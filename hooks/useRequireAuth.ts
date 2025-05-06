@@ -1,4 +1,4 @@
-import { useAuth } from "@/components/AuthProvider";
+import { useAuth } from "@/providers/AuthProvider";
 // @ts-ignore
 import { useRouter } from "expo-router";
 
@@ -8,6 +8,6 @@ export const useRequireAuth = () => {
 
   return (callback: () => void) => {
     if (session) callback();
-    else router.push("/auth");
+    else router.push("/login");
   };
 };

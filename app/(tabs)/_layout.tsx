@@ -1,5 +1,5 @@
-import { useAuth } from "@/components/AuthProvider";
 import { HapticTab } from "@/components/HapticTab";
+import { useAuth } from "@/providers/AuthProvider";
 import Feather from "@expo/vector-icons/Feather";
 // @ts-ignore
 import { router, Tabs } from "expo-router";

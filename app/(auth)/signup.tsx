@@ -1,169 +1,165 @@
-import { Box } from "@/components/ui/box";
-import { Button, ButtonText } from "@/components/ui/button";
-import { Center } from "@/components/ui/center";
-import {
-  FormControl,
-  FormControlLabel,
-  FormControlLabelText,
-} from "@/components/ui/form-control";
-import { HStack } from "@/components/ui/hstack";
-import { Input, InputField, InputSlot } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Text } from "@/components/ui/text";
-import { VStack } from "@/components/ui/vstack";
+import { useAuth } from "@/providers/AuthProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useForm } from "@tanstack/react-form";
-import React, { useState } from "react";
-import {
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-} from "react-native";
-// @ts-ignore
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "expo-router";
+import React, { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { TouchableOpacity, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { z } from "zod";
 
 export default function SignupScreen() {
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS !== "web" ? "padding" : "height"}
-      style={{ flex: 1 }}
+    <KeyboardAwareScrollView
+      contentContainerStyle={{ flexGrow: 1 }}
+      className="bg-background-0"
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          className="bg-background-0"
-        >
-          <Center className="h-full w-full p-4">
-            <Box className="w-full max-w-md">
-              <LoginForm />
-            </Box>
-          </Center>
-        </ScrollView>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+      <View className="h-full w-full p-4 items-center justify-center">
+        <View className="w-full max-w-md">
+          <SignupForm />
+        </View>
+      </View>
+    </KeyboardAwareScrollView>
   );
 }
 
-const LoginForm = () => {
+// Define the validation schema using zod
+const signupSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+type SignupFormValues = z.infer<typeof signupSchema>;
+
+const SignupForm = () => {
   const router = useRouter();
+  const { signUp } = useAuth();
 
-  const [showPassword, setShowPassword] = useState(false); // State to toggle password visibility
+  const [showPassword, setShowPassword] = useState(false);
+  const [showErrorMessage, setShowErrorMessage] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const form = useForm({
-    defaultValues: {
-      name: "",
-      email: "",
-      password: "",
-    },
-    onSubmit: async (values) => {
-      console.log(values.value);
-    },
+  // Initialize react-hook-form with zod validation
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<SignupFormValues>({
+    resolver: zodResolver(signupSchema),
   });
 
-  const togglePasswordVisibility = () => {
-    setShowPassword((prev) => !prev); // Toggle the state
+  const onSubmit = async (data: SignupFormValues) => {
+    try {
+      await signUp(data.name, data.email, data.password);
+      router.replace("/profile");
+    } catch {
+      setShowErrorMessage(true);
+      setErrorMessage("Failed to sign up. Please try again.");
+    }
   };
 
   return (
-    <VStack className="gap-6 w-full">
-      <form.Field name="name" validators={{}}>
-        {(field) => (
-          <FormControl
-            isInvalid={!field.state.meta.isValid}
-            size="lg"
-            isDisabled={form.state.isSubmitting}
-            className="w-full"
-          >
-            <FormControlLabel>
-              <FormControlLabelText>Email</FormControlLabelText>
-            </FormControlLabel>
-            <Input className="w-full" size="lg">
-              <InputField
-                type="text"
-                placeholder="Miles Morales"
-                value={field.state.value}
-                onChangeText={field.setValue}
-                className="w-full"
-              />
-            </Input>
-          </FormControl>
+    <View className="gap-4 w-full">
+      {/* Name Field */}
+      <Controller
+        control={control}
+        name="name"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <View>
+            <Input
+              placeholder="Miles Morales"
+              onBlur={onBlur}
+              onChangeText={onChange}
+              value={value}
+              className="w-full"
+            />
+            {errors.name && (
+              <Text className="text-error-500">{errors.name.message}</Text>
+            )}
+          </View>
         )}
-      </form.Field>
-      <form.Field name="email" validators={{}}>
-        {(field) => (
-          <FormControl
-            isInvalid={!field.state.meta.isValid}
-            size="lg"
-            isDisabled={form.state.isSubmitting}
-            className="w-full"
-          >
-            <FormControlLabel>
-              <FormControlLabelText>Email</FormControlLabelText>
-            </FormControlLabel>
-            <Input className="w-full" size="lg">
-              <InputField
-                type="text"
-                placeholder="miles@spidey.web"
-                value={field.state.value}
-                onChangeText={field.setValue}
-                className="w-full"
-              />
-            </Input>
-          </FormControl>
+      />
+
+      {/* Email Field */}
+      <Controller
+        control={control}
+        name="email"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <View>
+            <Input
+              placeholder="miles@spidey.web"
+              onBlur={onBlur}
+              onChangeText={onChange}
+              value={value}
+              className="w-full"
+            />
+            {errors.email && (
+              <Text className="text-error-500">{errors.email.message}</Text>
+            )}
+          </View>
         )}
-      </form.Field>
-      <form.Field name="password" validators={{}}>
-        {(field) => (
-          <FormControl
-            isInvalid={!field.state.meta.isValid}
-            size="lg"
-            isDisabled={form.state.isSubmitting}
-            className="w-full"
-          >
-            <FormControlLabel>
-              <FormControlLabelText>Password</FormControlLabelText>
-            </FormControlLabel>
-            <Input className="w-full relative" size="lg">
-              <InputField
-                type={showPassword ? "text" : "password"} // Toggle between text and password
-                placeholder="Create a password"
-                value={field.state.value}
-                onChangeText={field.setValue}
-                className="w-full"
-              />
-              <InputSlot className="mr-4">
-                <TouchableOpacity onPress={togglePasswordVisibility}>
-                  <Ionicons
-                    name={showPassword ? "eye-outline" : "eye-off-outline"} // Toggle icon
-                    size={20}
-                    color="black"
-                  />
-                </TouchableOpacity>
-              </InputSlot>
-            </Input>
-          </FormControl>
+      />
+
+      {/* Password Field */}
+      <Controller
+        control={control}
+        name="password"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <View className="w-full relative">
+            <Input
+              placeholder="Enter a password"
+              secureTextEntry={!showPassword}
+              onBlur={onBlur}
+              onChangeText={onChange}
+              value={value}
+              className="w-full"
+            />
+            <View className="absolute right-4 top-3">
+              <TouchableOpacity
+                onPress={() => setShowPassword((prev) => !prev)}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-outline" : "eye-off-outline"}
+                  size={20}
+                  color="black"
+                />
+              </TouchableOpacity>
+            </View>
+            {errors.password && (
+              <Text className="text-error-500">{errors.password.message}</Text>
+            )}
+          </View>
         )}
-      </form.Field>
-      <Button
-        size="lg"
-        variant="solid"
-        action="primary"
-        onPress={form.handleSubmit}
-      >
-        <ButtonText>Continue</ButtonText>
+      />
+
+      {/* Submit Button */}
+      <Button size="lg" onPress={handleSubmit(onSubmit)}>
+        <Text>Continue</Text>
       </Button>
-      <HStack className="w-full flex-row justify-center items-center gap-2">
-        <Text>Already have an account?</Text>
-        <Button
-          variant="link"
-          action="primary"
-          onPress={() => router.replace("login", { animation: "none" })}
-        >
-          <ButtonText>Log in</ButtonText>
+
+      {/* Error Message */}
+      {showErrorMessage && (
+        <View className="w-full bg-error-0 p-4 rounded">
+          <Text className="text-error-500 text-center">{errorMessage}</Text>
+        </View>
+      )}
+
+      {/* Additional Links */}
+      <View>
+        <Button variant="link">
+          <Text>Forgot Password?</Text>
         </Button>
-      </HStack>
-    </VStack>
+        <View className="w-full flex-row justify-center items-center">
+          <Text className="text-sm">Already have an account?</Text>
+          <Button variant="link" onPress={() => router.replace("/login")}>
+            <Text>Log in</Text>
+          </Button>
+        </View>
+      </View>
+    </View>
   );
 };
