@@ -5,16 +5,13 @@ import { useAuth } from "@/providers/AuthProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { TouchableOpacity, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { z } from "zod";
 
 export default function LoginScreen() {
-  useEffect(() => {
-    console.log("LoginForm re-rendered");
-  });
   return (
     <KeyboardAwareScrollView
       contentContainerStyle={{ flexGrow: 1 }}
@@ -140,7 +137,7 @@ const LoginForm = () => {
           <Text>Forgot Password?</Text>
         </Button>
         <View className="w-full flex-row justify-center items-center">
-          <Text className="text-sm">Don&apos;t have an account?</Text>
+          <Text>Don&apos;t have an account?</Text>
           <Button variant="link" onPress={() => router.replace("/signup")}>
             <Text>Sign up</Text>
           </Button>

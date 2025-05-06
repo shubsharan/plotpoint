@@ -13,7 +13,7 @@ export default function ProfileLayout() {
   }, [loading, router, session]);
 
   if (loading) {
-    return null; // or a loading spinner
+    return null;
   }
 
   return (

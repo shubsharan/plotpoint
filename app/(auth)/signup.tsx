@@ -154,7 +154,7 @@ const SignupForm = () => {
           <Text>Forgot Password?</Text>
         </Button>
         <View className="w-full flex-row justify-center items-center">
-          <Text className="text-sm">Already have an account?</Text>
+          <Text>Already have an account?</Text>
           <Button variant="link" onPress={() => router.replace("/login")}>
             <Text>Log in</Text>
           </Button>

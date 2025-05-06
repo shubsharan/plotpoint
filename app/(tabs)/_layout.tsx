@@ -1,7 +1,6 @@
 import { HapticTab } from "@/components/HapticTab";
 import { useAuth } from "@/providers/AuthProvider";
 import Feather from "@expo/vector-icons/Feather";
-// @ts-ignore
 import { router, Tabs } from "expo-router";
 import { Platform } from "react-native";
 
@@ -45,6 +44,17 @@ export default function TabLayout() {
           tabBarIcon: ({ color }: { color: string }) => (
             <TabBarIcon name="edit" color={color} />
           ),
+          tabBarButton: (props: any) =>
+            !session?.user ? (
+              <HapticTab
+                {...props}
+                onPress={() => {
+                  router.push("/login");
+                }}
+              />
+            ) : (
+              <HapticTab {...props} />
+            ),
         }}
       />
       <Tabs.Screen
