@@ -2,7 +2,7 @@ import { Stack } from "expo-router";
 
 export default function AuthLayout() {
   return (
-    <Stack>
+    <Stack screenOptions={{ presentation: "card" }}>
       <Stack.Screen
         name="login"
         options={{

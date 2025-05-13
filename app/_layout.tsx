@@ -1,6 +1,7 @@
 import "@/components/sheets/sheets.tsx";
 import "@/global.css";
 import { NAV_THEME } from "@/lib/constants";
+import "@/lib/gesture-handler";
 import { useColorScheme } from "@/lib/useColorScheme";
 import { AuthProvider } from "@/providers/AuthProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -18,6 +19,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import { SheetProvider } from "react-native-actions-sheet";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useSyncQueries } from "tanstack-query-dev-tools-expo-plugin";
 
 cssInterop(Ionicons, {
@@ -42,6 +44,11 @@ export {
 } from "expo-router";
 
 const queryClient = new QueryClient();
+
+export const unstable_settings = {
+  // Ensure any route can link back to `/`
+  initialRouteName: "index",
+};
 
 export default function RootLayout() {
   useSyncQueries({ queryClient });
@@ -73,28 +80,26 @@ export default function RootLayout() {
         <ThemeProvider value={isDarkColorScheme ? DARK_THEME : LIGHT_THEME}>
           <GestureHandlerRootView>
             <SheetProvider>
-              <StatusBar style={isDarkColorScheme ? "light" : "dark"} />
-              <Stack
-                initialRouteName="(tabs)"
-                screenOptions={{
-                  contentStyle: {
-                    backgroundColor: "bg-background-500",
-                  },
-                }}
-              >
-                <Stack.Screen
-                  name="(tabs)"
-                  options={{ headerShown: false, title: "Home" }}
-                />
-                <Stack.Screen
-                  name="(auth)"
-                  options={{
-                    headerShown: false,
-                    title: "Authentication",
-                    presentation: "modal",
-                  }}
-                />
-              </Stack>
+              <SafeAreaProvider>
+                <StatusBar style={isDarkColorScheme ? "light" : "dark"} />
+                <Stack initialRouteName="index" screenOptions={{}}>
+                  <Stack.Screen name="index" options={{ headerShown: false }} />
+                  <Stack.Screen
+                    name="(protected)"
+                    options={{
+                      headerShown: false,
+                    }}
+                  />
+                  <Stack.Screen
+                    name="(auth)"
+                    options={{
+                      headerShown: false,
+                      title: "Authentication",
+                      presentation: "modal",
+                    }}
+                  />
+                </Stack>
+              </SafeAreaProvider>
             </SheetProvider>
           </GestureHandlerRootView>
         </ThemeProvider>

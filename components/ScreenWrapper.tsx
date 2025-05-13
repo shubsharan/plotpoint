@@ -1,17 +1,9 @@
 import { ReactNode } from "react";
-import { Platform, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { View } from "react-native";
 
 export const ScreenWrapper = ({ children }: { children: ReactNode }) => {
-  const insets = useSafeAreaInsets();
   return (
-    <View
-      style={{
-        paddingTop: Platform.OS === "web" ? 8 : insets.top,
-        paddingBottom: insets.bottom,
-      }}
-      className="flex-1 px-4 bg-background-0"
-    >
+    <View className="flex-1 px-4 bg-background py-safe web: pt-4">
       {children}
     </View>
   );
