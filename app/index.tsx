@@ -30,14 +30,14 @@ export default function HomeScreen() {
           {/* Header */}
           <View className="w-full flex flex-row gap-3 items-center px-4 pt-safe pb-3 bg-background web:pt-3">
             {/* Logo */}
-            <View className="size-12 rounded-lg bg-primary items-center justify-center bg-yellow-300">
+            <View className="size-12 rounded-full bg-primary items-center justify-center bg-yellow-300">
               <LogoComponent size={24} />
             </View>
 
             {/* Search Bar */}
             <View className="flex-grow flex-shrink flex-row items-center">
               <Input
-                className="flex-grow py-2 pl-10 overflow-hidden rounded-lg h-12"
+                className="flex-grow py-2 pl-10 overflow-hidden rounded-full h-12"
                 placeholder="Search"
               />
               <Ionicons
@@ -49,7 +49,7 @@ export default function HomeScreen() {
 
             {/* Profile */}
             <Button
-              className="size-12 rounded-lg items-center justify-center p-0"
+              className="size-12 rounded-full items-center justify-center p-0"
               variant={"secondary"}
               size={"icon"}
               onPress={() => {
@@ -60,7 +60,7 @@ export default function HomeScreen() {
                 <AvatarImage source={{ uri: user?.avatar || undefined }} />
                 <AvatarFallback>
                   {user ? (
-                    <Text className="text-lg text-primary font-semibold">
+                    <Text className="text-lg text-primary-foreground font-semibold">
                       {user?.name
                         ?.split(" ")
                         .map((n) => n[0])

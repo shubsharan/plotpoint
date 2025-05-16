@@ -25,13 +25,13 @@ export default function ProfileScreen() {
 
   if (user && stories)
     return (
-      <View className="w-full flex-col flex-1 gap-4 pb-safe pt-4 px-4 web:pt-4">
+      <View className="w-full flex-col flex-1 gap-4 pb-safe pt-4 px-6 web:pt-4">
         {/* Profile Card */}
         <Card className="flex-col items-center justify-center gap-4 p-8 mb-4">
           <Avatar alt={`${user?.name}'s Avatar`} className="size-16">
             <AvatarImage source={{ uri: user?.avatar || undefined }} />
             <AvatarFallback>
-              <Text className="text-lg text-primary font-semibold">
+              <Text className="text-lg text-primary-foreground font-semibold">
                 {user?.name
                   ?.split(" ")
                   .map((n) => n[0])
@@ -50,7 +50,7 @@ export default function ProfileScreen() {
         <FlashList
           data={stories}
           ListHeaderComponent={() => (
-            <Text className="text-2xl font-semibold mb-4">Stories</Text>
+            <Text className="text-muted-foreground mb-2">Stories</Text>
           )}
           renderItem={({ item }) => (
             <Pressable

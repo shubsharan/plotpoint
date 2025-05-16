@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
 import { useAuth } from "@/providers/AuthProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -23,6 +22,7 @@ export default function ProtectedLayout() {
         name="profile"
         options={{
           headerShown: true,
+          headerShadowVisible: false,
           title: "Profile",
           headerLeft: () => (
             <Pressable
@@ -58,6 +58,7 @@ export default function ProtectedLayout() {
         name="create/index"
         options={{
           headerShown: true,
+          headerShadowVisible: false,
           title: "Create",
           animation: "slide_from_bottom",
           headerLeft: () => (
@@ -83,6 +84,7 @@ export default function ProtectedLayout() {
           headerShown: true,
           headerTitleAlign: "left",
           presentation: "card",
+          headerShadowVisible: false,
           headerLeft: () => (
             <Pressable
               className="web:ml-4"
@@ -106,14 +108,9 @@ export default function ProtectedLayout() {
                   className="text-primary"
                 />
               </Pressable>
-              <Button
-                variant={"link"}
-                size={"sm"}
-                className="p-0"
-                onPress={() => {}}
-              >
+              <Pressable onPress={() => {}}>
                 <Text className="font-semibold">Publish</Text>
-              </Button>
+              </Pressable>
             </View>
           ),
         }}

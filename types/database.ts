@@ -37,21 +37,27 @@ export type Database = {
       block_assignments: {
         Row: {
           applies_to_id: number;
-          applies_to_type: Database["public"]["Enums"]["block_applies_to_types"];
+          applies_to_type:
+            | Database["public"]["Enums"]["block_applies_to"]
+            | null;
           block_id: number;
           created_at: string;
           id: number;
         };
         Insert: {
           applies_to_id: number;
-          applies_to_type: Database["public"]["Enums"]["block_applies_to_types"];
+          applies_to_type?:
+            | Database["public"]["Enums"]["block_applies_to"]
+            | null;
           block_id: number;
           created_at?: string;
           id?: number;
         };
         Update: {
           applies_to_id?: number;
-          applies_to_type?: Database["public"]["Enums"]["block_applies_to_types"];
+          applies_to_type?:
+            | Database["public"]["Enums"]["block_applies_to"]
+            | null;
           block_id?: number;
           created_at?: string;
           id?: number;
@@ -264,7 +270,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      get_story_outline: {
+        Args: { story_id_input: number };
+        Returns: Json;
+      };
     };
     Enums: {
       block_applies_to: "story" | "section" | "content";

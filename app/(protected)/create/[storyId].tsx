@@ -1,10 +1,10 @@
+import StoryDragTree from "@/components/editor/StoryDragTree";
+import { Card } from "@/components/ui/card";
 import { Text } from "@/components/ui/text";
-import { supabase } from "@/lib/supabase";
-import { formatDate } from "@/lib/utils";
+import { useGetStoryOutline } from "@/queries/storyOutline";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
-import { View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
 
 export enum ToolbarContext {
   Main,
@@ -16,48 +16,42 @@ export default function CreateStoryScreen() {
   const { storyId } = useLocalSearchParams();
 
   // Fetch story data
-  const { data: story } = useQuery({
-    queryKey: ["story", storyId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("stories")
-        .select("*")
-        .eq("id", Number(storyId))
-        .single();
-      if (error) {
-        throw new Error(error.message);
-      }
-      return data;
-    },
-    enabled: !!storyId,
-  });
+  const { data: storyOutline } = useGetStoryOutline(Number(storyId));
 
-  if (story)
-    return (
-      <View className="flex-1 flex-col mb-safe pt-8 px-8 web:pt-8">
-        <Text className="text-4xl font-semibold mb-4">{story.title}</Text>
-        <View className="w-full grid grid-cols-2 gap-2 mb-4">
-          <View className="flex-row items-center">
-            <Ionicons
-              name="document-text-outline"
-              size={16}
-              className="text-primary"
-            />
-            <Text className="text-lg ml-4">
-              {story.description || "Enter description here..."}
-            </Text>
-          </View>
-          <View className="flex-row items-center">
-            <Ionicons
-              name="calendar-outline"
-              size={16}
-              className="text-primary"
-            />
-            <Text className="text-lg ml-4">
-              {"Edited " + formatDate(story.updated_at)}
-            </Text>
-          </View>
-        </View>
+  console.log(storyOutline);
+
+  return (
+    <View className="flex-1 flex-col gap-8 mb-safe pt-4 px-6 web:pt-4">
+      {/* Header */}
+      <View className="flex-col gap-2">
+        <TextInput
+          className="native:leading-[1.25] text-4xl font-semibold text-primary"
+          placeholder="Title (Required)"
+          defaultValue={storyOutline?.title}
+        />
+        <TextInput
+          className="native:leading-[1.25] text-lg text-primary"
+          multiline
+          numberOfLines={3}
+          placeholder="Enter description..."
+          defaultValue={storyOutline?.description ?? undefined}
+        />
       </View>
-    );
+
+      {/* Content */}
+      <View className="flex-col gap-4">
+        {/* Section Header */}
+        <View className="flex-row w-full items-center justify-between">
+          <Text className="text-muted-foreground">Content</Text>
+          <Pressable>
+            <Ionicons name="add" size={20} className="text-primary" />
+          </Pressable>
+        </View>
+        <Card className="w-full overflow-hidden pl-4 bg-primary/5">
+          {/* <StoryOutlineAccordion storyId={Number(storyId)} /> */}
+          {storyOutline && <StoryDragTree storyTree={storyOutline} />}
+        </Card>
+      </View>
+    </View>
+  );
 }
