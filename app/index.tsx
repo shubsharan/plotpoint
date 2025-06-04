@@ -70,7 +70,7 @@ export default function HomeScreen() {
                   ) : (
                     <Ionicons
                       name="person"
-                      className="text-primary"
+                      className="text-primary-foreground"
                       size={16}
                     />
                   )}

@@ -7,7 +7,7 @@ interface LogoComponentProps {
 
 export default function LogoComponent({
   size = 24,
-  color = "#000000",
+  color = "hsl(28.5714, 16.5354%, 24.902%)",
 }: LogoComponentProps) {
   return (
     <Svg width={size} height={size} viewBox={`0 0 48 48`} fill="none">

@@ -34,97 +34,45 @@ export type Database = {
   };
   public: {
     Tables: {
-      block_assignments: {
-        Row: {
-          applies_to_id: number;
-          applies_to_type:
-            | Database["public"]["Enums"]["block_applies_to"]
-            | null;
-          block_id: number;
-          created_at: string;
-          id: number;
-        };
-        Insert: {
-          applies_to_id: number;
-          applies_to_type?:
-            | Database["public"]["Enums"]["block_applies_to"]
-            | null;
-          block_id: number;
-          created_at?: string;
-          id?: number;
-        };
-        Update: {
-          applies_to_id?: number;
-          applies_to_type?:
-            | Database["public"]["Enums"]["block_applies_to"]
-            | null;
-          block_id?: number;
-          created_at?: string;
-          id?: number;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "block_assignment_applies_to_id_fkey";
-            columns: ["applies_to_id"];
-            isOneToOne: false;
-            referencedRelation: "stories";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "block_assignment_applies_to_id_fkey1";
-            columns: ["applies_to_id"];
-            isOneToOne: false;
-            referencedRelation: "sections";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "block_assignment_applies_to_id_fkey2";
-            columns: ["applies_to_id"];
-            isOneToOne: false;
-            referencedRelation: "content";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "block_assignment_block_id_fkey";
-            columns: ["block_id"];
-            isOneToOne: false;
-            referencedRelation: "blocks";
-            referencedColumns: ["id"];
-          }
-        ];
-      };
       blocks: {
         Row: {
           config: Json;
+          content_id: number;
           created_at: string;
           id: number;
-          type: Database["public"]["Enums"]["content_types"];
           updated_at: string;
         };
         Insert: {
           config: Json;
+          content_id: number;
           created_at?: string;
           id?: number;
-          type: Database["public"]["Enums"]["content_types"];
           updated_at?: string;
         };
         Update: {
           config?: Json;
+          content_id?: number;
           created_at?: string;
           id?: number;
-          type?: Database["public"]["Enums"]["content_types"];
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "blocks_content_id_fkey";
+            columns: ["content_id"];
+            isOneToOne: false;
+            referencedRelation: "content";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       content: {
         Row: {
           content: Json;
           created_at: string;
           id: number;
-          name: string;
-          parent_section: number | null;
           position: number;
+          story_id: number;
           type: Database["public"]["Enums"]["content_types"];
           updated_at: string;
         };
@@ -132,9 +80,8 @@ export type Database = {
           content: Json;
           created_at?: string;
           id?: number;
-          name: string;
-          parent_section?: number | null;
           position?: number;
+          story_id: number;
           type: Database["public"]["Enums"]["content_types"];
           updated_at?: string;
         };
@@ -142,63 +89,14 @@ export type Database = {
           content?: Json;
           created_at?: string;
           id?: number;
-          name?: string;
-          parent_section?: number | null;
           position?: number;
+          story_id?: number;
           type?: Database["public"]["Enums"]["content_types"];
           updated_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "content_parent_section_fkey";
-            columns: ["parent_section"];
-            isOneToOne: false;
-            referencedRelation: "sections";
-            referencedColumns: ["id"];
-          }
-        ];
-      };
-      sections: {
-        Row: {
-          created_at: string;
-          description: string | null;
-          id: number;
-          name: string;
-          parent_section: number | null;
-          position: number;
-          story_id: number;
-          updated_at: string;
-        };
-        Insert: {
-          created_at?: string;
-          description?: string | null;
-          id?: number;
-          name: string;
-          parent_section?: number | null;
-          position?: number;
-          story_id: number;
-          updated_at?: string;
-        };
-        Update: {
-          created_at?: string;
-          description?: string | null;
-          id?: number;
-          name?: string;
-          parent_section?: number | null;
-          position?: number;
-          story_id?: number;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "sections_parent_section_fkey";
-            columns: ["parent_section"];
-            isOneToOne: false;
-            referencedRelation: "sections";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "sections_story_id_fkey";
+            foreignKeyName: "content_story_id_fkey";
             columns: ["story_id"];
             isOneToOne: false;
             referencedRelation: "stories";
@@ -220,7 +118,7 @@ export type Database = {
           author_id: string;
           created_at?: string;
           description?: string | null;
-          id?: number;
+          id: number;
           status?: Database["public"]["Enums"]["stories_status"];
           title: string;
           updated_at?: string;

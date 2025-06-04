@@ -8,7 +8,7 @@ const Card = React.forwardRef<ViewRef, ViewProps>(
   ({ className, ...props }, ref) => (
     <View
       ref={ref}
-      className={cn("rounded-lg bg-primary/5", className)}
+      className={cn("rounded-lg bg-card border border-border", className)}
       {...props}
     />
   )

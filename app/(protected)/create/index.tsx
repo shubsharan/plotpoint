@@ -38,7 +38,7 @@ export default function CreateScreen() {
               <Ionicons
                 name="ellipsis-horizontal"
                 size={16}
-                className="text-primary"
+                className="text-primary-foreground"
               />
             </Button>
           </View>
