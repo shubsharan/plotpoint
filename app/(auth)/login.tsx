@@ -120,7 +120,7 @@ export const LoginForm = () => {
       />
 
       {/* Submit Button */}
-      <Button size="lg" onPress={handleSubmit(onSubmit)}>
+      <Button variant={"brand"} size="lg" onPress={handleSubmit(onSubmit)}>
         <Text>Continue</Text>
       </Button>
 

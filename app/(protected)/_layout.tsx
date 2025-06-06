@@ -34,7 +34,7 @@ export default function ProtectedLayout() {
               <Ionicons
                 name="chevron-back-outline"
                 size={20}
-                className="text-primary-foreground"
+                className="text-foreground"
               />
             </Pressable>
           ),
@@ -48,7 +48,7 @@ export default function ProtectedLayout() {
               <Ionicons
                 name="settings-outline"
                 size={20}
-                className="text-primary-foreground"
+                className="text-foreground"
               />
             </Pressable>
           ),
@@ -71,7 +71,7 @@ export default function ProtectedLayout() {
               <Ionicons
                 name="chevron-back-outline"
                 size={20}
-                className="text-primary-foreground"
+                className="text-foreground"
               />
             </Pressable>
           ),
@@ -81,13 +81,13 @@ export default function ProtectedLayout() {
         name="create/[storyId]"
         options={{
           title: "",
-          headerShown: false,
+          headerShown: true,
           headerTitleAlign: "left",
           presentation: "card",
           headerShadowVisible: false,
           headerLeft: () => (
             <Pressable
-              className="web:ml-4 text-primary-foreground"
+              className="web:ml-4"
               onPress={() => {
                 router.back();
               }}
@@ -95,17 +95,17 @@ export default function ProtectedLayout() {
               <Ionicons
                 name="chevron-back-outline"
                 size={20}
-                className="text-primary-foreground"
+                className="text-foreground"
               />
             </Pressable>
           ),
           headerRight: () => (
-            <View className="flex-row items-center justify-center gap-4 web:mr-4">
+            <View className="flex-row items-center justify-center gap-6 web:mr-4">
               <Pressable onPress={() => {}}>
                 <Ionicons
-                  name="menu"
-                  size={24}
-                  className="text-primary-foreground"
+                  name="ellipsis-horizontal"
+                  size={20}
+                  className="text-foreground"
                 />
               </Pressable>
               <Pressable onPress={() => {}}>

@@ -2,7 +2,6 @@ import "@/components/sheets/sheets.tsx";
 import "@/global.css";
 import { NAV_THEME } from "@/lib/constants";
 import "@/lib/gesture-handler";
-import { useColorScheme } from "@/lib/useColorScheme";
 import { AuthProvider } from "@/providers/AuthProvider";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import {
@@ -14,7 +13,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { cssInterop } from "nativewind";
+import { cssInterop, useColorScheme } from "nativewind";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import { SheetProvider } from "react-native-actions-sheet";
@@ -54,7 +53,8 @@ export default function RootLayout() {
   useSyncQueries({ queryClient });
 
   const hasMounted = useRef(false);
-  const { isDarkColorScheme } = useColorScheme();
+  const { colorScheme } = useColorScheme();
+  const isDarkColorScheme = colorScheme === "dark";
   const [isColorSchemeLoaded, setIsColorSchemeLoaded] = useState(false);
 
   useIsomorphicLayoutEffect(() => {

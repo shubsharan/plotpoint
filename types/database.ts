@@ -73,6 +73,7 @@ export type Database = {
           id: number;
           position: number;
           story_id: number;
+          title: string | null;
           type: Database["public"]["Enums"]["content_types"];
           updated_at: string;
         };
@@ -82,6 +83,7 @@ export type Database = {
           id?: number;
           position?: number;
           story_id: number;
+          title?: string | null;
           type: Database["public"]["Enums"]["content_types"];
           updated_at?: string;
         };
@@ -91,6 +93,7 @@ export type Database = {
           id?: number;
           position?: number;
           story_id?: number;
+          title?: string | null;
           type?: Database["public"]["Enums"]["content_types"];
           updated_at?: string;
         };
@@ -104,29 +107,53 @@ export type Database = {
           }
         ];
       };
+      genres: {
+        Row: {
+          id: number;
+          name: string;
+          type: Database["public"]["Enums"]["genre_types"];
+        };
+        Insert: {
+          id?: number;
+          name: string;
+          type: Database["public"]["Enums"]["genre_types"];
+        };
+        Update: {
+          id?: number;
+          name?: string;
+          type?: Database["public"]["Enums"]["genre_types"];
+        };
+        Relationships: [];
+      };
       stories: {
         Row: {
-          author_id: string;
+          author: string;
+          cover_image: string | null;
           created_at: string;
           description: string | null;
+          genre: number | null;
           id: number;
           status: Database["public"]["Enums"]["stories_status"];
           title: string;
           updated_at: string;
         };
         Insert: {
-          author_id: string;
+          author: string;
+          cover_image?: string | null;
           created_at?: string;
           description?: string | null;
-          id: number;
+          genre?: number | null;
+          id?: number;
           status?: Database["public"]["Enums"]["stories_status"];
           title: string;
           updated_at?: string;
         };
         Update: {
-          author_id?: string;
+          author?: string;
+          cover_image?: string | null;
           created_at?: string;
           description?: string | null;
+          genre?: number | null;
           id?: number;
           status?: Database["public"]["Enums"]["stories_status"];
           title?: string;
@@ -134,10 +161,17 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "stories_author_id_users_id_fk";
-            columns: ["author_id"];
+            foreignKeyName: "stories_author_fkey";
+            columns: ["author"];
             isOneToOne: false;
             referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "stories_genre_fkey";
+            columns: ["genre"];
+            isOneToOne: false;
+            referencedRelation: "genres";
             referencedColumns: ["id"];
           }
         ];
@@ -177,6 +211,7 @@ export type Database = {
       block_applies_to: "story" | "section" | "content";
       block_applies_to_types: "map" | "passcode" | "password";
       content_types: "text" | "video" | "audio";
+      genre_types: "fiction" | "non-fiction";
       stories_status: "draft" | "published" | "archived";
     };
     CompositeTypes: {
@@ -299,6 +334,7 @@ export const Constants = {
       block_applies_to: ["story", "section", "content"],
       block_applies_to_types: ["map", "passcode", "password"],
       content_types: ["text", "video", "audio"],
+      genre_types: ["fiction", "non-fiction"],
       stories_status: ["draft", "published", "archived"],
     },
   },

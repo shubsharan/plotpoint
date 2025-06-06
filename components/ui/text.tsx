@@ -13,8 +13,9 @@ const Text = React.forwardRef<TextRef, SlottableTextProps>(
     return (
       <Component
         // style={{ fontFamily: "Libre Baskerville" }}
+        selectable={true}
         className={cn(
-          "text-base text-primary-foreground web:select-text",
+          "text-base text-foreground web:select-text",
           textClass,
           className
         )}

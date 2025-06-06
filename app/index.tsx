@@ -25,7 +25,10 @@ export default function HomeScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1"
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <TouchableWithoutFeedback
+        onPress={Platform.OS === "web" ? undefined : Keyboard.dismiss}
+        accessible={false}
+      >
         <View className="flex-1">
           {/* Header */}
           <View className="w-full flex flex-row gap-3 items-center px-4 pt-safe pb-3 bg-background web:pt-3">
@@ -60,7 +63,7 @@ export default function HomeScreen() {
                 <AvatarImage source={{ uri: user?.avatar || undefined }} />
                 <AvatarFallback>
                   {user ? (
-                    <Text className="text-lg text-primary-foreground font-semibold">
+                    <Text className="text-lg font-semibold">
                       {user?.name
                         ?.split(" ")
                         .map((n) => n[0])
