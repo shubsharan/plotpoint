@@ -1,0 +1,37 @@
+{
+  "name": "@plotpoint/engine",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./actions": "./src/actions.ts",
+    "./semver": "./src/semver.ts",
+    "./conditions": "./src/conditions.ts",
+    "./registry": "./src/registry/index.ts",
+    "./compatibility": "./src/compatibility.ts",
+    "./migrations": "./src/migrations/index.ts",
+    "./graph": "./src/graph/index.ts",
+    "./state": "./src/state/index.ts",
+    "./executor": "./src/executor/index.ts",
+    "./assembly": "./src/assembly/index.ts",
+    "./events": "./src/events/index.ts",
+    "./testing": "./src/testing/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@plotpoint/db": "workspace:*",
+    "@plotpoint/schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "typescript": "^5.3.3",
+    "vitest": "^2.0.0"
+  }
+}

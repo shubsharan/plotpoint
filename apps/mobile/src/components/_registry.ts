@@ -16,7 +16,7 @@
  * 3. Import the component here
  */
 
-import { componentRegistry } from '@engine/registry';
+import { componentRegistry } from '@plotpoint/engine/registry';
 
 // ============================================
 // BLOCKS (Content Nodes)

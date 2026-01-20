@@ -9,7 +9,7 @@
 export { componentRegistry } from './_registry';
 
 // Export registry functions
-export { registerComponent } from '@engine/registry';
+export { registerComponent } from '@plotpoint/engine/registry';
 
 // ============================================
 // BLOCK Component Types
@@ -26,7 +26,7 @@ export type { ChoiceGateProps, ChoiceGateData } from './gates/choice-gate/v1.0.0
 // OTHER Component Types
 // ============================================
 export type { InventoryActionProps, InventoryActionData } from './other/inventory-action/v1.0.0/types';
-export type { EndNodeProps, EndNodeData } from './other/end/v1.0.0/types';
+export type { EndProps, EndData } from './other/end/v1.0.0/types';
 
 // ============================================
 // LEGACY EXPORTS (for backward compatibility)

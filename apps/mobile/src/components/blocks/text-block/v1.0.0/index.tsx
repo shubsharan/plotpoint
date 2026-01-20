@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Animated } from 'react-native';
 import type { TextBlockProps } from './types';
 import { textBlockSchema } from './schema';
-import { registerComponent } from '@engine/registry';
+import { registerComponent } from '@plotpoint/engine/registry';
 
 function TextBlockV1({ data, context, edges }: TextBlockProps) {
   const {

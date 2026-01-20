@@ -1,5 +1,5 @@
-import type { ComponentProps } from '@plotpoint/types';
-import type { VideoBlockProps as VideoBlockPropsSchema } from '@plotpoint/validators';
+import type { ComponentProps } from '@plotpoint/schemas';
+import type { VideoBlockProps as VideoBlockPropsSchema } from '@plotpoint/schemas';
 
 export type VideoBlockData = VideoBlockPropsSchema;
 

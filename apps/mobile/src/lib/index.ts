@@ -1,3 +1,5 @@
 export { supabase } from './supabase';
-export * from './semver';
-export * from './condition-evaluator';
+
+// Re-export from @plotpoint/engine
+export * from '@plotpoint/engine/semver';
+export * from '@plotpoint/engine/conditions';

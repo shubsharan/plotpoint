@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Animated } from 'react-native';
 import type { TextChapterProps } from './types';
 import { textChapterSchema } from './schema';
-import { registerComponent } from '@engine/registry';
+import { registerComponent } from '@plotpoint/engine/registry';
 
 function TextChapterV1({ data, context, edges }: TextChapterProps) {
   const {

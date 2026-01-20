@@ -15,12 +15,14 @@ import type {
   StoryEdge,
   StorySession,
   StoryManifest,
+} from '@plotpoint/db';
+import type {
   GameState,
   InventoryItem,
   ComponentContext,
   EdgeCondition,
-} from '@plotpoint/types';
-import { supabase } from '@lib/supabase';
+} from '@plotpoint/schemas';
+import { supabase } from '../../lib/supabase';
 import { NodeRenderer } from './node-renderer';
 
 // ============================================

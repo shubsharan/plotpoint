@@ -96,5 +96,5 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 - `@engine/*` → `./src/engine/*`
 - `@lib/*` → `./src/lib/*`
 - `@components/*` → `./src/components/*`
-- `@plotpoint/types` → `../../packages/types/src`
-- `@plotpoint/validators` → `../../packages/validators/src`
+- `@plotpoint/schemas` → `../../packages/types/src`
+- `@plotpoint/schemas` → `../../packages/schemas/src`

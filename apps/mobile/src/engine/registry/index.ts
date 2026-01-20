@@ -1,5 +1,7 @@
-export { componentRegistry, registerComponent } from './component-registry';
+// Re-export from @plotpoint/engine
 export {
+  componentRegistry,
+  registerComponent,
   resolveVersion,
   resolveManifest,
   resolveWithDependencies,
@@ -7,4 +9,4 @@ export {
   validateManifest,
   createDefaultManifest,
   type FallbackStrategy,
-} from './version-resolver';
+} from '@plotpoint/engine/registry';

@@ -10,7 +10,7 @@ import {
 import { useRouter } from 'expo-router';
 import type { EndProps } from './types';
 import { endSchema } from './schema';
-import { registerComponent } from '@engine/registry';
+import { registerComponent } from '@plotpoint/engine/registry';
 
 function EndV1({ data, context, edges }: EndProps) {
   const router = useRouter();

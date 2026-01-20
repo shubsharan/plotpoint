@@ -10,7 +10,7 @@
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
+    "db:push": "drizzle-kit up",
     "db:studio": "drizzle-kit studio",
     "db:types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/database.types.ts",
     "lint": "oxlint .",
@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.0.9",
+    "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.8"
   }
 }

@@ -10,7 +10,7 @@ import {
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import type { VideoPlayerProps } from './types';
 import { videoPlayerSchema } from './schema';
-import { registerComponent } from '@engine/registry';
+import { registerComponent } from '@plotpoint/engine/registry';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

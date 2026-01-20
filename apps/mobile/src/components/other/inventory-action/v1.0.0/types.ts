@@ -1,4 +1,4 @@
-import type { ComponentProps } from '@plotpoint/types';
+import type { ComponentProps } from '@plotpoint/schemas';
 
 export interface InventoryActionData {
   action: 'add' | 'remove' | 'check' | 'display';

@@ -7,13 +7,13 @@ import type {
   ComponentContext,
   ComponentTypeName,
   VersionConstraint,
-} from '@plotpoint/types';
+} from '@plotpoint/schemas';
 import {
   componentRegistry,
   getResolvedComponent,
   createDefaultManifest,
   type FallbackStrategy,
-} from '@engine/registry';
+} from '@plotpoint/engine/registry';
 
 // ============================================
 // Error Boundary

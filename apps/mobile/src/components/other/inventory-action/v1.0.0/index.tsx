@@ -9,10 +9,10 @@ import {
   ScrollView,
   FlatList,
 } from 'react-native';
-import type { InventoryItem } from '@plotpoint/types';
+import type { InventoryItem } from '@plotpoint/schemas';
 import type { InventoryActionProps } from './types';
 import { inventoryActionSchema } from './schema';
-import { registerComponent } from '@engine/registry';
+import { registerComponent } from '@plotpoint/engine/registry';
 
 function InventoryActionV1({ data, context, edges }: InventoryActionProps) {
   const {

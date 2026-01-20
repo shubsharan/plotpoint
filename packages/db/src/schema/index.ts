@@ -724,7 +724,10 @@ export const nodesRelations = relations(nodes, ({ one, many }) => ({
   }),
   outgoingEdges: many(edges, { relationName: 'sourceEdges' }),
   incomingEdges: many(edges, { relationName: 'targetEdges' }),
-  syncPoint: one(syncPoints),
+  syncPoint: one(syncPoints, {
+    fields: [nodes.id],
+    references: [syncPoints.nodeId],
+  }),
 }));
 
 export const edgesRelations = relations(edges, ({ one }) => ({

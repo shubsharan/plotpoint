@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import type { ChoiceDialogProps } from './types';
 import { choiceDialogSchema } from './schema';
-import { registerComponent } from '@engine/registry';
+import { registerComponent } from '@plotpoint/engine/registry';
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];

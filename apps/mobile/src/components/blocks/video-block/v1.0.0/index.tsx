@@ -10,7 +10,7 @@ import {
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import type { VideoBlockProps } from './types';
 import { videoBlockSchema } from './schema';
-import { registerComponent } from '@engine/registry';
+import { registerComponent } from '@plotpoint/engine/registry';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -138,7 +138,7 @@ function VideoBlockV1({ data, context, edges }: VideoBlockProps) {
           <Pressable style={styles.controlsOverlay} onPress={handlePlayPause}>
             {!isPlaying && (
               <View style={styles.playButtonContainer}>
-                <Text style={styles.playButton}>|></Text>
+                <Text style={styles.playButton}>▶</Text>
               </View>
             )}
           </Pressable>

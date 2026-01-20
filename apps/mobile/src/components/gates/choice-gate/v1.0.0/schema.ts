@@ -1,4 +1,4 @@
-import { choiceGatePropsSchema } from '@plotpoint/validators';
+import { choiceGatePropsSchema } from '@plotpoint/schemas';
 
 export const choiceGateSchema = choiceGatePropsSchema;
-export type { ChoiceGateProps } from '@plotpoint/validators';
+export type { ChoiceGateProps } from '@plotpoint/schemas';

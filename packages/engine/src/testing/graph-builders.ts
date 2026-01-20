@@ -1,0 +1,209 @@
+import type { StoryNode, StoryEdge } from '@plotpoint/db';
+import type { ComponentTypeName } from '@plotpoint/schemas';
+import type { StoryGraph } from '../graph/story-graph';
+import { createStoryGraph } from '../graph/story-graph';
+
+/**
+ * Create a linear story graph with N nodes connected by default edges.
+ * Useful for testing basic story flow.
+ */
+export function createLinearGraph(nodeCount: number): StoryGraph {
+  const nodes: StoryNode[] = [];
+  const edges: StoryEdge[] = [];
+
+  // Create nodes
+  for (let i = 0; i < nodeCount; i++) {
+    const isEnd = i === nodeCount - 1;
+    nodes.push(
+      createTestNode({
+        id: `node-${i}`,
+        nodeKey: `node_${i}`,
+        nodeType: isEnd ? 'end' : 'text_block',
+      })
+    );
+  }
+
+  // Create edges connecting them
+  for (let i = 0; i < nodeCount - 1; i++) {
+    edges.push(
+      createTestEdge(`node-${i}`, `node-${i + 1}`, {
+        id: `edge-${i}`,
+        edgeType: 'default',
+      })
+    );
+  }
+
+  return createStoryGraph(nodes, edges, 'node-0');
+}
+
+/**
+ * Create a branching story graph with specified depth and branch factor.
+ * Each node has 'branchFactor' outgoing choice edges.
+ */
+export function createBranchingGraph(depth: number, branchFactor: number): StoryGraph {
+  const nodes: StoryNode[] = [];
+  const edges: StoryEdge[] = [];
+  let nodeCounter = 0;
+
+  function createBranch(level: number, parentId: string | null): string {
+    const nodeId = `node-${nodeCounter++}`;
+    const isEnd = level === depth;
+
+    nodes.push(
+      createTestNode({
+        id: nodeId,
+        nodeKey: `node_${nodeId}`,
+        nodeType: isEnd ? 'end' : level === 0 ? 'text_block' : 'choice_gate',
+      })
+    );
+
+    // Create children if not at max depth
+    if (level < depth) {
+      for (let i = 0; i < branchFactor; i++) {
+        const childId = createBranch(level + 1, nodeId);
+        edges.push(
+          createTestEdge(nodeId, childId, {
+            id: `edge-${nodeId}-${childId}`,
+            edgeType: 'choice',
+            label: `Choice ${i + 1}`,
+          })
+        );
+      }
+    }
+
+    return nodeId;
+  }
+
+  const startNodeId = createBranch(0, null);
+  return createStoryGraph(nodes, edges, startNodeId);
+}
+
+/**
+ * Create a test node with default values.
+ */
+export function createTestNode(overrides?: Partial<StoryNode>): StoryNode {
+  const id = overrides?.id ?? `test-node-${Math.random().toString(36).substring(2, 11)}`;
+
+  return {
+    id,
+    storyId: 'test-story',
+    nodeKey: overrides?.nodeKey ?? `node_${id}`,
+    nodeCategory: overrides?.nodeCategory ?? 'block',
+    nodeType: overrides?.nodeType ?? 'text_block',
+    chapterId: overrides?.chapterId ?? null,
+    componentVersionId: overrides?.componentVersionId ?? null,
+    data: overrides?.data ?? {},
+    position: overrides?.position ?? { x: 0, y: 0 },
+    order: overrides?.order ?? 0,
+    allowedRoles: overrides?.allowedRoles ?? null,
+  };
+}
+
+/**
+ * Create a test edge with default values.
+ */
+export function createTestEdge(
+  sourceId: string,
+  targetId: string,
+  overrides?: Partial<StoryEdge>
+): StoryEdge {
+  const id = overrides?.id ?? `test-edge-${Math.random().toString(36).substring(2, 11)}`;
+
+  return {
+    id,
+    sourceNodeId: sourceId,
+    targetNodeId: targetId,
+    edgeType: overrides?.edgeType ?? 'default',
+    label: overrides?.label ?? null,
+    condition: overrides?.condition ?? null,
+    priority: overrides?.priority ?? 0,
+    allowedRoles: overrides?.allowedRoles ?? null,
+  };
+}
+
+/**
+ * Create a simple test graph with a start node, middle node, and end node.
+ */
+export function createSimpleTestGraph(): StoryGraph {
+  const nodes: StoryNode[] = [
+    createTestNode({
+      id: 'start',
+      nodeKey: 'start',
+      nodeType: 'text_block',
+    }),
+    createTestNode({
+      id: 'middle',
+      nodeKey: 'middle',
+      nodeType: 'choice_gate',
+    }),
+    createTestNode({
+      id: 'end',
+      nodeKey: 'end',
+      nodeType: 'end',
+    }),
+  ];
+
+  const edges: StoryEdge[] = [
+    createTestEdge('start', 'middle', {
+      id: 'edge-1',
+      edgeType: 'default',
+    }),
+    createTestEdge('middle', 'end', {
+      id: 'edge-2',
+      edgeType: 'choice',
+      label: 'Continue',
+    }),
+  ];
+
+  return createStoryGraph(nodes, edges, 'start');
+}
+
+/**
+ * Create a test graph with conditional edges.
+ */
+export function createConditionalTestGraph(): StoryGraph {
+  const nodes: StoryNode[] = [
+    createTestNode({
+      id: 'start',
+      nodeKey: 'start',
+      nodeType: 'text_block',
+    }),
+    createTestNode({
+      id: 'check',
+      nodeKey: 'check',
+      nodeType: 'text_block',
+    }),
+    createTestNode({
+      id: 'success',
+      nodeKey: 'success',
+      nodeType: 'end',
+    }),
+    createTestNode({
+      id: 'failure',
+      nodeKey: 'failure',
+      nodeType: 'end',
+    }),
+  ];
+
+  const edges: StoryEdge[] = [
+    createTestEdge('start', 'check', {
+      id: 'edge-1',
+      edgeType: 'default',
+    }),
+    createTestEdge('check', 'success', {
+      id: 'edge-2',
+      edgeType: 'conditional',
+      condition: {
+        operator: 'equals',
+        key: 'hasKey',
+        value: true,
+      },
+    }),
+    createTestEdge('check', 'failure', {
+      id: 'edge-3',
+      edgeType: 'default',
+    }),
+  ];
+
+  return createStoryGraph(nodes, edges, 'start');
+}
