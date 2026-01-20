@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import type { Session, User, AuthError } from '@supabase/supabase-js';
 
 // Mock user data
@@ -47,17 +48,17 @@ export function createMockSupabaseClient() {
   const authStateListeners: ((event: string, session: Session | null) => void)[] = [];
 
   const mockAuth = {
-    getSession: jest.fn().mockImplementation(async () => ({
+    getSession: vi.fn().mockImplementation(async () => ({
       data: { session: currentSession },
       error: null,
     })),
 
-    getUser: jest.fn().mockImplementation(async () => ({
+    getUser: vi.fn().mockImplementation(async () => ({
       data: { user: currentSession?.user ?? null },
       error: null,
     })),
 
-    signUp: jest.fn().mockImplementation(async ({ email, password, options }) => {
+    signUp: vi.fn().mockImplementation(async ({ email, password, options }) => {
       if (!email || !password) {
         return { data: { user: null, session: null }, error: createAuthError('Email and password required') };
       }
@@ -68,7 +69,7 @@ export function createMockSupabaseClient() {
       return { data: { user: newUser, session: null }, error: null };
     }),
 
-    signInWithPassword: jest.fn().mockImplementation(async ({ email, password }) => {
+    signInWithPassword: vi.fn().mockImplementation(async ({ email, password }) => {
       if (email === 'test@example.com' && password === 'ValidPass123') {
         currentSession = mockSession;
         authStateListeners.forEach((listener) => listener('SIGNED_IN', mockSession));
@@ -77,27 +78,27 @@ export function createMockSupabaseClient() {
       return { data: { user: null, session: null }, error: createAuthError('Invalid login credentials') };
     }),
 
-    signOut: jest.fn().mockImplementation(async () => {
+    signOut: vi.fn().mockImplementation(async () => {
       currentSession = null;
       authStateListeners.forEach((listener) => listener('SIGNED_OUT', null));
       return { error: null };
     }),
 
-    resetPasswordForEmail: jest.fn().mockImplementation(async (email) => {
+    resetPasswordForEmail: vi.fn().mockImplementation(async (email) => {
       if (!email || !email.includes('@')) {
         return { error: createAuthError('Invalid email') };
       }
       return { data: {}, error: null };
     }),
 
-    updateUser: jest.fn().mockImplementation(async ({ password }) => {
+    updateUser: vi.fn().mockImplementation(async ({ password }) => {
       if (password && password.length < 8) {
         return { data: { user: null }, error: createAuthError('Password too short') };
       }
       return { data: { user: mockUser }, error: null };
     }),
 
-    verifyOtp: jest.fn().mockImplementation(async ({ token_hash, type }) => {
+    verifyOtp: vi.fn().mockImplementation(async ({ token_hash, type }) => {
       if (token_hash === 'valid-token' && type === 'recovery') {
         currentSession = mockSession;
         return { data: { user: mockUser, session: mockSession }, error: null };
@@ -105,12 +106,12 @@ export function createMockSupabaseClient() {
       return { data: { user: null, session: null }, error: createAuthError('Invalid token') };
     }),
 
-    onAuthStateChange: jest.fn().mockImplementation((callback) => {
+    onAuthStateChange: vi.fn().mockImplementation((callback) => {
       authStateListeners.push(callback);
       return {
         data: {
           subscription: {
-            unsubscribe: jest.fn(() => {
+            unsubscribe: vi.fn(() => {
               const index = authStateListeners.indexOf(callback);
               if (index > -1) authStateListeners.splice(index, 1);
             }),
@@ -120,14 +121,14 @@ export function createMockSupabaseClient() {
     }),
   };
 
-  const mockFrom = jest.fn().mockImplementation((table: string) => {
+  const mockFrom = vi.fn().mockImplementation((table: string) => {
     return {
-      select: jest.fn().mockReturnThis(),
-      insert: jest.fn().mockReturnThis(),
-      update: jest.fn().mockReturnThis(),
-      delete: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockReturnThis(),
-      single: jest.fn().mockImplementation(async () => {
+      select: vi.fn().mockReturnThis(),
+      insert: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      delete: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockImplementation(async () => {
         if (table === 'profiles') {
           return { data: mockProfile, error: null };
         }

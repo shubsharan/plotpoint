@@ -3,18 +3,19 @@
  * Tests core authentication flows: sign up, sign in, sign out, password reset
  */
 
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { mockSupabaseClient } from './__mocks__/supabase';
 
 // Mock the supabase module before importing hooks
-jest.mock('@/lib/supabase', () => ({
+vi.mock('@/lib/supabase', () => ({
   supabase: mockSupabaseClient,
 }));
 
 // Mock react-query
-const mockMutate = jest.fn();
-const mockMutateAsync = jest.fn();
-jest.mock('@tanstack/react-query', () => ({
-  useMutation: jest.fn(({ mutationFn, onSuccess }) => ({
+const mockMutate = vi.fn();
+const mockMutateAsync = vi.fn();
+vi.mock('@tanstack/react-query', () => ({
+  useMutation: vi.fn(({ mutationFn, onSuccess }) => ({
     mutate: (data: any) => {
       mockMutate(data);
       return mutationFn(data).then((result: any) => {
@@ -31,14 +32,14 @@ jest.mock('@tanstack/react-query', () => ({
     error: null,
   })),
   useQueryClient: () => ({
-    clear: jest.fn(),
-    invalidateQueries: jest.fn(),
+    clear: vi.fn(),
+    invalidateQueries: vi.fn(),
   }),
 }));
 
 describe('Auth Flows', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockSupabaseClient._setSession(null);
   });
 
@@ -211,7 +212,7 @@ describe('Auth Flows', () => {
     });
 
     it('should notify listeners on auth state change', async () => {
-      const listener = jest.fn();
+      const listener = vi.fn();
       mockSupabaseClient.auth.onAuthStateChange(listener);
 
       // Sign in should trigger listener

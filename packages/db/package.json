@@ -9,10 +9,14 @@
     "./schema": "./src/schema/index.ts"
   },
   "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit up",
+    "db:check": "drizzle-kit check",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > src/database.types.ts",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt .",
@@ -24,7 +28,9 @@
   },
   "devDependencies": {
     "@types/node": "^25.0.9",
+    "@vitest/coverage-v8": "^4.0.0",
     "dotenv": "^17.2.3",
-    "drizzle-kit": "^0.31.8"
+    "drizzle-kit": "^0.31.8",
+    "vitest": "^4.0.0"
   }
 }
