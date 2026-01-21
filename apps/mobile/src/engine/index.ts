@@ -11,5 +11,7 @@ export {
   type FallbackStrategy,
 } from "./registry";
 
-// Runtime
-export { StoryRunner, useStoryRunner, NodeRenderer, ComponentErrorBoundary } from "./runtime";
+// Runtime components are now in app/(player)/_components/
+// Import directly from there if needed:
+// - StoryRunner from "app/(player)/_components/story-runner"
+// - NodeRenderer from "app/(player)/_components/node-renderer"

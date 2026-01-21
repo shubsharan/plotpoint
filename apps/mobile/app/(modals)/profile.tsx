@@ -1,7 +1,7 @@
 import { View, Text, SafeAreaView, ScrollView, TouchableOpacity } from "react-native";
 import { Redirect, useRouter, usePathname } from "expo-router";
-import { useAuthContext } from "../../src/contexts/AuthContext";
-import { useSignOut } from "../../src/hooks/useAuth";
+import { useAuthContext } from "../../src/contexts/auth-context";
+import { useSignOut } from "../../src/hooks/use-auth";
 import { cn } from "../../src/lib/utils";
 
 export default function ProfileModal() {

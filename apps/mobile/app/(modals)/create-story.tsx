@@ -11,8 +11,8 @@ import {
   Platform,
 } from "react-native";
 import { Redirect, useRouter, usePathname } from "expo-router";
-import { useAuthContext } from "../../src/contexts/AuthContext";
-import { useCreateStory, useGenres } from "../../src/hooks/useStories";
+import { useAuthContext } from "../../src/contexts/auth-context";
+import { useCreateStory, useGenres } from "../../src/hooks/use-stories";
 import { cn } from "../../src/lib/utils";
 
 export default function CreateStoryModal() {
@@ -24,7 +24,7 @@ export default function CreateStoryModal() {
   const [description, setDescription] = useState("");
 
   const createStoryMutation = useCreateStory();
-  const { data: genres } = useGenres();
+  const { data: _genres } = useGenres();
 
   // Route protection guard
   if (!isAuthenticated) {
@@ -45,7 +45,7 @@ export default function CreateStoryModal() {
     }
 
     try {
-      const story = await createStoryMutation.mutateAsync({
+      await createStoryMutation.mutateAsync({
         title,
         description: description.trim() || undefined,
         shellType: "ebook",

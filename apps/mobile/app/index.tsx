@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { usePublishedStories } from "../src/hooks/useStories";
-import { useCurrentLocation, useLocationPermissions } from "../src/hooks/useLocation";
-import { StoryMapView } from "../src/components/discovery/MapView";
-import { StoryListView } from "../src/components/discovery/StoryListView";
-import { Navbar } from "../src/components/discovery/Navbar";
-import { FilterSheet, StoryFilters } from "../src/components/discovery/FilterSheet";
+import { usePublishedStories } from "@/hooks/use-stories";
+import { useCurrentLocation, useLocationPermissions } from "@/hooks/use-location";
+import { StoryMapView } from "@features/discovery/story-map-view";
+import { StoryListView } from "@features/discovery/story-list-view";
+import { Navbar } from "@features/discovery/navbar";
+import { FilterSheet, type StoryFilters } from "@features/discovery/filter-sheet";
 
 type ViewMode = "map" | "list";
 

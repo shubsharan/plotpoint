@@ -6,10 +6,10 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaListener } from "react-native-safe-area-context";
 import { Uniwind } from "uniwind";
 import * as SplashScreen from "expo-splash-screen";
-import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
+import { AuthProvider, useAuthContext } from "@/contexts/auth-context";
 
 // Initialize component registry (must be imported before any components are used)
-import "@/components/_registry";
+import "@/components/story/_registry";
 
 // Uniwind CSS
 import "../global.css";
@@ -43,7 +43,7 @@ function DeepLinkGuard({ children }: { children: React.ReactNode }) {
       const hideSplash = async () => {
         try {
           await SplashScreen.hideAsync();
-        } catch (error) {
+        } catch {
           // Ignore errors if splash screen is not available
           // This can happen in development or if module isn't properly linked
         }

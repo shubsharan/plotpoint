@@ -15,9 +15,9 @@ export function Input({
 }: InputProps) {
   const variantClasses = {
     default:
-      "border-1 border-border hover:border-foreground hover:shadow-md focus-within:border-primary focus-within:shadow-lg",
+      "border-1 border-border hover:border-muted-foreground hover:shadow-md focus-within:border-primary focus-within:shadow-lg",
     bordered:
-      "border-1 border-foreground hover:border-foreground hover:shadow-md focus-within:border-primary focus-within:shadow-lg",
+      "border-1 border-foreground hover:border-muted-foreground hover:shadow-md focus-within:border-primary focus-within:shadow-lg",
   };
 
   return (

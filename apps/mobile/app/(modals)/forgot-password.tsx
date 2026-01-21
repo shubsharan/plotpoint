@@ -1,19 +1,11 @@
 import { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Alert,
-  SafeAreaView,
-} from "react-native";
+import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
-import { useRequestPasswordReset } from "../../src/hooks/useAuth";
+import { useRequestPasswordReset } from "@/hooks/use-auth";
 import { forgotPasswordFormSchema } from "@plotpoint/schemas";
-import { cn } from "../../src/lib/utils";
+import { cn } from "@/lib/utils";
+import { AuthFormLayout } from "@features/auth/auth-form-layout";
+import { FormField } from "@features/auth/form-field";
 
 export default function ForgotPasswordModal() {
   const [email, setEmail] = useState("");
@@ -61,72 +53,52 @@ export default function ForgotPasswordModal() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-          <View className="flex-1 justify-center p-6">
-            <Text className="text-4xl font-bold text-foreground mb-2">Forgot Password?</Text>
-            <Text className="text-base text-muted-foreground mb-8 leading-6">
-              Enter your email address and we'll send you a link to reset your password.
-            </Text>
+    <AuthFormLayout
+      title="Forgot Password?"
+      subtitle="Enter your email address and we'll send you a link to reset your password."
+    >
+      <View className="w-full">
+        <View className="mb-5">
+          <FormField
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Enter your email"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            error={errors.email}
+          />
+        </View>
 
-            <View className="w-full">
-              <View className="mb-5">
-                <Text className="text-sm font-semibold text-foreground mb-2">Email</Text>
-                <TextInput
-                  className={cn(
-                    "px-4 py-4 text-base text-foreground rounded-lg",
-                    "bg-input border-1 border-border",
-                    errors.email && "border-destructive",
-                  )}
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="Enter your email"
-                  placeholderTextColor="#A3A3A3"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  autoComplete="email"
-                  textAlignVertical="center"
-                />
-                {errors.email && (
-                  <Text className="text-destructive text-xs mt-1">{errors.email}</Text>
-                )}
-              </View>
+        <TouchableOpacity
+          className={cn(
+            "bg-primary rounded-lg px-4 py-4 items-center mb-4",
+            resetPasswordMutation.isPending && "opacity-60",
+          )}
+          onPress={handleRequestReset}
+          disabled={resetPasswordMutation.isPending}
+        >
+          <Text className="text-primary-foreground text-base font-semibold">
+            {resetPasswordMutation.isPending ? "Sending..." : "Send Reset Link"}
+          </Text>
+        </TouchableOpacity>
 
-              <TouchableOpacity
-                className={cn(
-                  "bg-primary rounded-lg px-4 py-4 items-center mb-4",
-                  resetPasswordMutation.isPending && "opacity-60",
-                )}
-                onPress={handleRequestReset}
-                disabled={resetPasswordMutation.isPending}
-              >
-                <Text className="text-primary-foreground text-base font-semibold">
-                  {resetPasswordMutation.isPending ? "Sending..." : "Send Reset Link"}
-                </Text>
-              </TouchableOpacity>
-
-              <View className="flex-row justify-center items-center">
-                <Text className="text-muted-foreground text-sm">Remember your password? </Text>
-                <Link
-                  href={{
-                    pathname: "/(modals)/login",
-                    params: { returnTo },
-                  }}
-                  asChild
-                >
-                  <TouchableOpacity>
-                    <Text className="text-primary text-sm font-semibold">Sign In</Text>
-                  </TouchableOpacity>
-                </Link>
-              </View>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        <View className="flex-row justify-center items-center">
+          <Text className="text-muted-foreground text-sm">Remember your password? </Text>
+          <Link
+            href={{
+              pathname: "/(modals)/login",
+              params: { returnTo },
+            }}
+            asChild
+          >
+            <TouchableOpacity>
+              <Text className="text-primary text-sm font-semibold">Sign In</Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
+      </View>
+    </AuthFormLayout>
   );
 }

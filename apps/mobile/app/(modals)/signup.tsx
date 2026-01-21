@@ -11,9 +11,9 @@ import {
   SafeAreaView,
 } from "react-native";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
-import { useSignUp } from "../../src/hooks/useAuth";
+import { useSignUp } from "@/hooks/use-auth";
 import { signUpFormSchema } from "@plotpoint/schemas";
-import { cn } from "../../src/lib/utils";
+import { cn } from "@/lib/utils";
 
 export default function SignupModal() {
   const [email, setEmail] = useState("");

@@ -1,13 +1,12 @@
-import { defineProject } from "vitest/config";
+import { defineConfig } from "vitest/config";
 import path from "path";
 
-export default defineProject({
+export default defineConfig({
   test: {
     name: "mobile",
     environment: "node",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     exclude: ["node_modules", "dist"],
-    passWithNoTests: true,
     setupFiles: ["./src/__tests__/setup.ts"],
     coverage: {
       include: ["src/**/*.ts", "src/**/*.tsx"],

@@ -1,6 +1,6 @@
 import { Redirect, useLocalSearchParams, usePathname } from "expo-router";
-import { useAuthContext } from "../../../src/contexts/AuthContext";
-import { StoryRunner } from "../../../src/engine/runtime/story-runner";
+import { useAuthContext } from "@/contexts/auth-context";
+import { StoryRunner } from "@features/player/story-runner";
 
 export default function StoryPlayerScreen() {
   const { storyId } = useLocalSearchParams<{ storyId: string }>();
