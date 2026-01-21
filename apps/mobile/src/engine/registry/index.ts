@@ -9,4 +9,4 @@ export {
   validateManifest,
   createDefaultManifest,
   type FallbackStrategy,
-} from '@plotpoint/engine/registry';
+} from "@plotpoint/engine/registry";

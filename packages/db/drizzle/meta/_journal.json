@@ -15,6 +15,20 @@
       "when": 1768885470517,
       "tag": "0001_married_garia",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1737415380000,
+      "tag": "0002_rls_policies",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1737415381000,
+      "tag": "0003_auth_triggers",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const choiceDialogSchema = z.object({
   prompt: z.string().optional(),

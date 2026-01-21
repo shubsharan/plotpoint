@@ -7,14 +7,6 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "dependencies": {
-    "@plotpoint/db": "workspace:*",
-    "zod": "^4.3.5"
-  },
-  "devDependencies": {
-    "@vitest/coverage-v8": "^4.0.0",
-    "vitest": "^4.0.0"
-  },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
@@ -23,5 +15,13 @@
     "lint:fix": "oxlint . --fix",
     "format": "oxfmt .",
     "format:check": "oxfmt . --check"
+  },
+  "dependencies": {
+    "@plotpoint/db": "workspace:*",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.0",
+    "vitest": "^4.0.0"
   }
 }

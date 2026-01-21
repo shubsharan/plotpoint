@@ -50,16 +50,16 @@ Story Manifest → Version Resolver → Component Registry → Render
 
 ### Node Types
 
-| Type | Description | Status |
-|------|-------------|--------|
-| `text_chapter` | Narrative text | ✅ |
-| `choice_dialog` | Branching choices | ✅ |
-| `video_player` | Video content | ✅ |
-| `inventory_action` | Item management | ✅ |
-| `end` | Story endings | ✅ |
-| `qr_scanner` | QR code scanning | 🔲 |
-| `geolocation_lock` | GPS unlocks | 🔲 |
-| `puzzle_solver` | Puzzles | 🔲 |
+| Type               | Description       | Status |
+| ------------------ | ----------------- | ------ |
+| `text_chapter`     | Narrative text    | ✅     |
+| `choice_dialog`    | Branching choices | ✅     |
+| `video_player`     | Video content     | ✅     |
+| `inventory_action` | Item management   | ✅     |
+| `end`              | Story endings     | ✅     |
+| `qr_scanner`       | QR code scanning  | 🔲     |
+| `geolocation_lock` | GPS unlocks       | 🔲     |
+| `puzzle_solver`    | Puzzles           | 🔲     |
 
 ### Adding Components
 
@@ -87,7 +87,7 @@ pnpm typecheck
 
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
 
 ## Path Aliases

@@ -1,15 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  Animated,
-} from 'react-native';
-import type { ChoiceGateProps } from './types';
-import { choiceGateSchema } from './schema';
-import { registerComponent } from '@plotpoint/engine/registry';
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { View, Text, Pressable, ScrollView, Animated } from "react-native";
+import type { ChoiceGateProps } from "./types";
+import { choiceGateSchema } from "./schema";
+import { registerComponent } from "@plotpoint/engine/registry";
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -36,7 +29,7 @@ function ChoiceGateV1({ data, context, edges }: ChoiceGateProps) {
 
   // Get choice edges (edges with type 'choice')
   const choiceEdges = useMemo(() => {
-    const choices = edges.filter((e) => e.edgeType === 'choice');
+    const choices = edges.filter((e) => e.edgeType === "choice");
     return shuffleChoices ? shuffleArray(choices) : choices;
   }, [edges, shuffleChoices]);
 
@@ -87,41 +80,45 @@ function ChoiceGateV1({ data, context, edges }: ChoiceGateProps) {
   };
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+    <Animated.View style={[{ flex: 1, opacity: fadeAnim }]} className="bg-background">
       {timedChoice && timeLimit && (
-        <View style={styles.timerContainer}>
+        <View className="h-10 bg-card justify-center items-center">
           <Animated.View
             style={[
-              styles.timerBar,
+              {
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                backgroundColor: "var(--primary)",
+                opacity: 0.3,
+              },
               {
                 width: timerBarAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
+                  outputRange: ["0%", "100%"],
                 }),
               },
             ]}
           />
-          <Text style={styles.timerText}>{timeRemaining}s</Text>
+          <Text className="text-card-foreground text-base font-semibold">{timeRemaining}s</Text>
         </View>
       )}
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, paddingBottom: 100 }}>
         {showPrompt && prompt && (
-          <Text style={styles.prompt}>{prompt}</Text>
+          <Text className="text-foreground text-2xl font-semibold mb-6 leading-8">{prompt}</Text>
         )}
 
-        <View style={styles.choicesContainer}>
+        <View className="gap-3">
           {choiceEdges.map((edge, index) => {
             return (
               <Pressable
                 key={edge.id}
-                style={styles.choiceButton}
+                className="bg-card border-2 border-border rounded-xl p-5 flex-row items-center justify-between"
                 onPress={() => handleChoicePress(edge.id)}
               >
-                <Text style={styles.choiceText}>
+                <Text className="text-card-foreground text-base flex-1">
                   {edge.label ?? `Option ${index + 1}`}
                 </Text>
               </Pressable>
@@ -133,68 +130,10 @@ function ChoiceGateV1({ data, context, edges }: ChoiceGateProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0f0f0f',
-  },
-  timerContainer: {
-    height: 40,
-    backgroundColor: '#1a1a1a',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timerBar: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: '#3b82f6',
-    opacity: 0.3,
-  },
-  timerText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 24,
-    paddingBottom: 100,
-  },
-  prompt: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginBottom: 24,
-    lineHeight: 30,
-  },
-  choicesContainer: {
-    gap: 12,
-  },
-  choiceButton: {
-    backgroundColor: '#1a1a1a',
-    borderWidth: 2,
-    borderColor: '#2a2a2a',
-    borderRadius: 12,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  choiceText: {
-    fontSize: 16,
-    color: '#e0e0e0',
-    flex: 1,
-  },
-});
-
 // Register the component with new taxonomy
 registerComponent({
-  componentType: 'choice_gate',
-  version: '1.0.0',
+  componentType: "choice_gate",
+  version: "1.0.0",
   Component: ChoiceGateV1,
   propsSchema: choiceGateSchema,
   defaultProps: {

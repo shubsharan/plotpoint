@@ -1,6 +1,6 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
-import { router } from 'expo-router';
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "../lib/supabase";
+import { router } from "expo-router";
 
 interface SignUpData {
   email: string;
@@ -70,7 +70,7 @@ export function useSignOut() {
       // Clear all cached queries
       queryClient.clear();
       // Navigate to login
-      router.replace('/login');
+      router.replace("/login");
     },
   });
 }
@@ -79,7 +79,7 @@ export function useRequestPasswordReset() {
   return useMutation({
     mutationFn: async (email: string) => {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'plotpoint://reset-password',
+        redirectTo: "plotpoint://reset-password",
       });
 
       if (error) throw error;
@@ -104,9 +104,11 @@ export function useUpdateProfile() {
 
   return useMutation({
     mutationFn: async (data: UpdateProfileData) => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-      if (!user) throw new Error('No authenticated user');
+      if (!user) throw new Error("No authenticated user");
 
       // Convert camelCase to snake_case for database
       const dbData: Record<string, any> = {};
@@ -117,16 +119,13 @@ export function useUpdateProfile() {
       if (data.isPublic !== undefined) dbData.is_public = data.isPublic;
       dbData.updated_at = new Date().toISOString();
 
-      const { error } = await supabase
-        .from('profiles')
-        .update(dbData)
-        .eq('id', user.id);
+      const { error } = await supabase.from("profiles").update(dbData).eq("id", user.id);
 
       if (error) throw error;
     },
     onSuccess: () => {
       // Invalidate auth-related queries if you have any
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
     },
   });
 }

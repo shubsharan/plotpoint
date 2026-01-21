@@ -1,21 +1,14 @@
-import React, { useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  Animated,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import type { EndProps } from './types';
-import { endSchema } from './schema';
-import { registerComponent } from '@plotpoint/engine/registry';
+import React, { useRef, useEffect } from "react";
+import { View, Text, Pressable, ScrollView, Animated } from "react-native";
+import { useRouter } from "expo-router";
+import type { EndProps } from "./types";
+import { endSchema } from "./schema";
+import { registerComponent } from "@plotpoint/engine/registry";
 
 function EndV1({ data, context, edges }: EndProps) {
   const router = useRouter();
   const {
-    endingType = 'neutral',
+    endingType = "neutral",
     title,
     message,
     showStats = false,
@@ -44,34 +37,34 @@ function EndV1({ data, context, edges }: EndProps) {
 
   const getEndingConfig = () => {
     switch (endingType) {
-      case 'success':
+      case "success":
         return {
-          icon: '🏆',
-          defaultTitle: 'Victory!',
-          backgroundColor: '#1a3d1a',
-          accentColor: '#4ade80',
+          icon: "🏆",
+          defaultTitle: "Victory!",
+          backgroundColor: "#1a3d1a",
+          accentColor: "#4ade80",
         };
-      case 'failure':
+      case "failure":
         return {
-          icon: '💀',
-          defaultTitle: 'Game Over',
-          backgroundColor: '#3d1a1a',
-          accentColor: '#f87171',
+          icon: "💀",
+          defaultTitle: "Game Over",
+          backgroundColor: "#3d1a1a",
+          accentColor: "#f87171",
         };
-      case 'secret':
+      case "secret":
         return {
-          icon: '🌟',
-          defaultTitle: 'Secret Ending',
-          backgroundColor: '#3d3d1a',
-          accentColor: '#fbbf24',
+          icon: "🌟",
+          defaultTitle: "Secret Ending",
+          backgroundColor: "#3d3d1a",
+          accentColor: "#fbbf24",
         };
-      case 'neutral':
+      case "neutral":
       default:
         return {
-          icon: '📖',
-          defaultTitle: 'The End',
-          backgroundColor: '#1a1a1a',
-          accentColor: '#94a3b8',
+          icon: "📖",
+          defaultTitle: "The End",
+          backgroundColor: "#1a1a1a",
+          accentColor: "#94a3b8",
         };
     }
   };
@@ -89,35 +82,46 @@ function EndV1({ data, context, edges }: EndProps) {
 
   return (
     <ScrollView
-      style={[styles.container, { backgroundColor: config.backgroundColor }]}
-      contentContainerStyle={styles.contentContainer}
+      style={{ flex: 1, backgroundColor: config.backgroundColor }}
+      contentContainerStyle={{
+        flexGrow: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 24,
+      }}
     >
       <Animated.View
-        style={[
-          styles.content,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }],
-          },
-        ]}
+        style={{
+          alignItems: "center",
+          width: "100%",
+          maxWidth: 400,
+          opacity: fadeAnim,
+          transform: [{ scale: scaleAnim }],
+        }}
       >
-        <Text style={styles.icon}>{config.icon}</Text>
-        <Text style={[styles.title, { color: config.accentColor }]}>
+        <Text className="text-8xl mb-6">{config.icon}</Text>
+        <Text style={{ color: config.accentColor }} className="text-4xl font-bold text-center mb-4">
           {title ?? config.defaultTitle}
         </Text>
 
-        {message && <Text style={styles.message}>{message}</Text>}
+        {message && (
+          <Text className="text-lg leading-7 text-card-foreground text-center mb-8">{message}</Text>
+        )}
 
         {showStats && (
-          <View style={styles.statsContainer}>
-            <Text style={styles.statsTitle}>Your Journey</Text>
-            <View style={styles.statRow}>
-              <Text style={styles.statLabel}>Nodes Visited</Text>
-              <Text style={styles.statValue}>{context.visitedNodes.length}</Text>
+          <View className="bg-black/30 rounded-2xl p-5 w-full mb-6">
+            <Text className="text-muted-foreground text-base font-semibold mb-4 text-center">
+              Your Journey
+            </Text>
+            <View className="flex-row justify-between my-2">
+              <Text className="text-card-foreground text-base">Nodes Visited</Text>
+              <Text className="text-foreground text-base font-semibold">
+                {context.visitedNodes.length}
+              </Text>
             </View>
-            <View style={styles.statRow}>
-              <Text style={styles.statLabel}>Items Collected</Text>
-              <Text style={styles.statValue}>
+            <View className="flex-row justify-between my-2">
+              <Text className="text-card-foreground text-base">Items Collected</Text>
+              <Text className="text-foreground text-base font-semibold">
                 {context.inventory.reduce((sum, item) => sum + item.quantity, 0)}
               </Text>
             </View>
@@ -125,26 +129,25 @@ function EndV1({ data, context, edges }: EndProps) {
         )}
 
         {showCredits && (
-          <View style={styles.creditsContainer}>
-            <Text style={styles.creditsTitle}>Credits</Text>
-            <Text style={styles.creditsText}>Made with Plotpoint</Text>
+          <View className="mb-8">
+            <Text className="text-muted-foreground text-sm font-semibold mb-2 text-center">
+              Credits
+            </Text>
+            <Text className="text-muted-foreground text-sm text-center">Made with Plotpoint</Text>
           </View>
         )}
 
-        <View style={styles.buttonsContainer}>
+        <View className="w-full gap-3">
           {allowRestart && (
-            <Pressable
-              style={[styles.button, styles.primaryButton]}
-              onPress={handleRestart}
-            >
-              <Text style={styles.buttonText}>Play Again</Text>
+            <Pressable className="bg-primary py-4 rounded-lg items-center" onPress={handleRestart}>
+              <Text className="text-primary-foreground text-lg font-semibold">Play Again</Text>
             </Pressable>
           )}
           <Pressable
-            style={[styles.button, styles.secondaryButton]}
+            className="bg-transparent border-2 border-border py-4 rounded-lg items-center"
             onPress={handleExit}
           >
-            <Text style={styles.secondaryButtonText}>Exit Story</Text>
+            <Text className="text-muted-foreground text-lg font-medium">Exit Story</Text>
           </Pressable>
         </View>
       </Animated.View>
@@ -152,118 +155,14 @@ function EndV1({ data, context, edges }: EndProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  contentContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  content: {
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 400,
-  },
-  icon: {
-    fontSize: 80,
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  message: {
-    fontSize: 18,
-    lineHeight: 28,
-    color: '#e0e0e0',
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  statsContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: 16,
-    padding: 20,
-    width: '100%',
-    marginBottom: 24,
-  },
-  statsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#888888',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 8,
-  },
-  statLabel: {
-    fontSize: 16,
-    color: '#e0e0e0',
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  creditsContainer: {
-    marginBottom: 32,
-  },
-  creditsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#888888',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  creditsText: {
-    fontSize: 14,
-    color: '#666666',
-    textAlign: 'center',
-  },
-  buttonsContainer: {
-    width: '100%',
-    gap: 12,
-  },
-  button: {
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  primaryButton: {
-    backgroundColor: '#3b82f6',
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#4a4a4a',
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  secondaryButtonText: {
-    color: '#888888',
-    fontSize: 18,
-    fontWeight: '500',
-  },
-});
-
 // Register the component
 registerComponent({
-  componentType: 'end',
-  version: '1.0.0',
+  componentType: "end",
+  version: "1.0.0",
   Component: EndV1,
   propsSchema: endSchema,
   defaultProps: {
-    endingType: 'neutral',
+    endingType: "neutral",
     showStats: false,
     allowRestart: true,
     showCredits: false,

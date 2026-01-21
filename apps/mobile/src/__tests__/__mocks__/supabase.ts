@@ -1,36 +1,36 @@
-import { vi } from 'vitest';
-import type { Session, User, AuthError } from '@supabase/supabase-js';
+import { vi } from "vitest";
+import type { Session, User, AuthError } from "@supabase/supabase-js";
 
 // Mock user data
 export const mockUser: User = {
-  id: 'test-user-id-123',
-  email: 'test@example.com',
+  id: "test-user-id-123",
+  email: "test@example.com",
   app_metadata: {},
   user_metadata: {
-    displayName: 'Test User',
+    displayName: "Test User",
   },
-  aud: 'authenticated',
-  created_at: '2024-01-01T00:00:00.000Z',
+  aud: "authenticated",
+  created_at: "2024-01-01T00:00:00.000Z",
 };
 
 export const mockSession: Session = {
-  access_token: 'mock-access-token',
-  refresh_token: 'mock-refresh-token',
+  access_token: "mock-access-token",
+  refresh_token: "mock-refresh-token",
   expires_in: 3600,
   expires_at: Math.floor(Date.now() / 1000) + 3600,
-  token_type: 'bearer',
+  token_type: "bearer",
   user: mockUser,
 };
 
 export const mockProfile = {
-  id: 'test-user-id-123',
-  username: 'testuser',
-  display_name: 'Test User',
+  id: "test-user-id-123",
+  username: "testuser",
+  display_name: "Test User",
   avatar_url: null,
-  bio: 'Test bio',
+  bio: "Test bio",
   is_public: true,
-  created_at: '2024-01-01T00:00:00.000Z',
-  updated_at: '2024-01-01T00:00:00.000Z',
+  created_at: "2024-01-01T00:00:00.000Z",
+  updated_at: "2024-01-01T00:00:00.000Z",
 };
 
 // Create mock auth error
@@ -38,7 +38,7 @@ export function createAuthError(message: string, status = 400): AuthError {
   return {
     message,
     status,
-    name: 'AuthError',
+    name: "AuthError",
   } as AuthError;
 }
 
@@ -60,50 +60,59 @@ export function createMockSupabaseClient() {
 
     signUp: vi.fn().mockImplementation(async ({ email, password, options }) => {
       if (!email || !password) {
-        return { data: { user: null, session: null }, error: createAuthError('Email and password required') };
+        return {
+          data: { user: null, session: null },
+          error: createAuthError("Email and password required"),
+        };
       }
       if (password.length < 8) {
-        return { data: { user: null, session: null }, error: createAuthError('Password too short') };
+        return {
+          data: { user: null, session: null },
+          error: createAuthError("Password too short"),
+        };
       }
       const newUser = { ...mockUser, email, user_metadata: options?.data || {} };
       return { data: { user: newUser, session: null }, error: null };
     }),
 
     signInWithPassword: vi.fn().mockImplementation(async ({ email, password }) => {
-      if (email === 'test@example.com' && password === 'ValidPass123') {
+      if (email === "test@example.com" && password === "ValidPass123") {
         currentSession = mockSession;
-        authStateListeners.forEach((listener) => listener('SIGNED_IN', mockSession));
+        authStateListeners.forEach((listener) => listener("SIGNED_IN", mockSession));
         return { data: { user: mockUser, session: mockSession }, error: null };
       }
-      return { data: { user: null, session: null }, error: createAuthError('Invalid login credentials') };
+      return {
+        data: { user: null, session: null },
+        error: createAuthError("Invalid login credentials"),
+      };
     }),
 
     signOut: vi.fn().mockImplementation(async () => {
       currentSession = null;
-      authStateListeners.forEach((listener) => listener('SIGNED_OUT', null));
+      authStateListeners.forEach((listener) => listener("SIGNED_OUT", null));
       return { error: null };
     }),
 
     resetPasswordForEmail: vi.fn().mockImplementation(async (email) => {
-      if (!email || !email.includes('@')) {
-        return { error: createAuthError('Invalid email') };
+      if (!email || !email.includes("@")) {
+        return { error: createAuthError("Invalid email") };
       }
       return { data: {}, error: null };
     }),
 
     updateUser: vi.fn().mockImplementation(async ({ password }) => {
       if (password && password.length < 8) {
-        return { data: { user: null }, error: createAuthError('Password too short') };
+        return { data: { user: null }, error: createAuthError("Password too short") };
       }
       return { data: { user: mockUser }, error: null };
     }),
 
     verifyOtp: vi.fn().mockImplementation(async ({ token_hash, type }) => {
-      if (token_hash === 'valid-token' && type === 'recovery') {
+      if (token_hash === "valid-token" && type === "recovery") {
         currentSession = mockSession;
         return { data: { user: mockUser, session: mockSession }, error: null };
       }
-      return { data: { user: null, session: null }, error: createAuthError('Invalid token') };
+      return { data: { user: null, session: null }, error: createAuthError("Invalid token") };
     }),
 
     onAuthStateChange: vi.fn().mockImplementation((callback) => {
@@ -129,7 +138,7 @@ export function createMockSupabaseClient() {
       delete: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockImplementation(async () => {
-        if (table === 'profiles') {
+        if (table === "profiles") {
           return { data: mockProfile, error: null };
         }
         return { data: null, error: null };

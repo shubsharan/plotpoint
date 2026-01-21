@@ -1,7 +1,7 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const endSchema = z.object({
-  endingType: z.enum(['success', 'failure', 'neutral', 'secret']).default('neutral'),
+  endingType: z.enum(["success", "failure", "neutral", "secret"]).default("neutral"),
   title: z.string().optional(),
   message: z.string().optional(),
   showStats: z.boolean().default(false),

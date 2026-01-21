@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const videoPlayerSchema = z.object({
   videoUrl: z.string().url(),
@@ -7,7 +7,7 @@ export const videoPlayerSchema = z.object({
   loop: z.boolean().default(false),
   muted: z.boolean().default(false),
   showControls: z.boolean().default(true),
-  onEndAction: z.enum(['pause', 'continue', 'loop']).default('continue'),
+  onEndAction: z.enum(["pause", "continue", "loop"]).default("continue"),
 });
 
 export type VideoPlayerSchema = z.infer<typeof videoPlayerSchema>;

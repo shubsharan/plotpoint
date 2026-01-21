@@ -1,15 +1,9 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  Animated,
-} from 'react-native';
-import type { ChoiceDialogProps } from './types';
-import { choiceDialogSchema } from './schema';
-import { registerComponent } from '@plotpoint/engine/registry';
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { View, Text, Pressable, ScrollView, Animated } from "react-native";
+import { cn } from "../../../lib/utils";
+import type { ChoiceDialogProps } from "./types";
+import { choiceDialogSchema } from "./schema";
+import { registerComponent } from "@plotpoint/engine/registry";
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -40,7 +34,7 @@ function ChoiceDialogV1({ data, context, edges }: ChoiceDialogProps) {
 
   // Get choice edges (edges with type 'choice')
   const choiceEdges = useMemo(() => {
-    const choices = edges.filter((e) => e.edgeType === 'choice');
+    const choices = edges.filter((e) => e.edgeType === "choice");
     return shuffleChoices ? shuffleArray(choices) : choices;
   }, [edges, shuffleChoices]);
 
@@ -119,63 +113,76 @@ function ChoiceDialogV1({ data, context, edges }: ChoiceDialogProps) {
   const canConfirm = selectedChoices.size >= minSelections;
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+    <Animated.View style={[{ flex: 1, opacity: fadeAnim }]} className="bg-background">
       {timedChoice && timeLimit && (
-        <View style={styles.timerContainer}>
+        <View className="h-10 bg-card justify-center items-center">
           <Animated.View
             style={[
-              styles.timerBar,
+              {
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                backgroundColor: "var(--primary)",
+                opacity: 0.3,
+              },
               {
                 width: timerBarAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
+                  outputRange: ["0%", "100%"],
                 }),
               },
             ]}
           />
-          <Text style={styles.timerText}>{timeRemaining}s</Text>
+          <Text className="text-card-foreground text-base font-semibold">{timeRemaining}s</Text>
         </View>
       )}
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, paddingBottom: 100 }}>
         {showPrompt && prompt && (
-          <Text style={styles.prompt}>{prompt}</Text>
+          <Text className="text-foreground text-2xl font-semibold mb-6 leading-8">{prompt}</Text>
         )}
 
         {allowMultiple && (
-          <Text style={styles.hint}>
-            Select {minSelections === maxSelections
+          <Text className="text-muted-foreground text-sm mb-4">
+            Select{" "}
+            {minSelections === maxSelections
               ? minSelections
-              : `${minSelections}${maxSelections ? `-${maxSelections}` : '+'}`} option{minSelections !== 1 ? 's' : ''}
+              : `${minSelections}${maxSelections ? `-${maxSelections}` : "+"}`}{" "}
+            option{minSelections !== 1 ? "s" : ""}
           </Text>
         )}
 
-        <View style={styles.choicesContainer}>
+        <View className="gap-3">
           {choiceEdges.map((edge, index) => {
             const isSelected = selectedChoices.has(edge.id);
             return (
               <Pressable
                 key={edge.id}
-                style={[
-                  styles.choiceButton,
-                  isSelected && styles.choiceButtonSelected,
-                ]}
+                className={cn(
+                  "flex-row bg-card border-2 rounded-xl p-5 items-center justify-between",
+                  isSelected ? "border-primary bg-blue-950" : "border-border",
+                )}
                 onPress={() => handleChoicePress(edge.id)}
               >
                 <Text
-                  style={[
-                    styles.choiceText,
-                    isSelected && styles.choiceTextSelected,
-                  ]}
+                  className={cn(
+                    "text-base flex-1",
+                    isSelected ? "text-foreground" : "text-card-foreground",
+                  )}
                 >
                   {edge.label ?? `Option ${index + 1}`}
                 </Text>
                 {allowMultiple && (
-                  <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                    {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                  <View
+                    className={cn(
+                      "w-6 h-6 rounded border-2 ml-3 items-center justify-center",
+                      isSelected ? "bg-primary border-primary" : "border-muted",
+                    )}
+                  >
+                    {isSelected && (
+                      <Text className="text-primary-foreground text-sm font-bold">✓</Text>
+                    )}
                   </View>
                 )}
               </Pressable>
@@ -185,17 +192,17 @@ function ChoiceDialogV1({ data, context, edges }: ChoiceDialogProps) {
       </ScrollView>
 
       {allowMultiple && (
-        <View style={styles.confirmContainer}>
+        <View className="absolute bottom-0 left-0 right-0 p-6 bg-background border-t-1 border-border">
           <Pressable
-            style={[styles.confirmButton, !canConfirm && styles.confirmButtonDisabled]}
+            className={cn("py-4 rounded-lg items-center", canConfirm ? "bg-primary" : "bg-muted")}
             onPress={handleConfirm}
             disabled={!canConfirm}
           >
             <Text
-              style={[
-                styles.confirmText,
-                !canConfirm && styles.confirmTextDisabled,
-              ]}
+              className={cn(
+                "text-lg font-semibold",
+                canConfirm ? "text-primary-foreground" : "text-muted-foreground",
+              )}
             >
               Confirm Selection
             </Text>
@@ -206,126 +213,10 @@ function ChoiceDialogV1({ data, context, edges }: ChoiceDialogProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0f0f0f',
-  },
-  timerContainer: {
-    height: 40,
-    backgroundColor: '#1a1a1a',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timerBar: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: '#3b82f6',
-    opacity: 0.3,
-  },
-  timerText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 24,
-    paddingBottom: 100,
-  },
-  prompt: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginBottom: 24,
-    lineHeight: 30,
-  },
-  hint: {
-    fontSize: 14,
-    color: '#888888',
-    marginBottom: 16,
-  },
-  choicesContainer: {
-    gap: 12,
-  },
-  choiceButton: {
-    backgroundColor: '#1a1a1a',
-    borderWidth: 2,
-    borderColor: '#2a2a2a',
-    borderRadius: 12,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  choiceButtonSelected: {
-    borderColor: '#3b82f6',
-    backgroundColor: '#1a2744',
-  },
-  choiceText: {
-    fontSize: 16,
-    color: '#e0e0e0',
-    flex: 1,
-  },
-  choiceTextSelected: {
-    color: '#ffffff',
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#4a4a4a',
-    marginLeft: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxSelected: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
-  },
-  checkmark: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  confirmContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 24,
-    backgroundColor: '#0f0f0f',
-    borderTopWidth: 1,
-    borderTopColor: '#2a2a2a',
-  },
-  confirmButton: {
-    backgroundColor: '#3b82f6',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  confirmButtonDisabled: {
-    backgroundColor: '#2a2a2a',
-  },
-  confirmText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  confirmTextDisabled: {
-    color: '#666666',
-  },
-});
-
 // Register the component
 registerComponent({
-  componentType: 'choice_dialog',
-  version: '1.0.0',
+  componentType: "choice_dialog",
+  version: "1.0.0",
   Component: ChoiceDialogV1,
   propsSchema: choiceDialogSchema,
   defaultProps: {

@@ -1,18 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ActivityIndicator,
-  Dimensions,
-} from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
-import type { VideoPlayerProps } from './types';
-import { videoPlayerSchema } from './schema';
-import { registerComponent } from '@plotpoint/engine/registry';
+import React, { useState, useRef, useEffect } from "react";
+import { View, Text, Pressable, ActivityIndicator, Dimensions } from "react-native";
+import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
+import type { VideoPlayerProps } from "./types";
+import { videoPlayerSchema } from "./schema";
+import { registerComponent } from "@plotpoint/engine/registry";
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 function VideoPlayerV1({ data, context, edges }: VideoPlayerProps) {
   const {
@@ -22,7 +15,7 @@ function VideoPlayerV1({ data, context, edges }: VideoPlayerProps) {
     loop = false,
     muted = false,
     showControls = true,
-    onEndAction = 'continue',
+    onEndAction = "continue",
   } = data;
 
   const videoRef = useRef<Video>(null);
@@ -56,13 +49,13 @@ function VideoPlayerV1({ data, context, edges }: VideoPlayerProps) {
       setHasEnded(true);
 
       switch (onEndAction) {
-        case 'continue':
+        case "continue":
           context.onComplete();
           break;
-        case 'loop':
+        case "loop":
           videoRef.current?.replayAsync();
           break;
-        case 'pause':
+        case "pause":
           // Already paused, do nothing
           break;
       }
@@ -92,18 +85,21 @@ function VideoPlayerV1({ data, context, edges }: VideoPlayerProps) {
     const totalSeconds = Math.floor(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
   if (error) {
     return (
-      <View style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorIcon}>⚠️</Text>
-          <Text style={styles.errorText}>Failed to load video</Text>
-          <Text style={styles.errorDetail}>{error}</Text>
-          <Pressable style={styles.skipButton} onPress={handleContinue}>
-            <Text style={styles.skipButtonText}>Skip Video</Text>
+      <View className="flex-1 bg-background">
+        <View className="flex-1 justify-center items-center p-6">
+          <Text className="text-5xl mb-4">⚠️</Text>
+          <Text className="text-destructive text-lg font-semibold mb-2">Failed to load video</Text>
+          <Text className="text-muted-foreground text-sm text-center mb-6">{error}</Text>
+          <Pressable
+            className="bg-card px-6 py-3 rounded-lg border-1 border-border"
+            onPress={handleContinue}
+          >
+            <Text className="text-card-foreground text-base">Skip Video</Text>
           </Pressable>
         </View>
       </View>
@@ -111,15 +107,15 @@ function VideoPlayerV1({ data, context, edges }: VideoPlayerProps) {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.videoContainer}>
+    <View className="flex-1 bg-background">
+      <View className="flex-1 justify-center items-center">
         <Video
           ref={videoRef}
           source={{ uri: videoUrl }}
           posterSource={posterUrl ? { uri: posterUrl } : undefined}
           usePoster={!!posterUrl}
-          posterStyle={styles.poster}
-          style={styles.video}
+          posterStyle={{ width: "100%", height: "100%", resizeMode: "contain" }}
+          style={{ width: SCREEN_WIDTH, height: (SCREEN_WIDTH * 9) / 16 }}
           resizeMode={ResizeMode.CONTAIN}
           isLooping={loop}
           isMuted={muted}
@@ -128,17 +124,20 @@ function VideoPlayerV1({ data, context, edges }: VideoPlayerProps) {
         />
 
         {isLoading && (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color="#ffffff" />
-            <Text style={styles.loadingText}>Loading video...</Text>
+          <View className="absolute inset-0 justify-center items-center bg-black/70">
+            <ActivityIndicator size="large" color="var(--card-foreground)" />
+            <Text className="text-card-foreground text-sm mt-3">Loading video...</Text>
           </View>
         )}
 
         {showControls && !isLoading && (
-          <Pressable style={styles.controlsOverlay} onPress={handlePlayPause}>
+          <Pressable
+            className="absolute inset-0 justify-center items-center"
+            onPress={handlePlayPause}
+          >
             {!isPlaying && (
-              <View style={styles.playButtonContainer}>
-                <Text style={styles.playButton}>▶</Text>
+              <View className="w-20 h-20 rounded-full bg-yellow-400/90 justify-center items-center">
+                <Text className="text-primary-foreground text-3xl ml-1">▶</Text>
               </View>
             )}
           </Pressable>
@@ -146,26 +145,30 @@ function VideoPlayerV1({ data, context, edges }: VideoPlayerProps) {
       </View>
 
       {showControls && (
-        <View style={styles.controlsBar}>
-          <Text style={styles.timeText}>{formatTime(progress)}</Text>
-          <View style={styles.progressContainer}>
-            <View style={styles.progressTrack}>
+        <View className="flex-row items-center p-4 bg-card">
+          <Text className="text-muted-foreground text-xs font-mono min-w-[45px] text-center">
+            {formatTime(progress)}
+          </Text>
+          <View className="flex-1 mx-3">
+            <View className="h-1 bg-muted rounded overflow-hidden">
               <View
-                style={[
-                  styles.progressFill,
-                  { width: duration > 0 ? `${(progress / duration) * 100}%` : '0%' },
-                ]}
+                style={{
+                  width: duration > 0 ? `${(progress / duration) * 100}%` : "0%",
+                }}
+                className="h-full bg-primary rounded"
               />
             </View>
           </View>
-          <Text style={styles.timeText}>{formatTime(duration)}</Text>
+          <Text className="text-muted-foreground text-xs font-mono min-w-[45px] text-center">
+            {formatTime(duration)}
+          </Text>
         </View>
       )}
 
-      {(hasEnded || onEndAction === 'pause') && (
-        <View style={styles.continueContainer}>
-          <Pressable style={styles.continueButton} onPress={handleContinue}>
-            <Text style={styles.continueButtonText}>Continue</Text>
+      {(hasEnded || onEndAction === "pause") && (
+        <View className="p-6 bg-background">
+          <Pressable className="bg-primary py-4 rounded-lg items-center" onPress={handleContinue}>
+            <Text className="text-primary-foreground text-lg font-semibold">Continue</Text>
           </Pressable>
         </View>
       )}
@@ -173,135 +176,10 @@ function VideoPlayerV1({ data, context, edges }: VideoPlayerProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  videoContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  video: {
-    width: SCREEN_WIDTH,
-    height: (SCREEN_WIDTH * 9) / 16,
-  },
-  poster: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'contain',
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-  },
-  loadingText: {
-    color: '#ffffff',
-    marginTop: 12,
-    fontSize: 14,
-  },
-  controlsOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playButtonContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(59, 130, 246, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playButton: {
-    color: '#ffffff',
-    fontSize: 32,
-    marginLeft: 4,
-  },
-  controlsBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#1a1a1a',
-  },
-  timeText: {
-    color: '#888888',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    minWidth: 45,
-    textAlign: 'center',
-  },
-  progressContainer: {
-    flex: 1,
-    marginHorizontal: 12,
-  },
-  progressTrack: {
-    height: 4,
-    backgroundColor: '#3a3a3a',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#3b82f6',
-    borderRadius: 2,
-  },
-  continueContainer: {
-    padding: 24,
-    backgroundColor: '#0f0f0f',
-  },
-  continueButton: {
-    backgroundColor: '#3b82f6',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  continueButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  errorIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: '#ff6b6b',
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  errorDetail: {
-    color: '#888888',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  skipButton: {
-    backgroundColor: '#2a2a2a',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  skipButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-  },
-});
-
 // Register the component
 registerComponent({
-  componentType: 'video_player',
-  version: '1.0.0',
+  componentType: "video_player",
+  version: "1.0.0",
   Component: VideoPlayerV1,
   propsSchema: videoPlayerSchema,
   defaultProps: {
@@ -309,7 +187,7 @@ registerComponent({
     loop: false,
     muted: false,
     showControls: true,
-    onEndAction: 'continue',
+    onEndAction: "continue",
   },
 });
 

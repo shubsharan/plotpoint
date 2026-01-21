@@ -10,643 +10,629 @@ import {
   uniqueIndex,
   index,
   doublePrecision,
-} from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+} from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 
 // ============================================
 // ENUMS
 // ============================================
 
 // Story status
-export const storyStatusEnum = pgEnum('story_status', ['draft', 'published', 'archived']);
+export const storyStatusEnum = pgEnum("story_status", ["draft", "published", "archived"]);
 
 // Shell types - determines story presentation
-export const shellTypeEnum = pgEnum('shell_type', ['ebook', 'chat', 'map']);
+export const shellTypeEnum = pgEnum("shell_type", ["ebook", "chat", "map"]);
 
 // Geography type - how the story relates to locations
-export const geographyTypeEnum = pgEnum('geography_type', [
-  'single_city',
-  'multi_region',
-  'location_agnostic',
+export const geographyTypeEnum = pgEnum("geography_type", [
+  "single_city",
+  "multi_region",
+  "location_agnostic",
 ]);
 
 // Node category - blocks are content, gates are unlock points
-export const nodeCategoryEnum = pgEnum('node_category', ['block', 'gate']);
+export const nodeCategoryEnum = pgEnum("node_category", ["block", "gate"]);
 
 // Edge types
-export const edgeTypeEnum = pgEnum('edge_type', ['default', 'choice', 'conditional']);
+export const edgeTypeEnum = pgEnum("edge_type", ["default", "choice", "conditional"]);
 
 // Component categories for organization
-export const componentCategoryEnum = pgEnum('component_category', [
-  'block',
-  'gate',
-  'other',
-]);
+export const componentCategoryEnum = pgEnum("component_category", ["block", "gate", "other"]);
 
 // Session status
-export const sessionStatusEnum = pgEnum('session_status', [
-  'active',
-  'completed',
-  'archived',
-  'abandoned',
+export const sessionStatusEnum = pgEnum("session_status", [
+  "active",
+  "completed",
+  "archived",
+  "abandoned",
 ]);
 
 // Multiplayer session status
-export const multiplayerStatusEnum = pgEnum('multiplayer_status', [
-  'waiting',
-  'active',
-  'completed',
-  'abandoned',
+export const multiplayerStatusEnum = pgEnum("multiplayer_status", [
+  "waiting",
+  "active",
+  "completed",
+  "abandoned",
 ]);
 
 // Location type for geolocation gates
-export const locationTypeEnum = pgEnum('location_type', ['specific', 'category', 'none']);
+export const locationTypeEnum = pgEnum("location_type", ["specific", "category", "none"]);
 
 // Fallback behavior for geolocation
-export const locationFallbackEnum = pgEnum('location_fallback', [
-  'wait',
-  'skip',
-  'manual_confirm',
-]);
+export const locationFallbackEnum = pgEnum("location_fallback", ["wait", "skip", "manual_confirm"]);
 
 // Sync point behavior for multiplayer
-export const syncBehaviorEnum = pgEnum('sync_behavior', [
-  'wait_screen',
-  'side_content',
-  'notification',
-  'timeout_skip',
+export const syncBehaviorEnum = pgEnum("sync_behavior", [
+  "wait_screen",
+  "side_content",
+  "notification",
+  "timeout_skip",
 ]);
 
 // Event types for analytics
-export const eventTypeEnum = pgEnum('event_type', [
-  'story_started',
-  'story_completed',
-  'story_abandoned',
-  'node_visited',
-  'choice_made',
-  'gate_unlocked',
-  'gate_failed',
-  'session_joined',
-  'session_left',
-  'achievement_unlocked',
+export const eventTypeEnum = pgEnum("event_type", [
+  "story_started",
+  "story_completed",
+  "story_abandoned",
+  "node_visited",
+  "choice_made",
+  "gate_unlocked",
+  "gate_failed",
+  "session_joined",
+  "session_left",
+  "achievement_unlocked",
 ]);
 
 // Asset types for story media
-export const assetTypeEnum = pgEnum('asset_type', [
-  'image',
-  'video',
-  'audio',
-  'document',
-  'other',
-]);
+export const assetTypeEnum = pgEnum("asset_type", ["image", "video", "audio", "document", "other"]);
 
 // ============================================
 // GENRES
 // ============================================
 export const genres = pgTable(
-  'genres',
+  "genres",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    name: text('name').notNull(),
-    slug: text('slug').notNull(),
-    description: text('description'),
-    icon: text('icon'),
-    color: text('color'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    description: text("description"),
+    icon: text("icon"),
+    color: text("color"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [uniqueIndex('genres_slug_idx').on(table.slug)]
+  (table) => [uniqueIndex("genres_slug_idx").on(table.slug)],
 );
 
 // ============================================
 // VENUE CATEGORIES
 // ============================================
 export const venueCategories = pgTable(
-  'venue_categories',
+  "venue_categories",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    name: text('name').notNull(), // e.g., "coffee_shop", "park", "museum"
-    displayName: text('display_name').notNull(),
-    osmTags: jsonb('osm_tags').notNull(), // OpenStreetMap tags to match
-    icon: text('icon'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(), // e.g., "coffee_shop", "park", "museum"
+    displayName: text("display_name").notNull(),
+    osmTags: jsonb("osm_tags").notNull(), // OpenStreetMap tags to match
+    icon: text("icon"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [uniqueIndex('venue_categories_name_idx').on(table.name)]
+  (table) => [uniqueIndex("venue_categories_name_idx").on(table.name)],
 );
 
 // ============================================
 // VENUES (cached from OSM + our data)
 // ============================================
 export const venues = pgTable(
-  'venues',
+  "venues",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    osmId: text('osm_id'), // OpenStreetMap ID if from OSM
-    categoryId: uuid('category_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    osmId: text("osm_id"), // OpenStreetMap ID if from OSM
+    categoryId: uuid("category_id")
       .notNull()
       .references(() => venueCategories.id),
-    name: text('name').notNull(),
-    latitude: doublePrecision('latitude').notNull(),
-    longitude: doublePrecision('longitude').notNull(),
-    address: text('address'),
-    city: text('city'),
-    country: text('country'),
-    isSponsored: boolean('is_sponsored').default(false).notNull(),
-    isVerified: boolean('is_verified').default(false).notNull(),
-    sponsorPriority: integer('sponsor_priority').default(0),
-    metadata: jsonb('metadata').default({}),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    name: text("name").notNull(),
+    latitude: doublePrecision("latitude").notNull(),
+    longitude: doublePrecision("longitude").notNull(),
+    address: text("address"),
+    city: text("city"),
+    country: text("country"),
+    isSponsored: boolean("is_sponsored").default(false).notNull(),
+    isVerified: boolean("is_verified").default(false).notNull(),
+    sponsorPriority: integer("sponsor_priority").default(0),
+    metadata: jsonb("metadata").default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
-    index('venues_category_idx').on(table.categoryId),
-    index('venues_city_idx').on(table.city),
-    index('venues_location_idx').on(table.latitude, table.longitude),
-    uniqueIndex('venues_osm_idx').on(table.osmId),
-  ]
+    index("venues_category_idx").on(table.categoryId),
+    index("venues_city_idx").on(table.city),
+    index("venues_location_idx").on(table.latitude, table.longitude),
+    uniqueIndex("venues_osm_idx").on(table.osmId),
+  ],
 );
 
 // ============================================
 // STORIES
 // ============================================
 export const stories = pgTable(
-  'stories',
+  "stories",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    title: text('title').notNull(),
-    slug: text('slug').notNull(),
-    description: text('description'),
-    authorId: uuid('author_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    title: text("title").notNull(),
+    slug: text("slug").notNull(),
+    description: text("description"),
+    authorId: uuid("author_id")
       .notNull()
       .references(() => profiles.id),
-    status: storyStatusEnum('status').default('draft').notNull(),
+    status: storyStatusEnum("status").default("draft").notNull(),
 
     // Shell determines presentation
-    shellType: shellTypeEnum('shell_type').default('ebook').notNull(),
+    shellType: shellTypeEnum("shell_type").default("ebook").notNull(),
 
     // Story metadata
-    genreId: uuid('genre_id').references(() => genres.id),
-    estimatedDurationMinutes: integer('estimated_duration_minutes'),
-    difficultyLevel: integer('difficulty_level'), // 1-5 scale
-    coverImageUrl: text('cover_image_url'),
+    genreId: uuid("genre_id").references(() => genres.id),
+    estimatedDurationMinutes: integer("estimated_duration_minutes"),
+    difficultyLevel: integer("difficulty_level"), // 1-5 scale
+    coverImageUrl: text("cover_image_url"),
 
     // Location settings
-    geographyType: geographyTypeEnum('geography_type').default('location_agnostic').notNull(),
-    primaryCity: text('primary_city'),
-    primaryCountry: text('primary_country'),
+    geographyType: geographyTypeEnum("geography_type").default("location_agnostic").notNull(),
+    primaryCity: text("primary_city"),
+    primaryCountry: text("primary_country"),
 
     // Navigation
-    startNodeId: uuid('start_node_id'),
+    startNodeId: uuid("start_node_id"),
 
     // Multiplayer settings
-    isMultiplayer: boolean('is_multiplayer').default(false).notNull(),
-    minPlayers: integer('min_players').default(1),
-    maxPlayers: integer('max_players').default(1),
+    isMultiplayer: boolean("is_multiplayer").default(false).notNull(),
+    minPlayers: integer("min_players").default(1),
+    maxPlayers: integer("max_players").default(1),
 
     // Timestamps
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-    publishedAt: timestamp('published_at'),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    publishedAt: timestamp("published_at"),
   },
   (table) => [
-    uniqueIndex('stories_slug_idx').on(table.slug),
-    index('stories_author_idx').on(table.authorId),
-    index('stories_genre_idx').on(table.genreId),
-    index('stories_status_idx').on(table.status),
-    index('stories_city_idx').on(table.primaryCity),
-  ]
+    uniqueIndex("stories_slug_idx").on(table.slug),
+    index("stories_author_idx").on(table.authorId),
+    index("stories_genre_idx").on(table.genreId),
+    index("stories_status_idx").on(table.status),
+    index("stories_city_idx").on(table.primaryCity),
+  ],
 );
 
 // ============================================
 // STORY ROLES (for multiplayer)
 // ============================================
 export const storyRoles = pgTable(
-  'story_roles',
+  "story_roles",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    storyId: uuid('story_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    storyId: uuid("story_id")
       .notNull()
-      .references(() => stories.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(), // e.g., "detective", "witness"
-    displayName: text('display_name').notNull(),
-    description: text('description'),
-    isRequired: boolean('is_required').default(true).notNull(),
-    order: integer('order').default(0),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+      .references(() => stories.id, { onDelete: "cascade" }),
+    name: text("name").notNull(), // e.g., "detective", "witness"
+    displayName: text("display_name").notNull(),
+    description: text("description"),
+    isRequired: boolean("is_required").default(true).notNull(),
+    order: integer("order").default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('story_roles_story_name_idx').on(table.storyId, table.name),
-    index('story_roles_story_idx').on(table.storyId),
-  ]
+    uniqueIndex("story_roles_story_name_idx").on(table.storyId, table.name),
+    index("story_roles_story_idx").on(table.storyId),
+  ],
 );
 
 // ============================================
 // CHAPTERS (optional grouping)
 // ============================================
 export const chapters = pgTable(
-  'chapters',
+  "chapters",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    storyId: uuid('story_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    storyId: uuid("story_id")
       .notNull()
-      .references(() => stories.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    description: text('description'),
-    order: integer('order').default(0),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+      .references(() => stories.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    order: integer("order").default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [index('chapters_story_idx').on(table.storyId)]
+  (table) => [index("chapters_story_idx").on(table.storyId)],
 );
 
 // ============================================
 // NODES
 // ============================================
 export const nodes = pgTable(
-  'nodes',
+  "nodes",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    storyId: uuid('story_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    storyId: uuid("story_id")
       .notNull()
-      .references(() => stories.id, { onDelete: 'cascade' }),
+      .references(() => stories.id, { onDelete: "cascade" }),
 
     // Node identification
-    nodeKey: text('node_key').notNull(),
-    nodeCategory: nodeCategoryEnum('node_category').notNull(), // block or gate
-    nodeType: text('node_type').notNull(), // text_block, choice_gate, etc.
+    nodeKey: text("node_key").notNull(),
+    nodeCategory: nodeCategoryEnum("node_category").notNull(), // block or gate
+    nodeType: text("node_type").notNull(), // text_block, choice_gate, etc.
 
     // Optional chapter grouping
-    chapterId: uuid('chapter_id').references(() => chapters.id),
+    chapterId: uuid("chapter_id").references(() => chapters.id),
 
     // Component version (for versioned rendering)
-    componentVersionId: uuid('component_version_id').references(() => componentVersions.id),
+    componentVersionId: uuid("component_version_id").references(() => componentVersions.id),
 
     // Node content/configuration
-    data: jsonb('data').default({}).notNull(),
+    data: jsonb("data").default({}).notNull(),
 
     // Visual editor position
-    position: jsonb('position').default({ x: 0, y: 0 }),
-    order: integer('order').default(0),
+    position: jsonb("position").default({ x: 0, y: 0 }),
+    order: integer("order").default(0),
 
     // Role restriction (for multiplayer)
-    allowedRoles: jsonb('allowed_roles'), // Array of role IDs that can see this node
+    allowedRoles: jsonb("allowed_roles"), // Array of role IDs that can see this node
 
     // Timestamps
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('nodes_story_key_idx').on(table.storyId, table.nodeKey),
-    index('nodes_story_idx').on(table.storyId),
-    index('nodes_chapter_idx').on(table.chapterId),
-    index('nodes_category_idx').on(table.nodeCategory),
-    index('nodes_type_idx').on(table.nodeType),
-    index('nodes_story_order_idx').on(table.storyId, table.order),
-  ]
+    uniqueIndex("nodes_story_key_idx").on(table.storyId, table.nodeKey),
+    index("nodes_story_idx").on(table.storyId),
+    index("nodes_chapter_idx").on(table.chapterId),
+    index("nodes_category_idx").on(table.nodeCategory),
+    index("nodes_type_idx").on(table.nodeType),
+    index("nodes_story_order_idx").on(table.storyId, table.order),
+  ],
 );
 
 // ============================================
 // EDGES (Connections between nodes)
 // ============================================
 export const edges = pgTable(
-  'edges',
+  "edges",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    sourceNodeId: uuid('source_node_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    sourceNodeId: uuid("source_node_id")
       .notNull()
-      .references(() => nodes.id, { onDelete: 'cascade' }),
-    targetNodeId: uuid('target_node_id')
+      .references(() => nodes.id, { onDelete: "cascade" }),
+    targetNodeId: uuid("target_node_id")
       .notNull()
-      .references(() => nodes.id, { onDelete: 'cascade' }),
-    edgeType: edgeTypeEnum('edge_type').default('default').notNull(),
-    label: text('label'), // For choice text
-    condition: jsonb('condition'), // For conditional edges
-    priority: integer('priority').default(0), // For ordering/evaluation
-    allowedRoles: jsonb('allowed_roles'), // For multiplayer role-based edges
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+      .references(() => nodes.id, { onDelete: "cascade" }),
+    edgeType: edgeTypeEnum("edge_type").default("default").notNull(),
+    label: text("label"), // For choice text
+    condition: jsonb("condition"), // For conditional edges
+    priority: integer("priority").default(0), // For ordering/evaluation
+    allowedRoles: jsonb("allowed_roles"), // For multiplayer role-based edges
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index('edges_source_idx').on(table.sourceNodeId),
-    index('edges_target_idx').on(table.targetNodeId),
-  ]
+    index("edges_source_idx").on(table.sourceNodeId),
+    index("edges_target_idx").on(table.targetNodeId),
+  ],
 );
 
 // ============================================
 // SYNC POINTS (Multiplayer coordination)
 // ============================================
 export const syncPoints = pgTable(
-  'sync_points',
+  "sync_points",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    storyId: uuid('story_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    storyId: uuid("story_id")
       .notNull()
-      .references(() => stories.id, { onDelete: 'cascade' }),
-    nodeId: uuid('node_id')
+      .references(() => stories.id, { onDelete: "cascade" }),
+    nodeId: uuid("node_id")
       .notNull()
-      .references(() => nodes.id, { onDelete: 'cascade' }),
-    behavior: syncBehaviorEnum('behavior').default('wait_screen').notNull(),
-    timeoutSeconds: integer('timeout_seconds'),
-    sideContentNodeId: uuid('side_content_node_id').references(() => nodes.id),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+      .references(() => nodes.id, { onDelete: "cascade" }),
+    behavior: syncBehaviorEnum("behavior").default("wait_screen").notNull(),
+    timeoutSeconds: integer("timeout_seconds"),
+    sideContentNodeId: uuid("side_content_node_id").references(() => nodes.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index('sync_points_story_idx').on(table.storyId),
-    uniqueIndex('sync_points_node_idx').on(table.nodeId),
-  ]
+    index("sync_points_story_idx").on(table.storyId),
+    uniqueIndex("sync_points_node_idx").on(table.nodeId),
+  ],
 );
 
 // ============================================
 // COMPONENT TYPES
 // ============================================
 export const componentTypes = pgTable(
-  'component_types',
+  "component_types",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    name: text('name').notNull(), // text_block, choice_gate, etc.
-    displayName: text('display_name').notNull(),
-    description: text('description'),
-    category: componentCategoryEnum('category').notNull(),
-    icon: text('icon'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(), // text_block, choice_gate, etc.
+    displayName: text("display_name").notNull(),
+    description: text("description"),
+    category: componentCategoryEnum("category").notNull(),
+    icon: text("icon"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [uniqueIndex('component_types_name_idx').on(table.name)]
+  (table) => [uniqueIndex("component_types_name_idx").on(table.name)],
 );
 
 // ============================================
 // COMPONENT VERSIONS
 // ============================================
 export const componentVersions = pgTable(
-  'component_versions',
+  "component_versions",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    componentTypeId: uuid('component_type_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    componentTypeId: uuid("component_type_id")
       .notNull()
-      .references(() => componentTypes.id, { onDelete: 'cascade' }),
-    major: integer('major').notNull(),
-    minor: integer('minor').notNull(),
-    patch: integer('patch').notNull(),
-    propsSchema: jsonb('props_schema').notNull(), // JSON Schema for validation
-    defaultProps: jsonb('default_props').default({}),
-    dependencies: jsonb('dependencies'), // Other component dependencies
-    changelog: text('changelog'),
-    isDeprecated: boolean('is_deprecated').default(false).notNull(),
-    deprecationMessage: text('deprecation_message'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+      .references(() => componentTypes.id, { onDelete: "cascade" }),
+    major: integer("major").notNull(),
+    minor: integer("minor").notNull(),
+    patch: integer("patch").notNull(),
+    propsSchema: jsonb("props_schema").notNull(), // JSON Schema for validation
+    defaultProps: jsonb("default_props").default({}),
+    dependencies: jsonb("dependencies"), // Other component dependencies
+    changelog: text("changelog"),
+    isDeprecated: boolean("is_deprecated").default(false).notNull(),
+    deprecationMessage: text("deprecation_message"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('component_versions_unique_idx').on(
+    uniqueIndex("component_versions_unique_idx").on(
       table.componentTypeId,
       table.major,
       table.minor,
-      table.patch
+      table.patch,
     ),
-    index('component_versions_type_idx').on(table.componentTypeId),
-  ]
+    index("component_versions_type_idx").on(table.componentTypeId),
+  ],
 );
 
 // ============================================
 // STORY MANIFESTS
 // ============================================
-export const storyManifests = pgTable('story_manifests', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  storyId: uuid('story_id')
+export const storyManifests = pgTable("story_manifests", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  storyId: uuid("story_id")
     .notNull()
-    .references(() => stories.id, { onDelete: 'cascade' })
+    .references(() => stories.id, { onDelete: "cascade" })
     .unique(),
-  requiredComponents: jsonb('required_components').notNull(), // { component_name: "^1.0.0" }
-  engineVersion: text('engine_version').notNull(),
-  resolvedComponents: jsonb('resolved_components'), // Cached resolution
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  requiredComponents: jsonb("required_components").notNull(), // { component_name: "^1.0.0" }
+  engineVersion: text("engine_version").notNull(),
+  resolvedComponents: jsonb("resolved_components"), // Cached resolution
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 // ============================================
 // PROFILES (User profiles)
 // ============================================
 export const profiles = pgTable(
-  'profiles',
+  "profiles",
   {
-    id: uuid('id').primaryKey(), // Same as Supabase auth.users.id
-    username: text('username'),
-    displayName: text('display_name'),
-    avatarUrl: text('avatar_url'),
-    bio: text('bio'),
-    isPublic: boolean('is_public').default(true).notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    id: uuid("id").primaryKey(), // Same as Supabase auth.users.id
+    username: text("username"),
+    displayName: text("display_name"),
+    avatarUrl: text("avatar_url"),
+    bio: text("bio"),
+    isPublic: boolean("is_public").default(true).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (table) => [uniqueIndex('profiles_username_idx').on(table.username)]
+  (table) => [uniqueIndex("profiles_username_idx").on(table.username)],
 );
 
 // ============================================
 // ACHIEVEMENTS
 // ============================================
 export const achievements = pgTable(
-  'achievements',
+  "achievements",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    name: text('name').notNull(),
-    slug: text('slug').notNull(),
-    description: text('description'),
-    icon: text('icon'),
-    category: text('category'), // e.g., "exploration", "completion", "social"
-    points: integer('points').default(0),
-    isSecret: boolean('is_secret').default(false).notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    description: text("description"),
+    icon: text("icon"),
+    category: text("category"), // e.g., "exploration", "completion", "social"
+    points: integer("points").default(0),
+    isSecret: boolean("is_secret").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [uniqueIndex('achievements_slug_idx').on(table.slug)]
+  (table) => [uniqueIndex("achievements_slug_idx").on(table.slug)],
 );
 
 // ============================================
 // USER ACHIEVEMENTS
 // ============================================
 export const userAchievements = pgTable(
-  'user_achievements',
+  "user_achievements",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    userId: uuid('user_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
       .notNull()
-      .references(() => profiles.id, { onDelete: 'cascade' }),
-    achievementId: uuid('achievement_id')
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    achievementId: uuid("achievement_id")
       .notNull()
-      .references(() => achievements.id, { onDelete: 'cascade' }),
-    storyId: uuid('story_id').references(() => stories.id), // Which story triggered it
-    unlockedAt: timestamp('unlocked_at').defaultNow().notNull(),
+      .references(() => achievements.id, { onDelete: "cascade" }),
+    storyId: uuid("story_id").references(() => stories.id), // Which story triggered it
+    unlockedAt: timestamp("unlocked_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('user_achievements_unique_idx').on(table.userId, table.achievementId),
-    index('user_achievements_user_idx').on(table.userId),
-  ]
+    uniqueIndex("user_achievements_unique_idx").on(table.userId, table.achievementId),
+    index("user_achievements_user_idx").on(table.userId),
+  ],
 );
 
 // ============================================
 // STORY SESSIONS (Single player progress)
 // ============================================
 export const storySessions = pgTable(
-  'story_sessions',
+  "story_sessions",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    userId: uuid('user_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
       .notNull()
-      .references(() => profiles.id, { onDelete: 'cascade' }),
-    storyId: uuid('story_id')
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    storyId: uuid("story_id")
       .notNull()
-      .references(() => stories.id, { onDelete: 'cascade' }),
-    currentNodeId: uuid('current_node_id').references(() => nodes.id),
-    status: sessionStatusEnum('status').default('active').notNull(),
-    gameState: jsonb('game_state').default({}).notNull(),
-    inventory: jsonb('inventory').default([]).notNull(),
-    visitedNodes: jsonb('visited_nodes').default([]).notNull(),
-    choiceHistory: jsonb('choice_history').default([]).notNull(),
-    startedAt: timestamp('started_at').defaultNow().notNull(),
-    lastPlayedAt: timestamp('last_played_at').defaultNow().notNull(),
-    completedAt: timestamp('completed_at'),
+      .references(() => stories.id, { onDelete: "cascade" }),
+    currentNodeId: uuid("current_node_id").references(() => nodes.id),
+    status: sessionStatusEnum("status").default("active").notNull(),
+    gameState: jsonb("game_state").default({}).notNull(),
+    inventory: jsonb("inventory").default([]).notNull(),
+    visitedNodes: jsonb("visited_nodes").default([]).notNull(),
+    choiceHistory: jsonb("choice_history").default([]).notNull(),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    lastPlayedAt: timestamp("last_played_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
   },
   (table) => [
-    index('story_sessions_user_idx').on(table.userId),
-    index('story_sessions_story_idx').on(table.storyId),
-    index('story_sessions_status_idx').on(table.status),
-    index('story_sessions_user_status_idx').on(table.userId, table.status),
+    index("story_sessions_user_idx").on(table.userId),
+    index("story_sessions_story_idx").on(table.storyId),
+    index("story_sessions_status_idx").on(table.status),
+    index("story_sessions_user_status_idx").on(table.userId, table.status),
     // Allow multiple completed sessions, only one active per user per story
-  ]
+  ],
 );
 
 // ============================================
 // MULTIPLAYER SESSIONS
 // ============================================
 export const multiplayerSessions = pgTable(
-  'multiplayer_sessions',
+  "multiplayer_sessions",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    storyId: uuid('story_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    storyId: uuid("story_id")
       .notNull()
-      .references(() => stories.id, { onDelete: 'cascade' }),
-    hostUserId: uuid('host_user_id')
+      .references(() => stories.id, { onDelete: "cascade" }),
+    hostUserId: uuid("host_user_id")
       .notNull()
       .references(() => profiles.id),
-    joinCode: text('join_code').notNull(), // For QR/deep link
-    status: multiplayerStatusEnum('status').default('waiting').notNull(),
-    sharedState: jsonb('shared_state').default({}).notNull(),
-    sharedInventory: jsonb('shared_inventory').default([]).notNull(),
-    currentSyncPointId: uuid('current_sync_point_id').references(() => syncPoints.id),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-    completedAt: timestamp('completed_at'),
+    joinCode: text("join_code").notNull(), // For QR/deep link
+    status: multiplayerStatusEnum("status").default("waiting").notNull(),
+    sharedState: jsonb("shared_state").default({}).notNull(),
+    sharedInventory: jsonb("shared_inventory").default([]).notNull(),
+    currentSyncPointId: uuid("current_sync_point_id").references(() => syncPoints.id),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
   },
   (table) => [
-    uniqueIndex('multiplayer_sessions_join_code_idx').on(table.joinCode),
-    index('multiplayer_sessions_story_idx').on(table.storyId),
-    index('multiplayer_sessions_host_idx').on(table.hostUserId),
-    index('multiplayer_sessions_status_idx').on(table.status),
-    index('multiplayer_sessions_story_status_idx').on(table.storyId, table.status),
-  ]
+    uniqueIndex("multiplayer_sessions_join_code_idx").on(table.joinCode),
+    index("multiplayer_sessions_story_idx").on(table.storyId),
+    index("multiplayer_sessions_host_idx").on(table.hostUserId),
+    index("multiplayer_sessions_status_idx").on(table.status),
+    index("multiplayer_sessions_story_status_idx").on(table.storyId, table.status),
+  ],
 );
 
 // ============================================
 // MULTIPLAYER PLAYERS (Player slots in session)
 // ============================================
 export const multiplayerPlayers = pgTable(
-  'multiplayer_players',
+  "multiplayer_players",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    sessionId: uuid('session_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    sessionId: uuid("session_id")
       .notNull()
-      .references(() => multiplayerSessions.id, { onDelete: 'cascade' }),
-    userId: uuid('user_id')
+      .references(() => multiplayerSessions.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
       .notNull()
       .references(() => profiles.id),
-    roleId: uuid('role_id').references(() => storyRoles.id),
-    currentNodeId: uuid('current_node_id').references(() => nodes.id),
-    personalState: jsonb('personal_state').default({}).notNull(),
-    visitedNodes: jsonb('visited_nodes').default([]).notNull(),
-    isConnected: boolean('is_connected').default(true).notNull(),
-    joinedAt: timestamp('joined_at').defaultNow().notNull(),
-    lastActiveAt: timestamp('last_active_at').defaultNow().notNull(),
+    roleId: uuid("role_id").references(() => storyRoles.id),
+    currentNodeId: uuid("current_node_id").references(() => nodes.id),
+    personalState: jsonb("personal_state").default({}).notNull(),
+    visitedNodes: jsonb("visited_nodes").default([]).notNull(),
+    isConnected: boolean("is_connected").default(true).notNull(),
+    joinedAt: timestamp("joined_at").defaultNow().notNull(),
+    lastActiveAt: timestamp("last_active_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex('multiplayer_players_session_user_idx').on(table.sessionId, table.userId),
-    index('multiplayer_players_session_idx').on(table.sessionId),
-    index('multiplayer_players_user_idx').on(table.userId),
-  ]
+    uniqueIndex("multiplayer_players_session_user_idx").on(table.sessionId, table.userId),
+    index("multiplayer_players_session_idx").on(table.sessionId),
+    index("multiplayer_players_user_idx").on(table.userId),
+  ],
 );
 
 // ============================================
 // STORY DOWNLOADS (Offline mode)
 // ============================================
 export const storyDownloads = pgTable(
-  'story_downloads',
+  "story_downloads",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    userId: uuid('user_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
       .notNull()
-      .references(() => profiles.id, { onDelete: 'cascade' }),
-    storyId: uuid('story_id')
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    storyId: uuid("story_id")
       .notNull()
-      .references(() => stories.id, { onDelete: 'cascade' }),
-    version: text('version').notNull(), // Story version downloaded
-    sizeBytes: integer('size_bytes'),
-    downloadedAt: timestamp('downloaded_at').defaultNow().notNull(),
-    lastAccessedAt: timestamp('last_accessed_at'),
-    expiresAt: timestamp('expires_at'),
+      .references(() => stories.id, { onDelete: "cascade" }),
+    version: text("version").notNull(), // Story version downloaded
+    sizeBytes: integer("size_bytes"),
+    downloadedAt: timestamp("downloaded_at").defaultNow().notNull(),
+    lastAccessedAt: timestamp("last_accessed_at"),
+    expiresAt: timestamp("expires_at"),
   },
   (table) => [
-    uniqueIndex('story_downloads_user_story_idx').on(table.userId, table.storyId),
-    index('story_downloads_user_idx').on(table.userId),
-  ]
+    uniqueIndex("story_downloads_user_story_idx").on(table.userId, table.storyId),
+    index("story_downloads_user_idx").on(table.userId),
+  ],
 );
 
 // ============================================
 // STORY ASSETS (Media per story for offline/cleanup)
 // ============================================
 export const storyAssets = pgTable(
-  'story_assets',
+  "story_assets",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    storyId: uuid('story_id')
+    id: uuid("id").defaultRandom().primaryKey(),
+    storyId: uuid("story_id")
       .notNull()
-      .references(() => stories.id, { onDelete: 'cascade' }),
-    assetType: assetTypeEnum('asset_type').notNull(),
-    filename: text('filename').notNull(),
-    mimeType: text('mime_type'),
-    storagePath: text('storage_path').notNull(),
-    publicUrl: text('public_url'),
-    sizeBytes: integer('size_bytes').notNull(),
-    width: integer('width'),
-    height: integer('height'),
-    durationSeconds: integer('duration_seconds'),
-    referencedByNodes: jsonb('referenced_by_nodes').default([]),
-    contentHash: text('content_hash'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+      .references(() => stories.id, { onDelete: "cascade" }),
+    assetType: assetTypeEnum("asset_type").notNull(),
+    filename: text("filename").notNull(),
+    mimeType: text("mime_type"),
+    storagePath: text("storage_path").notNull(),
+    publicUrl: text("public_url"),
+    sizeBytes: integer("size_bytes").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    durationSeconds: integer("duration_seconds"),
+    referencedByNodes: jsonb("referenced_by_nodes").default([]),
+    contentHash: text("content_hash"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
-    index('story_assets_story_idx').on(table.storyId),
-    index('story_assets_type_idx').on(table.assetType),
-    uniqueIndex('story_assets_storage_path_idx').on(table.storagePath),
-  ]
+    index("story_assets_story_idx").on(table.storyId),
+    index("story_assets_type_idx").on(table.assetType),
+    uniqueIndex("story_assets_storage_path_idx").on(table.storagePath),
+  ],
 );
 
 // ============================================
 // EVENTS (Analytics/Telemetry)
 // ============================================
 export const events = pgTable(
-  'events',
+  "events",
   {
-    id: uuid('id').defaultRandom().primaryKey(),
-    userId: uuid('user_id').references(() => profiles.id),
-    sessionId: uuid('session_id'), // story_sessions or multiplayer_sessions id
-    storyId: uuid('story_id').references(() => stories.id),
-    nodeId: uuid('node_id').references(() => nodes.id),
-    eventType: eventTypeEnum('event_type').notNull(),
-    eventData: jsonb('event_data').default({}),
-    deviceInfo: jsonb('device_info').default({}),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").references(() => profiles.id),
+    sessionId: uuid("session_id"), // story_sessions or multiplayer_sessions id
+    storyId: uuid("story_id").references(() => stories.id),
+    nodeId: uuid("node_id").references(() => nodes.id),
+    eventType: eventTypeEnum("event_type").notNull(),
+    eventData: jsonb("event_data").default({}),
+    deviceInfo: jsonb("device_info").default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index('events_user_idx').on(table.userId),
-    index('events_story_idx').on(table.storyId),
-    index('events_type_idx').on(table.eventType),
-    index('events_created_idx').on(table.createdAt),
-    index('events_story_created_idx').on(table.storyId, table.createdAt),
-  ]
+    index("events_user_idx").on(table.userId),
+    index("events_story_idx").on(table.storyId),
+    index("events_type_idx").on(table.eventType),
+    index("events_created_idx").on(table.createdAt),
+    index("events_story_created_idx").on(table.storyId, table.createdAt),
+  ],
 );
 
 // ============================================
@@ -680,7 +666,7 @@ export const storiesRelations = relations(stories, ({ one, many }) => ({
   startNode: one(nodes, {
     fields: [stories.startNodeId],
     references: [nodes.id],
-    relationName: 'startNode',
+    relationName: "startNode",
   }),
   nodes: many(nodes),
   chapters: many(chapters),
@@ -722,8 +708,8 @@ export const nodesRelations = relations(nodes, ({ one, many }) => ({
     fields: [nodes.componentVersionId],
     references: [componentVersions.id],
   }),
-  outgoingEdges: many(edges, { relationName: 'sourceEdges' }),
-  incomingEdges: many(edges, { relationName: 'targetEdges' }),
+  outgoingEdges: many(edges, { relationName: "sourceEdges" }),
+  incomingEdges: many(edges, { relationName: "targetEdges" }),
   syncPoint: one(syncPoints, {
     fields: [nodes.id],
     references: [syncPoints.nodeId],
@@ -734,12 +720,12 @@ export const edgesRelations = relations(edges, ({ one }) => ({
   sourceNode: one(nodes, {
     fields: [edges.sourceNodeId],
     references: [nodes.id],
-    relationName: 'sourceEdges',
+    relationName: "sourceEdges",
   }),
   targetNode: one(nodes, {
     fields: [edges.targetNodeId],
     references: [nodes.id],
-    relationName: 'targetEdges',
+    relationName: "targetEdges",
   }),
 }));
 

@@ -1,4 +1,4 @@
-import type { ComponentProps } from '@plotpoint/schemas';
+import type { ComponentProps } from "@plotpoint/schemas";
 
 export interface ChoiceDialogData {
   prompt?: string;

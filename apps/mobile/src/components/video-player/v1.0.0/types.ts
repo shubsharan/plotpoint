@@ -1,4 +1,4 @@
-import type { ComponentProps } from '@plotpoint/schemas';
+import type { ComponentProps } from "@plotpoint/schemas";
 
 export interface VideoPlayerData {
   videoUrl: string;
@@ -7,7 +7,7 @@ export interface VideoPlayerData {
   loop?: boolean;
   muted?: boolean;
   showControls?: boolean;
-  onEndAction?: 'pause' | 'continue' | 'loop';
+  onEndAction?: "pause" | "continue" | "loop";
 }
 
 export type VideoPlayerProps = ComponentProps<VideoPlayerData>;

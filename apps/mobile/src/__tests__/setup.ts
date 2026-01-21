@@ -1,4 +1,4 @@
-import { vi, beforeAll, afterAll } from 'vitest';
+import { vi, beforeAll, afterAll } from "vitest";
 
 // Minimal setup for auth tests - no expo dependencies needed
 // The auth.test.ts file mocks everything it needs inline

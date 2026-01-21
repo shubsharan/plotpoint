@@ -1,5 +1,5 @@
 // Export all schema definitions
-export * from './schema';
+export * from "./schema";
 
 // ============================================
 // Drizzle-Inferred Types
@@ -7,7 +7,7 @@ export * from './schema';
 // These types are automatically inferred from the Drizzle schema.
 // They serve as the single source of truth for database types.
 
-import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
+import type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 import {
   stories,
   nodes,
@@ -30,7 +30,7 @@ import {
   storyDownloads,
   storyAssets,
   events,
-} from './schema';
+} from "./schema";
 
 // ============================================
 // Story & Content Types

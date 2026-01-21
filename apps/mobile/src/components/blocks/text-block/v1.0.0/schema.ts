@@ -1,4 +1,4 @@
-import { textBlockPropsSchema } from '@plotpoint/schemas';
+import { textBlockPropsSchema } from "@plotpoint/schemas";
 
 export const textBlockSchema = textBlockPropsSchema;
-export type { TextBlockProps } from '@plotpoint/schemas';
+export type { TextBlockProps } from "@plotpoint/schemas";

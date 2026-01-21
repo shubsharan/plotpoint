@@ -9,7 +9,7 @@ export {
   validateManifest,
   createDefaultManifest,
   type FallbackStrategy,
-} from './registry';
+} from "./registry";
 
 // Runtime
-export { StoryRunner, useStoryRunner, NodeRenderer, ComponentErrorBoundary } from './runtime';
+export { StoryRunner, useStoryRunner, NodeRenderer, ComponentErrorBoundary } from "./runtime";

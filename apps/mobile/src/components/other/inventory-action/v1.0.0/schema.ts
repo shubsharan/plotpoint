@@ -1,7 +1,7 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const inventoryActionSchema = z.object({
-  action: z.enum(['add', 'remove', 'check', 'display']),
+  action: z.enum(["add", "remove", "check", "display"]),
   itemId: z.string().optional(),
   itemName: z.string().optional(),
   itemDescription: z.string().optional(),

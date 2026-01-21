@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Animated } from 'react-native';
-import type { TextChapterProps } from './types';
-import { textChapterSchema } from './schema';
-import { registerComponent } from '@plotpoint/engine/registry';
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, Pressable, ScrollView, Animated } from "react-native";
+import type { TextChapterProps } from "./types";
+import { textChapterSchema } from "./schema";
+import { registerComponent } from "@plotpoint/engine/registry";
 
 function TextChapterV1({ data, context, edges }: TextChapterProps) {
   const {
     title,
     content,
     showContinueButton = true,
-    continueButtonText = 'Continue',
+    continueButtonText = "Continue",
     autoAdvanceDelay,
     typingEffect = false,
     typingSpeed = 30,
   } = data;
 
-  const [displayedContent, setDisplayedContent] = useState(typingEffect ? '' : content);
+  const [displayedContent, setDisplayedContent] = useState(typingEffect ? "" : content);
   const [isTypingComplete, setIsTypingComplete] = useState(!typingEffect);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const contentIndexRef = useRef(0);
@@ -37,7 +37,7 @@ function TextChapterV1({ data, context, edges }: TextChapterProps) {
       return;
     }
 
-    setDisplayedContent('');
+    setDisplayedContent("");
     contentIndexRef.current = 0;
     setIsTypingComplete(false);
 
@@ -77,23 +77,25 @@ function TextChapterV1({ data, context, edges }: TextChapterProps) {
   };
 
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+    <Animated.View style={[{ flex: 1, opacity: fadeAnim }]} className="bg-background">
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 24, paddingBottom: 100 }}
         onTouchEnd={typingEffect && !isTypingComplete ? handleSkipTyping : undefined}
       >
-        {title && <Text style={styles.title}>{title}</Text>}
-        <Text style={styles.content}>{displayedContent}</Text>
+        {title && <Text className="text-foreground text-2xl font-bold mb-6">{title}</Text>}
+        <Text className="text-foreground text-lg leading-7">{displayedContent}</Text>
         {typingEffect && !isTypingComplete && (
-          <Text style={styles.hint}>Tap to skip</Text>
+          <Text className="text-muted-foreground text-sm mt-4 italic">Tap to skip</Text>
         )}
       </ScrollView>
 
       {showContinueButton && isTypingComplete && (
-        <View style={styles.buttonContainer}>
-          <Pressable style={styles.button} onPress={handleContinue}>
-            <Text style={styles.buttonText}>{continueButtonText}</Text>
+        <View className="absolute bottom-0 left-0 right-0 p-6 bg-background border-t-1 border-border">
+          <Pressable className="bg-primary py-4 rounded-lg items-center" onPress={handleContinue}>
+            <Text className="text-primary-foreground text-lg font-semibold">
+              {continueButtonText}
+            </Text>
           </Pressable>
         </View>
       )}
@@ -101,67 +103,15 @@ function TextChapterV1({ data, context, edges }: TextChapterProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0f0f0f',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 24,
-    paddingBottom: 100,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 24,
-  },
-  content: {
-    fontSize: 18,
-    lineHeight: 28,
-    color: '#e0e0e0',
-  },
-  hint: {
-    fontSize: 14,
-    color: '#666666',
-    marginTop: 16,
-    fontStyle: 'italic',
-  },
-  buttonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 24,
-    backgroundColor: '#0f0f0f',
-    borderTopWidth: 1,
-    borderTopColor: '#2a2a2a',
-  },
-  button: {
-    backgroundColor: '#3b82f6',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-});
-
 // Register the component
 registerComponent({
-  componentType: 'text_chapter',
-  version: '1.0.0',
+  componentType: "text_chapter",
+  version: "1.0.0",
   Component: TextChapterV1,
   propsSchema: textChapterSchema,
   defaultProps: {
     showContinueButton: true,
-    continueButtonText: 'Continue',
+    continueButtonText: "Continue",
     typingEffect: false,
     typingSpeed: 30,
   },

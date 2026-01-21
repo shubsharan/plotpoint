@@ -1,29 +1,12 @@
-import React, {
-  createContext,
-  useContext,
-  useCallback,
-  useMemo,
-  type ReactNode,
-} from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import type {
-  Story,
-  StoryNode,
-  StoryEdge,
-  StorySession,
-  StoryManifest,
-} from '@plotpoint/db';
-import type {
-  GameState,
-  InventoryItem,
-  ComponentContext,
-  EdgeCondition,
-} from '@plotpoint/schemas';
-import { supabase } from '../../lib/supabase';
-import { NodeRenderer } from './node-renderer';
+import React, { createContext, useContext, useCallback, useMemo } from "react";
+import { View, Text, ActivityIndicator, Pressable } from "react-native";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import type { Story, StoryNode, StoryEdge, StorySession, StoryManifest } from "@plotpoint/db";
+import type { GameState, InventoryItem, ComponentContext, EdgeCondition } from "@plotpoint/schemas";
+import { supabase } from "../../lib/supabase";
+import { NodeRenderer } from "./node-renderer";
 
 // ============================================
 // Types
@@ -49,7 +32,7 @@ interface StoryRunnerContextValue {
   navigateToNode: (nodeId: string) => void;
   navigateByEdge: (edgeId: string) => void;
   updateGameState: (updates: Partial<GameState>) => void;
-  updateInventory: (item: InventoryItem, action: 'add' | 'remove' | 'update') => void;
+  updateInventory: (item: InventoryItem, action: "add" | "remove" | "update") => void;
   completeCurrentNode: () => void;
   restartStory: () => void;
 }
@@ -62,7 +45,7 @@ const StoryRunnerContext = createContext<StoryRunnerContextValue | null>(null);
 export function useStoryRunner(): StoryRunnerContextValue {
   const context = useContext(StoryRunnerContext);
   if (!context) {
-    throw new Error('useStoryRunner must be used within a StoryRunner');
+    throw new Error("useStoryRunner must be used within a StoryRunner");
   }
   return context;
 }
@@ -73,42 +56,38 @@ export function useStoryRunner(): StoryRunnerContextValue {
 function evaluateCondition(
   condition: EdgeCondition,
   gameState: GameState,
-  inventory: InventoryItem[]
+  inventory: InventoryItem[],
 ): boolean {
   switch (condition.operator) {
-    case 'equals':
+    case "equals":
       return gameState[condition.key!] === condition.value;
 
-    case 'not_equals':
+    case "not_equals":
       return gameState[condition.key!] !== condition.value;
 
-    case 'greater_than':
+    case "greater_than":
       return (gameState[condition.key!] as number) > (condition.value as number);
 
-    case 'less_than':
+    case "less_than":
       return (gameState[condition.key!] as number) < (condition.value as number);
 
-    case 'contains':
+    case "contains":
       return String(gameState[condition.key!]).includes(String(condition.value));
 
-    case 'not_contains':
+    case "not_contains":
       return !String(gameState[condition.key!]).includes(String(condition.value));
 
-    case 'has_item':
+    case "has_item":
       return inventory.some((item) => item.id === condition.value && item.quantity > 0);
 
-    case 'not_has_item':
+    case "not_has_item":
       return !inventory.some((item) => item.id === condition.value && item.quantity > 0);
 
-    case 'and':
-      return (condition.conditions ?? []).every((c) =>
-        evaluateCondition(c, gameState, inventory)
-      );
+    case "and":
+      return (condition.conditions ?? []).every((c) => evaluateCondition(c, gameState, inventory));
 
-    case 'or':
-      return (condition.conditions ?? []).some((c) =>
-        evaluateCondition(c, gameState, inventory)
-      );
+    case "or":
+      return (condition.conditions ?? []).some((c) => evaluateCondition(c, gameState, inventory));
 
     default:
       return true;
@@ -120,13 +99,9 @@ function evaluateCondition(
 // ============================================
 function useStoryData(storyId: string) {
   return useQuery({
-    queryKey: ['story', storyId],
+    queryKey: ["story", storyId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('stories')
-        .select('*')
-        .eq('id', storyId)
-        .single();
+      const { data, error } = await supabase.from("stories").select("*").eq("id", storyId).single();
 
       if (error) throw error;
       return data as unknown as Story;
@@ -136,15 +111,15 @@ function useStoryData(storyId: string) {
 
 function useStoryManifest(storyId: string) {
   return useQuery({
-    queryKey: ['story-manifest', storyId],
+    queryKey: ["story-manifest", storyId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('story_manifests')
-        .select('*')
-        .eq('story_id', storyId)
+        .from("story_manifests")
+        .select("*")
+        .eq("story_id", storyId)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
+      if (error && error.code !== "PGRST116") throw error; // PGRST116 = not found
       return data as unknown as StoryManifest | null;
     },
   });
@@ -152,13 +127,13 @@ function useStoryManifest(storyId: string) {
 
 function useStoryNodes(storyId: string) {
   return useQuery({
-    queryKey: ['story-nodes', storyId],
+    queryKey: ["story-nodes", storyId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('nodes')
-        .select('*')
-        .eq('story_id', storyId)
-        .order('order');
+        .from("nodes")
+        .select("*")
+        .eq("story_id", storyId)
+        .order("order");
 
       if (error) throw error;
       return data as unknown as StoryNode[];
@@ -168,15 +143,12 @@ function useStoryNodes(storyId: string) {
 
 function useStoryEdges(storyId: string) {
   return useQuery({
-    queryKey: ['story-edges', storyId],
+    queryKey: ["story-edges", storyId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('edges')
-        .select('*')
-        .in(
-          'source_node_id',
-          supabase.from('nodes').select('id').eq('story_id', storyId)
-        );
+        .from("edges")
+        .select("*")
+        .in("source_node_id", supabase.from("nodes").select("id").eq("story_id", storyId));
 
       if (error) throw error;
       return (data ?? []) as unknown as StoryEdge[];
@@ -186,16 +158,16 @@ function useStoryEdges(storyId: string) {
 
 function useStorySession(storyId: string, userId: string) {
   return useQuery({
-    queryKey: ['story-session', storyId, userId],
+    queryKey: ["story-session", storyId, userId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('story_sessions')
-        .select('*')
-        .eq('story_id', storyId)
-        .eq('user_id', userId)
+        .from("story_sessions")
+        .select("*")
+        .eq("story_id", storyId)
+        .eq("user_id", userId)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error && error.code !== "PGRST116") throw error;
       return data as unknown as StorySession | null;
     },
   });
@@ -212,7 +184,7 @@ interface StoryRunnerProps {
 // ============================================
 // Component
 // ============================================
-export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps) {
+export function StoryRunner({ storyId, userId = "anonymous" }: StoryRunnerProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -247,20 +219,18 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
   // Session mutation for persisting progress
   const updateSessionMutation = useMutation({
     mutationFn: async (updates: Partial<StorySession>) => {
-      const { error } = await supabase
-        .from('story_sessions')
-        .upsert({
-          user_id: userId,
-          story_id: storyId,
-          ...localSession,
-          ...updates,
-          last_played_at: new Date().toISOString(),
-        });
+      const { error } = await supabase.from("story_sessions").upsert({
+        user_id: userId,
+        story_id: storyId,
+        ...localSession,
+        ...updates,
+        last_played_at: new Date().toISOString(),
+      });
 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['story-session', storyId, userId] });
+      queryClient.invalidateQueries({ queryKey: ["story-session", storyId, userId] });
     },
   });
 
@@ -271,7 +241,7 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
 
   const currentNode = useMemo(
     () => nodes.find((n) => n.id === currentNodeId) ?? null,
-    [nodes, currentNodeId]
+    [nodes, currentNodeId],
   );
 
   const currentEdges = useMemo(
@@ -280,17 +250,17 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
         .filter((e) => e.sourceNodeId === currentNodeId)
         .filter((e) => {
           // Filter out conditional edges that don't pass
-          if (e.edgeType === 'conditional' && e.condition) {
+          if (e.edgeType === "conditional" && e.condition) {
             return evaluateCondition(
               e.condition,
               localSession.gameState ?? {},
-              localSession.inventory ?? []
+              localSession.inventory ?? [],
             );
           }
           return true;
         })
         .sort((a, b) => a.priority - b.priority),
-    [allEdges, currentNodeId, localSession.gameState, localSession.inventory]
+    [allEdges, currentNodeId, localSession.gameState, localSession.inventory],
   );
 
   // Actions
@@ -309,7 +279,7 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
       setLocalSession((prev) => ({ ...prev, ...updates }));
       updateSessionMutation.mutate(updates);
     },
-    [localSession.visitedNodes, updateSessionMutation]
+    [localSession.visitedNodes, updateSessionMutation],
   );
 
   const navigateByEdge = useCallback(
@@ -336,7 +306,7 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
       setLocalSession((prev) => ({ ...prev, ...updates }));
       navigateToNode(edge.targetNodeId);
     },
-    [allEdges, currentNodeId, localSession.choiceHistory, navigateToNode]
+    [allEdges, currentNodeId, localSession.choiceHistory, navigateToNode],
   );
 
   const updateGameState = useCallback(
@@ -347,15 +317,15 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
       setLocalSession((prev) => ({ ...prev, ...updates }));
       updateSessionMutation.mutate(updates);
     },
-    [localSession.gameState, updateSessionMutation]
+    [localSession.gameState, updateSessionMutation],
   );
 
   const updateInventory = useCallback(
-    (item: InventoryItem, action: 'add' | 'remove' | 'update') => {
+    (item: InventoryItem, action: "add" | "remove" | "update") => {
       let newInventory = [...(localSession.inventory ?? [])];
 
       switch (action) {
-        case 'add': {
+        case "add": {
           const existing = newInventory.find((i) => i.id === item.id);
           if (existing) {
             existing.quantity += item.quantity;
@@ -364,7 +334,7 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
           }
           break;
         }
-        case 'remove': {
+        case "remove": {
           const idx = newInventory.findIndex((i) => i.id === item.id);
           if (idx !== -1) {
             newInventory[idx].quantity -= item.quantity;
@@ -374,7 +344,7 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
           }
           break;
         }
-        case 'update': {
+        case "update": {
           const idx = newInventory.findIndex((i) => i.id === item.id);
           if (idx !== -1) {
             newInventory[idx] = item;
@@ -387,12 +357,12 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
       setLocalSession((prev) => ({ ...prev, ...updates }));
       updateSessionMutation.mutate(updates);
     },
-    [localSession.inventory, updateSessionMutation]
+    [localSession.inventory, updateSessionMutation],
   );
 
   const completeCurrentNode = useCallback(() => {
     // Find the default edge (first non-choice, non-conditional edge)
-    const defaultEdge = currentEdges.find((e) => e.edgeType === 'default');
+    const defaultEdge = currentEdges.find((e) => e.edgeType === "default");
     if (defaultEdge) {
       navigateByEdge(defaultEdge.id);
     }
@@ -431,8 +401,7 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
         nodesQuery.isLoading ||
         edgesQuery.isLoading ||
         sessionQuery.isLoading,
-      error:
-        storyQuery.error ?? nodesQuery.error ?? edgesQuery.error ?? sessionQuery.error ?? null,
+      error: storyQuery.error ?? nodesQuery.error ?? edgesQuery.error ?? sessionQuery.error ?? null,
       navigateToNode,
       navigateByEdge,
       updateGameState,
@@ -460,7 +429,7 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
       updateInventory,
       completeCurrentNode,
       restartStory,
-    ]
+    ],
   );
 
   // Component context for child components
@@ -469,7 +438,7 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
       gameState: localSession.gameState ?? {},
       inventory: localSession.inventory ?? [],
       visitedNodes: localSession.visitedNodes ?? [],
-      sessionId: localSession.id ?? 'local',
+      sessionId: localSession.id ?? "local",
       onComplete: completeCurrentNode,
       onNavigate: navigateByEdge,
       onStateUpdate: updateGameState,
@@ -484,16 +453,16 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
       navigateByEdge,
       updateGameState,
       updateInventory,
-    ]
+    ],
   );
 
   // Loading state
   if (contextValue.isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#ffffff" />
-          <Text style={styles.loadingText}>Loading story...</Text>
+      <SafeAreaView className="flex-1 bg-background">
+        <View className="flex-1 justify-center items-center p-6">
+          <ActivityIndicator size="large" color="var(--foreground)" />
+          <Text className="text-muted-foreground mt-4 text-base">Loading story...</Text>
         </View>
       </SafeAreaView>
     );
@@ -502,12 +471,14 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
   // Error state
   if (contextValue.error) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>Error loading story</Text>
-          <Text style={styles.errorDetail}>{contextValue.error.message}</Text>
-          <Pressable style={styles.button} onPress={() => router.back()}>
-            <Text style={styles.buttonText}>Go Back</Text>
+      <SafeAreaView className="flex-1 bg-background">
+        <View className="flex-1 justify-center items-center p-6">
+          <Text className="text-destructive text-xl font-semibold mb-2">Error loading story</Text>
+          <Text className="text-muted-foreground text-sm text-center mb-6">
+            {contextValue.error.message}
+          </Text>
+          <Pressable className="bg-muted px-6 py-3 rounded" onPress={() => router.back()}>
+            <Text className="text-foreground text-base font-medium">Go Back</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -517,11 +488,11 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
   // No story found
   if (!contextValue.story) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>Story not found</Text>
-          <Pressable style={styles.button} onPress={() => router.back()}>
-            <Text style={styles.buttonText}>Go Back</Text>
+      <SafeAreaView className="flex-1 bg-background">
+        <View className="flex-1 justify-center items-center p-6">
+          <Text className="text-destructive text-xl font-semibold mb-6">Story not found</Text>
+          <Pressable className="bg-muted px-6 py-3 rounded" onPress={() => router.back()}>
+            <Text className="text-foreground text-base font-medium">Go Back</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -531,12 +502,14 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
   // No current node
   if (!currentNode) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>No starting point</Text>
-          <Text style={styles.errorDetail}>This story has no start node configured.</Text>
-          <Pressable style={styles.button} onPress={() => router.back()}>
-            <Text style={styles.buttonText}>Go Back</Text>
+      <SafeAreaView className="flex-1 bg-background">
+        <View className="flex-1 justify-center items-center p-6">
+          <Text className="text-destructive text-xl font-semibold mb-2">No starting point</Text>
+          <Text className="text-muted-foreground text-sm text-center mb-6">
+            This story has no start node configured.
+          </Text>
+          <Pressable className="bg-muted px-6 py-3 rounded" onPress={() => router.back()}>
+            <Text className="text-foreground text-base font-medium">Go Back</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -545,7 +518,7 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
 
   return (
     <StoryRunnerContext.Provider value={contextValue}>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView className="flex-1 bg-background">
         <NodeRenderer
           node={currentNode}
           edges={currentEdges}
@@ -556,47 +529,3 @@ export function StoryRunner({ storyId, userId = 'anonymous' }: StoryRunnerProps)
     </StoryRunnerContext.Provider>
   );
 }
-
-// ============================================
-// Styles
-// ============================================
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0f0f0f',
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  loadingText: {
-    color: '#888888',
-    marginTop: 16,
-    fontSize: 16,
-  },
-  errorText: {
-    color: '#ff6b6b',
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  errorDetail: {
-    color: '#888888',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  button: {
-    backgroundColor: '#2a2a2a',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-});

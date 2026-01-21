@@ -1,5 +1,5 @@
-import React, { Component, useMemo, type ReactNode } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import React, { Component, useMemo, type ReactNode } from "react";
+import { View, Text, Pressable, ScrollView } from "react-native";
 import type {
   StoryNode,
   StoryEdge,
@@ -7,13 +7,12 @@ import type {
   ComponentContext,
   ComponentTypeName,
   VersionConstraint,
-} from '@plotpoint/schemas';
+} from "@plotpoint/schemas";
 import {
   componentRegistry,
   getResolvedComponent,
-  createDefaultManifest,
   type FallbackStrategy,
-} from '@plotpoint/engine/registry';
+} from "@plotpoint/engine/registry";
 
 // ============================================
 // Error Boundary
@@ -41,11 +40,7 @@ class ComponentErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundary
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error(
-      `Component error in node ${this.props.node.nodeKey}:`,
-      error,
-      errorInfo
-    );
+    console.error(`Component error in node ${this.props.node.nodeKey}:`, error, errorInfo);
     this.props.onError?.(error, errorInfo);
   }
 
@@ -56,17 +51,19 @@ class ComponentErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundary
       }
 
       return (
-        <View style={errorStyles.container}>
-          <Text style={errorStyles.title}>Component Error</Text>
-          <Text style={errorStyles.message}>
+        <View className="flex-1 justify-center items-center p-6 bg-card">
+          <Text className="text-destructive text-xl font-semibold mb-3">Component Error</Text>
+          <Text className="text-foreground text-base text-center mb-2">
             The component for node "{this.props.node.nodeKey}" encountered an error.
           </Text>
-          <Text style={errorStyles.detail}>{this.state.error?.message}</Text>
+          <Text className="text-muted-foreground text-sm text-center mb-6 font-mono">
+            {this.state.error?.message}
+          </Text>
           <Pressable
-            style={errorStyles.button}
+            className="bg-muted px-6 py-3 rounded"
             onPress={() => this.setState({ hasError: false, error: null })}
           >
-            <Text style={errorStyles.buttonText}>Try Again</Text>
+            <Text className="text-foreground text-base">Try Again</Text>
           </Pressable>
         </View>
       );
@@ -75,45 +72,6 @@ class ComponentErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundary
     return this.props.children;
   }
 }
-
-const errorStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#1a1a1a',
-  },
-  title: {
-    color: '#ff6b6b',
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  message: {
-    color: '#ffffff',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  detail: {
-    color: '#888888',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 24,
-    fontFamily: 'monospace',
-  },
-  button: {
-    backgroundColor: '#2a2a2a',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-  },
-});
 
 // ============================================
 // Missing Component Fallback
@@ -126,124 +84,51 @@ interface MissingComponentProps {
   context: ComponentContext;
 }
 
-function MissingComponent({
-  nodeType,
-  version,
-  constraint,
-  node,
-  context,
-}: MissingComponentProps) {
+function MissingComponent({ nodeType, version, constraint, node, context }: MissingComponentProps) {
   const availableVersions = componentRegistry.getVersionStrings(nodeType);
 
   return (
-    <ScrollView style={missingStyles.container} contentContainerStyle={missingStyles.content}>
-      <View style={missingStyles.iconContainer}>
-        <Text style={missingStyles.icon}>⚠️</Text>
+    <ScrollView
+      className="flex-1 bg-card"
+      contentContainerStyle={{ padding: 24, alignItems: "center" }}
+    >
+      <View className="mb-4">
+        <Text className="text-5xl">⚠️</Text>
       </View>
-      <Text style={missingStyles.title}>Component Not Found</Text>
-      <Text style={missingStyles.message}>
+      <Text className="text-amber-500 text-xl font-semibold mb-2">Component Not Found</Text>
+      <Text className="text-foreground text-base text-center mb-6">
         Unable to render {nodeType}
-        {version ? `@${version}` : constraint ? ` matching ${constraint}` : ''}
+        {version ? `@${version}` : constraint ? ` matching ${constraint}` : ""}
       </Text>
 
       {availableVersions.length > 0 && (
-        <View style={missingStyles.versionSection}>
-          <Text style={missingStyles.versionTitle}>Available versions:</Text>
+        <View className="bg-muted p-4 rounded-lg w-full mb-4">
+          <Text className="text-muted-foreground text-sm mb-2">Available versions:</Text>
           {availableVersions.map((v) => (
-            <Text key={v} style={missingStyles.versionItem}>
+            <Text key={v} className="text-foreground text-sm font-mono my-0.5">
               • {nodeType}@{v}
             </Text>
           ))}
         </View>
       )}
 
-      <View style={missingStyles.debugSection}>
-        <Text style={missingStyles.debugTitle}>Debug Info</Text>
-        <Text style={missingStyles.debugText}>Node Key: {node.nodeKey}</Text>
-        <Text style={missingStyles.debugText}>Node ID: {node.id}</Text>
+      <View className="bg-muted p-4 rounded-lg w-full mb-6">
+        <Text className="text-muted-foreground text-sm mb-2">Debug Info</Text>
+        <Text className="text-muted-foreground text-xs font-mono my-0.5">
+          Node Key: {node.nodeKey}
+        </Text>
+        <Text className="text-muted-foreground text-xs font-mono my-0.5">Node ID: {node.id}</Text>
       </View>
 
-      <Pressable style={missingStyles.button} onPress={context.onComplete}>
-        <Text style={missingStyles.buttonText}>Skip & Continue</Text>
+      <Pressable
+        className="bg-card border-1 border-muted px-6 py-3 rounded"
+        onPress={context.onComplete}
+      >
+        <Text className="text-foreground text-base">Skip & Continue</Text>
       </Pressable>
     </ScrollView>
   );
 }
-
-const missingStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1a1a1a',
-  },
-  content: {
-    padding: 24,
-    alignItems: 'center',
-  },
-  iconContainer: {
-    marginBottom: 16,
-  },
-  icon: {
-    fontSize: 48,
-  },
-  title: {
-    color: '#ffa500',
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  message: {
-    color: '#ffffff',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  versionSection: {
-    backgroundColor: '#2a2a2a',
-    padding: 16,
-    borderRadius: 8,
-    width: '100%',
-    marginBottom: 16,
-  },
-  versionTitle: {
-    color: '#888888',
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  versionItem: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontFamily: 'monospace',
-    marginVertical: 2,
-  },
-  debugSection: {
-    backgroundColor: '#2a2a2a',
-    padding: 16,
-    borderRadius: 8,
-    width: '100%',
-    marginBottom: 24,
-  },
-  debugTitle: {
-    color: '#888888',
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  debugText: {
-    color: '#666666',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    marginVertical: 2,
-  },
-  button: {
-    backgroundColor: '#4a4a4a',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-  },
-});
 
 // ============================================
 // Node Renderer Props
@@ -264,7 +149,7 @@ export function NodeRenderer({
   edges,
   context,
   manifest,
-  fallbackStrategy = 'compatible',
+  fallbackStrategy = "compatible",
 }: NodeRendererProps) {
   // Resolve the component version from manifest or use latest
   const resolvedComponent = useMemo(() => {
@@ -310,14 +195,16 @@ export function NodeRenderer({
 
   // Validate props if we have a Zod schema
   let validatedData = mergedData;
-  if (propsSchema && typeof propsSchema === 'object' && 'safeParse' in propsSchema) {
-    const zodSchema = propsSchema as { safeParse: (data: unknown) => { success: boolean; data?: unknown; error?: unknown } };
+  if (propsSchema && typeof propsSchema === "object" && "safeParse" in propsSchema) {
+    const zodSchema = propsSchema as {
+      safeParse: (data: unknown) => { success: boolean; data?: unknown; error?: unknown };
+    };
     const result = zodSchema.safeParse(mergedData);
 
     if (!result.success) {
       console.warn(
         `Props validation failed for ${node.nodeType}@${resolvedComponent.component.versionString}:`,
-        result.error
+        result.error,
       );
       // Continue with unvalidated data, but log the warning
     } else {

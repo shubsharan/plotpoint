@@ -16,17 +16,17 @@
  * 3. Import the component here
  */
 
-import { componentRegistry } from '@plotpoint/engine/registry';
+import { componentRegistry } from "@plotpoint/engine/registry";
 
 // ============================================
 // BLOCKS (Content Nodes)
 // ============================================
 
 // Text Block - Narrative text display
-import './blocks/text-block/v1.0.0';
+import "./blocks/text-block/v1.0.0";
 
 // Video Block - Video playback
-import './blocks/video-block/v1.0.0';
+import "./blocks/video-block/v1.0.0";
 
 // Image Block (Future)
 // import './blocks/image-block/v1.0.0';
@@ -39,7 +39,7 @@ import './blocks/video-block/v1.0.0';
 // ============================================
 
 // Choice Gate - Branching decisions
-import './gates/choice-gate/v1.0.0';
+import "./gates/choice-gate/v1.0.0";
 
 // Geolocation Gate (Future)
 // import './gates/geolocation-gate/v1.0.0';
@@ -58,10 +58,10 @@ import './gates/choice-gate/v1.0.0';
 // ============================================
 
 // Inventory Action - Item management
-import './other/inventory-action/v1.0.0';
+import "./other/inventory-action/v1.0.0";
 
 // End Node - Story endings
-import './other/end/v1.0.0';
+import "./other/end/v1.0.0";
 
 // ============================================
 // LEGACY IMPORTS (for backward compatibility)
@@ -70,20 +70,20 @@ import './other/end/v1.0.0';
 // old and new names to support existing stories during migration.
 
 // Text Chapter (legacy) - now text_block
-import './text-chapter/v1.0.0';
+import "./text-chapter/v1.0.0";
 
 // Video Player (legacy) - now video_block
-import './video-player/v1.0.0';
+import "./video-player/v1.0.0";
 
 // Choice Dialog (legacy) - now choice_gate
-import './choice-dialog/v1.0.0';
+import "./choice-dialog/v1.0.0";
 
 // Mark registry as initialized
 componentRegistry.markInitialized();
 
 // Log registered components in development
-if (process.env.NODE_ENV === 'development') {
-  console.log('Registered components:', componentRegistry.getCategorizedSummary());
+if (process.env.NODE_ENV === "development") {
+  console.log("Registered components:", componentRegistry.getCategorizedSummary());
 }
 
 export { componentRegistry };
