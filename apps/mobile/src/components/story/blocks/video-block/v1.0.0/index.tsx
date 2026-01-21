@@ -4,10 +4,12 @@ import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
 import type { VideoBlockProps } from "./types";
 import { videoBlockSchema } from "./schema";
 import { registerComponent } from "@plotpoint/engine/registry";
+import { useThemeColors } from "@/lib/useThemeColors";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 function VideoBlockV1({ data, context, edges: _edges }: VideoBlockProps) {
+  const themeColors = useThemeColors();
   const {
     videoUrl,
     posterUrl,
@@ -124,8 +126,11 @@ function VideoBlockV1({ data, context, edges: _edges }: VideoBlockProps) {
         />
 
         {isLoading && (
-          <View className="absolute inset-0 justify-center items-center bg-black/70">
-            <ActivityIndicator size="large" color="var(--card-foreground)" />
+          <View
+            style={{ backgroundColor: "rgba(0, 0, 0, 0.7)" }}
+            className="absolute inset-0 justify-center items-center"
+          >
+            <ActivityIndicator size="large" color={themeColors.cardForeground} />
             <Text className="text-card-foreground text-sm mt-3">Loading video...</Text>
           </View>
         )}
@@ -136,7 +141,10 @@ function VideoBlockV1({ data, context, edges: _edges }: VideoBlockProps) {
             onPress={handlePlayPause}
           >
             {!isPlaying && (
-              <View className="w-20 h-20 rounded-full bg-yellow-400/90 justify-center items-center">
+              <View
+                style={{ backgroundColor: themeColors.primary, opacity: 0.9 }}
+                className="w-20 h-20 rounded-full justify-center items-center"
+              >
                 <Text className="text-primary-foreground text-3xl ml-1">▶</Text>
               </View>
             )}

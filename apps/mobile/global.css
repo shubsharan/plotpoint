@@ -1,6 +1,16 @@
 @import "tailwindcss";
 @import "uniwind";
 
+/*
+ * Theme colors - SOURCE OF TRUTH for oklch values
+ *
+ * These oklch values are used by NativeWind for className styling.
+ * When updating: modify oklch here, then update hex approximations in src/lib/theme.ts
+ *
+ * Why oklch? Better perceptual uniformity and color manipulation than hex/rgb.
+ * Why also maintain theme.ts? React Native props need runtime color strings.
+ */
+
 :root {
   --background: oklch(96% 0 0);
   --foreground: oklch(20% 0 0);
@@ -22,6 +32,7 @@
   --input: oklch(100% 0 0);
   --ring: oklch(85.2% 0.199 91.936);
   --radius: 0.5rem;
+  --overlay: rgba(0, 0, 0, 0.5);
 }
 
 .dark {
@@ -44,6 +55,7 @@
   --border: oklch(22% 0 0);
   --input: oklch(18% 0 0);
   --ring: oklch(85.2% 0.199 91.936);
+  --overlay: rgba(0, 0, 0, 0.5);
 }
 
 @theme inline {
@@ -66,6 +78,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-overlay: var(--overlay);
 
   --radius-sm: calc(var(--radius) - 0.125rem);
   --radius-md: var(--radius);

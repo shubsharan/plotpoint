@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { Clock, Star } from "lucide-react-native";
 import type { Story } from "@/hooks/use-stories";
 import { Card } from "@/components/ui/Card";
+import { useThemeColors } from "@/lib/useThemeColors";
 
 interface StoryCardProps {
   story: Story;
@@ -11,6 +12,7 @@ interface StoryCardProps {
 
 export function StoryCard({ story, distance }: StoryCardProps) {
   const router = useRouter();
+  const themeColors = useThemeColors();
 
   const handlePress = () => {
     router.push(`/story/${story.id}`);
@@ -48,10 +50,11 @@ export function StoryCard({ story, distance }: StoryCardProps) {
               <View
                 className="px-3 py-1.5 rounded-lg border-b-2 shadow-sm"
                 style={{
-                  backgroundColor: story.genre.color || "#FDDA0D",
-                  borderBottomColor: story.genre.color
-                    ? adjustColorBrightness(story.genre.color, -20)
-                    : "#E5C300",
+                  backgroundColor: story.genre.color || themeColors.primary,
+                  borderBottomColor: adjustColorBrightness(
+                    story.genre.color || themeColors.primary,
+                    -20,
+                  ),
                 }}
               >
                 <Text className="text-foreground text-xs font-semibold" numberOfLines={1}>
@@ -73,7 +76,7 @@ export function StoryCard({ story, distance }: StoryCardProps) {
             {/* Difficulty */}
             {story.difficultyLevel && (
               <View className="flex-row items-center gap-1 px-2 py-1">
-                <Star color="#FDDA0D" size={12} fill="#FDDA0D" />
+                <Star color={themeColors.primary} size={12} fill={themeColors.primary} />
                 <Text className="text-muted-foreground text-xs">{story.difficultyLevel}/5</Text>
               </View>
             )}

@@ -1,5 +1,6 @@
 import { TextInput, View, type TextInputProps } from "react-native";
 import { cn } from "../../lib/utils";
+import { useThemeColors } from "../../lib/useThemeColors";
 
 interface InputProps extends TextInputProps {
   containerClassName?: string;
@@ -10,9 +11,10 @@ export function Input({
   containerClassName,
   className,
   variant = "default",
-  placeholderTextColor = "#A3A3A3",
+  placeholderTextColor,
   ...props
 }: InputProps) {
+  const themeColors = useThemeColors();
   const variantClasses = {
     default:
       "border-1 border-border hover:border-muted-foreground hover:shadow-md focus-within:border-primary focus-within:shadow-lg",
@@ -33,7 +35,7 @@ export function Input({
           "px-4 py-0 text-base text-foreground leading-tight outline-none flex-1 w-full h-full transition-colors",
           className,
         )}
-        placeholderTextColor={placeholderTextColor}
+        placeholderTextColor={placeholderTextColor ?? themeColors.mutedForeground}
         textAlignVertical="center"
         {...props}
       />

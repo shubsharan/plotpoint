@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Modal, View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { useGenres } from "@/hooks/use-stories";
 import { cn } from "@/lib/utils";
+import { useThemeColors } from "@/lib/useThemeColors";
 
 export interface StoryFilters {
   genreIds: string[];
@@ -18,6 +19,7 @@ interface FilterSheetProps {
 
 export function FilterSheet({ visible, filters, onApply, onClose }: FilterSheetProps) {
   const { data: genres } = useGenres();
+  const themeColors = useThemeColors();
   const [localFilters, setLocalFilters] = useState<StoryFilters>(filters);
 
   useEffect(() => {
@@ -58,7 +60,7 @@ export function FilterSheet({ visible, filters, onApply, onClose }: FilterSheetP
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
-      <View className="flex-1 bg-black/50 justify-end">
+      <View style={{ backgroundColor: themeColors.overlay }} className="flex-1 justify-end">
         <View className="bg-background rounded-t-2xl max-h-[80%]">
           {/* Header */}
           <View className="flex-row justify-between items-center p-4 border-b-1 border-border">

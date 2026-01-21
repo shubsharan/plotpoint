@@ -1,18 +1,21 @@
 import { View, Text } from "react-native";
 import type { Story } from "@/hooks/use-stories";
+import { useThemeColors } from "@/lib/useThemeColors";
 
 interface StoryInfoProps {
   story: Story;
 }
 
 export function StoryInfo({ story }: StoryInfoProps) {
+  const themeColors = useThemeColors();
+
   return (
     <View className="px-6">
       {/* Metadata Row */}
       <View className="flex-row flex-wrap gap-3 mb-6">
         {story.genre && (
           <View
-            style={{ backgroundColor: story.genre.color || "#3b82f6" }}
+            style={{ backgroundColor: story.genre.color || themeColors.primary }}
             className="px-3 py-1.5 rounded"
           >
             <Text className="text-foreground text-sm font-semibold">{story.genre.name}</Text>
