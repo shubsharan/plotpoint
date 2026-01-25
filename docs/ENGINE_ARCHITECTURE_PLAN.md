@@ -35,6 +35,25 @@ No backward compatibility is required. This is a clean break.
    required component types not explicitly pinned in the story manifest.
 3. Fail in strict mode if any required package is missing or incompatible.
 
+### Required Components & Precedence Rules
+- **Required component types** are derived from the story graph (`nodes.node_type`).
+- The story manifest can **pin versions** for any of those types.
+- If a required type is not pinned, the resolver uses the registry package marked `is_default`
+  for that component type (see default selection rules below).
+- **Node-level override**: if `nodes.component_ref` is set, it **must** match a resolved
+  package and **must** satisfy any manifest version constraint for that component type.
+  If it does not, publish-time validation fails.
+
+### Default Selection Rules
+- Defaults are scoped **per component ID**.
+- A package is eligible as default only if:
+  - `is_default = true`, and
+  - its `engine` constraint is compatible with the story engine version, and
+  - visibility/ownership rules allow access.
+- If multiple eligible defaults exist for the same component ID, select the **highest semver**.
+- If no eligible default exists for a required type and it is not pinned in the manifest,
+  publish fails in strict mode.
+
 ---
 
 ## 3) Packages & Bundles (Filesystem + Packaging)
@@ -87,6 +106,7 @@ No backward compatibility is required. This is a clean break.
 ```
 stories:
   id (uuid, pk)
+  owner_id (uuid)                           -- org/user owning this story
   title (text)
   slug (text)
   status (enum: draft, published, archived)
@@ -158,6 +178,16 @@ story_manifests:
   resolved_packages (jsonb)                 -- lockfile stored at publish time
   fallback_strategy (enum: strict, latest, compatible)
   created_at, updated_at
+
+### 4.7 Package Entitlements (Private Access Control)
+```
+package_entitlements:
+  id (uuid, pk)
+  package_id (uuid, fk -> packages.id)
+  grantee_id (uuid)                         -- org/user allowed to use private package
+  scope (enum: use, publish, admin)
+  created_at
+```
 ```
 
 ---
@@ -177,6 +207,10 @@ story_manifests:
   "isDefault": true,
   "schema": "./schema.json",
   "ui": "./ui.tsx",
+  "uiPlatforms": {
+    "web": "./ui.web.tsx",
+    "native": "./ui.native.tsx"
+  },
   "logic": "./logic.ts",
   "theme": "./theme.json",
   "capabilities": [],
@@ -248,8 +282,42 @@ story_manifests:
 }
 ```
 
-> `resolvedPackages` is generated at publish time and stored in `story_manifests.resolved_packages`
+> `resolved_packages` is generated at publish time and stored in `story_manifests.resolved_packages`
 > as a lockfile for deterministic runtime and offline bundling.
+
+### 5.6 Resolved Packages Lockfile (`resolved_packages`)
+```
+{
+  "engineVersion": "2.0.0",
+  "generatedAt": "2026-01-23T12:00:00Z",
+  "packages": [
+    {
+      "id": "text_block",
+      "version": "2.0.1",
+      "kind": "component",
+      "source": "registry",
+      "checksum": "sha256:...",
+      "files": {
+        "schema": "schema.json",
+        "ui": "ui.tsx",
+        "logic": "logic.ts"
+      },
+      "dependencies": {
+        "pack:core-ui": "^1.0.0"
+      },
+      "platforms": ["web", "native"]
+    }
+  ],
+  "defaultsApplied": {
+    "text_block": "2.0.1"
+  }
+}
+```
+
+**Lockfile rules**
+- Generated only at publish time after successful validation.
+- Used verbatim at runtime and for offline bundles.
+- Any mismatch between lockfile and registry availability blocks publish (strict).
 
 ---
 
@@ -272,7 +340,8 @@ Given a story manifest:
 2. For any required component type not pinned, select the registry package marked `is_default`.
 3. Enforce package visibility (public/private) and ownership rules.
 4. Validate capabilities and permissions.
-5. Write resolved versions into `resolved_packages` at publish time.
+5. Validate node-level `component_ref` overrides (must match resolved packages).
+6. Write resolved versions into `resolved_packages` at publish time.
 
 ---
 
@@ -318,6 +387,7 @@ Add to `story_manifests`:
 ---
 
 ## 9) Publish-Time Validators (Required)
+**Errors (block publish)**
 - Engine version compatibility
 - Package availability (registry + private visibility)
 - Component schema validation against node props
@@ -326,6 +396,12 @@ Add to `story_manifests`:
 - Platform compatibility (web/ios/android)
 - Asset reference integrity
 - Theme override validation
+- `component_ref` mismatch (node override conflicts with manifest/lockfile)
+
+**Warnings (allowed, logged)**
+- Deprecated package versions
+- Missing optional assets
+- Non-default theme tokens not used
 
 ---
 
@@ -335,6 +411,13 @@ Add to `story_manifests`:
 - Ratings/reviews
 - Capability policy enforcement
 - License tracking
+
+### Marketplace API Boundaries (Minimum)
+- `POST /packages` (publish package, validate manifest)
+- `GET /packages/{id}` (list versions + metadata)
+- `GET /packages/{id}/{version}` (fetch manifest + files)
+- `POST /stories/{id}/publish` (run validators + write lockfile)
+- `GET /stories/{id}/resolved` (fetch lockfile)
 
 ---
 
@@ -346,27 +429,72 @@ Add to `story_manifests`:
 - Build registries (component/shell/plugin/theme).
 - Build resolver pipeline.
 
+**Deliverables**
+- DB migration scripts for new tables/columns.
+- Registry module with CRUD + in-memory index.
+- Resolver implementation with default selection rules.
+
+**Acceptance Criteria**
+- Resolver can resolve a story manifest and emit a lockfile.
+- Default selection deterministic for a component type.
+
 ### Phase 2: Publish Validators
 - Build validator suite.
 - Generate and store `resolved_packages` lockfile.
 
+**Deliverables**
+- Validator library with error vs warning severity.
+- Publish pipeline that writes `resolved_packages`.
+
+**Acceptance Criteria**
+- Publishing fails on validation errors.
+- Lockfile is generated and stored for valid stories.
+
 ### Phase 3: Shell + Theme System
 - Shell registry and render pipeline.
 - Theme token and override system.
+
+**Deliverables**
+- Shell loader + renderer integration.
+- Theme resolver (global + component overrides).
+
+**Acceptance Criteria**
+- Themes apply deterministically across all rendered components.
 
 ### Phase 4: Plugin System
 - Capability model.
 - Permission checks.
 - Plugin runtime hooks.
 
+**Deliverables**
+- Plugin registration + lifecycle hooks.
+- Capability enforcement at runtime.
+
+**Acceptance Criteria**
+- Stories cannot request undeclared capabilities.
+
 ### Phase 5: Offline Bundles
 - Offline bundle builder (engine + packages + assets).
 - Bundle distribution + caching.
+
+**Deliverables**
+- Bundle builder CLI/service.
+- Bundle format spec + lockfile validation.
+
+**Acceptance Criteria**
+- Offline bundle can run without registry access.
 
 ### Phase 6: Marketplace
 - Package catalog service.
 - Publish/update endpoints.
 - Dependency validation.
+
+**Deliverables**
+- Registry service APIs.
+- Package versioning + deprecation policy.
+
+**Acceptance Criteria**
+- Packages can be published and resolved by stories.
 
 ---
 
