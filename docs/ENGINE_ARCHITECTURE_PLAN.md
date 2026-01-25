@@ -30,18 +30,17 @@ No backward compatibility is required. This is a clean break.
 5. **Theme Runtime** (style overrides)
 
 ### Resolution Order (Layered Overrides)
-1. Story bundle
-2. App bundle
-3. Default bundle
+1. Story bundle **local packages** (overrides)
+2. Central registry packages (marketplace)
+3. Error if missing (or use fallback strategy)
 
 ---
 
 ## 3) Packages & Bundles (Filesystem + Packaging)
 
-### A) Default Bundle (engine-provided)
+### A) Central Registry (marketplace packages)
 ```
-/packages/story-default-pack/
-  manifest.json
+/registry/
   components/
     text_block/2.0.0/
       component.json
@@ -57,21 +56,18 @@ No backward compatibility is required. This is a clean break.
     analytics/1.0.0/
       plugin.json
       runtime.ts
+  themes/
+    default/1.0.0/
+      theme.json
 ```
 
-### B) App Bundle (app-provided)
-```
-/apps/mobile/story-pack/
-  manifest.json
-  components/...
-  shells/...
-  themes/...
-```
+> The "default pack" is simply a curated **list of registry packages** that stories can
+> reference in their manifest. There is no app layer in this model.
 
-### C) Story Bundle (author-provided)
+### B) Story Bundle (author-provided)
 ```
 /stories/<storyId>/bundle/
-  story.json
+  manifest.json
   components/...
   shells/...
   plugins/...
@@ -79,9 +75,10 @@ No backward compatibility is required. This is a clean break.
   assets/...
 ```
 
-### Bundle Merge Strategy
-Each bundle is merged into a **runtime registry** in this order:
-**default -> app -> story**. Later layers override earlier ones by package ID and version.
+### Resolution Strategy
+- **Local packages first**: story bundle entries override registry packages.
+- If no local match, resolve from the **central registry** by semver.
+- If missing, use `fallback_strategy` or fail in strict mode.
 
 ---
 
@@ -95,7 +92,7 @@ stories:
   slug (text)
   status (enum: draft, published, archived)
   start_node_id (uuid, fk -> nodes.id)
-  bundle_id (uuid, fk -> bundles.id)        -- explicit story bundle
+  bundle_id (uuid, fk -> story_bundles.id)  -- story bundle metadata
   created_at, updated_at (timestamp)
 ```
 
@@ -123,14 +120,14 @@ edges:
   created_at
 ```
 
-### 4.4 Bundles
+### 4.4 Story Bundles
 ```
-bundles:
+story_bundles:
   id (uuid, pk)
-  name (text)
-  version (text)
-  type (enum: default, app, story)
-  manifest (jsonb)                          -- bundle manifest
+  story_id (uuid, fk -> stories.id)
+  storage_path (text)                       -- CDN/S3 location
+  checksum (text)
+  size_bytes (int)
   created_at, updated_at
 ```
 
@@ -151,11 +148,11 @@ packages:
 story_manifests:
   story_id (uuid, pk, fk -> stories.id)
   engine_version (text)
-  bundle_refs (jsonb)                       -- ["default@1.0.0", "app@1.0.0", "story@1.0.0"]
   components (jsonb)                        -- { "text_block": "^2.0.0", ... }
-  shell (jsonb)                             -- { "type": "ar_explore", "version": "^1.0.0" }
+  shell (jsonb)                             -- { "id": "ar_explore", "version": "^1.0.0" }
   plugins (jsonb)                           -- { "ar_anchor": "^1.0.0" }
-  theme (jsonb)                             -- { "id": "dark_museum@1.0.0" }
+  theme (jsonb)                             -- { "id": "dark_museum", "version": "^1.0.0" }
+  local_packages (jsonb)                    -- [{ id, version, kind, path }]
   fallback_strategy (enum: strict, latest, compatible)
   created_at, updated_at
 ```
@@ -228,6 +225,29 @@ story_manifests:
 }
 ```
 
+### 5.5 Story Manifest (`manifest.json`)
+```
+{
+  "engineVersion": "2.0.0",
+  "components": {
+    "text_block": "^2.0.0",
+    "choice_gate": "^1.0.0"
+  },
+  "shell": { "id": "ar_explore", "version": "^1.0.0" },
+  "plugins": { "ar_anchor": "^1.0.0" },
+  "theme": { "id": "dark_museum", "version": "^1.0.0" },
+  "localPackages": [
+    {
+      "id": "text_block",
+      "version": "2.1.0",
+      "kind": "component",
+      "path": "components/text_block/2.1.0"
+    }
+  ],
+  "fallbackStrategy": "strict"
+}
+```
+
 ---
 
 ## 6) Runtime Registries
@@ -245,9 +265,9 @@ Each registry indexes by:
 
 ### 6.2 Resolver
 Given a story manifest:
-1. Load bundle refs (default, app, story).
-2. Register packages in order.
-3. Resolve required components/shell/plugins by semver.
+1. Load story bundle metadata and read `localPackages`.
+2. Resolve required components/shell/plugins/theme from the **registry** by semver.
+3. Overlay any matching `localPackages` (local wins).
 4. Validate capabilities and permissions.
 5. Build a runtime context for rendering.
 
@@ -255,8 +275,8 @@ Given a story manifest:
 
 ## 7) Engine Execution Flow (New)
 1. Load story + nodes + edges.
-2. Load story manifest + bundle refs.
-3. Merge registries (default -> app -> story).
+2. Load story manifest + story bundle metadata.
+3. Resolve registry packages and overlay local packages.
 4. Validate:
    - engine version
    - required packages present
@@ -271,9 +291,10 @@ Given a story manifest:
 
 ### Step 1: Create Story Bundle
 ```
-story.json
+manifest.json
 components/
 shells/
+plugins/
 themes/
 assets/
 ```
@@ -284,6 +305,7 @@ Add to `story_manifests`:
 - shell
 - plugins
 - theme
+- localPackages (local overrides)
 - fallback strategy
 
 ### Step 3: Publish
@@ -303,7 +325,7 @@ Upload story bundle and register manifest in DB.
 ## 10) Implementation Phases
 
 ### Phase 1: Core Data + Runtime
-- Implement new DB schema (bundles, packages, manifest).
+- Implement new DB schema (story_bundles, packages, manifest).
 - Build registries (component/shell/plugin/theme).
 - Build resolver pipeline.
 
@@ -336,7 +358,7 @@ Upload story bundle and register manifest in DB.
 ---
 
 ## 12) Success Criteria
-1. Story bundles can run independently with no global registry.
+1. Story bundles can run independently if all required packages are local.
 2. A story can override any component or shell without forking engine code.
 3. Marketplace packages can be installed without code changes.
 4. Authors can add new components by publishing a package.
