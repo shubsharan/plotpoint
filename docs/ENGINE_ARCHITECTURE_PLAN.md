@@ -14,7 +14,7 @@ No backward compatibility is required. This is a clean break.
 ## 1) Design Goals
 - **Extensible**: New components/plugins/shells added without core changes.
 - **Composable**: Defaults + story overrides via layered resolution.
-- **Portable**: Story bundles are self-contained and distributable.
+- **Portable**: Stories can be packaged into offline bundles.
 - **Deterministic**: Same inputs yield same runtime behavior.
 - **Marketplace-ready**: Packages are versioned, discoverable, and permissioned.
 
@@ -29,10 +29,11 @@ No backward compatibility is required. This is a clean break.
 4. **Plugin Runtime** (capabilities)
 5. **Theme Runtime** (style overrides)
 
-### Resolution Order (Layered Overrides)
-1. Story bundle **local packages** (overrides)
-2. Central registry packages (marketplace)
-3. Error if missing (or use fallback strategy)
+### Resolution Order (Registry-First)
+1. Resolve required packages from the **central registry** (marketplace).
+2. Apply **default packages** (registry packages marked `is_default`) for any
+   required component types not explicitly pinned in the story manifest.
+3. Fail in strict mode if any required package is missing or incompatible.
 
 ---
 
@@ -61,24 +62,22 @@ No backward compatibility is required. This is a clean break.
       theme.json
 ```
 
-> The "default pack" is simply a curated **list of registry packages** that stories can
-> reference in their manifest. There is no app layer in this model.
+> Defaults are registry packages flagged as `is_default`. They are automatically
+> selected when a story does not pin a specific version for a required component type.
 
-### B) Story Bundle (author-provided)
+### B) Offline Bundle (generated, optional)
 ```
-/stories/<storyId>/bundle/
-  manifest.json
-  components/...
-  shells/...
-  plugins/...
-  themes/...
-  assets/...
+/offline/<storyId>/<bundleVersion>/
+  engine/
+  packages/
+  assets/
+  lockfile.json
 ```
 
 ### Resolution Strategy
-- **Local packages first**: story bundle entries override registry packages.
-- If no local match, resolve from the **central registry** by semver.
-- If missing, use `fallback_strategy` or fail in strict mode.
+- Use the **registry** to resolve packages by semver.
+- If a required component type is not pinned, use the registry default (`is_default`).
+- Store resolved versions in a **lockfile** at publish time for determinism.
 
 ---
 
@@ -92,7 +91,7 @@ stories:
   slug (text)
   status (enum: draft, published, archived)
   start_node_id (uuid, fk -> nodes.id)
-  bundle_id (uuid, fk -> story_bundles.id)  -- story bundle metadata
+  offline_bundle_id (uuid, fk -> offline_bundles.id, nullable)
   created_at, updated_at (timestamp)
 ```
 
@@ -120,12 +119,13 @@ edges:
   created_at
 ```
 
-### 4.4 Story Bundles
+### 4.4 Offline Bundles
 ```
-story_bundles:
+offline_bundles:
   id (uuid, pk)
   story_id (uuid, fk -> stories.id)
   storage_path (text)                       -- CDN/S3 location
+  lockfile (jsonb)                          -- resolved packages + engine version
   checksum (text)
   size_bytes (int)
   created_at, updated_at
@@ -138,6 +138,9 @@ packages:
   name (text)                               -- unique slug
   version (text)                            -- semver
   kind (enum: component, shell, plugin, theme)
+  visibility (enum: public, private)
+  owner_id (uuid)                           -- org/account owner
+  is_default (boolean)                      -- eligible as auto default
   manifest (jsonb)                          -- package metadata
   storage_path (text)                       -- bundle asset location
   created_at, updated_at
@@ -152,7 +155,7 @@ story_manifests:
   shell (jsonb)                             -- { "id": "ar_explore", "version": "^1.0.0" }
   plugins (jsonb)                           -- { "ar_anchor": "^1.0.0" }
   theme (jsonb)                             -- { "id": "dark_museum", "version": "^1.0.0" }
-  local_packages (jsonb)                    -- [{ id, version, kind, path }]
+  resolved_packages (jsonb)                 -- lockfile stored at publish time
   fallback_strategy (enum: strict, latest, compatible)
   created_at, updated_at
 ```
@@ -170,6 +173,8 @@ story_manifests:
   "engine": "^2.0.0",
   "displayName": "Text Block",
   "category": "block",
+  "visibility": "public",
+  "isDefault": true,
   "schema": "./schema.json",
   "ui": "./ui.tsx",
   "logic": "./logic.ts",
@@ -188,6 +193,7 @@ story_manifests:
   "version": "1.0.0",
   "kind": "shell",
   "engine": "^2.0.0",
+  "visibility": "public",
   "ui": "./ui.tsx",
   "theme": "./theme.json",
   "capabilities": ["camera", "location"]
@@ -201,6 +207,7 @@ story_manifests:
   "version": "1.0.0",
   "kind": "plugin",
   "engine": "^2.0.0",
+  "visibility": "public",
   "runtime": "./runtime.ts",
   "capabilities": ["camera", "location"]
 }
@@ -212,6 +219,7 @@ story_manifests:
   "id": "dark_museum",
   "version": "1.0.0",
   "kind": "theme",
+  "visibility": "public",
   "tokens": {
     "color.primary": "#6b4eff",
     "font.body": "Gothic-Regular"
@@ -236,17 +244,12 @@ story_manifests:
   "shell": { "id": "ar_explore", "version": "^1.0.0" },
   "plugins": { "ar_anchor": "^1.0.0" },
   "theme": { "id": "dark_museum", "version": "^1.0.0" },
-  "localPackages": [
-    {
-      "id": "text_block",
-      "version": "2.1.0",
-      "kind": "component",
-      "path": "components/text_block/2.1.0"
-    }
-  ],
   "fallbackStrategy": "strict"
 }
 ```
+
+> `resolvedPackages` is generated at publish time and stored in `story_manifests.resolved_packages`
+> as a lockfile for deterministic runtime and offline bundling.
 
 ---
 
@@ -265,18 +268,18 @@ Each registry indexes by:
 
 ### 6.2 Resolver
 Given a story manifest:
-1. Load story bundle metadata and read `localPackages`.
-2. Resolve required components/shell/plugins/theme from the **registry** by semver.
-3. Overlay any matching `localPackages` (local wins).
+1. Resolve required components/shell/plugins/theme from the **registry** by semver.
+2. For any required component type not pinned, select the registry package marked `is_default`.
+3. Enforce package visibility (public/private) and ownership rules.
 4. Validate capabilities and permissions.
-5. Build a runtime context for rendering.
+5. Write resolved versions into `resolved_packages` at publish time.
 
 ---
 
 ## 7) Engine Execution Flow (New)
 1. Load story + nodes + edges.
-2. Load story manifest + story bundle metadata.
-3. Resolve registry packages and overlay local packages.
+2. Load story manifest + resolved packages lockfile.
+3. Resolve packages from lockfile (or compute if missing in dev).
 4. Validate:
    - engine version
    - required packages present
@@ -289,13 +292,9 @@ Given a story manifest:
 
 ## 8) Authoring Workflow (New)
 
-### Step 1: Create Story Bundle
+### Step 1: Create Story + Manifest
 ```
 manifest.json
-components/
-shells/
-plugins/
-themes/
 assets/
 ```
 
@@ -305,15 +304,32 @@ Add to `story_manifests`:
 - shell
 - plugins
 - theme
-- localPackages (local overrides)
 - fallback strategy
 
-### Step 3: Publish
-Upload story bundle and register manifest in DB.
+### Step 3: Publish (Validation + Lockfile)
+- Resolve dependencies via registry.
+- Run validators.
+- Write `resolved_packages` lockfile.
+
+### Step 4: Optional Offline Bundle
+- Build offline bundle containing engine + packages + assets.
+- Store in `offline_bundles`.
 
 ---
 
-## 9) Marketplace Requirements
+## 9) Publish-Time Validators (Required)
+- Engine version compatibility
+- Package availability (registry + private visibility)
+- Component schema validation against node props
+- Dependency graph resolution (no cycles)
+- Capability permissions (camera/location/network)
+- Platform compatibility (web/ios/android)
+- Asset reference integrity
+- Theme override validation
+
+---
+
+## 10) Marketplace Requirements
 - Package registry API
 - Semver resolution
 - Ratings/reviews
@@ -322,17 +338,17 @@ Upload story bundle and register manifest in DB.
 
 ---
 
-## 10) Implementation Phases
+## 11) Implementation Phases
 
-### Phase 1: Core Data + Runtime
-- Implement new DB schema (story_bundles, packages, manifest).
+### Phase 1: Core Data + Registry
+- Implement new DB schema (offline_bundles, packages, manifest).
+- Add registry metadata (visibility, is_default).
 - Build registries (component/shell/plugin/theme).
 - Build resolver pipeline.
 
-### Phase 2: Bundle System
-- Build packager format.
-- Bundle loader (local + remote).
-- Story bundle registry in DB.
+### Phase 2: Publish Validators
+- Build validator suite.
+- Generate and store `resolved_packages` lockfile.
 
 ### Phase 3: Shell + Theme System
 - Shell registry and render pipeline.
@@ -343,22 +359,27 @@ Upload story bundle and register manifest in DB.
 - Permission checks.
 - Plugin runtime hooks.
 
-### Phase 5: Marketplace
+### Phase 5: Offline Bundles
+- Offline bundle builder (engine + packages + assets).
+- Bundle distribution + caching.
+
+### Phase 6: Marketplace
 - Package catalog service.
 - Publish/update endpoints.
 - Dependency validation.
 
 ---
 
-## 11) Non-Goals (Explicit)
+## 12) Non-Goals (Explicit)
 - Backwards compatibility with current schema/runtime.
 - Migrating old stories automatically.
 - Supporting mixed legacy and new formats in the same runtime.
 
 ---
 
-## 12) Success Criteria
-1. Story bundles can run independently if all required packages are local.
-2. A story can override any component or shell without forking engine code.
-3. Marketplace packages can be installed without code changes.
-4. Authors can add new components by publishing a package.
+## 13) Success Criteria
+1. Stories resolve deterministically using `resolved_packages`.
+2. Defaults are applied automatically via `is_default` packages.
+3. Private packages can be used without local overrides.
+4. Offline bundles can run without registry access.
+5. Marketplace packages can be installed without code changes.
