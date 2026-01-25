@@ -357,6 +357,60 @@ Given a story manifest:
 6. Render nodes via resolved component packages.
 7. Emit analytics/events.
 
+### 7.1 Runtime Execution Sequence (Detailed)
+**Step 1: Load story data**
+- `stories` (metadata)
+- `nodes` + `edges` (graph)
+- `story_manifests` (manifest + `resolved_packages`)
+
+**Step 2: Validate manifest + lockfile**
+- Validate `engine_version` compatibility.
+- Validate `resolved_packages` checksums and package IDs.
+- If `resolved_packages` missing (dev only), run resolver to generate it.
+
+**Step 3: Load packages into registries**
+- For each entry in `resolved_packages`:
+  - Fetch package files from registry storage (`packages.storage_path`)
+  - Register in:
+    - `ComponentRegistry`
+    - `ShellRegistry`
+    - `PluginRegistry`
+    - `ThemeRegistry`
+
+**Step 4: Initialize shell + plugins**
+- Resolve shell package from lockfile.
+- Initialize shell runtime.
+- Load required plugins and enforce capabilities.
+
+**Step 5: Create execution context**
+- Build story graph from `nodes` + `edges`.
+- Set start node from `stories.start_node_id`.
+- Initialize session state.
+
+**Step 6: Render current node**
+- Lookup component by `node_type`.
+- Merge node `data` with component defaults.
+- Apply theme overrides.
+- Render component UI with context callbacks.
+
+**Step 7: Handle actions**
+- `onComplete` → navigate default edge
+- `onNavigate(edgeId)` → navigate explicit edge
+- `onStateUpdate` / `onInventoryUpdate` → state updates
+
+**Step 8: Persist + emit**
+- Write `story_sessions` updates.
+- Emit analytics/events.
+
+### 7.2 Data Model Mapping
+| Step | Data model source |
+| --- | --- |
+| Story metadata | `stories` |
+| Graph | `nodes`, `edges` |
+| Dependency lock | `story_manifests.resolved_packages` |
+| Package metadata | `packages` |
+| Session state | `story_sessions` |
+
 ---
 
 ## 8) Authoring Workflow (New)
