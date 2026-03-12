@@ -1,11 +1,12 @@
 # Feature: Monorepo & Build Tooling
 
-| Field       | Value                                                                                     |
-|-------------|-------------------------------------------------------------------------------------------|
-| **Epic**    | [EPIC-0001 — Monorepo Scaffold + Core Types](../epics/EPIC-0001-monorepo-scaffold.md)     |
-| **Phase**   | 1                                                                                         |
-| **Status**  | Not Started                                                                               |
-| **Scope**   | pnpm workspaces, Turborepo, shared TypeScript config, tsdown, oxlint, oxfmt, Vitest setup |
+
+| Field      | Value                                                                                     |
+| ---------- | ----------------------------------------------------------------------------------------- |
+| **Epic**   | [EPIC-0001 — Monorepo Scaffold + Core Types](../epics/EPIC-0001-monorepo-scaffold.md)     |                                                                                    |
+| **Status** | Complete                                                                                  |
+| **Scope**  | pnpm workspaces, Turborepo, shared TypeScript config, tsdown, oxlint, oxfmt, Vitest setup |
+
 
 ## Overview
 
@@ -13,15 +14,17 @@ This feature establishes the shared build infrastructure so that every subsequen
 
 **Tools:**
 
+
 | Concern       | Tool       | Why                                                    |
-|---------------|------------|--------------------------------------------------------|
+| ------------- | ---------- | ------------------------------------------------------ |
 | Workspaces    | pnpm       | Fast, disk-efficient, strict dependency resolution     |
-| Orchestration | Turborepo  | Topological task runner with remote caching             |
+| Orchestration | Turborepo  | Topological task runner with remote caching            |
 | Language      | TypeScript | Strict mode, `isolatedDeclarations` for fast .d.ts     |
 | Bundler       | tsdown     | Rust-based (rolldown ecosystem), fast ESM output + dts |
 | Linting       | oxlint     | Rust-based, ~100x faster than ESLint                   |
 | Formatting    | oxfmt      | Rust-based companion to oxlint                         |
 | Testing       | Vitest     | Native ESM, TypeScript-first, fast watch mode          |
+
 
 **References:**
 
@@ -50,23 +53,27 @@ All publishable/buildable code lives under `apps/` or `packages/`. No other top-
   "name": "plotpoint",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.6.2",
+  "packageManager": "pnpm@10.32.1",
   "engines": {
-    "node": ">=26"
+    "node": ">=25.4.0"
   },
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint",
-    "format": "turbo run format"
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "format": "oxfmt --check",
+    "format:fix": "oxfmt ."
   },
   "devDependencies": {
-    "turbo": "^2",
-    "typescript": "^5.8",
-    "tsdown": "^0",
-    "oxlint": "^0",
-    "vitest": "^3"
+    "oxfmt": "^0.38.0",
+    "oxlint": "^1.53.0",
+    "oxlint-tsgolint": "^0.16.0",
+    "tsdown": "^0.21.2",
+    "turbo": "^2.8.16",
+    "typescript": "6.0.1-rc",
+    "vitest": "^4.0.18"
   }
 }
 ```
@@ -76,7 +83,7 @@ All publishable/buildable code lives under `apps/` or `packages/`. No other top-
 - `"type": "module"` — ESM-only throughout the entire monorepo. No CJS outputs.
 - `"private": true` — root is not publishable; only individual packages are.
 - `"packageManager"` — enables corepack for deterministic pnpm version.
-- `"engines"` — enforces Node >= 26. All TypeScript targets and tooling assume this baseline.
+- `"engines"` — enforces Node >= 25.4.0. All TypeScript targets and tooling assume this baseline.
 - All scripts delegate to `turbo` — never run tools directly from root.
 
 ---
@@ -87,31 +94,37 @@ All publishable/buildable code lives under `apps/` or `packages/`. No other top-
 
 ```jsonc
 {
-  "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["tsconfig.json"],
+  "$schema": "https://turborepo.dev/schema.json",
+  "ui": "tui",
   "tasks": {
+    "//#quality": {
+      "dependsOn": ["//#lint", "//#format"]
+    },
+    "//#quality:fix": {
+      "dependsOn": ["//#lint:fix", "//#format:fix"]
+    },
+    "//#lint": {},
+    "//#lint:fix": {
+      "cache": false
+    },
+    "//#format": {},
+    "//#format:fix": {
+      "cache": false
+    },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"],
-      "inputs": ["src/**/*.ts", "src/**/*.tsx", "tsconfig.json", "tsdown.config.ts", "package.json"]
-    },
-    "typecheck": {
-      "dependsOn": ["^build"],
-      "inputs": ["src/**/*.ts", "src/**/*.tsx", "tsconfig.json", "package.json"]
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "lint": {
-      "inputs": ["src/**/*.ts", "src/**/*.tsx", "../../.oxlintrc.json"]
+      "dependsOn": ["^lint"]
     },
-    "format": {
-      "cache": false
-    },
-    "test": {
-      "dependsOn": ["^build"],
-      "cache": false
+    "check-types": {
+      "dependsOn": ["^check-types"]
     },
     "dev": {
-      "persistent": true,
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
@@ -119,14 +132,16 @@ All publishable/buildable code lives under `apps/` or `packages/`. No other top-
 
 **Pipeline rationale:**
 
-| Task        | `dependsOn`  | Cached | Why                                                                                   |
-|-------------|--------------|--------|---------------------------------------------------------------------------------------|
-| `build`     | `^build`     | Yes    | Packages must build dependencies first; outputs are deterministic from inputs          |
-| `typecheck` | `^build`     | Yes    | Needs `.d.ts` from dependencies to resolve cross-package imports                       |
-| `lint`      | —            | Yes    | Linting is file-local; no dependency ordering needed. Cached based on source + config  |
-| `format`    | —            | No     | Formatting mutates files in-place; caching would skip necessary rewrites               |
-| `test`      | `^build`     | No     | Tests import from built dependencies; not cached so tests always run fresh              |
-| `dev`       | —            | No     | Watch mode; persistent task that never terminates                                      |
+
+| Task        | `dependsOn` | Cached | Why                                                                                   |
+| ----------- | ----------- | ------ | ------------------------------------------------------------------------------------- |
+| `build`     | `^build`    | Yes    | Packages must build dependencies first; outputs are deterministic from inputs         |
+| `typecheck` | `^build`    | Yes    | Needs `.d.ts` from dependencies to resolve cross-package imports                      |
+| `lint`      | —           | Yes    | Linting is file-local; no dependency ordering needed. Cached based on source + config |
+| `format`    | —           | No     | Formatting mutates files in-place; caching would skip necessary rewrites              |
+| `test`      | `^build`    | No     | Tests import from built dependencies; not cached so tests always run fresh            |
+| `dev`       | —           | No     | Watch mode; persistent task that never terminates                                     |
+
 
 `globalDependencies` includes the root `tsconfig.json` because all packages extend it — a change there invalidates every cache.
 
@@ -174,7 +189,7 @@ All publishable/buildable code lives under `apps/` or `packages/`. No other top-
 
 **Key decisions:**
 
-- `target: ES2024` — Node 26 supports ES2024 natively. No downleveling needed.
+- `target: ES2024` — Node 25 supports ES2024 natively. No downleveling needed.
 - `module: NodeNext` / `moduleResolution: NodeNext` — required for ESM-only packages with `"type": "module"`. Enforces explicit `.js` extensions in imports.
 - `isolatedDeclarations: true` — enables tsdown to generate `.d.ts` files without a full TypeScript program, dramatically speeding up builds.
 - `verbatimModuleSyntax: true` — enforces `import type` for type-only imports, making the ESM boundary explicit.
@@ -352,24 +367,28 @@ packages/<name>/
 
 ### Files per package:
 
-| File                | Purpose                                    |
-|---------------------|--------------------------------------------|
-| `package.json`      | Name, type, exports, scripts, dependencies |
-| `tsconfig.json`     | Extends root, sets include/outDir/rootDir  |
-| `tsdown.config.ts`  | Build config (omit for empty packages)     |
-| `vitest.config.ts`  | Test config with `__tests__/` discovery    |
-| `src/index.ts`      | Package entry point (barrel export)        |
-| `src/__tests__/`    | Test directory                             |
+
+| File               | Purpose                                    |
+| ------------------ | ------------------------------------------ |
+| `package.json`     | Name, type, exports, scripts, dependencies |
+| `tsconfig.json`    | Extends root, sets include/outDir/rootDir  |
+| `tsdown.config.ts` | Build config (omit for empty packages)     |
+| `vitest.config.ts` | Test config with `__tests__/` discovery    |
+| `src/index.ts`     | Package entry point (barrel export)        |
+| `src/__tests__/`   | Test directory                             |
+
 
 ### Packages receiving this scaffold:
 
-| Package      | Buildable | Notes                                |
-|--------------|-----------|--------------------------------------|
-| `types`      | Yes       | Shared TypeScript types              |
-| `schemas`    | Yes       | Zod validation schemas              |
-| `db`         | Yes       | Drizzle ORM, `platform: "node"`     |
-| `engine`     | No        | Empty — implementation in Phase 2    |
-| `components` | No        | Empty — implementation in Phase 3    |
+
+| Package      | Buildable | Notes                             |
+| ------------ | --------- | --------------------------------- |
+| `types`      | Yes       | Shared TypeScript types           |
+| `schemas`    | Yes       | Zod validation schemas            |
+| `db`         | Yes       | Drizzle ORM, `platform: "node"`   |
+| `engine`     | No        | Empty — implementation in Phase 2 |
+| `components` | No        | Empty — implementation in Phase 3 |
+
 
 Empty packages (`engine`, `components`) still get `package.json`, `tsconfig.json`, `vitest.config.ts`, and `src/index.ts` — but no `tsdown.config.ts` until they have code to build. Their `src/index.ts` exports nothing (empty file) and their test directory contains a single placeholder test to satisfy the "at least one passing test per package" acceptance criterion.
 
@@ -377,27 +396,28 @@ Empty packages (`engine`, `components`) still get `package.json`, `tsconfig.json
 
 ## 9. Acceptance Criteria
 
-- [ ] `pnpm install` from root succeeds with no errors
-- [ ] `pnpm turbo build` succeeds across all packages (no type errors, no build failures)
-- [ ] `pnpm turbo test` runs Vitest in every package with at least one passing test per package
-- [ ] `pnpm turbo typecheck` passes with strict TypeScript in every package
-- [ ] `pnpm turbo lint` runs oxlint across all packages with zero errors
-- [ ] `pnpm turbo format` runs oxfmt across all packages
-- [ ] Each package is self-contained (own `package.json`, `tsconfig.json`, `vitest.config.ts`)
-- [ ] ESM-only throughout — no CJS outputs, `"type": "module"` in every `package.json`
-- [ ] No runtime logic, UI, or business logic in any package
-- [ ] `tsdown` generates `.d.ts` files for all buildable packages
-- [ ] Cross-package imports resolve correctly (e.g., `schemas` imports from `types`)
+- `pnpm install` from root succeeds with no errors
+- `pnpm turbo build` succeeds across all packages (no type errors, no build failures)
+- `pnpm turbo test` runs Vitest in every package with at least one passing test per package
+- `pnpm turbo typecheck` passes with strict TypeScript in every package
+- `pnpm turbo lint` runs oxlint across all packages with zero errors
+- `pnpm turbo format` runs oxfmt across all packages
+- Each package is self-contained (own `package.json`, `tsconfig.json`, `vitest.config.ts`)
+- ESM-only throughout — no CJS outputs, `"type": "module"` in every `package.json`
+- No runtime logic, UI, or business logic in any package
+- `tsdown` generates `.d.ts` files for all buildable packages
+- Cross-package imports resolve correctly (e.g., `schemas` imports from `types`)
 
 ---
 
 ## 10. Out of Scope
 
 - Any runtime logic, UI, or business logic
-- Schema definitions — covered by [`core-domain-schemas.md`](core-domain-schemas.md)
-- Database tables — covered by [`database-skeleton.md`](database-skeleton.md)
-- App shell contents — covered by [`app-shells.md`](app-shells.md)
-- Story JSON format — covered by [`story-json-format.md`](story-json-format.md)
+- Schema definitions — covered by `[core-domain-schemas.md](core-domain-schemas.md)`
+- Database tables — covered by `[database-skeleton.md](database-skeleton.md)`
+- App shell contents — covered by `[app-shells.md](app-shells.md)`
+- Story JSON format — covered by `[story-json-format.md](story-json-format.md)`
 - CI/CD pipeline configuration
 - Remote caching setup for Turborepo
 - Package publishing configuration
+

@@ -1,25 +1,37 @@
 # Dependencies
 node_modules/
+.pnp
+.pnp.js
 
 # Build output
-dist/
+out/
+build
+dist
 
-# Turborepo
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Turbo
 .turbo/
 
 # Environment
 .env
-.env.*
-!.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Claude Code
 .claude/settings.local.json
-
-# OS
-.DS_Store
 
 # Expo
 .expo/
 
 # Testing
 coverage/
+
+# Misc
+.DS_Store
+*.pem
