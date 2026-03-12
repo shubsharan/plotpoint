@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Turborepo
+.turbo/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Claude Code
+.claude/settings.local.json
+
+# OS
+.DS_Store
+
+# Expo
+.expo/
+
+# Testing
+coverage/
