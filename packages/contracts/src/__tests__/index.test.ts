@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-describe("@plotpoint/schemas", () => {
+describe("@plotpoint/contracts", () => {
   it("placeholder", () => {
     expect(true).toBe(true);
   });
