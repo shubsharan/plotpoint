@@ -1,5 +1,5 @@
 {
-  "name": "@packages/schemas",
+  "name": "@plotpoint/contracts",
   "version": "0.0.1",
   "private": true,
   "type": "module",

@@ -1,7 +1,12 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
-  "globalDependencies": ["packages/config/tsconfig.base.json"],
+  "globalDependencies": [
+    "packages/config/tsconfig/base.json",
+    "packages/config/tsconfig/api.json",
+    "packages/config/tsconfig/mobile.json",
+    "packages/config/tsconfig/library.json"
+  ],
   "tasks": {
     "//#quality": {
       "dependsOn": ["//#lint", "//#format"]

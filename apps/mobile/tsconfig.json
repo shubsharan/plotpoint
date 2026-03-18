@@ -1,8 +1,4 @@
 {
-  "extends": "@packages/config/tsconfig.base.json",
-  "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src"
-  },
+  "extends": "@packages/config/tsconfig/mobile.json",
   "include": ["src"]
 }

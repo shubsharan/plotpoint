@@ -50,6 +50,12 @@ importers:
 
   packages/config: {}
 
+  packages/contracts:
+    devDependencies:
+      '@packages/config':
+        specifier: workspace:*
+        version: link:../config
+
   packages/db:
     devDependencies:
       '@packages/config':
@@ -57,12 +63,6 @@ importers:
         version: link:../config
 
   packages/engine:
-    devDependencies:
-      '@packages/config':
-        specifier: workspace:*
-        version: link:../config
-
-  packages/schemas:
     devDependencies:
       '@packages/config':
         specifier: workspace:*
