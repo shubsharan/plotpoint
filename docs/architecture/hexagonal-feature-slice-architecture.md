@@ -275,7 +275,7 @@ export type State = {
 }
 
 export type Action =
-  | { type: 'unseal'; playerId: string }
+  | { type: 'unseal'; playerId: string; openedAt: Date }
 
 export const initialState: State = {
   sealed: true,
@@ -294,7 +294,7 @@ export const update = (
       return {
         sealed: false,
         openedBy: action.playerId,
-        openedAt: new Date(),
+        openedAt: action.openedAt,
       }
   }
 }

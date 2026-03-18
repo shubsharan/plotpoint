@@ -19,12 +19,14 @@ Rename `packages/schemas` to `packages/contracts` and add app-specific tsconfig 
 - Add `packages/config/tsconfig/api.json` — extends base, targets Node
 - Add `packages/config/tsconfig/mobile.json` — extends base, targets React Native/Expo
 - Add `packages/config/tsconfig/library.json` — extends base, for shared packages
+- Update `packages/config/package.json` exports/files so the new presets resolve via package specifiers
 - Update each package/app `tsconfig.json` to extend the appropriate override instead of base directly
 
 ## Affected Packages & Files
 
 - `packages/schemas/` -> `packages/contracts/` (rename)
 - `packages/contracts/package.json` (update name)
+- `packages/config/package.json` (export new tsconfig entries)
 - `packages/config/tsconfig/api.json` (new)
 - `packages/config/tsconfig/mobile.json` (new)
 - `packages/config/tsconfig/library.json` (new)
