@@ -13,29 +13,37 @@ Narrative-first, location-based experience platform. Players run co-op stories (
 - **Testing:** Vitest
 - **Language:** TypeScript (strict)
 
-## Doc-First Workflow
+## Notion-First Workflow
 
-Every piece of work follows this flow: **spec → plan → implement → review**.
+Notion is the source of truth for all product documentation. The repo receives docs via the `/notion-to-branch` pipeline skill. Every piece of work follows: **PRD → Task → branch → implement → review**.
+
+### Document Hierarchy
+
+| Notion artifact | Purpose | Repo location |
+|---|---|---|
+| **PRD** (Docs DB, Type=PRD) | Strategic context: goal, scope, requirements, architecture decisions | `docs/prds/PRD-{slug}.md` |
+| **Task** (Tasks DB) | Implementation spec: requirements, affected files, acceptance criteria | `docs/tasks/PP-{id}-{slug}.md` |
+| **ADR** (Docs DB, Type=ADR) | Architecture decision record | `docs/adrs/ADR-{slug}.md` |
+| **Architecture** (Docs DB, Type=Architecture) | System design docs | `docs/architecture/{slug}.md` |
 
 ### Documentation Structure
 
 ```
 docs/
-  product/
-    overview.md        # Architecture & product decisions (source of truth)
-    roadmap.md         # Phased product roadmap
-  epics/               # One file per epic (maps to roadmap phases)
-  features/            # Granular feature specs (implementation-ready)
-  adrs/                # Architecture Decision Records
+  prds/              # Docs DB Type=PRD
+  tasks/             # Tasks DB (imported per-task, named by Issue ID)
+  adrs/              # Docs DB Type=ADR
+  architecture/      # Docs DB Type=Architecture
 ```
 
 ### Rules
 
-1. **Read before building.** Before starting any epic or feature, read the relevant spec in `docs/`. If no spec exists, write one first.
-2. **Epics before features.** An epic doc must exist before creating feature files within it. A feature file must exist before writing code for it.
-3. **ADRs for non-obvious decisions.** When a design choice has meaningful trade-offs (e.g., separate components vs. single component with modes), document it as an ADR in `docs/adrs/`. Reference the ADR from the relevant feature spec.
-4. **Specs are living documents.** Update specs when implementation reveals the design was wrong. Don't let code and docs drift apart.
-5. **Don't build what isn't specced.** If you discover something needs building that isn't in a spec, stop and spec it first — even if it's small.
+1. **Read before building.** Before starting any task, read the imported task spec in `docs/tasks/` and linked PRD in `docs/prds/`. If no spec exists, create it in Notion first.
+2. **PRD before Tasks.** A PRD must exist in Notion before creating Tasks under it. Tasks carry implementation detail — run `superpowers:write-plan` against the task spec.
+3. **ADRs for non-obvious decisions.** When a design choice has meaningful trade-offs, document it as an ADR in the Docs DB (Type=ADR). Reference the ADR from the relevant PRD or Task.
+4. **Specs are living documents.** Update Notion specs when implementation reveals the design was wrong. Re-sync to repo. Don't let code and docs drift apart.
+5. **Don't build what isn't specced.** If you discover something needs building that isn't in a spec, stop and spec it in Notion first — even if it's small.
+6. **One Task = one branch = one PR.** Use `/notion-to-branch` to scaffold the branch and import specs from Notion.
 
 ## Architecture Principles
 

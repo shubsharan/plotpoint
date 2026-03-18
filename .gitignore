@@ -25,6 +25,7 @@ yarn-error.log*
 
 # Claude Code
 .claude/settings.local.json
+docs/superpowers/
 
 # Expo
 .expo/
