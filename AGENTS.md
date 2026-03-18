@@ -15,14 +15,16 @@ Narrative-first, location-based experience platform. Players run co-op stories (
 
 ## Notion-First Workflow
 
-Notion is the source of truth for all product documentation. The repo receives docs via the `/notion-to-branch` pipeline skill. Every piece of work follows: **PRD → Task → branch → implement → review**.
+Notion is the source of truth for all product documentation. The repo receives docs via sync/automation workflows. Every piece of work follows: **Roadmap -> Epic -> Architecture (as needed) -> Feature PRD -> branch -> implement -> review**.
 
 ### Document Hierarchy
 
 | Notion artifact | Purpose | Repo location |
 |---|---|---|
-| **PRD** (Docs DB, Type=PRD) | Strategic context: goal, scope, requirements, architecture decisions | `docs/prds/PRD-{slug}.md` |
-| **Task** (Tasks DB) | Implementation spec: requirements, affected files, acceptance criteria | `docs/tasks/PP-{id}-{slug}.md` |
+| **Roadmap** | MVP sequencing and delivery phases | `docs/product/product-roadmap.md` |
+| **Runbook** | Operational guides and repeatable delivery workflows | `docs/runbooks/{runbook-slug}.md` |
+| **Epic** | Broader initiative with strategic and sequencing context | `docs/epics/{epic-slug}.md` |
+| **Feature PRD** | Actionable implementation unit with requirements and acceptance criteria | `docs/features/{feature-slug}.md` |
 | **ADR** (Docs DB, Type=ADR) | Architecture decision record | `docs/adrs/ADR-{slug}.md` |
 | **Architecture** (Docs DB, Type=Architecture) | System design docs | `docs/architecture/{slug}.md` |
 
@@ -30,20 +32,23 @@ Notion is the source of truth for all product documentation. The repo receives d
 
 ```
 docs/
-  prds/              # Docs DB Type=PRD
-  tasks/             # Tasks DB (imported per-task, named by Issue ID)
+  product/           # Strategy and roadmap
+  runbooks/          # Operational guides and team workflows
+  epics/             # Strategic initiatives
+  features/          # Feature-level PRDs (implementation units)
   adrs/              # Docs DB Type=ADR
   architecture/      # Docs DB Type=Architecture
 ```
 
 ### Rules
 
-1. **Read before building.** Before starting any task, read the imported task spec in `docs/tasks/` and linked PRD in `docs/prds/`. If no spec exists, create it in Notion first.
-2. **PRD before Tasks.** A PRD must exist in Notion before creating Tasks under it. Tasks carry implementation detail — run `superpowers:write-plan` against the task spec.
-3. **ADRs for non-obvious decisions.** When a design choice has meaningful trade-offs, document it as an ADR in the Docs DB (Type=ADR). Reference the ADR from the relevant PRD or Task.
-4. **Specs are living documents.** Update Notion specs when implementation reveals the design was wrong. Re-sync to repo. Don't let code and docs drift apart.
-5. **Don't build what isn't specced.** If you discover something needs building that isn't in a spec, stop and spec it in Notion first — even if it's small.
-6. **One Task = one branch = one PR.** Use `/notion-to-branch` to scaffold the branch and import specs from Notion.
+1. **Read before building.** Before implementing, read the target feature PRD in `docs/features/`, its linked epic in `docs/epics/`, and any linked architecture docs.
+2. **Roadmap before epics, epics before features.** Keep decomposition order strict: roadmap -> epic -> feature PRD.
+3. **ADRs for non-obvious decisions.** When a design choice has meaningful trade-offs, document it as an ADR and link it from the epic or feature PRD.
+4. **Specs are living documents.** Update specs when implementation reveals the design was wrong. Do not let code and docs drift.
+5. **Don't build what isn't specced.** If needed work is missing from feature PRDs, stop and write/update the feature spec first.
+6. **One Feature PRD = one branch = one PR.** Start implementation by setting the feature PRD to `In Progress` and opening a draft PR with a scaffolding docs commit.
+7. **Status hygiene.** On merge, update feature, epic, and roadmap statuses to keep planning artifacts accurate.
 
 ## Architecture Principles
 
