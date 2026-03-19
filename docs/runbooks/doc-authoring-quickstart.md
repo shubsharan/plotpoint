@@ -3,7 +3,7 @@
 | **Type** | Runbook |
 | **Status** | Active |
 | **Owner** | product-engineering |
-| **Last synced** | 2026-03-18 |
+| **Last synced** | 2026-03-19 |
 
 # Runbook - Doc Authoring Quickstart
 
@@ -43,7 +43,7 @@ This runbook covers authoring and maintaining roadmap, epic, architecture, featu
 ## Naming Conventions
 - Epic docs use `EPIC-XXXX` IDs and filenames like `docs/epics/EPIC-0001-<slug>.md`.
 - Feature PRDs use `FEAT-XXXX` IDs and filenames like `docs/features/FEAT-0001-<slug>.md`.
-- Feature implementation branches use `feat/FEAT-XXXX-<slug>`.
+- Feature implementation branches use `FEAT-XXXX-<slug>`.
 
 ## Linking Rules
 - Each feature PRD links to exactly one epic.
@@ -60,8 +60,8 @@ Before coding starts:
 - Branch and draft PR are created from the feature PRD context.
 
 ## Status Hygiene
-- Update feature status during delivery: `Backlog -> In Progress -> In Review -> Done`.
-- Update epic status as grouped features move forward.
+- Update feature status during delivery: `Not Started -> In Progress -> In Review -> Completed`.
+- Update epic status as grouped features move forward to completion.
 - Update roadmap when epic status changes.
 
 ## Verification Checklist

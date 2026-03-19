@@ -48,8 +48,8 @@ docs/
 4. **ADRs for non-obvious decisions.** When a design choice has meaningful trade-offs, document it as an ADR and link it from the epic or feature PRD.
 5. **Specs are living documents.** Update specs when implementation reveals the design was wrong. Do not let code and docs drift.
 6. **Don't build what isn't specced.** If needed work is missing from feature PRDs, stop and write/update the feature spec first.
-7. **One Feature PRD = one branch = one PR.** Start implementation by setting the feature PRD to `In Progress` and opening a draft PR with a scaffolding docs commit.
-8. **Status hygiene.** On merge, update feature, epic, and roadmap statuses to keep planning artifacts accurate.
+7. **One Feature PRD = one branch = one PR.** Start implementation by setting the feature PRD to `In Progress`, creating branch `FEAT-XXXX-<slug>`, and opening a draft PR with a scaffolding docs commit.
+8. **Status hygiene.** Keep feature statuses on `Not Started -> In Progress -> In Review -> Completed`, and update feature, epic, and roadmap statuses on merge.
 
 ## Architecture Principles
 

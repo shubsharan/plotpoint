@@ -1,8 +1,8 @@
 | Field | Value |
 |---|---|
 | **Type** | Workflow |
-| **Status** | Proposed |
-| **Last synced** | 2026-03-18 |
+| **Status** | Active |
+| **Last synced** | 2026-03-19 |
 
 # Plotpoint - Spec-Driven Delivery Workflow
 
@@ -37,30 +37,35 @@ Define a repeatable planning-to-delivery workflow for Plotpoint where epics are 
 - `docs/features/`: actionable implementation PRDs with acceptance criteria.
 
 ## Required Status Lifecycle
-- Feature PRD: `Backlog -> In Progress -> In Review -> Done`
-- Epic: `Planned -> In Progress -> Done`
+- Feature PRD: `Not Started -> In Progress -> In Review -> Completed`
+- Epic: `Planned -> In Progress -> Completed`
 - Roadmap: kept current as epic statuses change.
 
 ## Branch and PR Rules
 - One feature PRD = one branch = one PR.
 - Epic IDs use `EPIC-XXXX`; feature IDs use `FEAT-XXXX`.
-- Branch naming: `feat/FEAT-XXXX-<slug>`.
+- Branch naming: `FEAT-XXXX-<slug>`.
 - First commit on the branch is the scaffolding docs commit (status flip + links).
 - PR starts in draft until acceptance criteria and tests pass.
 
-## Proposed Skill or Agent Command
-Create a command or skill named `/start-feature` that:
+## Implemented Command and Skill
+`/start-feature` and `/close-feature` are implemented as command wrappers over one shared skill:
+- `.claude/commands/start-feature.md`
+- `.claude/commands/close-feature.md`
+- `.claude/skills/feature-workflow/SKILL.md`
+
+`/start-feature` workflow:
 1. Validates a target feature PRD exists in `docs/features/`.
 2. Reads linked epic and architecture docs.
-3. Creates `feat/FEAT-XXXX-<slug>` branch from the selected feature PRD.
+3. Creates `FEAT-XXXX-<slug>` branch from the selected feature PRD.
 4. Updates the feature PRD status to `In Progress`.
 5. Creates a scaffolding docs commit.
 6. Opens a draft PR with acceptance criteria checklist.
 
-Create a companion `/close-feature` that:
+`/close-feature` workflow:
 1. Runs required tests.
 2. Validates PRD acceptance criteria.
-3. Updates feature status to `In Review` or `Done`.
+3. Updates feature status to `In Review`.
 4. Posts merge notes and next feature suggestion.
 
 ## Suggested AGENTS.md Guardrails

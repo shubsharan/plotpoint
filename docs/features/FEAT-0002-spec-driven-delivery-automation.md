@@ -3,11 +3,11 @@
 | --------------- | --------------------------- |
 | **Type**        | PRD                         |
 | **Feature ID**  | FEAT-0002                   |
-| **Status**      | Not Started                 |
+| **Status**      | In Progress                 |
 | **Epic**        | EPIC-0001                   |
 | **Owner**       | product-engineering         |
 | **Domains**     | Docs, Tooling, Git Workflow |
-| **Last synced** | 2026-03-18                  |
+| **Last synced** | 2026-03-19                  |
 
 
 # FEAT-0002 - Spec-Driven Delivery Automation
@@ -39,21 +39,24 @@ EPIC-0001 is not just about writing docs; it is about making the docs operationa
 ## Requirements
 
 1. There is a documented and implementable replacement for the old task-based `/open-task` flow.
-2. Starting a feature from a PRD uses the `FEAT-XXXX` identifier, `feat/FEAT-XXXX-<slug>` branch naming, and a draft-PR-first workflow.
+2. Starting a feature from a PRD uses the `FEAT-XXXX` identifier, `FEAT-XXXX-<slug>` branch naming, and a draft-PR-first workflow.
 3. The start flow updates the selected feature PRD to `In Progress` as part of the scaffolding step.
-4. The close flow validates tests and acceptance criteria before marking work ready for review or done.
+4. The close flow validates tests and acceptance criteria before marking work ready for review.
 5. Repo docs, runbooks, and agent guidance stay aligned with the implemented command behavior.
 
 ## Architecture and Technical Notes
 
 - Primary workflow references: `docs/runbooks/spec-driven-delivery-workflow.md` and `docs/runbooks/doc-authoring-quickstart.md`
 - Agent guidance reference: `AGENTS.md`
-- Legacy command reference to replace or supersede: `.claude/commands/open-task.md`
+- Implemented command wrappers: `.claude/commands/start-feature.md` and `.claude/commands/close-feature.md`
+- Implemented shared skill: `.claude/skills/feature-workflow/SKILL.md`
+- Legacy command reference deprecated: `.claude/commands/open-task.md`
 - No dedicated architecture doc is required unless command implementation introduces a cross-cutting workflow or tooling decision.
 
 ## Acceptance Criteria
 
 - A replacement feature-start workflow is defined for `FEAT-XXXX` PRDs.
+- `/start-feature` and `/close-feature` are wired to one shared skill implementation.
 - Legacy task-based command guidance is deprecated or replaced without conflicting instructions remaining in the repo.
 - Starting a feature from a PRD has one documented path for branch creation, status update, docs commit, and draft PR creation.
 - Closing a feature has one documented path for test verification and status updates.
@@ -77,5 +80,4 @@ EPIC-0001 is not just about writing docs; it is about making the docs operationa
 
 ## Open Questions
 
-- Should the first implementation be a repo command, an agent skill, or both?
-
+- None. This feature uses a Codex/assistant skill with command wrappers in `.claude/commands/`.

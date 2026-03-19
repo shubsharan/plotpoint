@@ -17,4 +17,9 @@ Plotpoint now uses this flow instead:
 
 Do not use the old task-based workflow in this file.
 
-Follow `docs/runbooks/spec-driven-delivery-workflow.md` and `docs/runbooks/doc-authoring-quickstart.md` until a dedicated `/start-feature` command replaces this legacy command.
+Use `/start-feature` and `/close-feature` instead.
+
+Implementation is centralized in:
+- `.claude/commands/start-feature.md`
+- `.claude/commands/close-feature.md`
+- `.claude/skills/feature-workflow/SKILL.md`
