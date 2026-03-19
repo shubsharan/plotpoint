@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { apiBoundary } from "../index.js";
 
 describe("@plotpoint/api", () => {
-  it("placeholder", () => {
-    expect(true).toBe(true);
+  it("exposes the placeholder api boundary", () => {
+    expect(apiBoundary.packageName).toBe("@plotpoint/api");
   });
 });

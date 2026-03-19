@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { contractsBoundary } from "../index.js";
 
 describe("@plotpoint/contracts", () => {
-  it("placeholder", () => {
-    expect(true).toBe(true);
+  it("exposes the placeholder contracts boundary", () => {
+    expect(contractsBoundary.packageName).toBe("@plotpoint/contracts");
   });
 });

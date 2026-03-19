@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { dbBoundary } from "../index.js";
 
 describe("@plotpoint/db", () => {
-  it("placeholder", () => {
-    expect(true).toBe(true);
+  it("exposes the placeholder db boundary", () => {
+    expect(dbBoundary.packageName).toBe("@plotpoint/db");
   });
 });

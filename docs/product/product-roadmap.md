@@ -59,6 +59,7 @@ Do not create full docs for queued epics until the active epic is nearly complet
 - [x] EPIC-0001 feature PRDs created
 - [x] Existing foundation feature specs aligned to `FEAT-XXXX`
 - [x] EPIC-0001 ready for implementation
+- [x] FEAT-0001 monorepo foundation finalized
 
 Focus:
 - Finalize the repo's planning system and naming conventions.

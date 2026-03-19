@@ -1,2 +1,4 @@
-// @plotpoint/engine — headless game engine
-// Implementation in Phase 2
+export const engineBoundary = {
+  packageName: "@plotpoint/engine",
+  status: "placeholder",
+} as const;

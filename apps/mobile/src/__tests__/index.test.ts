@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { mobileBoundary } from "../index.js";
 
 describe("@plotpoint/mobile", () => {
-  it("placeholder", () => {
-    expect(true).toBe(true);
+  it("exposes the placeholder mobile boundary", () => {
+    expect(mobileBoundary.packageName).toBe("@plotpoint/mobile");
   });
 });

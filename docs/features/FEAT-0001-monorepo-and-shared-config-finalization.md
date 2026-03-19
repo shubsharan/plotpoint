@@ -3,11 +3,11 @@
 | **Source** | [Monorepo Scaffold + Contracts](https://www.notion.so/321997b3842e81929d84dc1272a1ea51) |
 | **Type** | PRD |
 | **Feature ID** | FEAT-0001 |
-| **Status** | In Progress |
+| **Status** | Done |
 | **Epic** | EPIC-0001 |
 | **Owner** | product-engineering |
 | **Domains** | Infrastructure, Engine, API, Data Model |
-| **Last synced** | 2026-03-18 |
+| **Last synced** | 2026-03-19 |
 
 # FEAT-0001 - Monorepo and Shared Config Finalization
 
@@ -54,12 +54,12 @@ The scope stays intentionally narrow: this feature finalizes the platform founda
 - No new ADR is required unless foundation cleanup reveals a non-obvious package-boundary trade-off.
 
 ## Acceptance Criteria
-- [ ] Root workspace `build`, `test`, `typecheck`, and `lint` commands run successfully.
-- [ ] Foundation packages and apps expose the expected boundaries and compile cleanly.
-- [ ] Shared TypeScript and lint config are centralized in `packages/config/`.
-- [ ] Workspace packages use consistent `@plotpoint/*` naming while keeping the `apps/` and `packages/` folder split.
-- [ ] Placeholder scaffolds remain intentionally lightweight and do not imply unfinished runtime behavior belongs in this feature.
-- [ ] Foundation docs and references match the repo's actual structure and naming.
+- [x] Root workspace `build`, `test`, `typecheck`, and `lint` commands run successfully.
+- [x] Foundation packages and apps expose the expected boundaries and compile cleanly.
+- [x] Shared TypeScript and lint config are centralized in `packages/config/`.
+- [x] Workspace packages use consistent `@plotpoint/*` naming while keeping the `apps/` and `packages/` folder split.
+- [x] Placeholder scaffolds remain intentionally lightweight and do not imply unfinished runtime behavior belongs in this feature.
+- [x] Foundation docs and references match the repo's actual structure and naming.
 
 ## Test Plan
 - Run `pnpm build`.
@@ -78,3 +78,8 @@ The scope stays intentionally narrow: this feature finalizes the platform founda
 
 ## Open Questions
 - None. This feature stops at repo shape, naming, shared config centralization, and clean scaffold boundaries.
+
+## Implementation Notes
+- The finalized foundation workspace includes `apps/api`, `apps/mobile`, `packages/contracts`, `packages/db`, `packages/engine`, and `packages/config`.
+- `packages/components` and `packages/types` were removed because they were not part of the FEAT-0001 scaffold boundary contract.
+- App `build` commands now emit compiled placeholder entrypoints instead of succeeding through echo-only stubs.

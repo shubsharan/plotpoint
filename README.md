@@ -11,8 +11,6 @@ The current checkout is still scaffold-stage. This foundation pass finalizes the
 - `packages/contracts` - shared API contracts package
 - `packages/db` - scaffold for the database layer
 - `packages/engine` - scaffold for the headless game engine
-- `packages/components` - scaffold for shared UI components
-- `packages/types` - placeholder package retained in the scaffold for now
 - `packages/config` - shared TypeScript and lint config exports
 
 ## Commands

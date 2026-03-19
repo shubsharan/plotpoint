@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "echo 'mobile dev not yet implemented'",
-    "build": "echo 'mobile build not yet implemented'",
+    "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint -c ../../packages/config/oxlint.json src/",
     "lint:fix": "oxlint -c ../../packages/config/oxlint.json --fix src/",

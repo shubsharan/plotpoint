@@ -8,7 +8,7 @@
 
 ### Active Features
 
-- [FEAT-0001-monorepo-and-shared-config-finalization](features/FEAT-0001-monorepo-and-shared-config-finalization.md) (`In Progress`)
+- [FEAT-0001-monorepo-and-shared-config-finalization](features/FEAT-0001-monorepo-and-shared-config-finalization.md) (`Done`)
 - [FEAT-0002-spec-driven-delivery-automation](features/FEAT-0002-spec-driven-delivery-automation.md) (`Not Started`)
 
 ## All Docs
@@ -42,4 +42,3 @@
 ### `adrs/`
 
 - [_template](adrs/_template.md)
-
