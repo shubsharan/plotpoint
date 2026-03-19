@@ -9,8 +9,8 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "lint": "oxlint .",
-    "lint:fix": "oxlint --fix .",
+    "lint": "oxlint -c packages/config/oxlint.json .",
+    "lint:fix": "oxlint -c packages/config/oxlint.json --fix .",
     "format": "oxfmt --check",
     "format:fix": "oxfmt ."
   },

@@ -15,13 +15,13 @@ Narrative-first, location-based experience platform. Players run co-op stories (
 
 ## Notion-First Workflow
 
-Notion is the source of truth for all product documentation. The repo receives docs via sync/automation workflows. Every piece of work follows: **Roadmap -> Epic -> Architecture (as needed) -> Feature PRD -> branch -> implement -> review**.
+Notion is the source of truth for all product documentation. The repo receives docs via sync/automation workflows. Every piece of work follows: **Roadmap -> current Epic -> Architecture (as needed for the current epic) -> Feature PRD -> branch -> implement -> review**.
 
 ### Document Hierarchy
 
 | Notion artifact | Purpose | Repo location |
 |---|---|---|
-| **Roadmap** | MVP sequencing and delivery phases | `docs/product/product-roadmap.md` |
+| **Roadmap** | Ordered MVP epic queue and high-level sequencing | `docs/product/product-roadmap.md` |
 | **Runbook** | Operational guides and repeatable delivery workflows | `docs/runbooks/{runbook-slug}.md` |
 | **Epic** | Broader initiative with strategic and sequencing context | `docs/epics/{epic-slug}.md` |
 | **Feature PRD** | Actionable implementation unit with requirements and acceptance criteria | `docs/features/{feature-slug}.md` |
@@ -43,12 +43,13 @@ docs/
 ### Rules
 
 1. **Read before building.** Before implementing, read the target feature PRD in `docs/features/`, its linked epic in `docs/epics/`, and any linked architecture docs.
-2. **Roadmap before epics, epics before features.** Keep decomposition order strict: roadmap -> epic -> feature PRD.
-3. **ADRs for non-obvious decisions.** When a design choice has meaningful trade-offs, document it as an ADR and link it from the epic or feature PRD.
-4. **Specs are living documents.** Update specs when implementation reveals the design was wrong. Do not let code and docs drift.
-5. **Don't build what isn't specced.** If needed work is missing from feature PRDs, stop and write/update the feature spec first.
-6. **One Feature PRD = one branch = one PR.** Start implementation by setting the feature PRD to `In Progress` and opening a draft PR with a scaffolding docs commit.
-7. **Status hygiene.** On merge, update feature, epic, and roadmap statuses to keep planning artifacts accurate.
+2. **Roadmap before epics, epics before features.** Keep decomposition order strict: roadmap -> current epic -> feature PRD.
+3. **Plan just in time.** The roadmap can list many future epics, but only the current epic should be fully documented. Do not pre-write future epic, architecture, or feature docs unless they are required to unblock current work.
+4. **ADRs for non-obvious decisions.** When a design choice has meaningful trade-offs, document it as an ADR and link it from the epic or feature PRD.
+5. **Specs are living documents.** Update specs when implementation reveals the design was wrong. Do not let code and docs drift.
+6. **Don't build what isn't specced.** If needed work is missing from feature PRDs, stop and write/update the feature spec first.
+7. **One Feature PRD = one branch = one PR.** Start implementation by setting the feature PRD to `In Progress` and opening a draft PR with a scaffolding docs commit.
+8. **Status hygiene.** On merge, update feature, epic, and roadmap statuses to keep planning artifacts accurate.
 
 ## Architecture Principles
 

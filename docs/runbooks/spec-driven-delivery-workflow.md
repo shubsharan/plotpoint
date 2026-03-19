@@ -10,16 +10,23 @@
 Define a repeatable planning-to-delivery workflow for Plotpoint where epics are strategic initiatives and feature PRDs are implementation units.
 
 ## Canonical Flow
-1. Create or update product roadmap.
-2. Create epic docs from roadmap phases.
-3. Create or update architecture docs needed by those epics.
-4. Create feature PRDs linked to an epic.
-5. Pick one feature PRD to implement.
+1. Create or update product roadmap as the ordered queue of MVP epics.
+2. Create or update only the current epic doc.
+3. Create architecture docs only for the current epic and only when they are needed.
+4. Create feature PRDs only for the current epic.
+5. Pick one current-epic feature PRD to implement.
 6. Create a feature branch.
 7. Set feature PRD status to `In Progress` and open a draft PR with a docs-only scaffolding commit.
 8. Implement the feature.
 9. Run tests and close acceptance criteria.
-10. Approve PR, merge, update statuses, move to next feature.
+10. Approve PR, merge, update statuses, and only then move to the next feature or next epic.
+
+## Planning Depth Rules
+- The roadmap may list many future epics.
+- Only the active epic should have a full doc in `docs/epics/`.
+- Architecture docs are written just in time for the active epic.
+- Feature PRDs are written just in time for the active epic.
+- Future epic details should stay lightweight in the roadmap until the team is ready to work on them.
 
 ## Doc Types and Intent
 - `docs/product/`: strategy and roadmap docs.
@@ -36,7 +43,8 @@ Define a repeatable planning-to-delivery workflow for Plotpoint where epics are 
 
 ## Branch and PR Rules
 - One feature PRD = one branch = one PR.
-- Branch naming: `feat/PP-{id}-{slug}`.
+- Epic IDs use `EPIC-XXXX`; feature IDs use `FEAT-XXXX`.
+- Branch naming: `feat/FEAT-XXXX-<slug>`.
 - First commit on the branch is the scaffolding docs commit (status flip + links).
 - PR starts in draft until acceptance criteria and tests pass.
 
@@ -44,7 +52,7 @@ Define a repeatable planning-to-delivery workflow for Plotpoint where epics are 
 Create a command or skill named `/start-feature` that:
 1. Validates a target feature PRD exists in `docs/features/`.
 2. Reads linked epic and architecture docs.
-3. Creates `feat/PP-{id}-{slug}` branch.
+3. Creates `feat/FEAT-XXXX-<slug>` branch from the selected feature PRD.
 4. Updates the feature PRD status to `In Progress`.
 5. Creates a scaffolding docs commit.
 6. Opens a draft PR with acceptance criteria checklist.
@@ -59,4 +67,5 @@ Create a companion `/close-feature` that:
 - No implementation starts without a feature PRD in `docs/features/`.
 - Every feature PRD links to one epic and relevant architecture docs.
 - Architecture docs are required for cross-cutting or irreversible changes.
+- Only the active epic should be fully documented; future epics stay in the roadmap until they become current.
 - After merge, update feature, epic, and roadmap statuses in the same PR or immediate follow-up.

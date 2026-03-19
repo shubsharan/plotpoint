@@ -1,5 +1,5 @@
 {
-  "name": "@apps/api",
+  "name": "@plotpoint/api",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -7,10 +7,11 @@
     "dev": "echo 'api dev not yet implemented'",
     "build": "echo 'api build not yet implemented'",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint src/",
+    "lint": "oxlint -c ../../packages/config/oxlint.json src/",
+    "lint:fix": "oxlint -c ../../packages/config/oxlint.json --fix src/",
     "test": "vitest run"
   },
   "devDependencies": {
-    "@packages/config": "workspace:*"
+    "@plotpoint/config": "workspace:*"
   }
 }

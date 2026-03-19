@@ -1,15 +1,16 @@
 {
-  "name": "@packages/engine",
+  "name": "@plotpoint/engine",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint src/",
+    "lint": "oxlint -c ../config/oxlint.json src/",
+    "lint:fix": "oxlint -c ../config/oxlint.json --fix src/",
     "format": "oxfmt src/",
     "test": "vitest run"
   },
   "devDependencies": {
-    "@packages/config": "workspace:*"
+    "@plotpoint/config": "workspace:*"
   }
 }

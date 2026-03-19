@@ -1,13 +1,14 @@
 | Field | Value |
 |---|---|
 | **Type** | PRD |
+| **Feature ID** | FEAT-XXXX |
 | **Status** | Backlog |
-| **Epic** | <epic-slug> |
+| **Epic** | EPIC-XXXX |
 | **Owner** | team-or-owner |
 | **Domains** | DomainA, DomainB |
 | **Last synced** | YYYY-MM-DD |
 
-# Feature PRD - <title>
+# FEAT-XXXX - <title>
 
 ## Goal
 What this feature delivers and why.

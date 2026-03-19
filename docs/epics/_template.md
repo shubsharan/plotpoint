@@ -1,12 +1,13 @@
 | Field | Value |
 |---|---|
 | **Type** | Epic |
+| **Epic ID** | EPIC-XXXX |
 | **Status** | Planned |
 | **Owner** | team-or-owner |
 | **Target milestone** | MVP-<phase> |
 | **Last synced** | YYYY-MM-DD |
 
-# Epic - <title>
+# EPIC-XXXX - <title>
 
 ## Goal
 Strategic outcome this epic delivers and why it matters.
@@ -34,8 +35,8 @@ Background from roadmap and product strategy.
 - Risk and mitigation
 
 ## Feature Breakdown
-- Link to `docs/features/<feature-slug>.md`
-- Link to `docs/features/<feature-slug>.md`
+- Link to `docs/features/FEAT-XXXX-<feature-slug>.md`
+- Link to `docs/features/FEAT-XXXX-<feature-slug>.md`
 
 ## Milestones and Sequencing
 High-level sequence for delivery.

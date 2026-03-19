@@ -1,7 +1,7 @@
 | Field | Value |
 |---|---|
 | **Type** | Roadmap |
-| **Status** | Draft |
+| **Status** | Active |
 | **Horizon** | MVP |
 | **Last synced** | 2026-03-18 |
 
@@ -26,138 +26,60 @@ Deliver the first playable Plotpoint MVP: a single mobile app where small groups
 - Build for the first stories, then generalize where needed.
 - Keep engine logic headless, pure, and heavily tested.
 - Ship thin vertical slices across mobile, API, db, and engine.
-- Use specs as contracts: roadmap -> epic -> architecture -> feature PRD -> implementation.
+- Use specs as contracts: roadmap -> current epic -> architecture -> feature PRD -> implementation.
 - Keep content development and platform development moving in parallel.
 
-## Roadmap Phases
+## Roadmap Operating Model
+- The roadmap is the ordered queue of MVP epics.
+- Only the current epic should be fully elaborated in `docs/epics/`.
+- Architecture docs and feature PRDs are created just in time for the active epic.
+- Future epics stay lightweight in the roadmap until they become current, which helps reduce document drift.
 
-### Phase 0 - Planning and scope lock
+## Epic Queue
+
+| Epic | Status | Purpose |
+|---|---|---|
+| `EPIC-0001` | Active | Establish the planning system, doc conventions, workflow, and remaining foundation cleanup needed to start feature delivery. |
+| `EPIC-0002` | Queued | Define the canonical story bundle contract and internal publishing pipeline. |
+| `EPIC-0003` | Queued | Build the headless runtime engine, block model, and condition system. |
+| `EPIC-0004` | Queued | Add session lifecycle, persistence, and multiplayer shared-state handling. |
+| `EPIC-0005` | Queued | Deliver the mobile player shell, renderer registry, and MVP gameplay UX. |
+| `EPIC-0006` | Queued | Produce flagship stories and establish structured playtest operations. |
+| `EPIC-0007` | Queued | Harden the product for launch with monitoring, support, and release operations. |
+
+Do not create full docs for queued epics until the active epic is nearly complete or a future dependency is needed to unblock current work.
+
+## Current Epic
+
+### EPIC-0001 - Platform and Planning Foundation
 #### Progress Tracker
 
 - [x] Roadmap drafted
-- [ ] Epic docs created
-- [ ] Required architecture docs created
-- [ ] Initial feature PRDs created
+- [x] EPIC-0001 doc created
+- [x] EPIC-0001 feature PRDs created
+- [x] Existing foundation feature specs aligned to `FEAT-XXXX`
+- [x] EPIC-0001 ready for implementation
 
 Focus:
-- Create and align roadmap, epic docs, architecture docs, and feature PRDs.
-- Define MVP success metrics and select the initial flagship story set.
-- Confirm boundaries for what ships in MVP vs. post-MVP.
+- Finalize the repo's planning system and naming conventions.
+- Create only the docs needed to execute EPIC-0001 cleanly.
+- Align existing foundation work to the feature-based workflow.
 
 Exit criteria:
-- Core planning documents exist and link to each other.
-- Priorities and sequencing are explicit enough to begin feature implementation.
+- EPIC-0001 has its implementation-ready feature PRDs.
+- Workflow docs and agent guidance support just-in-time planning.
+- The team can begin implementation from a current feature PRD without relying on speculative future docs.
 
-### Phase 1 - Story bundle and publish foundation
-#### Progress Tracker
+Reference:
+- `docs/epics/EPIC-0001-platform-and-planning-foundation.md`
 
-- [ ] Story bundle schema finalized
-- [ ] Validation and versioning implemented
-- [ ] Internal publish/load flow implemented
-- [ ] End-to-end bundle validation/load verified
-
-Focus:
-- Finalize canonical story bundle schema, validation, and versioning rules.
-- Implement internal publish/load flow for curated story content.
-- Ensure authored content can be stored and loaded consistently by runtime services.
-
-Exit criteria:
-- A story bundle can be validated, versioned, stored, and loaded end-to-end.
-
-### Phase 2 - Engine runtime
-#### Progress Tracker
-
-- [ ] Block registry implemented
-- [ ] Core block reducers implemented
-- [ ] Traversal and condition evaluation implemented
-- [ ] Migration hooks implemented
-- [ ] Representative engine tests passing
-
-Focus:
-- Implement block registry and pure block reducer pattern.
-- Implement traversal and condition evaluation against merged save state.
-- Support migrations for bundle compatibility over engine versions.
-
-Exit criteria:
-- Engine can execute representative story flows in automated tests.
-
-### Phase 3 - Sessions, persistence, and sync
-#### Progress Tracker
-
-- [ ] Session start/join flow implemented
-- [ ] Role assignment implemented
-- [ ] User and shared state persistence implemented
-- [ ] Reconnect/resume flow implemented
-- [ ] Shared-state sync reliability verified
-
-Focus:
-- Implement start/join session flows and player role assignment.
-- Persist user and shared game state with reconnect and resume support.
-- Wire realtime updates for multiplayer shared-state changes.
-
-Exit criteria:
-- Multiple players can progress through one session with reliable state sync.
-
-### Phase 4 - Mobile player experience
-#### Progress Tracker
-
-- [ ] Onboarding flow implemented
-- [ ] Catalog and lobby flows implemented
-- [ ] Gameplay shell implemented
-- [ ] MVP block renderers implemented
-- [ ] Device integrations implemented
-- [ ] End-to-end mobile playthrough verified
-
-Focus:
-- Build onboarding, catalog, lobby, and gameplay shell flows.
-- Render scene content and the initial MVP block set in mobile UI.
-- Integrate required device capabilities (for example geolocation and QR scan).
-
-Exit criteria:
-- Players can complete an MVP story in the app with acceptable usability.
-
-### Phase 5 - Content production and playtesting
-#### Progress Tracker
-
-- [ ] First flagship story authored
-- [ ] Second flagship story authored
-- [ ] Internal playtests completed
-- [ ] High-priority content/platform gaps closed
-- [ ] Story release readiness verified
-
-Focus:
-- Author and tune 1-2 flagship curated stories.
-- Run internal/cohort playtests and close content and platform gaps.
-- Harden the publish, QA, and iteration loop for rapid fixes.
-
-Exit criteria:
-- At least one story is release-ready and repeatably playable.
-
-### Phase 6 - Launch hardening
-#### Progress Tracker
-
-- [ ] Analytics instrumentation added
-- [ ] Crash/error reporting added
-- [ ] Release checklist finalized
-- [ ] Support and rollback processes finalized
-- [ ] Alpha/beta launch readiness verified
-
-Focus:
-- Add analytics, crash/error reporting, and release instrumentation.
-- Finalize release checklist, support processes, and rollback paths.
-- Prepare closed alpha/beta launch and post-launch iteration cadence.
-
-Exit criteria:
-- Team can publish, monitor, support, and patch MVP with confidence.
-
-## Epic Groups for MVP
-- Platform and planning foundation.
-- Story schema and publishing pipeline.
-- Runtime engine and conditions system.
-- Session lifecycle and multiplayer state.
-- Mobile player experience.
-- Content production and playtest operations.
-- Launch readiness.
+## Upcoming Epics
+- `EPIC-0002` - Story Schema and Publishing Pipeline. Create this epic doc only after EPIC-0001 is substantially complete or blocked on story-schema decisions.
+- `EPIC-0003` - Runtime Engine and Conditions System. Create this epic doc after the story bundle contract is stable enough to implement against.
+- `EPIC-0004` - Session Lifecycle and Multiplayer State. Create this epic doc when runtime contracts are stable enough to define session persistence and sync.
+- `EPIC-0005` - Mobile Player Experience. Create this epic doc when the active runtime and session contracts are ready to render in mobile.
+- `EPIC-0006` - Content Production and Playtest Operations. Create this epic doc when the product can support meaningful flagship story playtests.
+- `EPIC-0007` - Launch Readiness. Create this epic doc when MVP gameplay is stable enough to define launch operations concretely.
 
 ## MVP Readiness Gate
 Plotpoint MVP is ready when:

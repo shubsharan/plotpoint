@@ -23,10 +23,16 @@ This runbook covers authoring and maintaining roadmap, epic, architecture, featu
 
 ## Standard Authoring Order
 1. Create or update `docs/product/product-roadmap.md`.
-2. Create or update relevant epic docs in `docs/epics/`.
-3. Add architecture docs in `docs/architecture/` if decisions are cross-cutting.
-4. Add feature PRDs in `docs/features/` linked to one epic.
+2. Create or update only the current epic doc in `docs/epics/`.
+3. Add architecture docs in `docs/architecture/` only when the current epic needs a cross-cutting decision documented.
+4. Add feature PRDs in `docs/features/` only for the current epic.
 5. Add ADRs in `docs/adrs/` for meaningful trade-off decisions.
+
+## Just-in-Time Planning Rules
+- Keep future epics lightweight in the roadmap until they become current.
+- Avoid drafting full future epic docs unless they are required to unblock the active epic.
+- Avoid drafting future architecture docs and feature PRDs in advance.
+- Prefer changing the roadmap over maintaining speculative downstream docs.
 
 ## Template Usage
 - Start each new runbook from `docs/runbooks/_template.md`.
@@ -34,10 +40,15 @@ This runbook covers authoring and maintaining roadmap, epic, architecture, featu
 - Start each new feature PRD from `docs/features/_template.md`.
 - Start each new ADR from `docs/adrs/_template.md`.
 
+## Naming Conventions
+- Epic docs use `EPIC-XXXX` IDs and filenames like `docs/epics/EPIC-0001-<slug>.md`.
+- Feature PRDs use `FEAT-XXXX` IDs and filenames like `docs/features/FEAT-0001-<slug>.md`.
+- Feature implementation branches use `feat/FEAT-XXXX-<slug>`.
+
 ## Linking Rules
 - Each feature PRD links to exactly one epic.
 - Feature PRDs link required architecture docs and ADRs.
-- Epics link all in-scope feature PRDs.
+- The current epic links all in-scope feature PRDs.
 - ADRs reference related epics/features and architecture docs.
 - Roadmap reflects current epic status at all times.
 

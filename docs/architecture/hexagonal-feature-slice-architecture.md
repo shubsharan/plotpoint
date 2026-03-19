@@ -8,6 +8,8 @@
 ## Repository Structure
 The Plotpoint monorepo is organized into apps (deployable applications) and packages (shared libraries). The architecture follows hexagonal principles for the engine and feature-slice organization for the API.
 
+Current foundation note: FEAT-0001 only finalizes the monorepo shape, package naming, and shared config ownership. The tree and code examples below describe the intended target structure that later features will fill in. During the scaffold phase, placeholder entrypoints are acceptable as long as package ownership and dependency direction stay clear.
+
 ```
 apps/
 ├── api/
@@ -103,8 +105,7 @@ packages/
 │   │   ├── api.json                   API-specific overrides
 │   │   ├── mobile.json                Mobile-specific overrides
 │   │   └── library.json               Library package overrides
-│   └── eslint/
-│       └── base.js                    Shared ESLint config
+│   └── oxlint.json                    Shared oxlint config
 ```
 
 ## Dependency Flow

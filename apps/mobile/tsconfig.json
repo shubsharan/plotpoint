@@ -1,4 +1,4 @@
 {
-  "extends": "@packages/config/tsconfig/mobile.json",
+  "extends": "../../packages/config/tsconfig/mobile.json",
   "include": ["src"]
 }

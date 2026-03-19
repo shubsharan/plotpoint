@@ -1,8 +1,8 @@
 # Plotpoint
 
-Plotpoint is a narrative-first, location-based gaming platform. This repository is the monorepo foundation for the API, mobile app, and shared packages described in `docs/strategy/product-strategy.md` and `docs/architecture/hexagonal-feature-slice-architecture.md`.
+Plotpoint is a narrative-first, location-based gaming platform. This repository is the monorepo foundation for the API, mobile app, and shared packages described in `docs/product/product-strategy.md` and `docs/architecture/hexagonal-feature-slice-architecture.md`.
 
-The current checkout is still scaffold-stage. The workspace, package boundaries, shared TypeScript config, and test/lint/typecheck surfaces are in place, but the engine, API routes, database schema, and mobile UI are still placeholders.
+The current checkout is still scaffold-stage. This foundation pass finalizes the monorepo shape, package naming, shared config ownership, and root workspace commands while intentionally leaving the engine, API routes, database schema, and mobile UI as placeholders for later features.
 
 ## Workspace
 
@@ -13,7 +13,7 @@ The current checkout is still scaffold-stage. The workspace, package boundaries,
 - `packages/engine` - scaffold for the headless game engine
 - `packages/components` - scaffold for shared UI components
 - `packages/types` - placeholder package retained in the scaffold for now
-- `packages/config` - shared TypeScript config exports
+- `packages/config` - shared TypeScript and lint config exports
 
 ## Commands
 
@@ -31,19 +31,20 @@ Package-scoped examples:
 
 ```sh
 pnpm --filter @plotpoint/contracts test
-pnpm --filter @apps/api typecheck
+pnpm --filter @plotpoint/api typecheck
 ```
 
 ## Current Foundation Scope
 
 - pnpm workspaces and Turborepo orchestration
-- shared TypeScript config under `packages/config/tsconfig/`
+- shared TypeScript and lint config under `packages/config/`
 - placeholder package/app entrypoints with Vitest coverage
-- `packages/contracts` rename from the earlier `packages/schemas` scaffold
+- consistent `@plotpoint/*` workspace package naming across `apps/` and `packages/`
 
 ## Docs
 
-- Product strategy: `docs/strategy/product-strategy.md`
-- Foundation PRD: `docs/prds/monorepo-scaffold-contracts.md`
+- Product strategy: `docs/product/product-strategy.md`
+- Product roadmap: `docs/product/product-roadmap.md`
+- Delivery workflow runbook: `docs/runbooks/spec-driven-delivery-workflow.md`
+- Foundation feature PRD: `docs/features/FEAT-0001-monorepo-and-shared-config-finalization.md`
 - Architecture target: `docs/architecture/hexagonal-feature-slice-architecture.md`
-- Current task record: `docs/tasks/PPT-2-shared-config-cleanup-package-rename.md`
