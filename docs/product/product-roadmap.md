@@ -32,6 +32,13 @@ Deliver the first playable Plotpoint MVP: a single mobile app where small groups
 ## Roadmap Phases
 
 ### Phase 0 - Planning and scope lock
+#### Progress Tracker
+
+- [x] Roadmap drafted
+- [ ] Epic docs created
+- [ ] Required architecture docs created
+- [ ] Initial feature PRDs created
+
 Focus:
 - Create and align roadmap, epic docs, architecture docs, and feature PRDs.
 - Define MVP success metrics and select the initial flagship story set.
@@ -42,6 +49,13 @@ Exit criteria:
 - Priorities and sequencing are explicit enough to begin feature implementation.
 
 ### Phase 1 - Story bundle and publish foundation
+#### Progress Tracker
+
+- [ ] Story bundle schema finalized
+- [ ] Validation and versioning implemented
+- [ ] Internal publish/load flow implemented
+- [ ] End-to-end bundle validation/load verified
+
 Focus:
 - Finalize canonical story bundle schema, validation, and versioning rules.
 - Implement internal publish/load flow for curated story content.
@@ -51,6 +65,14 @@ Exit criteria:
 - A story bundle can be validated, versioned, stored, and loaded end-to-end.
 
 ### Phase 2 - Engine runtime
+#### Progress Tracker
+
+- [ ] Block registry implemented
+- [ ] Core block reducers implemented
+- [ ] Traversal and condition evaluation implemented
+- [ ] Migration hooks implemented
+- [ ] Representative engine tests passing
+
 Focus:
 - Implement block registry and pure block reducer pattern.
 - Implement traversal and condition evaluation against merged save state.
@@ -60,6 +82,14 @@ Exit criteria:
 - Engine can execute representative story flows in automated tests.
 
 ### Phase 3 - Sessions, persistence, and sync
+#### Progress Tracker
+
+- [ ] Session start/join flow implemented
+- [ ] Role assignment implemented
+- [ ] User and shared state persistence implemented
+- [ ] Reconnect/resume flow implemented
+- [ ] Shared-state sync reliability verified
+
 Focus:
 - Implement start/join session flows and player role assignment.
 - Persist user and shared game state with reconnect and resume support.
@@ -69,6 +99,15 @@ Exit criteria:
 - Multiple players can progress through one session with reliable state sync.
 
 ### Phase 4 - Mobile player experience
+#### Progress Tracker
+
+- [ ] Onboarding flow implemented
+- [ ] Catalog and lobby flows implemented
+- [ ] Gameplay shell implemented
+- [ ] MVP block renderers implemented
+- [ ] Device integrations implemented
+- [ ] End-to-end mobile playthrough verified
+
 Focus:
 - Build onboarding, catalog, lobby, and gameplay shell flows.
 - Render scene content and the initial MVP block set in mobile UI.
@@ -78,6 +117,14 @@ Exit criteria:
 - Players can complete an MVP story in the app with acceptable usability.
 
 ### Phase 5 - Content production and playtesting
+#### Progress Tracker
+
+- [ ] First flagship story authored
+- [ ] Second flagship story authored
+- [ ] Internal playtests completed
+- [ ] High-priority content/platform gaps closed
+- [ ] Story release readiness verified
+
 Focus:
 - Author and tune 1-2 flagship curated stories.
 - Run internal/cohort playtests and close content and platform gaps.
@@ -87,6 +134,14 @@ Exit criteria:
 - At least one story is release-ready and repeatably playable.
 
 ### Phase 6 - Launch hardening
+#### Progress Tracker
+
+- [ ] Analytics instrumentation added
+- [ ] Crash/error reporting added
+- [ ] Release checklist finalized
+- [ ] Support and rollback processes finalized
+- [ ] Alpha/beta launch readiness verified
+
 Focus:
 - Add analytics, crash/error reporting, and release instrumentation.
 - Finalize release checklist, support processes, and rollback paths.
