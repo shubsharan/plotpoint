@@ -4,12 +4,16 @@
 
 ### Active Epic
 
-- [EPIC-0001-platform-and-planning-foundation](epics/EPIC-0001-platform-and-planning-foundation.md) (`In Progress`) — Platform and Planning Foundation
+- None currently. Last completed epic: [EPIC-0001-platform-and-planning-foundation](epics/EPIC-0001-platform-and-planning-foundation.md) (`Completed`).
 
 ### Active Features
 
+- None currently.
+
+### Recently Closed Features
+
 - [FEAT-0001-monorepo-and-shared-config-finalization](features/FEAT-0001-monorepo-and-shared-config-finalization.md) (`Done`)
-- [FEAT-0002-spec-driven-delivery-automation](features/FEAT-0002-spec-driven-delivery-automation.md) (`Not Started`)
+- [FEAT-0002-spec-driven-delivery-automation](features/FEAT-0002-spec-driven-delivery-automation.md) (`Cancelled`)
 
 ## All Docs
 
