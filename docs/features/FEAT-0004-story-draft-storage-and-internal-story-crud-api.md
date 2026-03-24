@@ -2,10 +2,10 @@
 |---|---|
 | **Type** | PRD |
 | **Feature ID** | FEAT-0004 |
-| **Status** | Backlog |
+| **Status** | Not Started |
 | **Epic** | EPIC-0002 |
 | **Owner** | product-engineering |
-| **Domains** | API, Data Model, Contracts |
+| **Domains** | API, Data Model |
 | **Last synced** | 2026-03-23 |
 
 # FEAT-0004 - Story Draft Storage and Internal Story CRUD API
@@ -14,7 +14,7 @@
 Provide the internal storage model and CRUD API surfaces needed to create, update, inspect, list, and delete draft stories before they are published.
 
 ## Background and Context
-Once FEAT-0003 defines the bundle contract, Plotpoint needs a thin vertical slice that stores draft story content and makes it manageable through the API. The architecture already reserves story route slices for `list-stories`, `get-story`, `create-story`, `update-story`, and `delete-story`, with the `db` package owning story persistence and the `contracts` package owning request and response schemas.
+Once FEAT-0003 defines the engine-owned bundle contract, Plotpoint needs a thin vertical slice that stores draft story content and makes it manageable through the API. The architecture already reserves story route slices for `list-stories`, `get-story`, `create-story`, `update-story`, and `delete-story`, with the `db` package owning story persistence and API routes owning request and response DTO schemas.
 
 This feature stays on the draft side of the workflow. It gives internal creators and operators a stable content-management surface without taking on publish, runtime, or player-facing catalog behavior yet.
 
@@ -34,7 +34,7 @@ This feature stays on the draft side of the workflow. It gives internal creators
 
 ## Requirements
 1. A story record must persist the current draft bundle plus the minimum metadata needed for internal management, including stable story id, title/labeling metadata, status, and created/updated timestamps.
-2. `create-story` must accept a valid draft story payload and return the persisted draft record in a contract defined in `packages/contracts`.
+2. `create-story` must accept a valid draft story payload and return the persisted draft record in a route-local API contract defined beside the handler.
 3. `update-story` must update draft metadata and bundle content without publishing or mutating any published artifact behavior reserved for FEAT-0005.
 4. `list-stories` and `get-story` must return internal draft-management views that include status and metadata needed to inspect current draft state.
 5. `delete-story` must remove draft-only story records explicitly and predictably; publish-history semantics are deferred to FEAT-0005.
@@ -43,7 +43,7 @@ This feature stays on the draft side of the workflow. It gives internal creators
 
 ## Architecture and Technical Notes
 - Primary reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
-- Expected ownership sits in `packages/db/src/schema/stories.ts`, `packages/db/src/stories.ts`, `apps/api/src/routes/{list-stories,get-story,create-story,update-story,delete-story}.ts`, and matching schemas in `packages/contracts/src/`.
+- Expected ownership sits in `packages/db/src/schema/stories.ts`, `packages/db/src/stories.ts`, and `apps/api/src/routes/{list-stories,get-story,create-story,update-story,delete-story}.ts` with route-local schemas in those route modules.
 - This feature should use the FEAT-0003 bundle contract as the draft payload shape rather than redefining a second story-content model.
 - Keep the dependency flow intact: `api` and `db` may depend inward, but the engine should not gain CRUD concerns.
 - No new ADR is required unless draft record design forces a non-obvious split between story metadata and bundle payload ownership.
@@ -57,7 +57,7 @@ This feature stays on the draft side of the workflow. It gives internal creators
 
 ## Test Plan
 - Add unit tests for story db operations covering create, update, list, get, and delete behavior.
-- Add route tests for each CRUD endpoint using the `packages/contracts` schemas.
+- Add route tests for each CRUD endpoint using the route-local API schemas.
 - Add validation tests proving invalid draft bundles or invalid route payloads are rejected cleanly.
 - Manually verify a draft story can be created, edited, fetched, listed, and removed without invoking publish behavior.
 

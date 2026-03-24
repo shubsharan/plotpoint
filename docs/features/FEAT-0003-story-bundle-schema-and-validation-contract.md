@@ -6,7 +6,7 @@
 | **Status**      | In Progress                   |
 | **Epic**        | EPIC-0002                     |
 | **Owner**       | product-engineering           |
-| **Domains**     | Engine, Contracts, Data Model |
+| **Domains**     | Engine, Data Model |
 | **Last synced** | 2026-03-23                    |
 
 
@@ -20,7 +20,7 @@ Define the canonical story bundle contract and the pure validation layers that m
 
 EPIC-0002 starts with the bundle contract because everything downstream depends on it. Plotpoint's Phase 1 creator workflow is internal and JSON-based, and the MVP roadmap requires curated stories to publish without custom code per release.
 
-The product strategy defines stories as directed graphs of scenes, blocks, and conditional edges. The architecture already places runtime ownership in `packages/engine` and shared wire contracts in `packages/contracts`. This feature turns that target shape into one canonical serialized contract that authoring, publishing, persistence, and later runtime loading all share without duplicating runtime authority inside authored JSON.
+The product strategy defines stories as directed graphs of scenes, blocks, and conditional edges. The architecture places story bundle boundary ownership in `packages/engine`, with adapters mapping to route-local DTOs as needed. This feature turns that target shape into one canonical serialized contract that authoring, publishing, persistence, and later runtime loading all share without duplicating runtime authority inside authored JSON.
 
 ## Scope
 
@@ -45,7 +45,7 @@ The product strategy defines stories as directed graphs of scenes, blocks, and c
 3. The contract must support the architecture's condition model by representing conditions as structured trees of `check`, `and`, `or`, and `always` nodes with named condition references and params.
 4. Validation must be split into three explicit pure layers: schema parsing, structural graph validation, and compatibility validation.
 5. Schema parsing must reject malformed bundle JSON shapes before semantic validation runs.
-6. Structural graph validation must reject invalid authored content, including duplicate ids, missing node or edge targets, and invalid entrypoints.
+6. Structural graph validation must reject invalid authored content, including duplicate ids, missing node or edge targets, invalid entrypoints, unreachable nodes, and directed cycles.
 7. Compatibility validation must reject bundles that reference unknown block types, unknown condition names, or incompatible engine major-version metadata.
 8. The bundle schema must be authored once and reused across implementation surfaces without duplicated hand-written type definitions.
 9. Validation logic that the engine relies on must remain pure and framework-free, with no API, db, or mobile dependencies.
@@ -54,13 +54,14 @@ The product strategy defines stories as directed graphs of scenes, blocks, and c
 ## Architecture and Technical Notes
 
 - Primary reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
-- `packages/contracts` owns the serialized bundle schema and inferred TypeScript types for transport and persistence surfaces.
-- `packages/engine` owns semantic interpretation of the bundle, including block registry metadata, condition registry metadata, structural validation, compatibility validation, and later runtime loading behavior.
+- `packages/engine` owns the serialized bundle schema, inferred TypeScript types, and semantic interpretation of the bundle, including block registry metadata, condition registry metadata, structural validation, compatibility validation, and later runtime loading behavior.
+- API route request/response schemas remain adapter-owned DTOs that live beside handlers in `apps/api/src/routes/*`.
 - The bundle contract must align with the engine port `StoryRepo.getBundle(storyId)` so later runtime work can load published bundles directly.
 - Use Zod-backed schemas as the source of truth for serialized bundle shapes and infer TypeScript types from them instead of maintaining parallel hand-written contract types.
 - Treat block scope as engine registry metadata rather than authored content. Bundle instances stay data-only: `type` plus author-configured `config`.
+- Roles are declared as story metadata in this feature only. No role-targeted graph semantics are introduced yet.
 - Expected validation composition for later features is: parse schema -> validate structure -> validate compatibility.
-- No new ADR is required unless schema ownership across `engine`, `contracts`, and `db` reveals a non-obvious boundary trade-off.
+- No new ADR is required unless schema ownership across `engine` and `db` reveals a non-obvious boundary trade-off.
 
 ## Acceptance Criteria
 

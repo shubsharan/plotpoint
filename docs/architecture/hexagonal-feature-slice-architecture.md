@@ -10,7 +10,7 @@ The Plotpoint monorepo is organized into apps (deployable applications) and pack
 
 Current foundation note: FEAT-0001 only finalizes the monorepo shape, package naming, and shared config ownership. The tree and code examples below describe the intended target structure that later features will fill in. During the scaffold phase, placeholder entrypoints are acceptable as long as package ownership and dependency direction stay clear.
 
-Current scaffold baseline: the checked-in foundation workspace contains only `apps/api`, `apps/mobile`, `packages/contracts`, `packages/db`, `packages/engine`, and `packages/config`. Future shared UI or shared types packages should not be added until a later feature explicitly specs their ownership.
+Current scaffold baseline: the checked-in foundation workspace contains only `apps/api`, `apps/mobile`, `packages/db`, `packages/engine`, and `packages/config`. Future shared UI or shared types packages should not be added until a later feature explicitly specs their ownership.
 
 ```
 apps/
@@ -88,19 +88,6 @@ packages/
 │   │   └── index.ts                   Barrel export
 │   └── package.json
 │
-├── contracts/
-│   ├── src/
-│   │   ├── start-session.ts           Request/response schemas
-│   │   ├── submit-action.ts           Request/response schemas
-│   │   ├── list-stories.ts            Request/response schemas
-│   │   ├── get-story.ts               Request/response schemas
-│   │   ├── create-story.ts            Request/response schemas
-│   │   ├── update-story.ts            Request/response schemas
-│   │   ├── delete-story.ts            Request/response schemas
-│   │   ├── publish-story.ts           Request/response schemas
-│   │   └── index.ts                   Barrel export
-│   └── package.json
-│
 ├── config/
 │   ├── tsconfig/
 │   │   ├── base.json                  Shared TypeScript config
@@ -111,15 +98,13 @@ packages/
 ```
 
 ## Dependency Flow
-The dependency direction is the most important architectural invariant to protect. The engine depends on nothing. Everything else depends inward toward it.
+The dependency direction is the most important architectural invariant to protect. Runtime behavior still depends inward toward the engine. The engine owns domain contracts and ports (including `StoryBundle`), while adapters own transport DTO schemas.
 
 ```
-mobile  →  contracts  ←  api
-                          ↓
-                        engine  ←  db
+mobile  →  api  →  engine  ←  db
 ```
 
-The engine imports nothing from outside its own package. It defines port types in `ports.ts` and receives concrete implementations at runtime. The `db` package imports from `engine/ports.ts` so its repos can implement those interfaces. The API imports from both `engine` and `db` to wire them together. If the engine ever imports from `db`, the hexagonal boundary is broken.
+The engine's runtime execution code imports nothing from outside its own package. The `db` package imports from `engine/ports.ts` so its repos can implement those interfaces. The API imports from both `engine` and `db` to wire them together and keeps HTTP request/response DTO schemas route-local in `apps/api/src/routes/*`. If the engine ever imports from `db`, the hexagonal boundary is broken.
 
 ## Engine Ports
 Ports are the abstract interfaces the engine defines for its external dependencies. They live in `engine/ports.ts` as TypeScript types. Any object matching the shape satisfies the port — no `implements` keyword needed thanks to structural typing.
@@ -215,11 +200,13 @@ A `BlockInstance` is a specific usage of a block type within a story node, confi
 // engine/graph/types.ts
 
 type BlockInstance = {
+  id: string               // authored instance id: "front-door"
   type: string             // which block definition: "locked-door"
   config: unknown          // author's settings: { correctCode: "1847" }
-  scope: 'user' | 'game'  // where this block's state lives
 }
 ```
+
+Canonical authored JSON stores nodes, blocks, and edges as ordered arrays. Runtime lookup tables are an engine concern after load, not part of the serialized bundle contract.
 
 ### User-Scoped Block Example
 
@@ -408,11 +395,12 @@ export const evaluateEdges = (
   allBlockStates: Record<string, unknown>,
   context: EvaluationContext
 ): AvailableEdge[] => {
-  const node = graph.nodes[currentNodeId]
+  const node = graph.nodes.find(node => node.id === currentNodeId)
+  if (!node) throw new Error(`Unknown node: ${currentNodeId}`)
 
   return node.edges
     .filter(edge =>
-      edge.condition === null || evaluate(edge.condition, allBlockStates, context)
+      edge.condition === undefined || evaluate(edge.condition, allBlockStates, context)
     )
     .map(edge => ({
       edgeId: edge.id,
@@ -484,7 +472,7 @@ const evaluate = (
 A complete trace of a player submitting an unlock code to a locked door, from the phone to the database and back.
 
 ### 1. Mobile App
-Player taps "Enter Code", types "1847", hits submit. The app POSTs to `/actions` with the `saveId`, `blockId`, and action payload. Request shape is validated against the contract from `@plotpoint/contracts`.
+Player taps "Enter Code", types "1847", hits submit. The app POSTs to `/actions` with the `saveId`, `blockId`, and action payload. Request shape is validated against a route-local DTO schema.
 
 ### 2. API Route
 The route in `routes/submit-action.ts` parses the request, validates with Zod, and calls `engine.submitAction(saveId, blockId, action)`. The route doesn't know about blocks, graphs, or game logic.
@@ -493,7 +481,7 @@ The route in `routes/submit-action.ts` parses the request, validates with Zod, a
 // api/routes/submit-action.ts
 import { Hono } from 'hono'
 import { engine } from '../server'
-import { submitActionRequest } from '@plotpoint/contracts'
+import { submitActionRequest } from './submit-action.dto'
 
 const app = new Hono()
 
@@ -532,8 +520,8 @@ export const executeAction = async (
   const story = await ports.storyRepo.getBundle(save.storyId)
 
   // 2. Find the target block's type and config from the story bundle
-  const currentNode = story.graph.nodes[save.currentNodeId]
-  const blockConfig = currentNode.blocks[blockId]
+  const currentNode = story.graph.nodes.find((node) => node.id === save.currentNodeId)
+  const blockConfig = currentNode?.blocks.find((block) => block.id === blockId)
   const blockDef = getBlock(blockConfig.type)
 
   // 3. Read current state from the appropriate save based on scope
@@ -634,10 +622,16 @@ const migrations = [
     to: 2,
     migrate: (bundle) => ({
       ...bundle,
-      edges: bundle.edges.map(e => ({
-        ...e,
-        priority: e.priority ?? 0,
-      })),
+      graph: {
+        ...bundle.graph,
+        nodes: bundle.graph.nodes.map(node => ({
+          ...node,
+          edges: node.edges.map(edge => ({
+            ...edge,
+            priority: edge.priority ?? 0,
+          })),
+        })),
+      },
     }),
   },
 ]
@@ -773,21 +767,31 @@ test('force open works after 3 failed attempts', () => {
 ```typescript
 const fakeStoryRepo: StoryRepo = {
   getBundle: async (id) => ({
-    id,
+    metadata: {
+      storyId: id,
+      title: 'Story Title',
+    },
+    roles: [],
     graph: {
-      nodes: {
-        'node-1': {
+      entryNodeId: 'node-1',
+      nodes: [
+        {
           id: 'node-1',
-          blocks: {
-            'door-1': {
+          title: 'Intro Node',
+          blocks: [
+            {
+              id: 'door-1',
               type: 'locked-door',
               config: { correctCode: '1847' },
-              scope: 'user',
             },
-          },
+          ],
           edges: [],
         },
-      },
+      ],
+    },
+    version: {
+      schemaVersion: 1,
+      engineMajor: 2,
     },
   }),
 }

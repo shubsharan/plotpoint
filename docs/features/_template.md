@@ -2,7 +2,7 @@
 |---|---|
 | **Type** | PRD |
 | **Feature ID** | FEAT-XXXX |
-| **Status** | Backlog |
+| **Status** | Not Started |
 | **Epic** | EPIC-XXXX |
 | **Owner** | team-or-owner |
 | **Domains** | DomainA, DomainB |
