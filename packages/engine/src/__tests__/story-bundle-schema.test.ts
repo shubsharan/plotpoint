@@ -3,7 +3,7 @@ import { storyBundleSchema } from "../index.js";
 import {
   invalidStoryBundleFixtures,
   validStoryBundleFixture,
-} from "./__fixtures__/story-bundles.js";
+} from "./fixtures/story-bundles.js";
 
 describe("@plotpoint/engine story bundle schema", () => {
   it("parses a valid story bundle", () => {
@@ -18,7 +18,9 @@ describe("@plotpoint/engine story bundle schema", () => {
   });
 
   it("rejects malformed shapes deterministically", () => {
-    const result = storyBundleSchema.safeParse(invalidStoryBundleFixtures.malformedShape);
+    const result = storyBundleSchema.safeParse(
+      invalidStoryBundleFixtures.malformedShape,
+    );
 
     expect(result.success).toBe(false);
     if (result.success) {
@@ -39,7 +41,9 @@ describe("@plotpoint/engine story bundle schema", () => {
   });
 
   it("rejects empty condition combinators", () => {
-    const result = storyBundleSchema.safeParse(invalidStoryBundleFixtures.emptyConditionChildren);
+    const result = storyBundleSchema.safeParse(
+      invalidStoryBundleFixtures.emptyConditionChildren,
+    );
 
     expect(result.success).toBe(false);
     if (result.success) {

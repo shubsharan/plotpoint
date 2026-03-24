@@ -27,11 +27,33 @@ const validStoryBundleSeed: StoryBundle = {
         title: "Gallery Foyer",
         blocks: [
           {
-            id: "entry-clue",
-            type: "clue",
+            id: "briefing",
+            type: "text",
             config: {
-              clueId: "entry-ticket",
-              text: "A torn ticket points toward the archive wing.",
+              document: {
+                type: "doc",
+                children: [
+                  {
+                    type: "heading",
+                    level: 2,
+                    children: [
+                      {
+                        type: "text",
+                        text: "Briefing Note",
+                      },
+                    ],
+                  },
+                  {
+                    type: "paragraph",
+                    children: [
+                      {
+                        type: "text",
+                        text: "A torn ticket points toward the archive wing.",
+                      },
+                    ],
+                  },
+                ],
+              },
             },
           },
         ],
@@ -48,11 +70,30 @@ const validStoryBundleSeed: StoryBundle = {
         title: "Archive Door",
         blocks: [
           {
-            id: "vault-lock",
-            type: "locked-door",
+            id: "vault-code",
+            type: "code",
             config: {
-              correctCode: "1847",
               maxAttempts: 5,
+              mode: "passcode",
+              expected: "1847",
+            },
+          },
+          {
+            id: "suspect-theory",
+            type: "single-choice",
+            config: {
+              prompt: "Who had access to the archive key?",
+              options: [
+                {
+                  id: "curator",
+                  label: "Curator",
+                },
+                {
+                  id: "archivist",
+                  label: "Archivist",
+                },
+              ],
+              correctOptionId: "archivist",
             },
           },
         ],
@@ -65,9 +106,9 @@ const validStoryBundleSeed: StoryBundle = {
               type: "check",
               condition: "field-equals",
               params: {
-                blockId: "vault-lock",
-                field: "locked",
-                value: false,
+                blockId: "vault-code",
+                field: "solved",
+                value: true,
               },
             },
           },
@@ -78,10 +119,19 @@ const validStoryBundleSeed: StoryBundle = {
         title: "Archive Vault",
         blocks: [
           {
-            id: "vault-timer",
-            type: "timer",
+            id: "find-ledger",
+            type: "location",
             config: {
-              durationSeconds: 180,
+              target: {
+                kind: "coordinates",
+                lat: 37.7749,
+                lng: -122.4194,
+              },
+              radiusMeters: 25,
+              ui: {
+                variant: "compass",
+              },
+              hint: "Stand beneath the central skylight.",
             },
           },
         ],
@@ -166,10 +216,42 @@ const invalidStoryBundleFixturesInternal = {
       engineMajor: null,
     },
   },
+  invalidBlockConfig: {
+    metadata: {
+      storyId: "story-invalid-code-config",
+      title: "Invalid Code Config Story",
+    },
+    roles: [],
+    graph: {
+      entryNodeId: "foyer",
+      nodes: [
+        {
+          id: "foyer",
+          title: "Gallery Foyer",
+          blocks: [
+            {
+              id: "vault-code",
+              type: "code",
+              config: {
+                mode: "passcode",
+                maxAttempts: "five",
+              },
+            },
+          ],
+          edges: [],
+        },
+      ],
+    },
+    version: {
+      schemaVersion: 1,
+      engineMajor: null,
+    },
+  },
 } as const;
 
 export const invalidStoryBundleFixtures: Readonly<{
   emptyConditionChildren: unknown;
+  invalidBlockConfig: unknown;
   malformedShape: unknown;
 }> = invalidStoryBundleFixturesInternal;
 

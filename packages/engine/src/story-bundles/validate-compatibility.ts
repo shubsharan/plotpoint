@@ -1,4 +1,5 @@
-import { hasBlockType } from "../blocks/index.js";
+import type { z } from "zod";
+import { getBlockDefinition, hasBlockType } from "../blocks/index.js";
 import { hasConditionName } from "../graph/conditions.js";
 import type {
   StoryBundle,
@@ -30,6 +31,13 @@ const createIssue = (
         message,
         path,
       };
+
+const normalizeIssuePath = (
+  path: ReadonlyArray<PropertyKey>,
+): Array<number | string> =>
+  path.map((segment) =>
+    typeof segment === "number" ? segment : String(segment),
+  );
 
 const visitCondition = (
   condition: StoryBundleCondition,
@@ -74,7 +82,39 @@ export const validateStoryBundleCompatibility = (
             },
           ),
         );
+        return;
       }
+
+      const definition = getBlockDefinition(block.type);
+      const configResult = definition.configSchema.safeParse(block.config);
+
+      if (configResult.success) {
+        return;
+      }
+
+      configResult.error.issues.forEach((issue: z.ZodIssue) => {
+        issues.push(
+          createIssue(
+            "invalid-block-config",
+            [
+              "graph",
+              "nodes",
+              nodeIndex,
+              "blocks",
+              blockIndex,
+              "config",
+              ...normalizeIssuePath(issue.path),
+            ],
+            `Block "${block.id}" has invalid config for type "${block.type}".`,
+            {
+              blockId: block.id,
+              blockType: block.type,
+              nodeId: node.id,
+              validationCode: issue.code,
+            },
+          ),
+        );
+      });
     });
 
     node.edges.forEach((edge, edgeIndex) => {

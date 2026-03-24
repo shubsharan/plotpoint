@@ -1,8 +1,10 @@
 export {
   blockRegistry,
+  getBlockDefinition,
   hasBlockType,
 } from "./blocks/index.js";
 export type {
+  BlockConfig,
   BlockRegistryEntry,
   BlockScope,
   KnownBlockType,

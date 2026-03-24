@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  storyBundleSchema,
   validateStoryBundleCompatibility,
   validateStoryBundleStructure,
 } from "../index.js";
@@ -7,7 +8,8 @@ import {
   createCompatibilityInvalidStoryBundleFixture,
   createStructurallyInvalidStoryBundleFixture,
   createValidStoryBundleFixture,
-} from "./__fixtures__/story-bundles.js";
+  invalidStoryBundleFixtures,
+} from "./fixtures/story-bundles.js";
 
 describe("@plotpoint/engine story bundle validation", () => {
   it("accepts a valid rooted DAG bundle", () => {
@@ -47,7 +49,9 @@ describe("@plotpoint/engine story bundle validation", () => {
     const vaultNode = bundle.graph.nodes[2];
 
     if (!entryNode || !archiveNode || !vaultNode) {
-      throw new Error("Expected seed fixture to include foyer, archive door, and vault nodes.");
+      throw new Error(
+        "Expected seed fixture to include foyer, archive door, and vault nodes.",
+      );
     }
 
     entryNode.edges[0] = {
@@ -108,7 +112,9 @@ describe("@plotpoint/engine story bundle validation", () => {
     const firstNode = bundle.graph.nodes[0];
 
     if (!firstNode) {
-      throw new Error("Expected a first node in the valid story bundle fixture.");
+      throw new Error(
+        "Expected a first node in the valid story bundle fixture.",
+      );
     }
 
     bundle.roles.push({
@@ -116,8 +122,8 @@ describe("@plotpoint/engine story bundle validation", () => {
       title: "Lead Detective",
     });
     firstNode.blocks.push({
-      id: "entry-clue",
-      type: "clue",
+      id: "briefing",
+      type: "text",
       config: {},
     });
     firstNode.edges.push({
@@ -140,12 +146,12 @@ describe("@plotpoint/engine story bundle validation", () => {
       {
         code: "duplicate-block-id",
         details: {
-          duplicateId: "entry-clue",
+          duplicateId: "briefing",
           duplicateIndex: 1,
           firstIndex: 0,
         },
         layer: "structure",
-        message: 'block id "entry-clue" is duplicated.',
+        message: 'block id "briefing" is duplicated.',
         path: ["graph", "nodes", 0, "blocks", 1, "id"],
       },
       {
@@ -196,12 +202,55 @@ describe("@plotpoint/engine story bundle validation", () => {
     ]);
   });
 
+  it("rejects invalid block configs for known block types", () => {
+    const bundle = storyBundleSchema.parse(
+      invalidStoryBundleFixtures.invalidBlockConfig,
+    );
+
+    expect(
+      validateStoryBundleCompatibility(bundle, {
+        currentEngineMajor: 0,
+        mode: "draft",
+      }),
+    ).toEqual([
+      {
+        code: "invalid-block-config",
+        details: {
+          blockId: "vault-code",
+          blockType: "code",
+          nodeId: "foyer",
+          validationCode: "invalid_type",
+        },
+        layer: "compatibility",
+        message: 'Block "vault-code" has invalid config for type "code".',
+        path: ["graph", "nodes", 0, "blocks", 0, "config", "expected"],
+      },
+      {
+        code: "invalid-block-config",
+        details: {
+          blockId: "vault-code",
+          blockType: "code",
+          nodeId: "foyer",
+          validationCode: "invalid_type",
+        },
+        layer: "compatibility",
+        message: 'Block "vault-code" has invalid config for type "code".',
+        path: ["graph", "nodes", 0, "blocks", 0, "config", "maxAttempts"],
+      },
+    ]);
+  });
+
   it("rejects unknown condition names and missing published engine majors", () => {
     const bundle = createValidStoryBundleFixture();
     const conditionalEdge = bundle.graph.nodes[1]?.edges[0];
 
-    if (!conditionalEdge?.condition || conditionalEdge.condition.type !== "check") {
-      throw new Error("Expected archive-door edge to include a check condition.");
+    if (
+      !conditionalEdge?.condition ||
+      conditionalEdge.condition.type !== "check"
+    ) {
+      throw new Error(
+        "Expected archive-door edge to include a check condition.",
+      );
     }
 
     conditionalEdge.condition.condition = "mystery-check";
