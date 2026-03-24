@@ -2,10 +2,10 @@
 |---|---|
 | **Type** | PRD |
 | **Feature ID** | FEAT-0005 |
-| **Status** | Backlog |
+| **Status** | Not Started |
 | **Epic** | EPIC-0002 |
 | **Owner** | product-engineering |
-| **Domains** | API, Data Model, Engine, Contracts |
+| **Domains** | API, Data Model, Engine |
 | **Last synced** | 2026-03-23 |
 
 # FEAT-0005 - Story Publish Pipeline and Published Catalog Availability
@@ -40,13 +40,13 @@ This feature closes EPIC-0002 by making publish a real transition instead of an 
 4. Re-publishing must create a new current published snapshot from the latest valid draft rather than mutating the previous published artifact in place.
 5. `list-stories` and `get-story` must support a published-catalog view that exposes only published stories and excludes draft-only fields from player-facing consumers.
 6. `StoryRepo.getBundle(storyId)` must read published bundle data, not mutable draft content.
-7. Publish orchestration must stay in API/db/contracts ownership; the engine consumes published bundles but does not own publish workflow state transitions.
+7. Publish orchestration must stay in API/db ownership; the engine consumes published bundles but does not own publish workflow state transitions.
 
 ## Architecture and Technical Notes
 - Primary reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
 - The architecture explicitly allows `publish-story` to update story status directly through the database without importing from `update-story`.
 - Publish behavior must respect the engine semver rules described in the architecture doc: engine major versions stamp published bundles, and later migrations operate on published bundle data.
-- Expected implementation surfaces include `apps/api/src/routes/publish-story.ts`, `packages/contracts/src/publish-story.ts`, published-story storage in `packages/db`, and `packages/db/src/repos/story-repo.ts` returning the current published bundle.
+- Expected implementation surfaces include `apps/api/src/routes/publish-story.ts` with route-local DTO schemas, published-story storage in `packages/db`, and `packages/db/src/repos/story-repo.ts` returning the current published bundle.
 - Distinct published snapshots are the default for this repo because publish is defined as validation plus optimization plus making a stable bundle available for runtime consumption.
 
 ## Acceptance Criteria

@@ -3,7 +3,7 @@
 | **Source** | [Monorepo Scaffold + Contracts](https://www.notion.so/321997b3842e81929d84dc1272a1ea51) |
 | **Type** | PRD |
 | **Feature ID** | FEAT-0001 |
-| **Status** | Done |
+| **Status** | Completed |
 | **Epic** | EPIC-0001 |
 | **Owner** | product-engineering |
 | **Domains** | Infrastructure, Engine, API, Data Model |
@@ -25,7 +25,7 @@ The scope stays intentionally narrow: this feature finalizes the platform founda
 - pnpm workspace and Turborepo task orchestration that runs cleanly from the repo root
 - shared TypeScript and lint config in `packages/config/`
 - Vitest setup across apps and packages
-- stable package boundaries for `packages/contracts`, `packages/db`, `packages/engine`, `apps/api`, and `apps/mobile`
+- stable package boundaries for `packages/db`, `packages/engine`, `apps/api`, and `apps/mobile`
 - consistent `@plotpoint/*` workspace package naming across both `apps/` and `packages/`
 - placeholder entrypoints that make intended package ownership and dependency direction visible without pre-building future feature logic
 - cleanup of foundation-level docs and references so they match the current repo structure
@@ -41,13 +41,13 @@ The scope stays intentionally narrow: this feature finalizes the platform founda
 2. Each app/package is self-contained with its own `package.json`, `tsconfig.json`, and `vitest.config.ts` where applicable.
 3. Shared config in `packages/config/` is the only source for common TypeScript and lint configuration.
 4. Workspace package names follow a single `@plotpoint/*` namespace while preserving the `apps/` and `packages/` folder split.
-5. `packages/contracts`, `packages/db`, and `packages/engine` expose intentional scaffold boundaries only; concrete runtime contracts, schema, and ports are deferred to later features.
+5. `packages/db` and `packages/engine` expose intentional scaffold boundaries only; concrete runtime contracts, schema, and ports are deferred to later features.
 6. Placeholder entrypoints and tests compile cleanly without leaking future runtime behavior into this feature.
 7. Repo docs and references that describe the foundation stage align with the actual package layout and naming conventions.
 
 ## Architecture and Technical Notes
 - Primary architecture reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
-- This feature should reinforce the dependency flow `mobile -> contracts <- api -> engine <- db`.
+- This feature should reinforce the dependency flow `mobile -> api -> engine <- db`.
 - The dependency flow is a boundary target for scaffold ownership in this feature, not yet a requirement for concrete implementations.
 - Zod remains the planned source of truth for shared schema shapes in later feature work.
 - Story bundle schema work is intentionally deferred to `EPIC-0002`.
@@ -80,6 +80,6 @@ The scope stays intentionally narrow: this feature finalizes the platform founda
 - None. This feature stops at repo shape, naming, shared config centralization, and clean scaffold boundaries.
 
 ## Implementation Notes
-- The finalized foundation workspace includes `apps/api`, `apps/mobile`, `packages/contracts`, `packages/db`, `packages/engine`, and `packages/config`.
+- The finalized foundation workspace includes `apps/api`, `apps/mobile`, `packages/db`, `packages/engine`, and `packages/config`.
 - `packages/components` and `packages/types` were removed because they were not part of the FEAT-0001 scaffold boundary contract.
 - App `build` commands now emit compiled placeholder entrypoints instead of succeeding through echo-only stubs.

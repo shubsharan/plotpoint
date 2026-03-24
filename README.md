@@ -8,7 +8,6 @@ The current checkout is still scaffold-stage. This foundation pass finalizes the
 
 - `apps/api` - scaffold for the Hono API app
 - `apps/mobile` - scaffold for the Expo mobile app
-- `packages/contracts` - shared API contracts package
 - `packages/db` - scaffold for the database layer
 - `packages/engine` - scaffold for the headless game engine
 - `packages/config` - shared TypeScript and lint config exports
@@ -28,7 +27,7 @@ pnpm lint
 Package-scoped examples:
 
 ```sh
-pnpm --filter @plotpoint/contracts test
+pnpm --filter @plotpoint/engine test
 pnpm --filter @plotpoint/api typecheck
 ```
 
