@@ -2,10 +2,10 @@
 | -------------------- | ------------------- |
 | **Type**             | Epic                |
 | **Epic ID**          | EPIC-0002           |
-| **Status**           | Completed           |
+| **Status**           | In Progress         |
 | **Owner**            | product-engineering |
 | **Target milestone** | MVP-P1              |
-| **Last synced**      | 2026-03-23          |
+| **Last synced**      | 2026-03-24          |
 
 # EPIC-0002 - Story Bundle Contract and Internal Publishing Pipeline
 
