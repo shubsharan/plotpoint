@@ -12,6 +12,12 @@ type TraversableEdge = {
   targetNodeId: string;
 };
 
+type BlockLocation = {
+  blockIndex: number;
+  nodeId: string;
+  nodeIndex: number;
+};
+
 const createIssue = (
   code: string,
   path: ReadonlyArray<number | string>,
@@ -67,6 +73,7 @@ export const validateStoryBundleStructure = (
   bundle: StoryBundle,
 ): StoryBundleValidationIssue[] => {
   const issues: StoryBundleValidationIssue[] = [];
+  const firstCrossNodeBlockById = new Map<string, BlockLocation>();
 
   appendDuplicateIdIssues(issues, bundle.roles, ["roles"], "role");
 
@@ -97,6 +104,40 @@ export const validateStoryBundleStructure = (
       ["graph", "nodes", nodeIndex, "blocks"],
       "block",
     );
+
+    node.blocks.forEach((block, blockIndex) => {
+      const firstLocation = firstCrossNodeBlockById.get(block.id);
+      if (firstLocation === undefined) {
+        firstCrossNodeBlockById.set(block.id, {
+          blockIndex,
+          nodeId: node.id,
+          nodeIndex,
+        });
+        return;
+      }
+
+      if (firstLocation.nodeIndex === nodeIndex) {
+        return;
+      }
+
+      issues.push(
+        createIssue(
+          "duplicate-block-id",
+          ["graph", "nodes", nodeIndex, "blocks", blockIndex, "id"],
+          `block id "${block.id}" is duplicated.`,
+          {
+            duplicateId: block.id,
+            duplicateIndex: blockIndex,
+            duplicateNodeId: node.id,
+            duplicateNodeIndex: nodeIndex,
+            firstIndex: firstLocation.blockIndex,
+            firstNodeId: firstLocation.nodeId,
+            firstNodeIndex: firstLocation.nodeIndex,
+          },
+        ),
+      );
+    });
+
     appendDuplicateIdIssues(
       issues,
       node.edges,

@@ -168,6 +168,39 @@ describe("@plotpoint/engine story bundle validation", () => {
     ]);
   });
 
+  it("rejects duplicate block ids across different nodes", () => {
+    const bundle = createValidStoryBundleFixture();
+    const vaultNode = bundle.graph.nodes[2];
+
+    if (!vaultNode) {
+      throw new Error("Expected vault node in valid story bundle fixture.");
+    }
+
+    vaultNode.blocks.push({
+      id: "vault-code",
+      type: "text",
+      config: {},
+    });
+
+    expect(validateStoryBundleStructure(bundle)).toEqual([
+      {
+        code: "duplicate-block-id",
+        details: {
+          duplicateId: "vault-code",
+          duplicateIndex: 1,
+          duplicateNodeId: "vault",
+          duplicateNodeIndex: 2,
+          firstIndex: 0,
+          firstNodeId: "archive-door",
+          firstNodeIndex: 1,
+        },
+        layer: "structure",
+        message: 'block id "vault-code" is duplicated.',
+        path: ["graph", "nodes", 2, "blocks", 1, "id"],
+      },
+    ]);
+  });
+
   it("rejects unknown block types and incompatible engine majors", () => {
     const bundle = createCompatibilityInvalidStoryBundleFixture();
 
@@ -236,6 +269,162 @@ describe("@plotpoint/engine story bundle validation", () => {
         layer: "compatibility",
         message: 'Block "vault-code" has invalid config for type "code".',
         path: ["graph", "nodes", 0, "blocks", 0, "config", "maxAttempts"],
+      },
+    ]);
+  });
+
+  it("rejects inconsistent single-choice configs", () => {
+    const bundle = createValidStoryBundleFixture();
+    const singleChoiceBlock = bundle.graph.nodes[1]?.blocks[1];
+
+    if (!singleChoiceBlock || singleChoiceBlock.type !== "single-choice") {
+      throw new Error(
+        "Expected archive-door node to include a single-choice block.",
+      );
+    }
+
+    singleChoiceBlock.config = {
+      correctOptionId: "missing-option",
+      options: [
+        {
+          id: "archivist",
+          label: "Archivist",
+        },
+        {
+          id: "archivist",
+          label: "Archivist (duplicate)",
+        },
+      ],
+      prompt: "Who had access to the archive key?",
+    };
+
+    expect(
+      validateStoryBundleCompatibility(bundle, {
+        currentEngineMajor: 0,
+        mode: "draft",
+      }),
+    ).toEqual([
+      {
+        code: "invalid-block-config",
+        details: {
+          blockId: "suspect-theory",
+          blockType: "single-choice",
+          nodeId: "archive-door",
+          validationCode: "custom",
+        },
+        layer: "compatibility",
+        message: 'Block "suspect-theory" has invalid config for type "single-choice".',
+        path: ["graph", "nodes", 1, "blocks", 1, "config", "options", 1, "id"],
+      },
+      {
+        code: "invalid-block-config",
+        details: {
+          blockId: "suspect-theory",
+          blockType: "single-choice",
+          nodeId: "archive-door",
+          validationCode: "custom",
+        },
+        layer: "compatibility",
+        message: 'Block "suspect-theory" has invalid config for type "single-choice".',
+        path: ["graph", "nodes", 1, "blocks", 1, "config", "correctOptionId"],
+      },
+    ]);
+  });
+
+  it("rejects inconsistent multi-choice configs", () => {
+    const bundle = createValidStoryBundleFixture();
+    const archiveNode = bundle.graph.nodes[1];
+
+    if (!archiveNode) {
+      throw new Error("Expected archive-door node in valid story bundle fixture.");
+    }
+
+    archiveNode.blocks.push({
+      id: "suspect-vote",
+      type: "multi-choice",
+      config: {
+        correctOptionIds: ["curator", "missing-option", "curator"],
+        maxSelections: 2,
+        minSelections: 3,
+        options: [
+          {
+            id: "curator",
+            label: "Curator",
+          },
+          {
+            id: "curator",
+            label: "Curator (duplicate)",
+          },
+        ],
+        prompt: "Which suspects had key access?",
+      },
+    });
+
+    expect(
+      validateStoryBundleCompatibility(bundle, {
+        currentEngineMajor: 0,
+        mode: "draft",
+      }),
+    ).toEqual([
+      {
+        code: "invalid-block-config",
+        details: {
+          blockId: "suspect-vote",
+          blockType: "multi-choice",
+          nodeId: "archive-door",
+          validationCode: "custom",
+        },
+        layer: "compatibility",
+        message: 'Block "suspect-vote" has invalid config for type "multi-choice".',
+        path: ["graph", "nodes", 1, "blocks", 2, "config", "options", 1, "id"],
+      },
+      {
+        code: "invalid-block-config",
+        details: {
+          blockId: "suspect-vote",
+          blockType: "multi-choice",
+          nodeId: "archive-door",
+          validationCode: "custom",
+        },
+        layer: "compatibility",
+        message: 'Block "suspect-vote" has invalid config for type "multi-choice".',
+        path: ["graph", "nodes", 1, "blocks", 2, "config", "correctOptionIds", 1],
+      },
+      {
+        code: "invalid-block-config",
+        details: {
+          blockId: "suspect-vote",
+          blockType: "multi-choice",
+          nodeId: "archive-door",
+          validationCode: "custom",
+        },
+        layer: "compatibility",
+        message: 'Block "suspect-vote" has invalid config for type "multi-choice".',
+        path: ["graph", "nodes", 1, "blocks", 2, "config", "correctOptionIds", 2],
+      },
+      {
+        code: "invalid-block-config",
+        details: {
+          blockId: "suspect-vote",
+          blockType: "multi-choice",
+          nodeId: "archive-door",
+          validationCode: "custom",
+        },
+        layer: "compatibility",
+        message: 'Block "suspect-vote" has invalid config for type "multi-choice".',
+        path: ["graph", "nodes", 1, "blocks", 2, "config", "minSelections"],
+      },
+      {
+        code: "invalid-block-config",
+        details: {
+          blockId: "suspect-vote",
+          blockType: "multi-choice",
+          nodeId: "archive-door",
+          validationCode: "custom",
+        },
+        layer: "compatibility",
+        message: 'Block "suspect-vote" has invalid config for type "multi-choice".',
+        path: ["graph", "nodes", 1, "blocks", 2, "config", "minSelections"],
       },
     ]);
   });

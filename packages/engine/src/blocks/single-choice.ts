@@ -15,7 +15,31 @@ export const singleChoiceConfigSchema: z.ZodType<BlockConfig> = z
     prompt: z.string().min(1),
     shuffle: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((config, context) => {
+    const optionIdSet = new Set<string>();
+
+    config.options.forEach((option, optionIndex) => {
+      if (optionIdSet.has(option.id)) {
+        context.addIssue({
+          code: "custom",
+          message: `Option id "${option.id}" is duplicated.`,
+          path: ["options", optionIndex, "id"],
+        });
+        return;
+      }
+
+      optionIdSet.add(option.id);
+    });
+
+    if (!optionIdSet.has(config.correctOptionId)) {
+      context.addIssue({
+        code: "custom",
+        message: `correctOptionId "${config.correctOptionId}" must match a declared option id.`,
+        path: ["correctOptionId"],
+      });
+    }
+  });
 
 export const singleChoiceBlock: BlockRegistryEntry = {
   configSchema: singleChoiceConfigSchema,
