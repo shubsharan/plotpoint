@@ -3,7 +3,7 @@
 | --------------- | ----------------------------- |
 | **Type**        | PRD                           |
 | **Feature ID**  | FEAT-0003                     |
-| **Status**      | Backlog                       |
+| **Status**      | In Progress                   |
 | **Epic**        | EPIC-0002                     |
 | **Owner**       | product-engineering           |
 | **Domains**     | Engine, Contracts, Data Model |
