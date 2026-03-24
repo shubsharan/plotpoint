@@ -9,7 +9,7 @@
 
 ### Active Features
 
-- None currently.
+- [FEAT-0004-story-draft-storage-and-internal-story-crud-api](features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md) (`In Progress`)
 
 ### Recently Closed Features
 

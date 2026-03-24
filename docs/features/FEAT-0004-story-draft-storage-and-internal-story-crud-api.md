@@ -2,11 +2,11 @@
 |---|---|
 | **Type** | PRD |
 | **Feature ID** | FEAT-0004 |
-| **Status** | Not Started |
+| **Status** | In Progress |
 | **Epic** | EPIC-0002 |
 | **Owner** | product-engineering |
 | **Domains** | API, Data Model |
-| **Last synced** | 2026-03-23 |
+| **Last synced** | 2026-03-24 |
 
 # FEAT-0004 - Story Draft Storage and Internal Story CRUD API
 
