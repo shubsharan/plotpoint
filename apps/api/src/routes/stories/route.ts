@@ -1,15 +1,10 @@
-import {
-  createStory,
-  deleteStory,
-  getStory,
-  listStories,
-  patchStory,
-  updateStory,
-} from '@plotpoint/db';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import {
+  type CreateStoryRequest,
+  type PatchStoryRequest,
+  type PutStoryRequest,
   createStoryRequestSchema,
   deleteStoryResponseSchema,
   pathParamsSchema,
@@ -21,102 +16,125 @@ import {
 } from './contracts.js';
 import type { ValidationIssue } from './contracts.js';
 
-export const stories = new Hono();
+type StoryCrudReadModel = {
+  createdAt: Date;
+  draftBundleUri: string;
+  id: string;
+  status: 'draft' | 'published' | 'archived';
+  summary: string | null;
+  title: string;
+  updatedAt: Date;
+};
 
-stories.get('/', async (context) => {
-  return context.json(await listStories(), 200);
-});
+export type StoriesRouteDeps = {
+  createStory: (input: CreateStoryRequest) => Promise<StoryCrudReadModel>;
+  deleteStory: (storyId: string) => Promise<boolean>;
+  getStory: (storyId: string) => Promise<StoryCrudReadModel | null>;
+  listStories: () => Promise<StoryCrudReadModel[]>;
+  patchStory: (input: PatchStoryRequest & { id: string }) => Promise<StoryCrudReadModel | null>;
+  updateStory: (input: PutStoryRequest & { id: string }) => Promise<StoryCrudReadModel | null>;
+};
 
-stories.get('/:id', async (context) => {
-  const path = parseStoryId(context);
-  if (!path.success) {
-    return path.response;
-  }
+export const createStoriesRoutes = (deps: StoriesRouteDeps) => {
+  const stories = new Hono();
 
-  const story = await getStory(path.storyId);
-  if (!story) {
-    return storyNotFound(context, path.storyId);
-  }
+  stories.get('/', async (context) => {
+    return context.json(await deps.listStories(), 200);
+  });
 
-  return context.json(story, 200);
-});
-
-stories.post('/', async (context) => {
-  const parsedBody = await parseJsonBody(context, createStoryRequestSchema);
-  if (!parsedBody.success) {
-    return parsedBody.response;
-  }
-
-  try {
-    const story = await createStory(parsedBody.data);
-
-    return context.json(story, 201);
-  } catch (error) {
-    if (isUniqueViolationError(error)) {
-      return storyIdConflict(context, parsedBody.data.id);
+  stories.get('/:id', async (context) => {
+    const path = parseStoryId(context);
+    if (!path.success) {
+      return path.response;
     }
 
-    throw error;
-  }
-});
+    const story = await deps.getStory(path.storyId);
+    if (!story) {
+      return storyNotFound(context, path.storyId);
+    }
 
-stories.put('/:id', async (context) => {
-  const path = parseStoryId(context);
-  if (!path.success) {
-    return path.response;
-  }
-
-  const parsedBody = await parseJsonBody(context, putStoryRequestSchema);
-  if (!parsedBody.success) {
-    return parsedBody.response;
-  }
-
-  const story = await updateStory({
-    id: path.storyId,
-    ...parsedBody.data,
+    return context.json(story, 200);
   });
-  if (!story) {
-    return storyNotFound(context, path.storyId);
-  }
 
-  return context.json(story, 200);
-});
+  stories.post('/', async (context) => {
+    const parsedBody = await parseJsonBody(context, createStoryRequestSchema);
+    if (!parsedBody.success) {
+      return parsedBody.response;
+    }
 
-stories.patch('/:id', async (context) => {
-  const path = parseStoryId(context);
-  if (!path.success) {
-    return path.response;
-  }
+    try {
+      const story = await deps.createStory(parsedBody.data);
 
-  const parsedBody = await parseJsonBody(context, patchStoryRequestSchema);
-  if (!parsedBody.success) {
-    return parsedBody.response;
-  }
+      return context.json(story, 201);
+    } catch (error) {
+      if (isUniqueViolationError(error)) {
+        return storyIdConflict(context, parsedBody.data.id);
+      }
 
-  const story = await patchStory({
-    id: path.storyId,
-    ...parsedBody.data,
+      throw error;
+    }
   });
-  if (!story) {
-    return storyNotFound(context, path.storyId);
-  }
 
-  return context.json(story, 200);
-});
+  stories.put('/:id', async (context) => {
+    const path = parseStoryId(context);
+    if (!path.success) {
+      return path.response;
+    }
 
-stories.delete('/:id', async (context) => {
-  const path = parseStoryId(context);
-  if (!path.success) {
-    return path.response;
-  }
+    const parsedBody = await parseJsonBody(context, putStoryRequestSchema);
+    if (!parsedBody.success) {
+      return parsedBody.response;
+    }
 
-  const deleted = await deleteStory(path.storyId);
-  if (!deleted) {
-    return storyNotFound(context, path.storyId);
-  }
+    const story = await deps.updateStory({
+      id: path.storyId,
+      ...parsedBody.data,
+    });
+    if (!story) {
+      return storyNotFound(context, path.storyId);
+    }
 
-  return context.json(deleteStoryResponseSchema.parse({ deleted: true }), 200);
-});
+    return context.json(story, 200);
+  });
+
+  stories.patch('/:id', async (context) => {
+    const path = parseStoryId(context);
+    if (!path.success) {
+      return path.response;
+    }
+
+    const parsedBody = await parseJsonBody(context, patchStoryRequestSchema);
+    if (!parsedBody.success) {
+      return parsedBody.response;
+    }
+
+    const story = await deps.patchStory({
+      id: path.storyId,
+      ...parsedBody.data,
+    });
+    if (!story) {
+      return storyNotFound(context, path.storyId);
+    }
+
+    return context.json(story, 200);
+  });
+
+  stories.delete('/:id', async (context) => {
+    const path = parseStoryId(context);
+    if (!path.success) {
+      return path.response;
+    }
+
+    const deleted = await deps.deleteStory(path.storyId);
+    if (!deleted) {
+      return storyNotFound(context, path.storyId);
+    }
+
+    return context.json(deleteStoryResponseSchema.parse({ deleted: true }), 200);
+  });
+
+  return stories;
+};
 
 const mapIssues = (issues: z.core.$ZodIssue[]): ValidationIssue[] =>
   issues.map((issue) => ({

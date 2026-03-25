@@ -1,5 +1,5 @@
 import { desc, eq } from 'drizzle-orm';
-import { db } from '../client.js';
+import type { PgAsyncDatabase } from 'drizzle-orm/pg-core/async/db';
 import { type StoryRow, stories } from '../schema/stories.js';
 
 const storyCrudReadModelProjection = {
@@ -17,7 +17,7 @@ export type StoryCrudReadModel = Pick<
   'id' | 'title' | 'summary' | 'status' | 'draftBundleUri' | 'createdAt' | 'updatedAt'
 >;
 
-type CreateStoryInput = {
+export type CreateStoryInput = {
   id: string;
   title: string;
   summary?: string | null;
@@ -25,7 +25,7 @@ type CreateStoryInput = {
   now?: Date;
 };
 
-type UpdateStoryInput = {
+export type UpdateStoryInput = {
   id: string;
   title: string;
   summary?: string | null;
@@ -33,7 +33,7 @@ type UpdateStoryInput = {
   now?: Date;
 };
 
-type PatchStoryInput = {
+export type PatchStoryInput = {
   id: string;
   title?: string;
   summary?: string | null;
@@ -41,89 +41,111 @@ type PatchStoryInput = {
   now?: Date;
 };
 
-export const listStories = async () =>
-  db
-    .select(storyCrudReadModelProjection)
-    .from(stories)
-    .orderBy(desc(stories.updatedAt), desc(stories.id));
+type StoryCrudDatabase = PgAsyncDatabase<any, any, any>;
 
-export const getStory = async (storyId: string) => {
-  const [story] = await db
-    .select(storyCrudReadModelProjection)
-    .from(stories)
-    .where(eq(stories.id, storyId))
-    .limit(1);
-
-  return story ?? null;
+export type StoryQueries = {
+  createStory: (input: CreateStoryInput) => Promise<StoryCrudReadModel>;
+  deleteStory: (storyId: string) => Promise<boolean>;
+  getStory: (storyId: string) => Promise<StoryCrudReadModel | null>;
+  listStories: () => Promise<StoryCrudReadModel[]>;
+  patchStory: (input: PatchStoryInput) => Promise<StoryCrudReadModel | null>;
+  updateStory: (input: UpdateStoryInput) => Promise<StoryCrudReadModel | null>;
 };
 
-export const createStory = async (input: CreateStoryInput) => {
-  const timestamp = input.now ?? new Date();
-  const [story] = await db
-    .insert(stories)
-    .values({
-      id: input.id,
-      title: input.title,
-      summary: input.summary ?? null,
-      status: 'draft',
-      draftBundleUri: input.draftBundleUri,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    })
-    .returning(storyCrudReadModelProjection);
+export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries => {
+  const listStories = async () =>
+    database
+      .select(storyCrudReadModelProjection)
+      .from(stories)
+      .orderBy(desc(stories.updatedAt), desc(stories.id));
 
-  if (!story) {
-    throw new Error(`Failed to create story "${input.id}".`);
-  }
+  const getStory = async (storyId: string) => {
+    const [story] = await database
+      .select(storyCrudReadModelProjection)
+      .from(stories)
+      .where(eq(stories.id, storyId))
+      .limit(1);
 
-  return story;
-};
+    return story ?? null;
+  };
 
-export const updateStory = async (input: UpdateStoryInput) => {
-  const timestamp = input.now ?? new Date();
-  const [story] = await db
-    .update(stories)
-    .set({
-      draftBundleUri: input.draftBundleUri,
-      status: 'draft',
-      summary: input.summary ?? null,
-      title: input.title,
-      updatedAt: timestamp,
-    })
-    .where(eq(stories.id, input.id))
-    .returning(storyCrudReadModelProjection);
+  const createStory = async (input: CreateStoryInput) => {
+    const timestamp = input.now ?? new Date();
+    const [story] = await database
+      .insert(stories)
+      .values({
+        id: input.id,
+        title: input.title,
+        summary: input.summary ?? null,
+        status: 'draft',
+        draftBundleUri: input.draftBundleUri,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .returning(storyCrudReadModelProjection);
 
-  return story ?? null;
-};
+    if (!story) {
+      throw new Error(`Failed to create story "${input.id}".`);
+    }
 
-export const patchStory = async (input: PatchStoryInput) => {
-  const timestamp = input.now ?? new Date();
-  const hasNoPatchFields =
-    input.title === undefined && input.summary === undefined && input.draftBundleUri === undefined;
-  if (hasNoPatchFields) {
-    throw new Error('At least one story field must be provided for patch.');
-  }
+    return story;
+  };
 
-  const [story] = await db
-    .update(stories)
-    .set({
-      ...(input.draftBundleUri !== undefined ? { draftBundleUri: input.draftBundleUri } : {}),
-      ...(input.summary !== undefined ? { summary: input.summary } : {}),
-      ...(input.title !== undefined ? { title: input.title } : {}),
-      status: 'draft',
-      updatedAt: timestamp,
-    })
-    .where(eq(stories.id, input.id))
-    .returning(storyCrudReadModelProjection);
+  const updateStory = async (input: UpdateStoryInput) => {
+    const timestamp = input.now ?? new Date();
+    const [story] = await database
+      .update(stories)
+      .set({
+        draftBundleUri: input.draftBundleUri,
+        status: 'draft',
+        summary: input.summary ?? null,
+        title: input.title,
+        updatedAt: timestamp,
+      })
+      .where(eq(stories.id, input.id))
+      .returning(storyCrudReadModelProjection);
 
-  return story ?? null;
-};
+    return story ?? null;
+  };
 
-export const deleteStory = async (storyId: string) => {
-  const result = await db
-    .delete(stories)
-    .where(eq(stories.id, storyId))
-    .returning({ id: stories.id });
+  const patchStory = async (input: PatchStoryInput) => {
+    const timestamp = input.now ?? new Date();
+    const hasNoPatchFields =
+      input.title === undefined && input.summary === undefined && input.draftBundleUri === undefined;
+    if (hasNoPatchFields) {
+      throw new Error('At least one story field must be provided for patch.');
+    }
 
-  return result.length > 0;
+    const [story] = await database
+      .update(stories)
+      .set({
+        ...(input.draftBundleUri !== undefined ? { draftBundleUri: input.draftBundleUri } : {}),
+        ...(input.summary !== undefined ? { summary: input.summary } : {}),
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        status: 'draft',
+        updatedAt: timestamp,
+      })
+      .where(eq(stories.id, input.id))
+      .returning(storyCrudReadModelProjection);
+
+    return story ?? null;
+  };
+
+  const deleteStory = async (storyId: string) => {
+    const result = await database
+      .delete(stories)
+      .where(eq(stories.id, storyId))
+      .returning({ id: stories.id });
+
+    return result.length > 0;
+  };
+
+  return {
+    createStory,
+    deleteStory,
+    getStory,
+    listStories,
+    patchStory,
+    updateStory,
+  };
 };

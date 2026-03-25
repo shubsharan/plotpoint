@@ -1,24 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../index.js';
+import type { StoriesRouteDeps } from '../routes/stories/route.js';
 
-const dbMocks = vi.hoisted(() => ({
-  listStories: vi.fn(),
-  getStory: vi.fn(),
-  createStory: vi.fn(),
-  updateStory: vi.fn(),
-  patchStory: vi.fn(),
-  deleteStory: vi.fn(),
-}));
+type StoriesRouteDepsMocks = {
+  [Key in keyof StoriesRouteDeps]: ReturnType<typeof vi.fn<StoriesRouteDeps[Key]>>;
+};
 
-vi.mock('@plotpoint/db', () => {
-  return {
-    listStories: dbMocks.listStories,
-    getStory: dbMocks.getStory,
-    createStory: dbMocks.createStory,
-    updateStory: dbMocks.updateStory,
-    patchStory: dbMocks.patchStory,
-    deleteStory: dbMocks.deleteStory,
-  };
+const createRouteDeps = (): StoriesRouteDepsMocks => ({
+  createStory: vi.fn<StoriesRouteDeps['createStory']>(),
+  deleteStory: vi.fn<StoriesRouteDeps['deleteStory']>(),
+  getStory: vi.fn<StoriesRouteDeps['getStory']>(),
+  listStories: vi.fn<StoriesRouteDeps['listStories']>(),
+  patchStory: vi.fn<StoriesRouteDeps['patchStory']>(),
+  updateStory: vi.fn<StoriesRouteDeps['updateStory']>(),
 });
 
 const buildStoryRow = (
@@ -43,15 +37,17 @@ const buildStoryRow = (
 });
 
 const createJsonRequest = (
+  deps: StoriesRouteDeps,
   path: string,
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body?: unknown,
 ) => {
+  const app = createApp(deps);
   if (body === undefined) {
-    return createApp().request(path, { method });
+    return app.request(path, { method });
   }
 
-  return createApp().request(path, {
+  return app.request(path, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -61,15 +57,18 @@ const createJsonRequest = (
 };
 
 describe('@plotpoint/api story routes', () => {
+  let deps: StoriesRouteDepsMocks;
+
   beforeEach(() => {
+    deps = createRouteDeps();
     vi.clearAllMocks();
   });
 
   it('creates a story and returns the persisted record', async () => {
     const story = buildStoryRow();
-    dbMocks.createStory.mockResolvedValueOnce(story);
+    deps.createStory.mockResolvedValueOnce(story);
 
-    const response = await createJsonRequest('/stories', 'POST', {
+    const response = await createJsonRequest(deps, '/stories', 'POST', {
       id: story.id,
       title: story.title,
       summary: story.summary,
@@ -86,7 +85,7 @@ describe('@plotpoint/api story routes', () => {
       createdAt: '2026-03-24T10:00:00.000Z',
       updatedAt: '2026-03-24T10:30:00.000Z',
     });
-    expect(dbMocks.createStory).toHaveBeenCalledWith({
+    expect(deps.createStory).toHaveBeenCalledWith({
       id: story.id,
       title: story.title,
       summary: story.summary,
@@ -94,27 +93,24 @@ describe('@plotpoint/api story routes', () => {
     });
   });
 
-  it('normalizes omitted create summary to null for db writes', async () => {
-    const story = buildStoryRow({ id: 'story-no-summary', summary: null });
-    dbMocks.createStory.mockResolvedValueOnce(story);
-
-    const response = await createJsonRequest('/stories', 'POST', {
-      id: story.id,
-      title: story.title,
-      draftBundleUri: story.draftBundleUri,
+  it('returns 400 for malformed json bodies', async () => {
+    const app = createApp(deps);
+    const response = await app.request('/stories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"id":"broken"',
     });
 
-    expect(response.status).toBe(201);
-    expect(dbMocks.createStory).toHaveBeenCalledWith({
-      id: story.id,
-      title: story.title,
-      summary: null,
-      draftBundleUri: story.draftBundleUri,
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'validation_error',
+      },
     });
   });
 
   it('returns 400 for invalid create payloads', async () => {
-    const response = await createJsonRequest('/stories', 'POST', {
+    const response = await createJsonRequest(deps, '/stories', 'POST', {
       id: 'story-invalid-uri',
       title: 'Invalid URI Story',
       draftBundleUri: 'not-a-uri',
@@ -129,9 +125,9 @@ describe('@plotpoint/api story routes', () => {
   });
 
   it('returns 409 when create collides with an existing story id', async () => {
-    dbMocks.createStory.mockRejectedValueOnce({ code: '23505' });
+    deps.createStory.mockRejectedValueOnce({ code: '23505' });
 
-    const response = await createJsonRequest('/stories', 'POST', {
+    const response = await createJsonRequest(deps, '/stories', 'POST', {
       id: 'story-the-stolen-ledger',
       title: 'The Stolen Ledger',
       draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
@@ -146,8 +142,8 @@ describe('@plotpoint/api story routes', () => {
     });
   });
 
-  it('lists stories in API response format', async () => {
-    dbMocks.listStories.mockResolvedValueOnce([
+  it('lists stories in api response format', async () => {
+    deps.listStories.mockResolvedValueOnce([
       buildStoryRow({
         id: 'story-2',
         updatedAt: new Date('2026-03-24T12:00:00.000Z'),
@@ -158,7 +154,7 @@ describe('@plotpoint/api story routes', () => {
       }),
     ]);
 
-    const response = await createJsonRequest('/stories', 'GET');
+    const response = await createJsonRequest(deps, '/stories', 'GET');
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual([
@@ -183,13 +179,25 @@ describe('@plotpoint/api story routes', () => {
     ]);
   });
 
+  it('returns 500 on unexpected dependency failures', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    deps.listStories.mockRejectedValueOnce(new Error('database unavailable'));
+
+    try {
+      const response = await createJsonRequest(deps, '/stories', 'GET');
+      expect(response.status).toBe(500);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   it('gets one story and returns 404 when missing', async () => {
-    dbMocks.getStory.mockResolvedValueOnce(buildStoryRow({ id: 'story-a' }));
-    let response = await createJsonRequest('/stories/story-a', 'GET');
+    deps.getStory.mockResolvedValueOnce(buildStoryRow({ id: 'story-a' }));
+    let response = await createJsonRequest(deps, '/stories/story-a', 'GET');
     expect(response.status).toBe(200);
 
-    dbMocks.getStory.mockResolvedValueOnce(null);
-    response = await createJsonRequest('/stories/story-missing', 'GET');
+    deps.getStory.mockResolvedValueOnce(null);
+    response = await createJsonRequest(deps, '/stories/story-missing', 'GET');
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: {
@@ -199,104 +207,43 @@ describe('@plotpoint/api story routes', () => {
     });
   });
 
-  it('replaces a story via put and returns 404 when missing', async () => {
-    dbMocks.updateStory.mockResolvedValueOnce(
+  it('validates path ids for read routes', async () => {
+    const response = await createJsonRequest(deps, '/stories/%20', 'GET');
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'validation_error',
+      },
+    });
+  });
+
+  it('replaces a story via put and allows null summary', async () => {
+    deps.updateStory.mockResolvedValueOnce(
       buildStoryRow({
         id: 'story-update',
         title: 'Updated Story',
-        summary: 'Updated summary.',
-      }),
-    );
-
-    let response = await createJsonRequest('/stories/story-update', 'PUT', {
-      title: 'Updated Story',
-      summary: 'Updated summary.',
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-update/v2.json',
-    });
-
-    expect(response.status).toBe(200);
-    expect(dbMocks.updateStory).toHaveBeenCalledWith({
-      id: 'story-update',
-      title: 'Updated Story',
-      summary: 'Updated summary.',
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-update/v2.json',
-    });
-
-    dbMocks.updateStory.mockResolvedValueOnce(null);
-    response = await createJsonRequest('/stories/story-missing', 'PUT', {
-      title: 'Missing Story',
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-missing/v2.json',
-    });
-
-    expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toEqual({
-      error: {
-        code: 'story_not_found',
-        storyId: 'story-missing',
-      },
-    });
-    expect(dbMocks.updateStory).toHaveBeenLastCalledWith({
-      id: 'story-missing',
-      title: 'Missing Story',
-      summary: null,
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-missing/v2.json',
-    });
-  });
-
-  it('applies partial patch updates and supports summary clearing', async () => {
-    dbMocks.patchStory.mockResolvedValueOnce(
-      buildStoryRow({
-        id: 'story-patch',
-        title: 'Partially Updated Story',
-        summary: 'Track the missing ledger.',
-      }),
-    );
-
-    let response = await createJsonRequest('/stories/story-patch', 'PATCH', {
-      title: 'Partially Updated Story',
-    });
-
-    expect(response.status).toBe(200);
-    expect(dbMocks.patchStory).toHaveBeenCalledWith({
-      id: 'story-patch',
-      title: 'Partially Updated Story',
-    });
-
-    dbMocks.patchStory.mockResolvedValueOnce(
-      buildStoryRow({
-        id: 'story-patch',
         summary: null,
       }),
     );
-    response = await createJsonRequest('/stories/story-patch', 'PATCH', {
+
+    const response = await createJsonRequest(deps, '/stories/story-update', 'PUT', {
+      title: 'Updated Story',
       summary: null,
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-update/v2.json',
     });
 
     expect(response.status).toBe(200);
-    expect(dbMocks.patchStory).toHaveBeenLastCalledWith({
-      id: 'story-patch',
+    expect(deps.updateStory).toHaveBeenCalledWith({
+      id: 'story-update',
+      title: 'Updated Story',
       summary: null,
-    });
-  });
-
-  it('returns 404 when patch target is missing', async () => {
-    dbMocks.patchStory.mockResolvedValueOnce(null);
-
-    const response = await createJsonRequest('/stories/story-missing', 'PATCH', {
-      title: 'Missing Story',
-    });
-
-    expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toEqual({
-      error: {
-        code: 'story_not_found',
-        storyId: 'story-missing',
-      },
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-update/v2.json',
     });
   });
 
   it('returns 400 for invalid put payloads', async () => {
-    const response = await createJsonRequest('/stories/story-update', 'PUT', {
+    const response = await createJsonRequest(deps, '/stories/story-update', 'PUT', {
       title: '',
       draftBundleUri: 'not-a-uri',
     });
@@ -309,8 +256,43 @@ describe('@plotpoint/api story routes', () => {
     });
   });
 
+  it('patches draft bundle uri only', async () => {
+    deps.patchStory.mockResolvedValueOnce(
+      buildStoryRow({
+        id: 'story-patch',
+        draftBundleUri: 's3://plotpoint-stories/drafts/story-patch/v2.json',
+      }),
+    );
+
+    const response = await createJsonRequest(deps, '/stories/story-patch', 'PATCH', {
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-patch/v2.json',
+    });
+
+    expect(response.status).toBe(200);
+    expect(deps.patchStory).toHaveBeenCalledWith({
+      id: 'story-patch',
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-patch/v2.json',
+    });
+  });
+
+  it('returns 404 when patch target is missing', async () => {
+    deps.patchStory.mockResolvedValueOnce(null);
+
+    const response = await createJsonRequest(deps, '/stories/story-missing', 'PATCH', {
+      title: 'Missing Story',
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'story_not_found',
+        storyId: 'story-missing',
+      },
+    });
+  });
+
   it('returns 400 for invalid patch payloads', async () => {
-    let response = await createJsonRequest('/stories/story-update', 'PATCH', {
+    let response = await createJsonRequest(deps, '/stories/story-update', 'PATCH', {
       title: '',
     });
 
@@ -321,7 +303,7 @@ describe('@plotpoint/api story routes', () => {
       },
     });
 
-    response = await createJsonRequest('/stories/story-update', 'PATCH', {});
+    response = await createJsonRequest(deps, '/stories/story-update', 'PATCH', {});
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
       error: {
@@ -331,14 +313,14 @@ describe('@plotpoint/api story routes', () => {
   });
 
   it('deletes a story and returns 404 when missing', async () => {
-    dbMocks.deleteStory.mockResolvedValueOnce(true);
-    let response = await createJsonRequest('/stories/story-a', 'DELETE');
+    deps.deleteStory.mockResolvedValueOnce(true);
+    let response = await createJsonRequest(deps, '/stories/story-a', 'DELETE');
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ deleted: true });
-    expect(dbMocks.deleteStory).toHaveBeenCalledWith('story-a');
+    expect(deps.deleteStory).toHaveBeenCalledWith('story-a');
 
-    dbMocks.deleteStory.mockResolvedValueOnce(false);
-    response = await createJsonRequest('/stories/story-missing', 'DELETE');
+    deps.deleteStory.mockResolvedValueOnce(false);
+    response = await createJsonRequest(deps, '/stories/story-missing', 'DELETE');
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: {

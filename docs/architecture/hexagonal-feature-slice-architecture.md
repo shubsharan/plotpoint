@@ -722,6 +722,12 @@ storiesRoutes.get('/', async (c) => {
 
 The hexagonal boundary makes testing straightforward. Blocks are pure functions that test with no setup. The engine's ports can be satisfied with plain objects — no mocking libraries needed.
 
+Current repo testing standard for story CRUD:
+
+- `packages/db`: run query tests against real Drizzle SQL migrations on PGlite, and bind queries through `createStoryQueries(database)` so tests exercise the same query implementation used in production.
+- `apps/api`: inject `StoriesRouteDeps` into `createApp` and test request/response contracts with fake deps instead of module-level mocks.
+- `apps/api` seam coverage: keep a small integration suite that wires `createApp(createStoryQueries(drizzle(PGlite)))` to verify real API-to-DB behavior without duplicating all layer tests.
+
 ### Testing a Block
 
 ```typescript

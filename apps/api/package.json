@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "echo 'api dev not yet implemented'",
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit",
+    "build": "pnpm --filter @plotpoint/db build && tsc -p tsconfig.json",
+    "typecheck": "pnpm --filter @plotpoint/db build && tsc --noEmit",
     "lint": "oxlint -c ../../packages/config/oxlint.json src/",
     "lint:fix": "oxlint -c ../../packages/config/oxlint.json --fix src/",
-    "test": "vitest run"
+    "test": "pnpm --filter @plotpoint/db build && vitest run"
   },
   "dependencies": {
     "@plotpoint/db": "workspace:*",
@@ -17,7 +17,10 @@
     "zod": "^4.1.11"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14",
     "@plotpoint/config": "workspace:*",
+    "@types/node": "^24.6.1",
+    "drizzle-orm": "1.0.0-beta.19",
     "typescript": "6.0.1-rc",
     "vitest": "^4.0.18"
   }

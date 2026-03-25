@@ -1,17 +1,10 @@
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  createStory,
-  deleteStory,
-  getStory,
-  listStories,
-  patchStory,
-  updateStory,
-} from '../index.js';
+import { createStoryQueries, type StoryQueries } from '../index.js';
 import { stories } from '../schema/stories.js';
 
 const schema = { stories } as const;
@@ -19,17 +12,6 @@ const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const migrationsDirectory = join(currentDirectory, '../../supabase/migrations');
 
 type TestDatabase = PgliteDatabase<typeof schema>;
-let testDatabase: TestDatabase | null = null;
-
-vi.mock('../client.js', () => ({
-  get db() {
-    if (!testDatabase) {
-      throw new Error('Test database not initialized.');
-    }
-
-    return testDatabase;
-  },
-}));
 
 const createStoryInput = () => ({
   draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
@@ -48,7 +30,7 @@ const loadMigrations = async (): Promise<string[]> => {
     .map((entry) => entry.name)
     .sort();
   if (migrationFolders.length === 0) {
-    throw new Error('Expected at least one Drizzle SQL migration in packages/db/drizzle.');
+    throw new Error('Expected at least one Drizzle SQL migration in packages/db/supabase/migrations.');
   }
 
   return Promise.all(
@@ -78,22 +60,28 @@ const setupDatabase = async (): Promise<{
 
 describe('@plotpoint/db stories', () => {
   let client: PGlite;
+  let testDatabase: TestDatabase;
+  let storyQueries: StoryQueries;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     const setup = await setupDatabase();
 
     client = setup.client;
     testDatabase = setup.database;
+    storyQueries = createStoryQueries(testDatabase);
   });
 
-  afterEach(async () => {
-    testDatabase = null;
+  afterAll(async () => {
     await client.close();
+  });
+
+  beforeEach(async () => {
+    await testDatabase.delete(stories);
   });
 
   it('creates and fetches a draft story', async () => {
     const input = createStoryInput();
-    const result = await createStory({
+    const result = await storyQueries.createStory({
       ...input,
       now: new Date('2026-03-23T12:00:00.000Z'),
     });
@@ -105,7 +93,7 @@ describe('@plotpoint/db stories', () => {
       title: 'The Stolen Ledger',
     });
 
-    const story = await getStory('story-the-stolen-ledger');
+    const story = await storyQueries.getStory('story-the-stolen-ledger');
 
     expect(story).toMatchObject({
       id: 'story-the-stolen-ledger',
@@ -117,9 +105,9 @@ describe('@plotpoint/db stories', () => {
   it('rejects duplicate story ids at the database layer', async () => {
     const input = createStoryInput();
 
-    await createStory(input);
+    await storyQueries.createStory(input);
 
-    await expect(createStory(input)).rejects.toThrow();
+    await expect(storyQueries.createStory(input)).rejects.toThrow();
   });
 
   it('lists stories by updated timestamp descending', async () => {
@@ -133,16 +121,16 @@ describe('@plotpoint/db stories', () => {
     newerInput.title = 'Newer Story';
     newerInput.draftBundleUri = 's3://plotpoint-stories/drafts/story-newer/v1.json';
 
-    await createStory({
+    await storyQueries.createStory({
       ...olderInput,
       now: new Date('2026-03-23T08:00:00.000Z'),
     });
-    await createStory({
+    await storyQueries.createStory({
       ...newerInput,
       now: new Date('2026-03-23T09:00:00.000Z'),
     });
 
-    await expect(listStories()).resolves.toMatchObject([
+    await expect(storyQueries.listStories()).resolves.toMatchObject([
       {
         id: 'story-newer',
       },
@@ -152,59 +140,58 @@ describe('@plotpoint/db stories', () => {
     ]);
   });
 
-  it('updates the stored metadata and bundle together', async () => {
+  it('applies deterministic tie-breaking when updated timestamps match', async () => {
+    await storyQueries.createStory({
+      ...createStoryInput(),
+      id: 'story-a',
+      now: new Date('2026-03-23T09:00:00.000Z'),
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-a/v1.json',
+      title: 'Story A',
+    });
+    await storyQueries.createStory({
+      ...createStoryInput(),
+      id: 'story-z',
+      now: new Date('2026-03-23T09:00:00.000Z'),
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-z/v1.json',
+      title: 'Story Z',
+    });
+
+    await expect(storyQueries.listStories()).resolves.toMatchObject([
+      { id: 'story-z' },
+      { id: 'story-a' },
+    ]);
+  });
+
+  it('replaces a story including null summary and updated bundle uri', async () => {
     const input = createStoryInput();
 
-    await createStory(input);
+    await storyQueries.createStory(input);
 
-    input.summary = 'Updated story summary.';
-    input.title = 'The Stolen Ledger Revised';
-    input.draftBundleUri = 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json';
-
-    const result = await updateStory({
-      draftBundleUri: input.draftBundleUri,
+    const result = await storyQueries.updateStory({
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json',
       id: 'story-the-stolen-ledger',
       now: new Date('2026-03-23T13:00:00.000Z'),
-      summary: input.summary,
-      title: input.title,
+      summary: null,
+      title: 'The Stolen Ledger Revised',
     });
 
     expect(result).not.toBeNull();
     expect(result).toMatchObject({
-      summary: 'Updated story summary.',
+      summary: null,
       title: 'The Stolen Ledger Revised',
     });
 
-    const story = await getStory('story-the-stolen-ledger');
+    const story = await storyQueries.getStory('story-the-stolen-ledger');
 
-    expect(story?.draftBundleUri).toBe(input.draftBundleUri);
+    expect(story?.draftBundleUri).toBe('s3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json');
     expect(story?.updatedAt.toISOString()).toBe('2026-03-23T13:00:00.000Z');
-  });
-
-  it('updates by path story id', async () => {
-    await createStory(createStoryInput());
-
-    const updated = await updateStory({
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v3.json',
-      id: 'story-the-stolen-ledger',
-      summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
-      title: 'The Stolen Ledger',
-    });
-
-    expect(updated).toMatchObject({
-      id: 'story-the-stolen-ledger',
-      title: 'The Stolen Ledger',
-    });
-    expect(updated?.draftBundleUri).toBe(
-      's3://plotpoint-stories/drafts/story-the-stolen-ledger/v3.json',
-    );
   });
 
   it('patches only provided fields and keeps omitted fields unchanged', async () => {
     const input = createStoryInput();
-    await createStory(input);
+    await storyQueries.createStory(input);
 
-    const patched = await patchStory({
+    const patched = await storyQueries.patchStory({
       id: 'story-the-stolen-ledger',
       now: new Date('2026-03-23T14:00:00.000Z'),
       title: "The Stolen Ledger: Director's Cut",
@@ -214,34 +201,51 @@ describe('@plotpoint/db stories', () => {
       title: "The Stolen Ledger: Director's Cut",
     });
 
-    const story = await getStory('story-the-stolen-ledger');
+    const story = await storyQueries.getStory('story-the-stolen-ledger');
     expect(story?.title).toBe("The Stolen Ledger: Director's Cut");
     expect(story?.summary).toBe(input.summary);
     expect(story?.draftBundleUri).toBe(input.draftBundleUri);
     expect(story?.updatedAt.toISOString()).toBe('2026-03-23T14:00:00.000Z');
   });
 
-  it('clears summary when patch receives explicit null', async () => {
-    await createStory(createStoryInput());
+  it('patches only draft bundle uri when provided', async () => {
+    await storyQueries.createStory(createStoryInput());
 
-    const patched = await patchStory({
+    const patched = await storyQueries.patchStory({
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json',
+      id: 'story-the-stolen-ledger',
+      now: new Date('2026-03-23T15:00:00.000Z'),
+    });
+
+    expect(patched?.draftBundleUri).toBe('s3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json');
+    await expect(storyQueries.getStory('story-the-stolen-ledger')).resolves.toMatchObject({
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json',
+      summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
+      title: 'The Stolen Ledger',
+    });
+  });
+
+  it('clears summary when patch receives explicit null', async () => {
+    await storyQueries.createStory(createStoryInput());
+
+    const patched = await storyQueries.patchStory({
       id: 'story-the-stolen-ledger',
       summary: null,
     });
 
     expect(patched?.summary).toBeNull();
-    await expect(getStory('story-the-stolen-ledger')).resolves.toMatchObject({
+    await expect(storyQueries.getStory('story-the-stolen-ledger')).resolves.toMatchObject({
       summary: null,
     });
   });
 
   it('returns null/false for not-found reads, updates, and deletes', async () => {
-    const missingStory = await getStory('story-missing');
+    const missingStory = await storyQueries.getStory('story-missing');
 
     expect(missingStory).toBeNull();
 
     await expect(
-      updateStory({
+      storyQueries.updateStory({
         draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
         id: 'story-the-stolen-ledger',
         summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
@@ -249,27 +253,27 @@ describe('@plotpoint/db stories', () => {
       }),
     ).resolves.toBeNull();
     await expect(
-      patchStory({
+      storyQueries.patchStory({
         id: 'story-the-stolen-ledger',
         title: 'Does Not Exist',
       }),
     ).resolves.toBeNull();
 
-    await expect(deleteStory('story-missing')).resolves.toBe(false);
+    await expect(storyQueries.deleteStory('story-missing')).resolves.toBe(false);
   });
 
   it('rejects patch requests with no writable fields', async () => {
     await expect(
-      patchStory({
+      storyQueries.patchStory({
         id: 'story-the-stolen-ledger',
       }),
     ).rejects.toThrow('At least one story field must be provided for patch.');
   });
 
   it('deletes existing stories explicitly', async () => {
-    await createStory(createStoryInput());
+    await storyQueries.createStory(createStoryInput());
 
-    await expect(deleteStory('story-the-stolen-ledger')).resolves.toBe(true);
-    await expect(getStory('story-the-stolen-ledger')).resolves.toBeNull();
+    await expect(storyQueries.deleteStory('story-the-stolen-ledger')).resolves.toBe(true);
+    await expect(storyQueries.getStory('story-the-stolen-ledger')).resolves.toBeNull();
   });
 });

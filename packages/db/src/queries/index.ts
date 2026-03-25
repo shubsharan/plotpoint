@@ -1,9 +1,10 @@
 export {
-  createStory,
-  deleteStory,
-  getStory,
-  listStories,
-  patchStory,
-  updateStory,
+  createStoryQueries,
 } from './stories.js';
-export type { StoryCrudReadModel } from './stories.js';
+export type {
+  CreateStoryInput,
+  PatchStoryInput,
+  StoryCrudReadModel,
+  StoryQueries,
+  UpdateStoryInput,
+} from './stories.js';
