@@ -1,9 +1,24 @@
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../client.js';
-import { stories } from '../schema/stories.js';
+import { type StoryRow, stories } from '../schema/stories.js';
+
+const storyCrudReadModelProjection = {
+  createdAt: stories.createdAt,
+  draftBundleUri: stories.draftBundleUri,
+  id: stories.id,
+  status: stories.status,
+  summary: stories.summary,
+  title: stories.title,
+  updatedAt: stories.updatedAt,
+};
+
+export type StoryCrudReadModel = Pick<
+  StoryRow,
+  'id' | 'title' | 'summary' | 'status' | 'draftBundleUri' | 'createdAt' | 'updatedAt'
+>;
 
 type CreateStoryInput = {
-  storyId: string;
+  id: string;
   title: string;
   summary?: string | null;
   draftBundleUri: string;
@@ -11,7 +26,7 @@ type CreateStoryInput = {
 };
 
 type UpdateStoryInput = {
-  storyId: string;
+  id: string;
   title: string;
   summary?: string | null;
   draftBundleUri: string;
@@ -19,7 +34,7 @@ type UpdateStoryInput = {
 };
 
 type PatchStoryInput = {
-  storyId: string;
+  id: string;
   title?: string;
   summary?: string | null;
   draftBundleUri?: string;
@@ -27,10 +42,17 @@ type PatchStoryInput = {
 };
 
 export const listStories = async () =>
-  db.select().from(stories).orderBy(desc(stories.updatedAt), desc(stories.id));
+  db
+    .select(storyCrudReadModelProjection)
+    .from(stories)
+    .orderBy(desc(stories.updatedAt), desc(stories.id));
 
 export const getStory = async (storyId: string) => {
-  const [story] = await db.select().from(stories).where(eq(stories.id, storyId)).limit(1);
+  const [story] = await db
+    .select(storyCrudReadModelProjection)
+    .from(stories)
+    .where(eq(stories.id, storyId))
+    .limit(1);
 
   return story ?? null;
 };
@@ -40,7 +62,7 @@ export const createStory = async (input: CreateStoryInput) => {
   const [story] = await db
     .insert(stories)
     .values({
-      id: input.storyId,
+      id: input.id,
       title: input.title,
       summary: input.summary ?? null,
       status: 'draft',
@@ -48,10 +70,10 @@ export const createStory = async (input: CreateStoryInput) => {
       createdAt: timestamp,
       updatedAt: timestamp,
     })
-    .returning();
+    .returning(storyCrudReadModelProjection);
 
   if (!story) {
-    throw new Error(`Failed to create story "${input.storyId}".`);
+    throw new Error(`Failed to create story "${input.id}".`);
   }
 
   return story;
@@ -68,8 +90,8 @@ export const updateStory = async (input: UpdateStoryInput) => {
       title: input.title,
       updatedAt: timestamp,
     })
-    .where(eq(stories.id, input.storyId))
-    .returning();
+    .where(eq(stories.id, input.id))
+    .returning(storyCrudReadModelProjection);
 
   return story ?? null;
 };
@@ -91,8 +113,8 @@ export const patchStory = async (input: PatchStoryInput) => {
       status: 'draft',
       updatedAt: timestamp,
     })
-    .where(eq(stories.id, input.storyId))
-    .returning();
+    .where(eq(stories.id, input.id))
+    .returning(storyCrudReadModelProjection);
 
   return story ?? null;
 };

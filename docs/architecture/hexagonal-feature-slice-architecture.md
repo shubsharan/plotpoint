@@ -3,7 +3,7 @@
 | **Source**      | [Hexagonal + Feature-Slice Architecture](https://www.notion.so/321997b3842e815c9c79ecdfc2f0e06d) |
 | **Type**        | Architecture                                                                                     |
 | **Domains**     | Engine, API, Data Model, Mobile                                                                  |
-| **Last synced** | 2026-03-24                                                                                       |
+| **Last synced** | 2026-03-25                                                                                       |
 
 ## Repository Structure
 
@@ -28,9 +28,8 @@ apps/
 │   │   │   ├── start-session.ts        POST /sessions/start
 │   │   │   ├── submit-action.ts        POST /actions
 │   │   │   ├── stories/
-│   │   │   │   ├── router.ts          GET/POST/PUT/PATCH/DELETE /stories*
-│   │   │   │   ├── contracts.ts       Route-local request/response schemas
-│   │   │   │   └── helpers.ts         Route-local mapping and validation helpers
+│   │   │   │   ├── route.ts           GET/POST/PUT/PATCH/DELETE /stories*
+│   │   │   │   └── contracts.ts       Route-local request + error response contracts
 │   │   │   ├── publish-story.ts        POST /stories/:id/publish
 │   │   ├── middleware.ts               Auth, rate limiting, error handling
 │   │   └── server.ts                   App setup, engine creation, route mounting
@@ -111,7 +110,7 @@ The dependency direction is the most important architectural invariant to protec
 mobile  →  api  →  engine  ←  db
 ```
 
-The engine's runtime execution code imports nothing from outside its own package. The `db` package imports from `engine/ports.ts` so its repos can implement those interfaces. The API imports from both `engine` and `db` to wire them together and keeps HTTP request/response DTO schemas route-local in `apps/api/src/routes/*`. If the engine ever imports from `db`, the hexagonal boundary is broken.
+The engine's runtime execution code imports nothing from outside its own package. The `db` package imports from `engine/ports.ts` so its repos can implement those interfaces. The API imports from both `engine` and `db` to wire them together, keeps request validation plus error-response contracts route-local in `apps/api/src/routes/*`, and returns db CRUD read models directly via JSON for internal CRUD routes. If the engine ever imports from `db`, the hexagonal boundary is broken.
 
 ## Engine Ports
 

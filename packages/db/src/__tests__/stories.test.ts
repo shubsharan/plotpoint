@@ -33,7 +33,7 @@ vi.mock('../client.js', () => ({
 
 const createStoryInput = () => ({
   draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
-  storyId: 'story-the-stolen-ledger',
+  id: 'story-the-stolen-ledger',
   summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
   title: 'The Stolen Ledger',
 });
@@ -126,10 +126,10 @@ describe('@plotpoint/db stories', () => {
     const olderInput = createStoryInput();
     const newerInput = createStoryInput();
 
-    olderInput.storyId = 'story-older';
+    olderInput.id = 'story-older';
     olderInput.title = 'Older Story';
     olderInput.draftBundleUri = 's3://plotpoint-stories/drafts/story-older/v1.json';
-    newerInput.storyId = 'story-newer';
+    newerInput.id = 'story-newer';
     newerInput.title = 'Newer Story';
     newerInput.draftBundleUri = 's3://plotpoint-stories/drafts/story-newer/v1.json';
 
@@ -163,8 +163,8 @@ describe('@plotpoint/db stories', () => {
 
     const result = await updateStory({
       draftBundleUri: input.draftBundleUri,
+      id: 'story-the-stolen-ledger',
       now: new Date('2026-03-23T13:00:00.000Z'),
-      storyId: 'story-the-stolen-ledger',
       summary: input.summary,
       title: input.title,
     });
@@ -186,7 +186,7 @@ describe('@plotpoint/db stories', () => {
 
     const updated = await updateStory({
       draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v3.json',
-      storyId: 'story-the-stolen-ledger',
+      id: 'story-the-stolen-ledger',
       summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
       title: 'The Stolen Ledger',
     });
@@ -205,8 +205,8 @@ describe('@plotpoint/db stories', () => {
     await createStory(input);
 
     const patched = await patchStory({
+      id: 'story-the-stolen-ledger',
       now: new Date('2026-03-23T14:00:00.000Z'),
-      storyId: 'story-the-stolen-ledger',
       title: "The Stolen Ledger: Director's Cut",
     });
 
@@ -225,7 +225,7 @@ describe('@plotpoint/db stories', () => {
     await createStory(createStoryInput());
 
     const patched = await patchStory({
-      storyId: 'story-the-stolen-ledger',
+      id: 'story-the-stolen-ledger',
       summary: null,
     });
 
@@ -243,14 +243,14 @@ describe('@plotpoint/db stories', () => {
     await expect(
       updateStory({
         draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
-        storyId: 'story-the-stolen-ledger',
+        id: 'story-the-stolen-ledger',
         summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
         title: 'The Stolen Ledger',
       }),
     ).resolves.toBeNull();
     await expect(
       patchStory({
-        storyId: 'story-the-stolen-ledger',
+        id: 'story-the-stolen-ledger',
         title: 'Does Not Exist',
       }),
     ).resolves.toBeNull();
@@ -261,7 +261,7 @@ describe('@plotpoint/db stories', () => {
   it('rejects patch requests with no writable fields', async () => {
     await expect(
       patchStory({
-        storyId: 'story-the-stolen-ledger',
+        id: 'story-the-stolen-ledger',
       }),
     ).rejects.toThrow('At least one story field must be provided for patch.');
   });

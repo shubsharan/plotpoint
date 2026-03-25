@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 import { createApp } from '../index.js';
 
 const dbMocks = vi.hoisted(() => ({
@@ -12,16 +11,6 @@ const dbMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@plotpoint/db', () => {
-  const storySelectSchema = z.object({
-    id: z.string(),
-    title: z.string(),
-    summary: z.string().nullable(),
-    status: z.enum(['draft', 'published', 'archived']),
-    draftBundleUri: z.string(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
-  });
-
   return {
     listStories: dbMocks.listStories,
     getStory: dbMocks.getStory,
@@ -29,7 +18,6 @@ vi.mock('@plotpoint/db', () => {
     updateStory: dbMocks.updateStory,
     patchStory: dbMocks.patchStory,
     deleteStory: dbMocks.deleteStory,
-    storySelectSchema,
   };
 });
 
@@ -99,9 +87,28 @@ describe('@plotpoint/api story routes', () => {
       updatedAt: '2026-03-24T10:30:00.000Z',
     });
     expect(dbMocks.createStory).toHaveBeenCalledWith({
-      storyId: story.id,
+      id: story.id,
       title: story.title,
       summary: story.summary,
+      draftBundleUri: story.draftBundleUri,
+    });
+  });
+
+  it('normalizes omitted create summary to null for db writes', async () => {
+    const story = buildStoryRow({ id: 'story-no-summary', summary: null });
+    dbMocks.createStory.mockResolvedValueOnce(story);
+
+    const response = await createJsonRequest('/stories', 'POST', {
+      id: story.id,
+      title: story.title,
+      draftBundleUri: story.draftBundleUri,
+    });
+
+    expect(response.status).toBe(201);
+    expect(dbMocks.createStory).toHaveBeenCalledWith({
+      id: story.id,
+      title: story.title,
+      summary: null,
       draftBundleUri: story.draftBundleUri,
     });
   });
@@ -209,7 +216,7 @@ describe('@plotpoint/api story routes', () => {
 
     expect(response.status).toBe(200);
     expect(dbMocks.updateStory).toHaveBeenCalledWith({
-      storyId: 'story-update',
+      id: 'story-update',
       title: 'Updated Story',
       summary: 'Updated summary.',
       draftBundleUri: 's3://plotpoint-stories/drafts/story-update/v2.json',
@@ -228,6 +235,12 @@ describe('@plotpoint/api story routes', () => {
         storyId: 'story-missing',
       },
     });
+    expect(dbMocks.updateStory).toHaveBeenLastCalledWith({
+      id: 'story-missing',
+      title: 'Missing Story',
+      summary: null,
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-missing/v2.json',
+    });
   });
 
   it('applies partial patch updates and supports summary clearing', async () => {
@@ -245,7 +258,7 @@ describe('@plotpoint/api story routes', () => {
 
     expect(response.status).toBe(200);
     expect(dbMocks.patchStory).toHaveBeenCalledWith({
-      storyId: 'story-patch',
+      id: 'story-patch',
       title: 'Partially Updated Story',
     });
 
@@ -261,7 +274,7 @@ describe('@plotpoint/api story routes', () => {
 
     expect(response.status).toBe(200);
     expect(dbMocks.patchStory).toHaveBeenLastCalledWith({
-      storyId: 'story-patch',
+      id: 'story-patch',
       summary: null,
     });
   });

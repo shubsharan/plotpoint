@@ -1,17 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
 
 vi.mock('@plotpoint/db', () => {
-  const storySelectSchema = z.object({
-    id: z.string(),
-    title: z.string(),
-    summary: z.string().nullable(),
-    status: z.enum(['draft', 'published', 'archived']),
-    draftBundleUri: z.string(),
-    createdAt: z.date(),
-    updatedAt: z.date(),
-  });
-
   return {
     listStories: vi.fn(),
     getStory: vi.fn(),
@@ -19,7 +8,6 @@ vi.mock('@plotpoint/db', () => {
     updateStory: vi.fn(),
     patchStory: vi.fn(),
     deleteStory: vi.fn(),
-    storySelectSchema,
   };
 });
 

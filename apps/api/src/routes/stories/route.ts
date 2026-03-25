@@ -6,34 +6,25 @@ import {
   patchStory,
   updateStory,
 } from '@plotpoint/db';
+import type { Context } from 'hono';
 import { Hono } from 'hono';
+import { z } from 'zod';
 import {
   createStoryRequestSchema,
   deleteStoryResponseSchema,
-  listStoriesResponseSchema,
+  pathParamsSchema,
   patchStoryRequestSchema,
   putStoryRequestSchema,
-  storyResponseSchema,
+  storyIdConflictResponseSchema,
+  storyNotFoundResponseSchema,
+  validationErrorResponseSchema,
 } from './contracts.js';
-import {
-  isUniqueViolationError,
-  parseJsonBody,
-  parseStoryId,
-  storyIdConflict,
-  storyNotFound,
-  toCreateStoryInput,
-  toPatchStoryInput,
-  toPutStoryInput,
-  toStoryResponse,
-} from './helpers.js';
+import type { ValidationIssue } from './contracts.js';
 
 export const stories = new Hono();
 
 stories.get('/', async (context) => {
-  const storyRows = await listStories();
-  const response = storyRows.map(toStoryResponse);
-
-  return context.json(listStoriesResponseSchema.parse(response), 200);
+  return context.json(await listStories(), 200);
 });
 
 stories.get('/:id', async (context) => {
@@ -47,7 +38,7 @@ stories.get('/:id', async (context) => {
     return storyNotFound(context, path.storyId);
   }
 
-  return context.json(storyResponseSchema.parse(toStoryResponse(story)), 200);
+  return context.json(story, 200);
 });
 
 stories.post('/', async (context) => {
@@ -57,9 +48,9 @@ stories.post('/', async (context) => {
   }
 
   try {
-    const story = await createStory(toCreateStoryInput(parsedBody.data));
+    const story = await createStory(parsedBody.data);
 
-    return context.json(storyResponseSchema.parse(toStoryResponse(story)), 201);
+    return context.json(story, 201);
   } catch (error) {
     if (isUniqueViolationError(error)) {
       return storyIdConflict(context, parsedBody.data.id);
@@ -80,12 +71,15 @@ stories.put('/:id', async (context) => {
     return parsedBody.response;
   }
 
-  const story = await updateStory(toPutStoryInput(path.storyId, parsedBody.data));
+  const story = await updateStory({
+    id: path.storyId,
+    ...parsedBody.data,
+  });
   if (!story) {
     return storyNotFound(context, path.storyId);
   }
 
-  return context.json(storyResponseSchema.parse(toStoryResponse(story)), 200);
+  return context.json(story, 200);
 });
 
 stories.patch('/:id', async (context) => {
@@ -99,12 +93,15 @@ stories.patch('/:id', async (context) => {
     return parsedBody.response;
   }
 
-  const story = await patchStory(toPatchStoryInput(path.storyId, parsedBody.data));
+  const story = await patchStory({
+    id: path.storyId,
+    ...parsedBody.data,
+  });
   if (!story) {
     return storyNotFound(context, path.storyId);
   }
 
-  return context.json(storyResponseSchema.parse(toStoryResponse(story)), 200);
+  return context.json(story, 200);
 });
 
 stories.delete('/:id', async (context) => {
@@ -120,3 +117,95 @@ stories.delete('/:id', async (context) => {
 
   return context.json(deleteStoryResponseSchema.parse({ deleted: true }), 200);
 });
+
+const mapIssues = (issues: z.core.$ZodIssue[]): ValidationIssue[] =>
+  issues.map((issue) => ({
+    code: issue.code,
+    message: issue.message,
+    path: issue.path.map((segment) => (typeof segment === 'number' ? segment : String(segment))),
+  }));
+
+const validationError = (context: Context, issues: ValidationIssue[]) =>
+  context.json(
+    validationErrorResponseSchema.parse({
+      error: {
+        code: 'validation_error',
+        issues,
+      },
+    }),
+    400,
+  );
+
+const parseStoryId = (context: Context) => {
+  const result = pathParamsSchema.safeParse(context.req.param());
+
+  if (!result.success) {
+    return {
+      success: false as const,
+      response: validationError(context, mapIssues(result.error.issues)),
+    };
+  }
+
+  return { success: true as const, storyId: result.data.id };
+};
+
+const parseJsonBody = async <TSchema extends z.ZodTypeAny>(
+  context: Context,
+  schema: TSchema,
+) => {
+  let body: unknown;
+  try {
+    body = await context.req.json();
+  } catch {
+    return {
+      success: false as const,
+      response: validationError(context, [
+        {
+          code: 'invalid_json',
+          message: 'Request body must be valid JSON.',
+          path: [],
+        },
+      ]),
+    };
+  }
+
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    return {
+      success: false as const,
+      response: validationError(context, mapIssues(parsed.error.issues)),
+    };
+  }
+
+  return { success: true as const, data: parsed.data };
+};
+
+const isUniqueViolationError = (error: unknown): boolean => {
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+
+  return 'code' in error && error.code === '23505';
+};
+
+const storyNotFound = (context: Context, storyId: string) =>
+  context.json(
+    storyNotFoundResponseSchema.parse({
+      error: {
+        code: 'story_not_found',
+        storyId,
+      },
+    }),
+    404,
+  );
+
+const storyIdConflict = (context: Context, storyId: string) =>
+  context.json(
+    storyIdConflictResponseSchema.parse({
+      error: {
+        code: 'story_id_conflict',
+        storyId,
+      },
+    }),
+    409,
+  );

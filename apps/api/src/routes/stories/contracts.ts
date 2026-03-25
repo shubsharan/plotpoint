@@ -1,4 +1,3 @@
-import { storySelectSchema } from '@plotpoint/db';
 import { z } from 'zod';
 
 const storyIdSchema = z.string().trim().min(1);
@@ -24,15 +23,43 @@ const patchStoryWriteFieldsSchema = storyWriteFieldsSchema
     },
   );
 
-export const createStoryRequestSchema = storyWriteFieldsSchema.extend({
-  id: storyIdSchema,
-});
+export const createStoryRequestSchema = storyWriteFieldsSchema
+  .extend({
+    id: storyIdSchema,
+  })
+  .transform((value) => ({
+    ...value,
+    summary: value.summary ?? null,
+  }));
 
-export const putStoryRequestSchema = storyWriteFieldsSchema.extend({
-  summary: z.string().nullable().optional(),
-});
+export const putStoryRequestSchema = storyWriteFieldsSchema
+  .extend({
+    summary: z.string().nullable().optional(),
+  })
+  .transform((value) => ({
+    ...value,
+    summary: value.summary ?? null,
+  }));
 
-export const patchStoryRequestSchema = patchStoryWriteFieldsSchema;
+export const patchStoryRequestSchema = patchStoryWriteFieldsSchema.transform((value) => {
+  const normalized: {
+    draftBundleUri?: string;
+    summary?: string | null;
+    title?: string;
+  } = {};
+
+  if (value.draftBundleUri !== undefined) {
+    normalized.draftBundleUri = value.draftBundleUri;
+  }
+  if (value.summary !== undefined) {
+    normalized.summary = value.summary;
+  }
+  if (value.title !== undefined) {
+    normalized.title = value.title;
+  }
+
+  return normalized;
+});
 
 export const pathParamsSchema = z.object({
   id: storyIdSchema,
@@ -69,23 +96,7 @@ export const deleteStoryResponseSchema = z.object({
   deleted: z.literal(true),
 });
 
-const storyResponseFieldsSchema = storySelectSchema.pick({
-  draftBundleUri: true,
-  id: true,
-  status: true,
-  summary: true,
-  title: true,
-});
-
-export const storyResponseSchema = storyResponseFieldsSchema.extend({
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
-});
-
-export const listStoriesResponseSchema = z.array(storyResponseSchema);
-
 export type CreateStoryRequest = z.infer<typeof createStoryRequestSchema>;
 export type PutStoryRequest = z.infer<typeof putStoryRequestSchema>;
 export type PatchStoryRequest = z.infer<typeof patchStoryRequestSchema>;
 export type ValidationIssue = z.infer<typeof validationIssueSchema>;
-export type StoryResponse = z.infer<typeof storyResponseSchema>;
