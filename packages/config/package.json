@@ -1,6 +1,10 @@
 {
   "name": "@plotpoint/config",
   "private": true,
+  "files": [
+    "oxlint.json",
+    "tsconfig"
+  ],
   "type": "module",
   "exports": {
     "./oxlint.json": "./oxlint.json",
@@ -8,6 +12,5 @@
     "./tsconfig/api.json": "./tsconfig/api.json",
     "./tsconfig/mobile.json": "./tsconfig/mobile.json",
     "./tsconfig/library.json": "./tsconfig/library.json"
-  },
-  "files": ["oxlint.json", "tsconfig"]
+  }
 }

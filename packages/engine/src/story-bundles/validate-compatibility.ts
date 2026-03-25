@@ -1,14 +1,14 @@
-import type { z } from "zod";
-import { getBlockDefinition, hasBlockType } from "../blocks/index.js";
-import { hasConditionName } from "../graph/conditions.js";
+import type { z } from 'zod';
+import { getBlockDefinition, hasBlockType } from '../blocks/index.js';
+import { hasConditionName } from '../graph/conditions.js';
 import type {
   StoryBundle,
   StoryBundleCompatibilityOptions,
   StoryBundleValidationIssue,
-} from "./types.js";
+} from './types.js';
 
 type StoryBundleCondition = NonNullable<
-  StoryBundle["graph"]["nodes"][number]["edges"][number]["condition"]
+  StoryBundle['graph']['nodes'][number]['edges'][number]['condition']
 >;
 
 const createIssue = (
@@ -20,24 +20,20 @@ const createIssue = (
   details === undefined
     ? {
         code,
-        layer: "compatibility",
+        layer: 'compatibility',
         message,
         path,
       }
     : {
         code,
         details,
-        layer: "compatibility",
+        layer: 'compatibility',
         message,
         path,
       };
 
-const normalizeIssuePath = (
-  path: ReadonlyArray<PropertyKey>,
-): Array<number | string> =>
-  path.map((segment) =>
-    typeof segment === "number" ? segment : String(segment),
-  );
+const normalizeIssuePath = (path: ReadonlyArray<PropertyKey>): Array<number | string> =>
+  path.map((segment) => (typeof segment === 'number' ? segment : String(segment)));
 
 const visitCondition = (
   condition: StoryBundleCondition,
@@ -47,15 +43,15 @@ const visitCondition = (
   visit(condition, path);
 
   switch (condition.type) {
-    case "and":
-    case "or": {
+    case 'and':
+    case 'or': {
       condition.children.forEach((child, childIndex) => {
-        visitCondition(child, [...path, "children", childIndex], visit);
+        visitCondition(child, [...path, 'children', childIndex], visit);
       });
       return;
     }
-    case "always":
-    case "check":
+    case 'always':
+    case 'check':
       return;
   }
 };
@@ -65,15 +61,15 @@ export const validateStoryBundleCompatibility = (
   options: StoryBundleCompatibilityOptions,
 ): StoryBundleValidationIssue[] => {
   const issues: StoryBundleValidationIssue[] = [];
-  const mode = options.mode ?? "draft";
+  const mode = options.mode ?? 'draft';
 
   bundle.graph.nodes.forEach((node, nodeIndex) => {
     node.blocks.forEach((block, blockIndex) => {
       if (!hasBlockType(block.type)) {
         issues.push(
           createIssue(
-            "unknown-block-type",
-            ["graph", "nodes", nodeIndex, "blocks", blockIndex, "type"],
+            'unknown-block-type',
+            ['graph', 'nodes', nodeIndex, 'blocks', blockIndex, 'type'],
             `Block type "${block.type}" is not registered in the engine.`,
             {
               blockId: block.id,
@@ -92,17 +88,17 @@ export const validateStoryBundleCompatibility = (
         return;
       }
 
-      configResult.error.issues.forEach((issue: z.ZodIssue) => {
+      configResult.error.issues.forEach((issue: z.core.$ZodIssue) => {
         issues.push(
           createIssue(
-            "invalid-block-config",
+            'invalid-block-config',
             [
-              "graph",
-              "nodes",
+              'graph',
+              'nodes',
               nodeIndex,
-              "blocks",
+              'blocks',
               blockIndex,
-              "config",
+              'config',
               ...normalizeIssuePath(issue.path),
             ],
             `Block "${block.id}" has invalid config for type "${block.type}".`,
@@ -124,16 +120,16 @@ export const validateStoryBundleCompatibility = (
 
       visitCondition(
         edge.condition,
-        ["graph", "nodes", nodeIndex, "edges", edgeIndex, "condition"],
+        ['graph', 'nodes', nodeIndex, 'edges', edgeIndex, 'condition'],
         (condition, path) => {
-          if (condition.type !== "check" || hasConditionName(condition.condition)) {
+          if (condition.type !== 'check' || hasConditionName(condition.condition)) {
             return;
           }
 
           issues.push(
             createIssue(
-              "unknown-condition-name",
-              [...path, "condition"],
+              'unknown-condition-name',
+              [...path, 'condition'],
               `Condition "${condition.condition}" is not registered in the engine.`,
               {
                 conditionName: condition.condition,
@@ -148,12 +144,12 @@ export const validateStoryBundleCompatibility = (
   });
 
   const engineMajor = bundle.version.engineMajor;
-  if (mode === "draft") {
+  if (mode === 'draft') {
     if (engineMajor !== null && engineMajor !== options.currentEngineMajor) {
       issues.push(
         createIssue(
-          "incompatible-engine-major",
-          ["version", "engineMajor"],
+          'incompatible-engine-major',
+          ['version', 'engineMajor'],
           `Draft bundle engine major ${engineMajor} does not match current engine major ${options.currentEngineMajor}.`,
           {
             currentEngineMajor: options.currentEngineMajor,
@@ -170,8 +166,8 @@ export const validateStoryBundleCompatibility = (
   if (engineMajor === null) {
     issues.push(
       createIssue(
-        "missing-engine-major",
-        ["version", "engineMajor"],
+        'missing-engine-major',
+        ['version', 'engineMajor'],
         `Bundle engine major is required for ${mode} validation.`,
         {
           currentEngineMajor: options.currentEngineMajor,
@@ -185,8 +181,8 @@ export const validateStoryBundleCompatibility = (
   if (engineMajor !== options.currentEngineMajor) {
     issues.push(
       createIssue(
-        "incompatible-engine-major",
-        ["version", "engineMajor"],
+        'incompatible-engine-major',
+        ['version', 'engineMajor'],
         `Bundle engine major ${engineMajor} does not match current engine major ${options.currentEngineMajor}.`,
         {
           currentEngineMajor: options.currentEngineMajor,

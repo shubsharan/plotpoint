@@ -1,6 +1,6 @@
-import type { z } from "zod";
+import type { z } from 'zod';
 
-export type BlockScope = "game" | "user";
+export type BlockScope = 'game' | 'user';
 
 export type BlockConfig = Record<string, unknown>;
 

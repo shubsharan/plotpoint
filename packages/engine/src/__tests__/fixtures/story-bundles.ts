@@ -1,54 +1,54 @@
-import type { StoryBundle } from "../../story-bundles/schema.js";
-import { storyBundleSchema } from "../../story-bundles/schema.js";
+import type { StoryBundle } from '../../story-bundles/schema.js';
+import { storyBundleSchema } from '../../story-bundles/schema.js';
 
 const validStoryBundleSeed: StoryBundle = {
   metadata: {
-    storyId: "story-the-stolen-ledger",
-    title: "The Stolen Ledger",
-    summary: "Track the missing ledger from the gallery foyer to the archive vault.",
+    storyId: 'story-the-stolen-ledger',
+    title: 'The Stolen Ledger',
+    summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
   },
   roles: [
     {
-      id: "detective",
-      title: "Detective",
-      description: "Leads the investigation through the core puzzle path.",
+      id: 'detective',
+      title: 'Detective',
+      description: 'Leads the investigation through the core puzzle path.',
     },
     {
-      id: "archivist",
-      title: "Archivist",
-      description: "Carries the historical context needed to decode clues.",
+      id: 'archivist',
+      title: 'Archivist',
+      description: 'Carries the historical context needed to decode clues.',
     },
   ],
   graph: {
-    entryNodeId: "foyer",
+    entryNodeId: 'foyer',
     nodes: [
       {
-        id: "foyer",
-        title: "Gallery Foyer",
+        id: 'foyer',
+        title: 'Gallery Foyer',
         blocks: [
           {
-            id: "briefing",
-            type: "text",
+            id: 'briefing',
+            type: 'text',
             config: {
               document: {
-                type: "doc",
+                type: 'doc',
                 children: [
                   {
-                    type: "heading",
+                    type: 'heading',
                     level: 2,
                     children: [
                       {
-                        type: "text",
-                        text: "Briefing Note",
+                        type: 'text',
+                        text: 'Briefing Note',
                       },
                     ],
                   },
                   {
-                    type: "paragraph",
+                    type: 'paragraph',
                     children: [
                       {
-                        type: "text",
-                        text: "A torn ticket points toward the archive wing.",
+                        type: 'text',
+                        text: 'A torn ticket points toward the archive wing.',
                       },
                     ],
                   },
@@ -59,55 +59,55 @@ const validStoryBundleSeed: StoryBundle = {
         ],
         edges: [
           {
-            id: "foyer-to-archive",
-            targetNodeId: "archive-door",
-            label: "Head to the archive",
+            id: 'foyer-to-archive',
+            targetNodeId: 'archive-door',
+            label: 'Head to the archive',
           },
         ],
       },
       {
-        id: "archive-door",
-        title: "Archive Door",
+        id: 'archive-door',
+        title: 'Archive Door',
         blocks: [
           {
-            id: "vault-code",
-            type: "code",
+            id: 'vault-code',
+            type: 'code',
             config: {
               maxAttempts: 5,
-              mode: "passcode",
-              expected: "1847",
+              mode: 'passcode',
+              expected: '1847',
             },
           },
           {
-            id: "suspect-theory",
-            type: "single-choice",
+            id: 'suspect-theory',
+            type: 'single-choice',
             config: {
-              prompt: "Who had access to the archive key?",
+              prompt: 'Who had access to the archive key?',
               options: [
                 {
-                  id: "curator",
-                  label: "Curator",
+                  id: 'curator',
+                  label: 'Curator',
                 },
                 {
-                  id: "archivist",
-                  label: "Archivist",
+                  id: 'archivist',
+                  label: 'Archivist',
                 },
               ],
-              correctOptionId: "archivist",
+              correctOptionId: 'archivist',
             },
           },
         ],
         edges: [
           {
-            id: "archive-to-vault",
-            targetNodeId: "vault",
-            label: "Open the archive vault",
+            id: 'archive-to-vault',
+            targetNodeId: 'vault',
+            label: 'Open the archive vault',
             condition: {
-              type: "check",
-              condition: "field-equals",
+              type: 'check',
+              condition: 'field-equals',
               params: {
-                blockId: "vault-code",
-                field: "solved",
+                blockId: 'vault-code',
+                field: 'solved',
                 value: true,
               },
             },
@@ -115,23 +115,23 @@ const validStoryBundleSeed: StoryBundle = {
         ],
       },
       {
-        id: "vault",
-        title: "Archive Vault",
+        id: 'vault',
+        title: 'Archive Vault',
         blocks: [
           {
-            id: "find-ledger",
-            type: "location",
+            id: 'find-ledger',
+            type: 'location',
             config: {
               target: {
-                kind: "coordinates",
+                kind: 'coordinates',
                 lat: 37.7749,
                 lng: -122.4194,
               },
               radiusMeters: 25,
               ui: {
-                variant: "compass",
+                variant: 'compass',
               },
-              hint: "Stand beneath the central skylight.",
+              hint: 'Stand beneath the central skylight.',
             },
           },
         ],
@@ -153,21 +153,21 @@ export const createValidStoryBundleFixture = (): StoryBundle =>
 const invalidStoryBundleFixturesInternal = {
   malformedShape: {
     metadata: {
-      storyId: "story-the-stolen-ledger",
-      title: "The Stolen Ledger",
+      storyId: 'story-the-stolen-ledger',
+      title: 'The Stolen Ledger',
     },
     roles: [],
     graph: {
-      entryNodeId: "foyer",
+      entryNodeId: 'foyer',
       nodes: [
         {
-          id: "foyer",
-          title: "Gallery Foyer",
+          id: 'foyer',
+          title: 'Gallery Foyer',
           blocks: [
             {
-              id: "entry-clue",
-              type: "clue",
-              config: "not-an-object",
+              id: 'entry-clue',
+              type: 'clue',
+              config: 'not-an-object',
             },
           ],
           edges: [],
@@ -181,31 +181,31 @@ const invalidStoryBundleFixturesInternal = {
   },
   emptyConditionChildren: {
     metadata: {
-      storyId: "story-empty-condition",
-      title: "Empty Condition Story",
+      storyId: 'story-empty-condition',
+      title: 'Empty Condition Story',
     },
     roles: [],
     graph: {
-      entryNodeId: "foyer",
+      entryNodeId: 'foyer',
       nodes: [
         {
-          id: "foyer",
-          title: "Gallery Foyer",
+          id: 'foyer',
+          title: 'Gallery Foyer',
           blocks: [],
           edges: [
             {
-              id: "foyer-to-vault",
-              targetNodeId: "vault",
+              id: 'foyer-to-vault',
+              targetNodeId: 'vault',
               condition: {
-                type: "and",
+                type: 'and',
                 children: [],
               },
             },
           ],
         },
         {
-          id: "vault",
-          title: "Archive Vault",
+          id: 'vault',
+          title: 'Archive Vault',
           blocks: [],
           edges: [],
         },
@@ -218,23 +218,23 @@ const invalidStoryBundleFixturesInternal = {
   },
   invalidBlockConfig: {
     metadata: {
-      storyId: "story-invalid-code-config",
-      title: "Invalid Code Config Story",
+      storyId: 'story-invalid-code-config',
+      title: 'Invalid Code Config Story',
     },
     roles: [],
     graph: {
-      entryNodeId: "foyer",
+      entryNodeId: 'foyer',
       nodes: [
         {
-          id: "foyer",
-          title: "Gallery Foyer",
+          id: 'foyer',
+          title: 'Gallery Foyer',
           blocks: [
             {
-              id: "vault-code",
-              type: "code",
+              id: 'vault-code',
+              type: 'code',
               config: {
-                mode: "passcode",
-                maxAttempts: "five",
+                mode: 'passcode',
+                maxAttempts: 'five',
               },
             },
           ],
@@ -259,8 +259,8 @@ export const createStructurallyInvalidStoryBundleFixture = (): StoryBundle => {
   const bundle = createValidStoryBundleFixture();
 
   bundle.graph.nodes.push({
-    id: "archive-door",
-    title: "Duplicate Archive Door",
+    id: 'archive-door',
+    title: 'Duplicate Archive Door',
     blocks: [],
     edges: [],
   });
@@ -277,8 +277,8 @@ export const createCompatibilityInvalidStoryBundleFixture = (): StoryBundle => {
   }
 
   firstNode.blocks.push({
-    id: "mystery-device",
-    type: "mystery-device",
+    id: 'mystery-device',
+    type: 'mystery-device',
     config: {},
   });
 

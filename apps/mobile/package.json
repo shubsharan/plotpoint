@@ -12,6 +12,8 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@plotpoint/config": "workspace:*"
+    "@plotpoint/config": "workspace:*",
+    "typescript": "6.0.1-rc",
+    "vitest": "^4.0.18"
   }
 }

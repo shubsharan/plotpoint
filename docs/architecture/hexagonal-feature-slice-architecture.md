@@ -20,13 +20,11 @@ apps/
 │   │   ├── routes/
 │   │   │   ├── start-session.ts        POST /sessions/start
 │   │   │   ├── submit-action.ts        POST /actions
-│   │   │   ├── list-stories.ts         GET /stories
-│   │   │   ├── get-story.ts            GET /stories/:id
-│   │   │   ├── create-story.ts         POST /stories
-│   │   │   ├── update-story.ts         PATCH /stories/:id
-│   │   │   ├── delete-story.ts         DELETE /stories/:id
+│   │   │   ├── stories/
+│   │   │   │   ├── router.ts          GET/POST/PUT/PATCH/DELETE /stories*
+│   │   │   │   ├── contracts.ts       Route-local request/response schemas
+│   │   │   │   └── helpers.ts         Route-local mapping and validation helpers
 │   │   │   ├── publish-story.ts        POST /stories/:id/publish
-│   │   │   └── index.ts               Barrel export, route registration
 │   │   ├── middleware.ts               Auth, rate limiting, error handling
 │   │   └── server.ts                   App setup, engine creation, route mounting
 │   └── package.json
@@ -161,13 +159,13 @@ import { Hono } from 'hono';
 import { createEngine } from '@plotpoint/engine';
 import { storyRepo, userSaveRepo, gameSaveRepo } from '@plotpoint/db/repos';
 import submitAction from './routes/submit-action';
-import listStories from './routes/list-stories';
+import { storiesRoutes } from './routes/stories/router';
 
 export const engine = createEngine({ storyRepo, userSaveRepo, gameSaveRepo });
 
 const app = new Hono();
 app.route('/api', submitAction);
-app.route('/api', listStories);
+app.route('/stories', storiesRoutes);
 
 export default app;
 ```
@@ -702,19 +700,16 @@ export const storyRepo: StoryRepo = {
 Simple read routes skip the engine entirely and call database operations directly:
 
 ```typescript
-// api/routes/list-stories.ts
+// api/routes/stories/router.ts
 import { Hono } from 'hono';
 import { listStories } from '@plotpoint/db';
 
-const app = new Hono();
+export const storiesRoutes = new Hono();
 
-app.get('/stories', async (c) => {
-  const filters = c.req.query();
-  const stories = await listStories(filters);
+storiesRoutes.get('/', async (c) => {
+  const stories = await listStories();
   return c.json(stories);
 });
-
-export default app;
 ```
 
 ## Testing

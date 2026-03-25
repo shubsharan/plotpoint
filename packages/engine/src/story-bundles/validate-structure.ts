@@ -1,5 +1,5 @@
-import type { StoryBundle } from "./schema.js";
-import type { StoryBundleValidationIssue } from "./types.js";
+import type { StoryBundle } from './schema.js';
+import type { StoryBundleValidationIssue } from './types.js';
 
 type DuplicateItem = {
   id: string;
@@ -27,14 +27,14 @@ const createIssue = (
   details === undefined
     ? {
         code,
-        layer: "structure",
+        layer: 'structure',
         message,
         path,
       }
     : {
         code,
         details,
-        layer: "structure",
+        layer: 'structure',
         message,
         path,
       };
@@ -57,7 +57,7 @@ const appendDuplicateIdIssues = (
     issues.push(
       createIssue(
         `duplicate-${itemLabel}-id`,
-        [...pathPrefix, index, "id"],
+        [...pathPrefix, index, 'id'],
         `${itemLabel} id "${item.id}" is duplicated.`,
         {
           duplicateId: item.id,
@@ -69,20 +69,18 @@ const appendDuplicateIdIssues = (
   });
 };
 
-export const validateStoryBundleStructure = (
-  bundle: StoryBundle,
-): StoryBundleValidationIssue[] => {
+export const validateStoryBundleStructure = (bundle: StoryBundle): StoryBundleValidationIssue[] => {
   const issues: StoryBundleValidationIssue[] = [];
   const firstCrossNodeBlockById = new Map<string, BlockLocation>();
 
-  appendDuplicateIdIssues(issues, bundle.roles, ["roles"], "role");
+  appendDuplicateIdIssues(issues, bundle.roles, ['roles'], 'role');
 
   if (bundle.graph.nodes.length === 0) {
     issues.push(
       createIssue(
-        "empty-graph",
-        ["graph", "nodes"],
-        "Story bundles must declare at least one node.",
+        'empty-graph',
+        ['graph', 'nodes'],
+        'Story bundles must declare at least one node.',
       ),
     );
   }
@@ -98,12 +96,7 @@ export const validateStoryBundleStructure = (
       hasDuplicateNodeIds = true;
     }
 
-    appendDuplicateIdIssues(
-      issues,
-      node.blocks,
-      ["graph", "nodes", nodeIndex, "blocks"],
-      "block",
-    );
+    appendDuplicateIdIssues(issues, node.blocks, ['graph', 'nodes', nodeIndex, 'blocks'], 'block');
 
     node.blocks.forEach((block, blockIndex) => {
       const firstLocation = firstCrossNodeBlockById.get(block.id);
@@ -122,8 +115,8 @@ export const validateStoryBundleStructure = (
 
       issues.push(
         createIssue(
-          "duplicate-block-id",
-          ["graph", "nodes", nodeIndex, "blocks", blockIndex, "id"],
+          'duplicate-block-id',
+          ['graph', 'nodes', nodeIndex, 'blocks', blockIndex, 'id'],
           `block id "${block.id}" is duplicated.`,
           {
             duplicateId: block.id,
@@ -138,22 +131,17 @@ export const validateStoryBundleStructure = (
       );
     });
 
-    appendDuplicateIdIssues(
-      issues,
-      node.edges,
-      ["graph", "nodes", nodeIndex, "edges"],
-      "edge",
-    );
+    appendDuplicateIdIssues(issues, node.edges, ['graph', 'nodes', nodeIndex, 'edges'], 'edge');
   });
 
-  appendDuplicateIdIssues(issues, bundle.graph.nodes, ["graph", "nodes"], "node");
+  appendDuplicateIdIssues(issues, bundle.graph.nodes, ['graph', 'nodes'], 'node');
 
   const entryNodeIndex = nodeIndexById.get(bundle.graph.entryNodeId);
   if (entryNodeIndex === undefined) {
     issues.push(
       createIssue(
-        "invalid-entry-node",
-        ["graph", "entryNodeId"],
+        'invalid-entry-node',
+        ['graph', 'entryNodeId'],
         `Entry node "${bundle.graph.entryNodeId}" does not exist.`,
         {
           entryNodeId: bundle.graph.entryNodeId,
@@ -170,8 +158,8 @@ export const validateStoryBundleStructure = (
       if (targetIndex === undefined) {
         issues.push(
           createIssue(
-            "unknown-edge-target",
-            ["graph", "nodes", nodeIndex, "edges", edgeIndex, "targetNodeId"],
+            'unknown-edge-target',
+            ['graph', 'nodes', nodeIndex, 'edges', edgeIndex, 'targetNodeId'],
             `Edge target "${edge.targetNodeId}" does not exist.`,
             {
               sourceNodeId: node.id,
@@ -218,8 +206,8 @@ export const validateStoryBundleStructure = (
 
       issues.push(
         createIssue(
-          "unreachable-node",
-          ["graph", "nodes", nodeIndex, "id"],
+          'unreachable-node',
+          ['graph', 'nodes', nodeIndex, 'id'],
           `Node "${node.id}" is unreachable from entry node "${bundle.graph.entryNodeId}".`,
           {
             entryNodeId: bundle.graph.entryNodeId,
@@ -243,8 +231,8 @@ export const validateStoryBundleStructure = (
         if (visitState[edge.targetIndex] === 1) {
           issues.push(
             createIssue(
-              "cyclic-edge",
-              ["graph", "nodes", nodeIndex, "edges", edge.edgeIndex, "targetNodeId"],
+              'cyclic-edge',
+              ['graph', 'nodes', nodeIndex, 'edges', edge.edgeIndex, 'targetNodeId'],
               `Edge from "${edge.sourceNodeId}" to "${edge.targetNodeId}" creates a cycle.`,
               {
                 sourceNodeId: edge.sourceNodeId,

@@ -18,6 +18,7 @@ Define the canonical story bundle contract and the internal publishing flow that
 The product strategy makes Phase 1 explicitly internal and JSON-driven: Plotpoint works directly with game designers using JSON-based tooling before investing in a visual builder or broader creator ecosystem. The roadmap makes that concrete for MVP by requiring internal creators to publish and update curated story bundles repeatably, while keeping the engine headless, pure, and testable.
 
 The architecture already establishes the main delivery boundaries for this epic. Story CRUD and publishing surfaces belong in API route slices, persistence lives in the db package, and the engine owns the story bundle boundary consumed through the `StoryRepo.getBundle` port. Published bundles also need version stamping that stays compatible with the engine's semver and migration model.
+Bundle payload persistence uses object storage pointers in relational tables, as captured in [ADR-story-bundle-object-storage-links](../adrs/ADR-story-bundle-object-storage-links.md).
 
 ## Scope
 

@@ -1,14 +1,12 @@
-
-| Field           | Value                         |
-| --------------- | ----------------------------- |
-| **Type**        | PRD                           |
-| **Feature ID**  | FEAT-0003                     |
-| **Status**      | Completed                     |
-| **Epic**        | EPIC-0002                     |
-| **Owner**       | product-engineering           |
-| **Domains**     | Engine, Data Model |
-| **Last synced** | 2026-03-24                    |
-
+| Field           | Value               |
+| --------------- | ------------------- |
+| **Type**        | PRD                 |
+| **Feature ID**  | FEAT-0003           |
+| **Status**      | Completed           |
+| **Epic**        | EPIC-0002           |
+| **Owner**       | product-engineering |
+| **Domains**     | Engine, Data Model  |
+| **Last synced** | 2026-03-24          |
 
 # FEAT-0003 - Story Bundle Schema and Validation Contract
 

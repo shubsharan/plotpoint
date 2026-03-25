@@ -1,5 +1,5 @@
-import { z } from "zod";
-import type { BlockConfig, BlockRegistryEntry } from "./types.js";
+import { z } from 'zod';
+import type { BlockConfig, BlockRegistryEntry } from './types.js';
 
 export const codeConfigSchema: z.ZodType<BlockConfig> = z
   .object({
@@ -13,11 +13,11 @@ export const codeConfigSchema: z.ZodType<BlockConfig> = z
       .strict()
       .optional(),
     maxAttempts: z.number().int().positive().optional(),
-    mode: z.enum(["passcode", "password"]),
+    mode: z.enum(['passcode', 'password']),
   })
   .strict();
 
 export const codeBlock: BlockRegistryEntry = {
   configSchema: codeConfigSchema,
-  scope: "user",
+  scope: 'user',
 };

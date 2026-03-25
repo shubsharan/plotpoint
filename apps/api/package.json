@@ -11,7 +11,14 @@
     "lint:fix": "oxlint -c ../../packages/config/oxlint.json --fix src/",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@plotpoint/db": "workspace:*",
+    "hono": "^4.10.4",
+    "zod": "^4.1.11"
+  },
   "devDependencies": {
-    "@plotpoint/config": "workspace:*"
+    "@plotpoint/config": "workspace:*",
+    "typescript": "6.0.1-rc",
+    "vitest": "^4.0.18"
   }
 }

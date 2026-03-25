@@ -9,6 +9,7 @@ user_invocable: true
 This command is deprecated.
 
 Plotpoint now uses this flow instead:
+
 - roadmap in `docs/product/`
 - epic in `docs/epics/`
 - architecture docs in `docs/architecture/` as needed

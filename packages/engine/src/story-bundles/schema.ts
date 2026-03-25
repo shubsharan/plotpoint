@@ -1,22 +1,22 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 type JsonPrimitive = boolean | null | number | string;
 type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type StoryBundleCondition =
   | {
-      type: "always";
+      type: 'always';
     }
   | {
-      type: "check";
+      type: 'check';
       condition: string;
       params: Record<string, JsonValue>;
     }
   | {
-      type: "and";
+      type: 'and';
       children: StoryBundleCondition[];
     }
   | {
-      type: "or";
+      type: 'or';
       children: StoryBundleCondition[];
     };
 
@@ -88,23 +88,23 @@ const storyBundleRoleSchema = z
 
 const storyBundleConditionSchema: z.ZodType<StoryBundleCondition> = z.lazy(() =>
   z.union([
-    z.object({ type: z.literal("always") }).strict(),
+    z.object({ type: z.literal('always') }).strict(),
     z
       .object({
-        type: z.literal("check"),
+        type: z.literal('check'),
         condition: nonEmptyStringSchema,
         params: jsonObjectSchema,
       })
       .strict(),
     z
       .object({
-        type: z.literal("and"),
+        type: z.literal('and'),
         children: z.array(storyBundleConditionSchema).min(1),
       })
       .strict(),
     z
       .object({
-        type: z.literal("or"),
+        type: z.literal('or'),
         children: z.array(storyBundleConditionSchema).min(1),
       })
       .strict(),
