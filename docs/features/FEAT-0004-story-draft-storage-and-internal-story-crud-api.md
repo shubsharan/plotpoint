@@ -1,4 +1,3 @@
-
 | Field           | Value               |
 | --------------- | ------------------- |
 | **Type**        | PRD                 |
@@ -7,8 +6,7 @@
 | **Epic**        | EPIC-0002           |
 | **Owner**       | product-engineering |
 | **Domains**     | API, Data Model     |
-| **Last synced** | 2026-03-24          |
-
+| **Last synced** | 2026-03-25          |
 
 # FEAT-0004 - Story Draft Storage and Internal Story CRUD API
 
@@ -18,7 +16,7 @@ Provide the internal storage model and CRUD API surfaces needed to create, updat
 
 ## Background and Context
 
-Once FEAT-0003 defines the engine-owned bundle contract, Plotpoint needs a thin vertical slice that stores draft story content and makes it manageable through the API. The architecture already reserves story route slices for `list-stories`, `get-story`, `create-story`, `update-story`, and `delete-story`, with the `db` package owning story persistence and API routes owning request and response DTO schemas.
+Once FEAT-0003 defines the engine-owned bundle contract, Plotpoint needs a thin vertical slice that stores draft story content and makes it manageable through the API. The architecture already reserves story route slices for `list-stories`, `get-story`, `create-story`, `replace-story`, `patch-story`, and `delete-story`, with the `db` package owning story persistence and API routes owning request and response DTO schemas.
 
 This feature stays on the draft side of the workflow. It gives internal creators and operators a stable content-management surface without taking on publish, runtime, or player-facing catalog behavior yet.
 
@@ -27,7 +25,7 @@ This feature stays on the draft side of the workflow. It gives internal creators
 ### In scope
 
 - Define the draft story persistence model and supporting metadata needed for internal content management.
-- Define request and response contracts for `list-stories`, `get-story`, `create-story`, `update-story`, and `delete-story`.
+- Define request and response contracts for `list-stories`, `get-story`, `create-story`, `replace-story` (`PUT`), `patch-story` (`PATCH`), and `delete-story`.
 - Implement the API route slices and db operations for draft story CRUD.
 - Define how draft story records reference the canonical bundle contract from FEAT-0003.
 
@@ -42,16 +40,17 @@ This feature stays on the draft side of the workflow. It gives internal creators
 
 1. A story record must persist a draft bundle object-storage pointer (`draft_bundle_uri`) plus the minimum metadata needed for internal management, including stable story id, title/labeling metadata, status, and created/updated timestamps.
 2. `create-story` must accept draft metadata plus a valid draft bundle object-storage pointer and return the persisted draft record in a route-local API contract defined beside the handler.
-3. `update-story` must update draft metadata and draft bundle pointer without publishing or mutating any published artifact behavior reserved for FEAT-0005.
-4. `list-stories` and `get-story` must return internal draft-management views that include status and metadata needed to inspect current draft state.
-5. `delete-story` must remove draft-only story records explicitly and predictably; publish-history semantics are deferred to FEAT-0005.
-6. API routes must remain independent feature slices that call db operations directly rather than importing logic from each other.
-7. Validation errors and not-found cases must surface through explicit contract responses instead of silent fallbacks.
+3. `replace-story` (`PUT /stories/:id`) must update draft metadata and draft bundle pointer using full-update semantics without publishing or mutating any published artifact behavior reserved for FEAT-0005.
+4. `patch-story` (`PATCH /stories/:id`) must support partial updates where omitted fields remain unchanged and `summary: null` explicitly clears summary.
+5. `list-stories` and `get-story` must return internal draft-management views that include status and metadata needed to inspect current draft state.
+6. `delete-story` must remove draft-only story records explicitly and predictably; publish-history semantics are deferred to FEAT-0005.
+7. API routes must remain independent feature slices that call db operations directly rather than importing logic from each other.
+8. Validation errors and not-found cases must surface through explicit contract responses instead of silent fallbacks.
 
 ## Architecture and Technical Notes
 
 - Primary reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
-- Expected ownership sits in `packages/db/src/schema/stories.ts`, `packages/db/src/stories.ts`, and `apps/api/src/routes/{list-stories,get-story,create-story,update-story,delete-story}.ts` with route-local schemas in those route modules.
+- Expected ownership sits in `packages/db/src/schema/stories.ts`, `packages/db/src/queries/stories.ts`, and `apps/api/src/routes/stories/{router,contracts,helpers}.ts` with route-local schemas kept beside the stories handlers.
 - This feature must store object-storage pointers in DB rows; API and publish layers own bundle upload/download and FEAT-0003 validation against the retrieved payload.
 - Keep the dependency flow intact: `api` and `db` may depend inward, but the engine should not gain CRUD concerns.
 - Storage decision: [ADR-story-bundle-object-storage-links](../adrs/ADR-story-bundle-object-storage-links.md).
@@ -59,6 +58,7 @@ This feature stays on the draft side of the workflow. It gives internal creators
 ## Acceptance Criteria
 
 - Draft story records can be created, updated, listed, fetched individually, and deleted through typed API contracts.
+- `PUT /stories/:id` and `PATCH /stories/:id` semantics are explicit and tested: `PUT` performs full replacement of writable draft fields, while `PATCH` performs partial updates with omitted fields unchanged and `summary: null` clearing summary.
 - Draft storage persists object-storage pointers for bundle payloads while preserving FEAT-0003 bundle validation ownership in API/engine layers.
 - Story route handlers and db operations align to the feature-slice layout already named by the architecture doc.
 - Delete behavior is explicit for draft-only records and does not pre-commit published-story lifecycle decisions.
@@ -66,8 +66,8 @@ This feature stays on the draft side of the workflow. It gives internal creators
 
 ## Test Plan
 
-- Add unit tests for story db operations covering create, update, list, get, and delete behavior.
-- Add route tests for each CRUD endpoint using the route-local API schemas.
+- Add unit tests for story db operations covering create, put-update, patch-update, list, get, and delete behavior.
+- Add route tests for each CRUD endpoint (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`) using the route-local API schemas.
 - Add validation tests proving invalid draft bundle pointers or invalid route payloads are rejected cleanly.
 - Manually verify a draft story can be created, edited, fetched, listed, and removed without invoking publish behavior.
 
@@ -86,4 +86,3 @@ This feature stays on the draft side of the workflow. It gives internal creators
 ## Open Questions
 
 - None. This feature only covers draft persistence and internal CRUD behavior.
-

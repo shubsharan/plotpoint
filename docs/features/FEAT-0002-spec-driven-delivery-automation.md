@@ -1,4 +1,3 @@
-
 | Field           | Value                       |
 | --------------- | --------------------------- |
 | **Type**        | PRD                         |
@@ -8,7 +7,6 @@
 | **Owner**       | product-engineering         |
 | **Domains**     | Docs, Tooling, Git Workflow |
 | **Last synced** | 2026-03-19                  |
-
 
 # FEAT-0002 - Spec-Driven Delivery Automation (Cancelled)
 

@@ -19,14 +19,14 @@ Notion is the source of truth for all product documentation. The repo receives d
 
 ### Document Hierarchy
 
-| Notion artifact | Purpose | Repo location |
-|---|---|---|
-| **Roadmap** | Ordered MVP epic queue and high-level sequencing | `docs/product/product-roadmap.md` |
-| **Runbook** | Operational guides and repeatable delivery workflows | `docs/runbooks/{runbook-slug}.md` |
-| **Epic** | Broader initiative with strategic and sequencing context | `docs/epics/{epic-slug}.md` |
-| **Feature PRD** | Actionable implementation unit with requirements and acceptance criteria | `docs/features/{feature-slug}.md` |
-| **ADR** (Docs DB, Type=ADR) | Architecture decision record | `docs/adrs/ADR-{slug}.md` |
-| **Architecture** (Docs DB, Type=Architecture) | System design docs | `docs/architecture/{slug}.md` |
+| Notion artifact                               | Purpose                                                                  | Repo location                     |
+| --------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------- |
+| **Roadmap**                                   | Ordered MVP epic queue and high-level sequencing                         | `docs/product/product-roadmap.md` |
+| **Runbook**                                   | Operational guides and repeatable delivery workflows                     | `docs/runbooks/{runbook-slug}.md` |
+| **Epic**                                      | Broader initiative with strategic and sequencing context                 | `docs/epics/{epic-slug}.md`       |
+| **Feature PRD**                               | Actionable implementation unit with requirements and acceptance criteria | `docs/features/{feature-slug}.md` |
+| **ADR** (Docs DB, Type=ADR)                   | Architecture decision record                                             | `docs/adrs/ADR-{slug}.md`         |
+| **Architecture** (Docs DB, Type=Architecture) | System design docs                                                       | `docs/architecture/{slug}.md`     |
 
 ### Documentation Structure
 

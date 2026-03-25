@@ -1,475 +1,462 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 import {
   storyBundleSchema,
   validateStoryBundleCompatibility,
   validateStoryBundleStructure,
-} from "../index.js";
+} from '../index.js';
 import {
   createCompatibilityInvalidStoryBundleFixture,
   createStructurallyInvalidStoryBundleFixture,
   createValidStoryBundleFixture,
   invalidStoryBundleFixtures,
-} from "./fixtures/story-bundles.js";
+} from './fixtures/story-bundles.js';
 
-describe("@plotpoint/engine story bundle validation", () => {
-  it("accepts a valid rooted DAG bundle", () => {
+describe('@plotpoint/engine story bundle validation', () => {
+  it('accepts a valid rooted DAG bundle', () => {
     const bundle = createValidStoryBundleFixture();
 
     expect(validateStoryBundleStructure(bundle)).toEqual([]);
     expect(
       validateStoryBundleCompatibility(bundle, {
         currentEngineMajor: 0,
-        mode: "draft",
+        mode: 'draft',
       }),
     ).toEqual([]);
   });
 
-  it("rejects duplicate node ids deterministically", () => {
+  it('rejects duplicate node ids deterministically', () => {
     const bundle = createStructurallyInvalidStoryBundleFixture();
 
     expect(validateStoryBundleStructure(bundle)).toEqual([
       {
-        code: "duplicate-node-id",
+        code: 'duplicate-node-id',
         details: {
-          duplicateId: "archive-door",
+          duplicateId: 'archive-door',
           duplicateIndex: 3,
           firstIndex: 1,
         },
-        layer: "structure",
+        layer: 'structure',
         message: 'node id "archive-door" is duplicated.',
-        path: ["graph", "nodes", 3, "id"],
+        path: ['graph', 'nodes', 3, 'id'],
       },
     ]);
   });
 
-  it("rejects broken references, unreachable nodes, and cycles", () => {
+  it('rejects broken references, unreachable nodes, and cycles', () => {
     const bundle = createValidStoryBundleFixture();
     const entryNode = bundle.graph.nodes[0];
     const archiveNode = bundle.graph.nodes[1];
     const vaultNode = bundle.graph.nodes[2];
 
     if (!entryNode || !archiveNode || !vaultNode) {
-      throw new Error(
-        "Expected seed fixture to include foyer, archive door, and vault nodes.",
-      );
+      throw new Error('Expected seed fixture to include foyer, archive door, and vault nodes.');
     }
 
     entryNode.edges[0] = {
-      id: "foyer-to-missing",
-      targetNodeId: "missing-node",
+      id: 'foyer-to-missing',
+      targetNodeId: 'missing-node',
     };
     vaultNode.edges.push({
-      id: "vault-to-archive",
-      targetNodeId: "archive-door",
+      id: 'vault-to-archive',
+      targetNodeId: 'archive-door',
     });
 
     expect(validateStoryBundleStructure(bundle)).toEqual([
       {
-        code: "unknown-edge-target",
+        code: 'unknown-edge-target',
         details: {
-          sourceNodeId: "foyer",
-          targetNodeId: "missing-node",
+          sourceNodeId: 'foyer',
+          targetNodeId: 'missing-node',
         },
-        layer: "structure",
+        layer: 'structure',
         message: 'Edge target "missing-node" does not exist.',
-        path: ["graph", "nodes", 0, "edges", 0, "targetNodeId"],
+        path: ['graph', 'nodes', 0, 'edges', 0, 'targetNodeId'],
       },
       {
-        code: "unreachable-node",
+        code: 'unreachable-node',
         details: {
-          entryNodeId: "foyer",
-          nodeId: "archive-door",
+          entryNodeId: 'foyer',
+          nodeId: 'archive-door',
         },
-        layer: "structure",
+        layer: 'structure',
         message: 'Node "archive-door" is unreachable from entry node "foyer".',
-        path: ["graph", "nodes", 1, "id"],
+        path: ['graph', 'nodes', 1, 'id'],
       },
       {
-        code: "unreachable-node",
+        code: 'unreachable-node',
         details: {
-          entryNodeId: "foyer",
-          nodeId: "vault",
+          entryNodeId: 'foyer',
+          nodeId: 'vault',
         },
-        layer: "structure",
+        layer: 'structure',
         message: 'Node "vault" is unreachable from entry node "foyer".',
-        path: ["graph", "nodes", 2, "id"],
+        path: ['graph', 'nodes', 2, 'id'],
       },
       {
-        code: "cyclic-edge",
+        code: 'cyclic-edge',
         details: {
-          sourceNodeId: "vault",
-          targetNodeId: "archive-door",
+          sourceNodeId: 'vault',
+          targetNodeId: 'archive-door',
         },
-        layer: "structure",
+        layer: 'structure',
         message: 'Edge from "vault" to "archive-door" creates a cycle.',
-        path: ["graph", "nodes", 2, "edges", 0, "targetNodeId"],
+        path: ['graph', 'nodes', 2, 'edges', 0, 'targetNodeId'],
       },
     ]);
   });
 
-  it("rejects duplicate role, block, and edge ids", () => {
+  it('rejects duplicate role, block, and edge ids', () => {
     const bundle = createValidStoryBundleFixture();
     const firstNode = bundle.graph.nodes[0];
 
     if (!firstNode) {
-      throw new Error(
-        "Expected a first node in the valid story bundle fixture.",
-      );
+      throw new Error('Expected a first node in the valid story bundle fixture.');
     }
 
     bundle.roles.push({
-      id: "detective",
-      title: "Lead Detective",
+      id: 'detective',
+      title: 'Lead Detective',
     });
     firstNode.blocks.push({
-      id: "briefing",
-      type: "text",
+      id: 'briefing',
+      type: 'text',
       config: {},
     });
     firstNode.edges.push({
-      id: "foyer-to-archive",
-      targetNodeId: "archive-door",
+      id: 'foyer-to-archive',
+      targetNodeId: 'archive-door',
     });
 
     expect(validateStoryBundleStructure(bundle)).toEqual([
       {
-        code: "duplicate-role-id",
+        code: 'duplicate-role-id',
         details: {
-          duplicateId: "detective",
+          duplicateId: 'detective',
           duplicateIndex: 2,
           firstIndex: 0,
         },
-        layer: "structure",
+        layer: 'structure',
         message: 'role id "detective" is duplicated.',
-        path: ["roles", 2, "id"],
+        path: ['roles', 2, 'id'],
       },
       {
-        code: "duplicate-block-id",
+        code: 'duplicate-block-id',
         details: {
-          duplicateId: "briefing",
+          duplicateId: 'briefing',
           duplicateIndex: 1,
           firstIndex: 0,
         },
-        layer: "structure",
+        layer: 'structure',
         message: 'block id "briefing" is duplicated.',
-        path: ["graph", "nodes", 0, "blocks", 1, "id"],
+        path: ['graph', 'nodes', 0, 'blocks', 1, 'id'],
       },
       {
-        code: "duplicate-edge-id",
+        code: 'duplicate-edge-id',
         details: {
-          duplicateId: "foyer-to-archive",
+          duplicateId: 'foyer-to-archive',
           duplicateIndex: 1,
           firstIndex: 0,
         },
-        layer: "structure",
+        layer: 'structure',
         message: 'edge id "foyer-to-archive" is duplicated.',
-        path: ["graph", "nodes", 0, "edges", 1, "id"],
+        path: ['graph', 'nodes', 0, 'edges', 1, 'id'],
       },
     ]);
   });
 
-  it("rejects duplicate block ids across different nodes", () => {
+  it('rejects duplicate block ids across different nodes', () => {
     const bundle = createValidStoryBundleFixture();
     const vaultNode = bundle.graph.nodes[2];
 
     if (!vaultNode) {
-      throw new Error("Expected vault node in valid story bundle fixture.");
+      throw new Error('Expected vault node in valid story bundle fixture.');
     }
 
     vaultNode.blocks.push({
-      id: "vault-code",
-      type: "text",
+      id: 'vault-code',
+      type: 'text',
       config: {},
     });
 
     expect(validateStoryBundleStructure(bundle)).toEqual([
       {
-        code: "duplicate-block-id",
+        code: 'duplicate-block-id',
         details: {
-          duplicateId: "vault-code",
+          duplicateId: 'vault-code',
           duplicateIndex: 1,
-          duplicateNodeId: "vault",
+          duplicateNodeId: 'vault',
           duplicateNodeIndex: 2,
           firstIndex: 0,
-          firstNodeId: "archive-door",
+          firstNodeId: 'archive-door',
           firstNodeIndex: 1,
         },
-        layer: "structure",
+        layer: 'structure',
         message: 'block id "vault-code" is duplicated.',
-        path: ["graph", "nodes", 2, "blocks", 1, "id"],
+        path: ['graph', 'nodes', 2, 'blocks', 1, 'id'],
       },
     ]);
   });
 
-  it("rejects unknown block types and incompatible engine majors", () => {
+  it('rejects unknown block types and incompatible engine majors', () => {
     const bundle = createCompatibilityInvalidStoryBundleFixture();
 
     expect(
       validateStoryBundleCompatibility(bundle, {
         currentEngineMajor: 0,
-        mode: "published",
+        mode: 'published',
       }),
     ).toEqual([
       {
-        code: "unknown-block-type",
+        code: 'unknown-block-type',
         details: {
-          blockId: "mystery-device",
-          blockType: "mystery-device",
-          nodeId: "foyer",
+          blockId: 'mystery-device',
+          blockType: 'mystery-device',
+          nodeId: 'foyer',
         },
-        layer: "compatibility",
+        layer: 'compatibility',
         message: 'Block type "mystery-device" is not registered in the engine.',
-        path: ["graph", "nodes", 0, "blocks", 1, "type"],
+        path: ['graph', 'nodes', 0, 'blocks', 1, 'type'],
       },
       {
-        code: "incompatible-engine-major",
+        code: 'incompatible-engine-major',
         details: {
           currentEngineMajor: 0,
           engineMajor: 9,
-          mode: "published",
+          mode: 'published',
         },
-        layer: "compatibility",
-        message: "Bundle engine major 9 does not match current engine major 0.",
-        path: ["version", "engineMajor"],
+        layer: 'compatibility',
+        message: 'Bundle engine major 9 does not match current engine major 0.',
+        path: ['version', 'engineMajor'],
       },
     ]);
   });
 
-  it("rejects invalid block configs for known block types", () => {
-    const bundle = storyBundleSchema.parse(
-      invalidStoryBundleFixtures.invalidBlockConfig,
-    );
+  it('rejects invalid block configs for known block types', () => {
+    const bundle = storyBundleSchema.parse(invalidStoryBundleFixtures.invalidBlockConfig);
 
     expect(
       validateStoryBundleCompatibility(bundle, {
         currentEngineMajor: 0,
-        mode: "draft",
+        mode: 'draft',
       }),
     ).toEqual([
       {
-        code: "invalid-block-config",
+        code: 'invalid-block-config',
         details: {
-          blockId: "vault-code",
-          blockType: "code",
-          nodeId: "foyer",
-          validationCode: "invalid_type",
+          blockId: 'vault-code',
+          blockType: 'code',
+          nodeId: 'foyer',
+          validationCode: 'invalid_type',
         },
-        layer: "compatibility",
+        layer: 'compatibility',
         message: 'Block "vault-code" has invalid config for type "code".',
-        path: ["graph", "nodes", 0, "blocks", 0, "config", "expected"],
+        path: ['graph', 'nodes', 0, 'blocks', 0, 'config', 'expected'],
       },
       {
-        code: "invalid-block-config",
+        code: 'invalid-block-config',
         details: {
-          blockId: "vault-code",
-          blockType: "code",
-          nodeId: "foyer",
-          validationCode: "invalid_type",
+          blockId: 'vault-code',
+          blockType: 'code',
+          nodeId: 'foyer',
+          validationCode: 'invalid_type',
         },
-        layer: "compatibility",
+        layer: 'compatibility',
         message: 'Block "vault-code" has invalid config for type "code".',
-        path: ["graph", "nodes", 0, "blocks", 0, "config", "maxAttempts"],
+        path: ['graph', 'nodes', 0, 'blocks', 0, 'config', 'maxAttempts'],
       },
     ]);
   });
 
-  it("rejects inconsistent single-choice configs", () => {
+  it('rejects inconsistent single-choice configs', () => {
     const bundle = createValidStoryBundleFixture();
     const singleChoiceBlock = bundle.graph.nodes[1]?.blocks[1];
 
-    if (!singleChoiceBlock || singleChoiceBlock.type !== "single-choice") {
-      throw new Error(
-        "Expected archive-door node to include a single-choice block.",
-      );
+    if (!singleChoiceBlock || singleChoiceBlock.type !== 'single-choice') {
+      throw new Error('Expected archive-door node to include a single-choice block.');
     }
 
     singleChoiceBlock.config = {
-      correctOptionId: "missing-option",
+      correctOptionId: 'missing-option',
       options: [
         {
-          id: "archivist",
-          label: "Archivist",
+          id: 'archivist',
+          label: 'Archivist',
         },
         {
-          id: "archivist",
-          label: "Archivist (duplicate)",
+          id: 'archivist',
+          label: 'Archivist (duplicate)',
         },
       ],
-      prompt: "Who had access to the archive key?",
+      prompt: 'Who had access to the archive key?',
     };
 
     expect(
       validateStoryBundleCompatibility(bundle, {
         currentEngineMajor: 0,
-        mode: "draft",
+        mode: 'draft',
       }),
     ).toEqual([
       {
-        code: "invalid-block-config",
+        code: 'invalid-block-config',
         details: {
-          blockId: "suspect-theory",
-          blockType: "single-choice",
-          nodeId: "archive-door",
-          validationCode: "custom",
+          blockId: 'suspect-theory',
+          blockType: 'single-choice',
+          nodeId: 'archive-door',
+          validationCode: 'custom',
         },
-        layer: "compatibility",
+        layer: 'compatibility',
         message: 'Block "suspect-theory" has invalid config for type "single-choice".',
-        path: ["graph", "nodes", 1, "blocks", 1, "config", "options", 1, "id"],
+        path: ['graph', 'nodes', 1, 'blocks', 1, 'config', 'options', 1, 'id'],
       },
       {
-        code: "invalid-block-config",
+        code: 'invalid-block-config',
         details: {
-          blockId: "suspect-theory",
-          blockType: "single-choice",
-          nodeId: "archive-door",
-          validationCode: "custom",
+          blockId: 'suspect-theory',
+          blockType: 'single-choice',
+          nodeId: 'archive-door',
+          validationCode: 'custom',
         },
-        layer: "compatibility",
+        layer: 'compatibility',
         message: 'Block "suspect-theory" has invalid config for type "single-choice".',
-        path: ["graph", "nodes", 1, "blocks", 1, "config", "correctOptionId"],
+        path: ['graph', 'nodes', 1, 'blocks', 1, 'config', 'correctOptionId'],
       },
     ]);
   });
 
-  it("rejects inconsistent multi-choice configs", () => {
+  it('rejects inconsistent multi-choice configs', () => {
     const bundle = createValidStoryBundleFixture();
     const archiveNode = bundle.graph.nodes[1];
 
     if (!archiveNode) {
-      throw new Error("Expected archive-door node in valid story bundle fixture.");
+      throw new Error('Expected archive-door node in valid story bundle fixture.');
     }
 
     archiveNode.blocks.push({
-      id: "suspect-vote",
-      type: "multi-choice",
+      id: 'suspect-vote',
+      type: 'multi-choice',
       config: {
-        correctOptionIds: ["curator", "missing-option", "curator"],
+        correctOptionIds: ['curator', 'missing-option', 'curator'],
         maxSelections: 2,
         minSelections: 3,
         options: [
           {
-            id: "curator",
-            label: "Curator",
+            id: 'curator',
+            label: 'Curator',
           },
           {
-            id: "curator",
-            label: "Curator (duplicate)",
+            id: 'curator',
+            label: 'Curator (duplicate)',
           },
         ],
-        prompt: "Which suspects had key access?",
+        prompt: 'Which suspects had key access?',
       },
     });
 
     expect(
       validateStoryBundleCompatibility(bundle, {
         currentEngineMajor: 0,
-        mode: "draft",
+        mode: 'draft',
       }),
     ).toEqual([
       {
-        code: "invalid-block-config",
+        code: 'invalid-block-config',
         details: {
-          blockId: "suspect-vote",
-          blockType: "multi-choice",
-          nodeId: "archive-door",
-          validationCode: "custom",
+          blockId: 'suspect-vote',
+          blockType: 'multi-choice',
+          nodeId: 'archive-door',
+          validationCode: 'custom',
         },
-        layer: "compatibility",
+        layer: 'compatibility',
         message: 'Block "suspect-vote" has invalid config for type "multi-choice".',
-        path: ["graph", "nodes", 1, "blocks", 2, "config", "options", 1, "id"],
+        path: ['graph', 'nodes', 1, 'blocks', 2, 'config', 'options', 1, 'id'],
       },
       {
-        code: "invalid-block-config",
+        code: 'invalid-block-config',
         details: {
-          blockId: "suspect-vote",
-          blockType: "multi-choice",
-          nodeId: "archive-door",
-          validationCode: "custom",
+          blockId: 'suspect-vote',
+          blockType: 'multi-choice',
+          nodeId: 'archive-door',
+          validationCode: 'custom',
         },
-        layer: "compatibility",
+        layer: 'compatibility',
         message: 'Block "suspect-vote" has invalid config for type "multi-choice".',
-        path: ["graph", "nodes", 1, "blocks", 2, "config", "correctOptionIds", 1],
+        path: ['graph', 'nodes', 1, 'blocks', 2, 'config', 'correctOptionIds', 1],
       },
       {
-        code: "invalid-block-config",
+        code: 'invalid-block-config',
         details: {
-          blockId: "suspect-vote",
-          blockType: "multi-choice",
-          nodeId: "archive-door",
-          validationCode: "custom",
+          blockId: 'suspect-vote',
+          blockType: 'multi-choice',
+          nodeId: 'archive-door',
+          validationCode: 'custom',
         },
-        layer: "compatibility",
+        layer: 'compatibility',
         message: 'Block "suspect-vote" has invalid config for type "multi-choice".',
-        path: ["graph", "nodes", 1, "blocks", 2, "config", "correctOptionIds", 2],
+        path: ['graph', 'nodes', 1, 'blocks', 2, 'config', 'correctOptionIds', 2],
       },
       {
-        code: "invalid-block-config",
+        code: 'invalid-block-config',
         details: {
-          blockId: "suspect-vote",
-          blockType: "multi-choice",
-          nodeId: "archive-door",
-          validationCode: "custom",
+          blockId: 'suspect-vote',
+          blockType: 'multi-choice',
+          nodeId: 'archive-door',
+          validationCode: 'custom',
         },
-        layer: "compatibility",
+        layer: 'compatibility',
         message: 'Block "suspect-vote" has invalid config for type "multi-choice".',
-        path: ["graph", "nodes", 1, "blocks", 2, "config", "minSelections"],
+        path: ['graph', 'nodes', 1, 'blocks', 2, 'config', 'minSelections'],
       },
       {
-        code: "invalid-block-config",
+        code: 'invalid-block-config',
         details: {
-          blockId: "suspect-vote",
-          blockType: "multi-choice",
-          nodeId: "archive-door",
-          validationCode: "custom",
+          blockId: 'suspect-vote',
+          blockType: 'multi-choice',
+          nodeId: 'archive-door',
+          validationCode: 'custom',
         },
-        layer: "compatibility",
+        layer: 'compatibility',
         message: 'Block "suspect-vote" has invalid config for type "multi-choice".',
-        path: ["graph", "nodes", 1, "blocks", 2, "config", "minSelections"],
+        path: ['graph', 'nodes', 1, 'blocks', 2, 'config', 'minSelections'],
       },
     ]);
   });
 
-  it("rejects unknown condition names and missing published engine majors", () => {
+  it('rejects unknown condition names and missing published engine majors', () => {
     const bundle = createValidStoryBundleFixture();
     const conditionalEdge = bundle.graph.nodes[1]?.edges[0];
 
-    if (
-      !conditionalEdge?.condition ||
-      conditionalEdge.condition.type !== "check"
-    ) {
-      throw new Error(
-        "Expected archive-door edge to include a check condition.",
-      );
+    if (!conditionalEdge?.condition || conditionalEdge.condition.type !== 'check') {
+      throw new Error('Expected archive-door edge to include a check condition.');
     }
 
-    conditionalEdge.condition.condition = "mystery-check";
+    conditionalEdge.condition.condition = 'mystery-check';
 
     expect(
       validateStoryBundleCompatibility(bundle, {
         currentEngineMajor: 0,
-        mode: "runtime",
+        mode: 'runtime',
       }),
     ).toEqual([
       {
-        code: "unknown-condition-name",
+        code: 'unknown-condition-name',
         details: {
-          conditionName: "mystery-check",
-          edgeId: "archive-to-vault",
-          nodeId: "archive-door",
+          conditionName: 'mystery-check',
+          edgeId: 'archive-to-vault',
+          nodeId: 'archive-door',
         },
-        layer: "compatibility",
+        layer: 'compatibility',
         message: 'Condition "mystery-check" is not registered in the engine.',
-        path: ["graph", "nodes", 1, "edges", 0, "condition", "condition"],
+        path: ['graph', 'nodes', 1, 'edges', 0, 'condition', 'condition'],
       },
       {
-        code: "missing-engine-major",
+        code: 'missing-engine-major',
         details: {
           currentEngineMajor: 0,
-          mode: "runtime",
+          mode: 'runtime',
         },
-        layer: "compatibility",
-        message: "Bundle engine major is required for runtime validation.",
-        path: ["version", "engineMajor"],
+        layer: 'compatibility',
+        message: 'Bundle engine major is required for runtime validation.',
+        path: ['version', 'engineMajor'],
       },
     ]);
   });

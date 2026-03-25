@@ -1,5 +1,5 @@
-import { z } from "zod";
-import type { BlockConfig, BlockRegistryEntry } from "./types.js";
+import { z } from 'zod';
+import type { BlockConfig, BlockRegistryEntry } from './types.js';
 
 export const locationConfigSchema: z.ZodType<BlockConfig> = z
   .object({
@@ -8,21 +8,21 @@ export const locationConfigSchema: z.ZodType<BlockConfig> = z
     target: z.union([
       z
         .object({
-          kind: z.literal("coordinates"),
+          kind: z.literal('coordinates'),
           lat: z.number(),
           lng: z.number(),
         })
         .strict(),
       z
         .object({
-          kind: z.literal("place"),
+          kind: z.literal('place'),
           placeId: z.string().min(1),
         })
         .strict(),
     ]),
     ui: z
       .object({
-        variant: z.enum(["map", "compass", "hint"]),
+        variant: z.enum(['map', 'compass', 'hint']),
       })
       .strict(),
   })
@@ -30,5 +30,5 @@ export const locationConfigSchema: z.ZodType<BlockConfig> = z
 
 export const locationBlock: BlockRegistryEntry = {
   configSchema: locationConfigSchema,
-  scope: "user",
+  scope: 'user',
 };

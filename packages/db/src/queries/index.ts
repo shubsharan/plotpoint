@@ -3,5 +3,6 @@ export {
   deleteStory,
   getStory,
   listStories,
+  patchStory,
   updateStory,
-} from "./stories.js";
+} from './stories.js';

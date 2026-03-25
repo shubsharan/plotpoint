@@ -2,16 +2,10 @@
   "version": "8",
   "dialect": "postgres",
   "id": "a7c2c1e8-1c99-43c8-b692-cb7236b78880",
-  "prevIds": [
-    "00000000-0000-0000-0000-000000000000"
-  ],
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
-      "values": [
-        "draft",
-        "published",
-        "archived"
-      ],
+      "values": ["draft", "published", "archived"],
       "name": "story_status",
       "entityType": "enums",
       "schema": "public"
@@ -114,9 +108,7 @@
       "table": "stories"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "stories_pkey",
       "schema": "public",

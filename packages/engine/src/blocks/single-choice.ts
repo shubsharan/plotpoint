@@ -1,5 +1,5 @@
-import { z } from "zod";
-import type { BlockConfig, BlockRegistryEntry } from "./types.js";
+import { z } from 'zod';
+import type { BlockConfig, BlockRegistryEntry } from './types.js';
 
 const optionSchema = z
   .object({
@@ -22,9 +22,9 @@ export const singleChoiceConfigSchema: z.ZodType<BlockConfig> = z
     config.options.forEach((option, optionIndex) => {
       if (optionIdSet.has(option.id)) {
         context.addIssue({
-          code: "custom",
+          code: 'custom',
           message: `Option id "${option.id}" is duplicated.`,
-          path: ["options", optionIndex, "id"],
+          path: ['options', optionIndex, 'id'],
         });
         return;
       }
@@ -34,14 +34,14 @@ export const singleChoiceConfigSchema: z.ZodType<BlockConfig> = z
 
     if (!optionIdSet.has(config.correctOptionId)) {
       context.addIssue({
-        code: "custom",
+        code: 'custom',
         message: `correctOptionId "${config.correctOptionId}" must match a declared option id.`,
-        path: ["correctOptionId"],
+        path: ['correctOptionId'],
       });
     }
   });
 
 export const singleChoiceBlock: BlockRegistryEntry = {
   configSchema: singleChoiceConfigSchema,
-  scope: "user",
+  scope: 'user',
 };

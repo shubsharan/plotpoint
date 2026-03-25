@@ -2,6 +2,9 @@
   "name": "@plotpoint/engine",
   "version": "0.0.1",
   "private": true,
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -9,7 +12,6 @@
       "import": "./dist/index.mjs"
     }
   },
-  "files": ["dist"],
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc --noEmit",

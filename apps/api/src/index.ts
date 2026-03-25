@@ -1,6 +1,12 @@
-import { createApp } from "./server.js";
+import { Hono } from 'hono';
+import { stories } from './routes/stories/route.js';
 
-export { createApp } from "./server.js";
+const createApp = () => {
+  const app = new Hono();
+
+  app.route('/stories', stories);
+
+  return app;
+};
 
 export const app = createApp();
-export type AppType = typeof app;

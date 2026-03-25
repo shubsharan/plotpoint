@@ -1,5 +1,5 @@
-import { z } from "zod";
-import type { BlockConfig, BlockRegistryEntry } from "./types.js";
+import { z } from 'zod';
+import type { BlockConfig, BlockRegistryEntry } from './types.js';
 
 const optionSchema = z
   .object({
@@ -24,9 +24,9 @@ export const multiChoiceConfigSchema: z.ZodType<BlockConfig> = z
     config.options.forEach((option, optionIndex) => {
       if (optionIdSet.has(option.id)) {
         context.addIssue({
-          code: "custom",
+          code: 'custom',
           message: `Option id "${option.id}" is duplicated.`,
-          path: ["options", optionIndex, "id"],
+          path: ['options', optionIndex, 'id'],
         });
         return;
       }
@@ -38,9 +38,9 @@ export const multiChoiceConfigSchema: z.ZodType<BlockConfig> = z
     config.correctOptionIds.forEach((correctOptionId, correctOptionIndex) => {
       if (correctOptionIdSet.has(correctOptionId)) {
         context.addIssue({
-          code: "custom",
+          code: 'custom',
           message: `correctOptionIds contains duplicate id "${correctOptionId}".`,
-          path: ["correctOptionIds", correctOptionIndex],
+          path: ['correctOptionIds', correctOptionIndex],
         });
       } else {
         correctOptionIdSet.add(correctOptionId);
@@ -48,9 +48,9 @@ export const multiChoiceConfigSchema: z.ZodType<BlockConfig> = z
 
       if (!optionIdSet.has(correctOptionId)) {
         context.addIssue({
-          code: "custom",
+          code: 'custom',
           message: `correctOptionIds[${correctOptionIndex}] "${correctOptionId}" must match a declared option id.`,
-          path: ["correctOptionIds", correctOptionIndex],
+          path: ['correctOptionIds', correctOptionIndex],
         });
       }
     });
@@ -61,30 +61,30 @@ export const multiChoiceConfigSchema: z.ZodType<BlockConfig> = z
       config.minSelections > config.maxSelections
     ) {
       context.addIssue({
-        code: "custom",
-        message: "minSelections cannot be greater than maxSelections.",
-        path: ["minSelections"],
+        code: 'custom',
+        message: 'minSelections cannot be greater than maxSelections.',
+        path: ['minSelections'],
       });
     }
 
     if (config.minSelections !== undefined && config.minSelections > config.options.length) {
       context.addIssue({
-        code: "custom",
-        message: "minSelections cannot be greater than options length.",
-        path: ["minSelections"],
+        code: 'custom',
+        message: 'minSelections cannot be greater than options length.',
+        path: ['minSelections'],
       });
     }
 
     if (config.maxSelections !== undefined && config.maxSelections > config.options.length) {
       context.addIssue({
-        code: "custom",
-        message: "maxSelections cannot be greater than options length.",
-        path: ["maxSelections"],
+        code: 'custom',
+        message: 'maxSelections cannot be greater than options length.',
+        path: ['maxSelections'],
       });
     }
   });
 
 export const multiChoiceBlock: BlockRegistryEntry = {
   configSchema: multiChoiceConfigSchema,
-  scope: "user",
+  scope: 'user',
 };

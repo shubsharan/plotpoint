@@ -1,10 +1,8 @@
-
 | Field           | Value      |
 | --------------- | ---------- |
 | **Type**        | Strategy   |
 | **Status**      | Active     |
 | **Last synced** | 2026-03-12 |
-
 
 # Plotpoint — Product Strategy
 
@@ -54,7 +52,7 @@ The component registry is fixed and curated. Creators compose from a predefined 
 
 ## 5. Business Model
 
-The primary revenue model is location-based advertising with a natural, non-intrusive fit. Stories reference location *categories* — "coffee shop," "park," "historic building" — not specific businesses. When a story needs to send a player to a coffee shop, the engine queries an ad service at runtime.
+The primary revenue model is location-based advertising with a natural, non-intrusive fit. Stories reference location _categories_ — "coffee shop," "park," "historic building" — not specific businesses. When a story needs to send a player to a coffee shop, the engine queries an ad service at runtime.
 
 Businesses bid on story categories with time-windowed campaigns. A local café can bid on "coffee shop" locations in murder mystery stories running in their area this month. Campaigns can be paused, updated, or expired without touching story files. No hardcoded business partnerships pollute the narrative.
 
