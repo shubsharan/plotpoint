@@ -13,6 +13,8 @@
 
 Strategic outcome this epic delivers and why it matters.
 
+Allowed status values: `Planned`, `In Progress`, `Completed`, `Cancelled`.
+
 ## Context
 
 Background from roadmap and product strategy.

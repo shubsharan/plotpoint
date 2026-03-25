@@ -1,81 +1,48 @@
 | Field           | Value      |
 | --------------- | ---------- |
 | **Type**        | Workflow   |
-| **Status**      | Proposed   |
-| **Last synced** | 2026-03-18 |
+| **Status**      | Active     |
+| **Last synced** | 2026-03-24 |
 
 # Plotpoint - Spec-Driven Delivery Workflow
 
 ## Purpose
 
-Define a repeatable planning-to-delivery workflow for Plotpoint where epics are strategic initiatives and feature PRDs are implementation units.
+Define the update contract for planning, implementation, and docs maintenance in this repository.
 
-## Canonical Flow
+## Document Ownership
 
-1. Create or update product roadmap as the ordered queue of MVP epics.
-2. Create or update only the current epic doc.
-3. Create architecture docs only for the current epic and only when they are needed.
-4. Create feature PRDs only for the current epic.
-5. Pick one current-epic feature PRD to implement.
-6. Create a feature branch.
-7. Set feature PRD status to `In Progress` and open a draft PR with a docs-only scaffolding commit.
-8. Implement the feature.
-9. Run tests and close acceptance criteria.
-10. Approve PR, merge, update statuses, and only then move to the next feature or next epic.
+- Current implementation state and status rollups live in `docs/index.md`.
+- Strategy and epic sequencing live in `docs/product/`.
+- Structural and technical boundary docs live in `docs/architecture/`.
+- Scoped delivery records live in `docs/epics/`, `docs/features/`, and `docs/adrs/`.
 
-## Planning Depth Rules
+## Update Rules
 
-- The roadmap may list many future epics.
-- Only the active epic should have a full doc in `docs/epics/`.
-- Architecture docs are written just in time for the active epic.
-- Feature PRDs are written just in time for the active epic.
-- Future epic details should stay lightweight in the roadmap until the team is ready to work on them.
+1. Work-state changes update status on affected epic/feature docs and sync `docs/index.md` in the same patch.
+2. Scope, contracts, acceptance criteria, or test-plan changes update affected epic/feature docs.
+3. Strategy and roadmap sequencing changes update `docs/product/`.
+4. Architecture or package-boundary changes update `docs/architecture/`.
+5. Non-obvious trade-offs update `docs/adrs/`.
 
-## Doc Types and Intent
+## Delivery Flow
 
-- `docs/product/`: strategy and roadmap docs.
-- `docs/runbooks/`: operational guides and repeatable team workflows.
-- `docs/epics/`: broader initiatives, sequencing, and value narrative.
-- `docs/architecture/`: cross-cutting design docs and technical constraints.
-- `docs/adrs/`: non-obvious decisions with trade-offs.
-- `docs/features/`: actionable implementation PRDs with acceptance criteria.
+1. Confirm the epic or feature doc captures the intended scope and acceptance criteria.
+2. Create the feature branch from the selected feature PRD (`FEAT-XXXX-<slug>`).
+3. Set feature status to `In Progress` before implementation work starts.
+4. Implement and run relevant verification (including `pnpm docs:check` when docs change).
+5. If state changed, update epic/feature statuses and sync `docs/index.md`.
+6. If scope changed, update scoped docs in the same patch.
 
-## Required Status Lifecycle
+## Status Contract
 
-- Feature PRD: `Not Started -> In Progress -> In Review -> Completed`
-- Epic: `Planned -> In Progress -> Completed`
-- Roadmap: kept current as epic statuses change.
+- Feature statuses: `Not Started`, `In Progress`, `In Review`, `Completed`, `Cancelled`.
+- Epic statuses: `Planned`, `In Progress`, `Completed`, `Cancelled`.
+- Roadmap remains strategic and must not be used as a feature execution dashboard.
 
-## Branch and PR Rules
+## Guardrails
 
-- One feature PRD = one branch = one PR.
-- Epic IDs use `EPIC-XXXX`; feature IDs use `FEAT-XXXX`.
-- Branch naming: `FEAT-XXXX-<slug>`.
-- First commit on the branch is the scaffolding docs commit (status flip + links).
-- PR starts in draft until acceptance criteria and tests pass.
-
-## Proposed Skill or Agent Command
-
-Create a command or skill named `/start-feature` that:
-
-1. Validates a target feature PRD exists in `docs/features/`.
-2. Reads linked epic and architecture docs.
-3. Creates `FEAT-XXXX-<slug>` branch from the selected feature PRD.
-4. Updates the feature PRD status to `In Progress`.
-5. Creates a scaffolding docs commit.
-6. Opens a draft PR with acceptance criteria checklist.
-
-Create a companion `/close-feature` that:
-
-1. Runs required tests.
-2. Validates PRD acceptance criteria.
-3. Updates feature status to `In Review` or `Completed`.
-4. Posts merge notes and next feature suggestion.
-
-## Suggested AGENTS.md Guardrails
-
-- No implementation starts without a feature PRD in `docs/features/`.
-- Every feature PRD links to one epic and relevant architecture docs.
-- Architecture docs are required for cross-cutting or irreversible changes.
-- Only the active epic should be fully documented; future epics stay in the roadmap until they become current.
-- After merge, update feature, epic, and roadmap statuses in the same PR or immediate follow-up.
+- Keep epic and feature docs authoritative for scoped status, contracts, and acceptance criteria.
+- Keep `docs/index.md` as the one-page current-state rollup.
+- Do not duplicate mutable feature execution status across product strategy docs.
+- Keep future planning lightweight in roadmap docs until an epic becomes active.

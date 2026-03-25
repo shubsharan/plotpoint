@@ -14,6 +14,8 @@
 
 What this feature delivers and why.
 
+Allowed status values: `Not Started`, `In Progress`, `In Review`, `Completed`, `Cancelled`.
+
 ## Background and Context
 
 Relevant product and user context.

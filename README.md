@@ -22,6 +22,8 @@ pnpm build
 pnpm test
 pnpm typecheck
 pnpm lint
+pnpm docs:check
+pnpm verify
 ```
 
 Package-scoped examples:

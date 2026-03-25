@@ -3,7 +3,7 @@
 | **Source**      | [Hexagonal + Feature-Slice Architecture](https://www.notion.so/321997b3842e815c9c79ecdfc2f0e06d) |
 | **Type**        | Architecture                                                                                     |
 | **Domains**     | Engine, API, Data Model, Mobile                                                                  |
-| **Last synced** | 2026-03-19                                                                                       |
+| **Last synced** | 2026-03-24                                                                                       |
 
 ## Repository Structure
 
@@ -12,6 +12,13 @@ The Plotpoint monorepo is organized into apps (deployable applications) and pack
 Current foundation note: FEAT-0001 only finalizes the monorepo shape, package naming, and shared config ownership. The tree and code examples below describe the intended target structure that later features will fill in. During the scaffold phase, placeholder entrypoints are acceptable as long as package ownership and dependency direction stay clear.
 
 Current scaffold baseline: the checked-in foundation workspace contains only `apps/api`, `apps/mobile`, `packages/db`, `packages/engine`, and `packages/config`. Future shared UI or shared types packages should not be added until a later feature explicitly specs their ownership.
+
+## Documentation Contract
+
+- `docs/index.md` is the authoritative current-state document for epic and feature work status.
+- `docs/product/` captures strategy and roadmap sequencing.
+- `docs/architecture/` captures durable technical boundaries and implementation direction.
+- `docs/epics/`, `docs/features/`, and `docs/adrs/` capture scoped design records and trade-off decisions.
 
 ```
 apps/

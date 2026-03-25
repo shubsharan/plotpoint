@@ -3,7 +3,7 @@
 | **Type**        | Roadmap    |
 | **Status**      | Active     |
 | **Horizon**     | MVP        |
-| **Last synced** | 2026-03-19 |
+| **Last synced** | 2026-03-24 |
 
 # Plotpoint - MVP Product Roadmap
 
@@ -39,6 +39,13 @@ Deliver the first playable Plotpoint MVP: a single mobile app where small groups
 - The roadmap does not track active work, feature checklists, or execution status.
 - `docs/index.md` is the operational source for active epic/feature tracking.
 - Epic/feature docs carry implementation details and day-to-day progress.
+
+## Document Ownership
+
+- `docs/index.md` owns current implementation state and epic/feature work status rollups.
+- `docs/product/` owns product strategy and roadmap sequencing.
+- `docs/architecture/` owns technical boundaries, package direction, and structural conventions.
+- `docs/epics/`, `docs/features/`, and `docs/adrs/` own scoped design records, acceptance contracts, and trade-off decisions.
 
 ## Epic Queue
 

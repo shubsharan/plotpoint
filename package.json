@@ -8,6 +8,8 @@
     "typecheck": "turbo run typecheck",
     "lint": "oxlint -c packages/config/oxlint.json .",
     "lint:fix": "oxlint -c packages/config/oxlint.json --fix .",
+    "docs:check": "node tools/docs/check-docs.mjs",
+    "verify": "pnpm build && pnpm test && pnpm typecheck && pnpm lint && pnpm docs:check",
     "format": "oxfmt --check",
     "format:fix": "oxfmt ."
   },

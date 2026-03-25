@@ -3,7 +3,7 @@
 | **Type**        | Runbook             |
 | **Status**      | Active              |
 | **Owner**       | product-engineering |
-| **Last synced** | 2026-03-18          |
+| **Last synced** | 2026-03-24          |
 
 # Runbook - Doc Authoring Quickstart
 
@@ -17,6 +17,7 @@ This runbook covers authoring and maintaining roadmap, epic, architecture, featu
 
 ## Use This Doc Type Guide
 
+- `docs/index.md`: one-page rollup of epic/feature statuses, current implementation snapshot, and full docs inventory.
 - `docs/product/`: strategy and roadmap.
 - `docs/runbooks/`: repeatable team workflows and operational guides.
 - `docs/epics/`: strategic initiatives that group multiple features.
@@ -26,11 +27,12 @@ This runbook covers authoring and maintaining roadmap, epic, architecture, featu
 
 ## Standard Authoring Order
 
-1. Create or update `docs/product/product-roadmap.md`.
-2. Create or update only the current epic doc in `docs/epics/`.
+1. Create or update `docs/product/product-roadmap.md` only when sequencing or strategy changes.
+2. Create or update only the current epic doc in `docs/epics/` when shared scope or contracts change.
 3. Add architecture docs in `docs/architecture/` only when the current epic needs a cross-cutting decision documented.
-4. Add feature PRDs in `docs/features/` only for the current epic.
-5. Add ADRs in `docs/adrs/` for meaningful trade-off decisions.
+4. Add feature PRDs in `docs/features/` only for the current epic, and keep acceptance criteria and test plan current.
+5. Sync epic/feature status rollups and docs inventory in `docs/index.md` whenever scoped status or docs set changes.
+6. Add ADRs in `docs/adrs/` for meaningful trade-off decisions.
 
 ## Just-in-Time Planning Rules
 
@@ -59,6 +61,7 @@ This runbook covers authoring and maintaining roadmap, epic, architecture, featu
 - The current epic links all in-scope feature PRDs.
 - ADRs reference related epics/features and architecture docs.
 - Roadmap reflects current epic status at all times.
+- `docs/index.md` lists every markdown file under `docs/` except `docs/index.md` itself.
 
 ## Implementation Gate
 
@@ -72,8 +75,10 @@ Before coding starts:
 ## Status Hygiene
 
 - Update feature status during delivery: `Not Started -> In Progress -> In Review -> Completed`.
-- Update epic status as grouped features move forward.
-- Update roadmap when epic status changes.
+- Allowed feature statuses: `Not Started`, `In Progress`, `In Review`, `Completed`, `Cancelled`.
+- Allowed epic statuses: `Planned`, `In Progress`, `Completed`, `Cancelled`.
+- Update epic status as grouped features move forward, then sync `docs/index.md` in the same patch.
+- Keep roadmap strategic; avoid using it as a feature execution dashboard.
 
 ## Verification Checklist
 
@@ -82,6 +87,9 @@ Before coding starts:
 - [ ] Links to related docs are present and valid.
 - [ ] Status fields reflect real project state.
 - [ ] Feature PRD includes acceptance criteria and test plan.
+- [ ] `docs/index.md` rollup statuses match epic/feature doc statuses.
+- [ ] `docs/index.md` docs inventory matches the files currently under `docs/`.
+- [ ] Run `pnpm docs:check` successfully after docs changes.
 
 ## References
 
