@@ -51,4 +51,5 @@
 
 ### `adrs/`
 
+- [ADR-story-bundle-object-storage-links](adrs/ADR-story-bundle-object-storage-links.md)
 - [\_template](adrs/_template.md)

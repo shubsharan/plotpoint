@@ -2,6 +2,9 @@
   "name": "@plotpoint/db",
   "version": "0.0.1",
   "private": true,
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -9,16 +12,24 @@
       "import": "./dist/index.mjs"
     }
   },
-  "files": ["dist"],
   "scripts": {
     "build": "tsdown",
+    "generate": "drizzle-kit generate --config drizzle.config.ts",
+    "migrate": "drizzle-kit migrate --config drizzle.config.ts",
+    "push": "drizzle-kit push --config drizzle.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint -c ../config/oxlint.json src/",
     "lint:fix": "oxlint -c ../config/oxlint.json --fix src/",
     "format": "oxfmt src/",
     "test": "vitest run"
   },
+  "dependencies": {
+    "drizzle-orm": "1.0.0-beta.19",
+    "postgres": "^3.4.7"
+  },
   "devDependencies": {
-    "@plotpoint/config": "workspace:*"
+    "@electric-sql/pglite": "^0.3.14",
+    "@plotpoint/config": "workspace:*",
+    "@types/node": "^24.6.1"
   }
 }

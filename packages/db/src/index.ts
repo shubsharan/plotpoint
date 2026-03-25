@@ -1,4 +1,3 @@
-export const dbBoundary = {
-  packageName: "@plotpoint/db",
-  status: "placeholder",
-} as const;
+export { db } from "./client.js";
+export * from "./queries/index.js";
+export * from "./schema/index.js";

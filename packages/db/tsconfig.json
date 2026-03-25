@@ -1,8 +1,10 @@
 {
   "extends": "../config/tsconfig/library.json",
   "compilerOptions": {
+    "isolatedDeclarations": false,
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "types": ["node"]
   },
   "include": ["src"]
 }

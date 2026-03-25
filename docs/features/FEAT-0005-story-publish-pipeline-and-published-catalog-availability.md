@@ -6,7 +6,7 @@
 | **Epic** | EPIC-0002 |
 | **Owner** | product-engineering |
 | **Domains** | API, Data Model, Engine |
-| **Last synced** | 2026-03-23 |
+| **Last synced** | 2026-03-24 |
 
 # FEAT-0005 - Story Publish Pipeline and Published Catalog Availability
 
@@ -35,7 +35,7 @@ This feature closes EPIC-0002 by making publish a real transition instead of an 
 
 ## Requirements
 1. `publish-story` must reject drafts that fail the FEAT-0003 schema and validation rules, with structured errors that explain why publish was blocked.
-2. A successful publish must create a distinct published snapshot that stores the publish-ready bundle, engine major-version stamp, and publish metadata separately from the mutable draft record.
+2. A successful publish must create a distinct published snapshot that stores a publish-ready bundle object-storage pointer, engine major-version stamp, and publish metadata separately from the mutable draft record.
 3. Story records must track current publish status and the current published snapshot needed for later catalog and runtime lookup.
 4. Re-publishing must create a new current published snapshot from the latest valid draft rather than mutating the previous published artifact in place.
 5. `list-stories` and `get-story` must support a published-catalog view that exposes only published stories and excludes draft-only fields from player-facing consumers.
@@ -48,6 +48,7 @@ This feature closes EPIC-0002 by making publish a real transition instead of an 
 - Publish behavior must respect the engine semver rules described in the architecture doc: engine major versions stamp published bundles, and later migrations operate on published bundle data.
 - Expected implementation surfaces include `apps/api/src/routes/publish-story.ts` with route-local DTO schemas, published-story storage in `packages/db`, and `packages/db/src/repos/story-repo.ts` returning the current published bundle.
 - Distinct published snapshots are the default for this repo because publish is defined as validation plus optimization plus making a stable bundle available for runtime consumption.
+- Storage decision: [ADR-story-bundle-object-storage-links](../adrs/ADR-story-bundle-object-storage-links.md).
 
 ## Acceptance Criteria
 - [ ] Invalid drafts cannot be published and return structured publish-time validation failures.
