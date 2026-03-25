@@ -9,13 +9,14 @@
 
 ### Active Features
 
-- [FEAT-0004-story-draft-storage-and-internal-story-crud-api](features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md) (`In Progress`)
+- None.
 
 ### Recently Closed Features
 
 - [FEAT-0001-monorepo-and-shared-config-finalization](features/FEAT-0001-monorepo-and-shared-config-finalization.md) (`Completed`)
 - [FEAT-0002-spec-driven-delivery-automation](features/FEAT-0002-spec-driven-delivery-automation.md) (`Cancelled`)
 - [FEAT-0003-story-bundle-schema-and-validation-contract](features/FEAT-0003-story-bundle-schema-and-validation-contract.md) (`Completed`)
+- [FEAT-0004-story-draft-storage-and-internal-story-crud-api](features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md) (`Completed`)
 
 ## All Docs
 

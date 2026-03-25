@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { stories } from './routes/stories/route.js';
 
-const createApp = () => {
+export const createApp = () => {
   const app = new Hono();
 
   app.route('/stories', stories);

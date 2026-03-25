@@ -2,7 +2,7 @@
 | --------------- | ------------------- |
 | **Type**        | PRD                 |
 | **Feature ID**  | FEAT-0004           |
-| **Status**      | In Progress         |
+| **Status**      | Completed           |
 | **Epic**        | EPIC-0002           |
 | **Owner**       | product-engineering |
 | **Domains**     | API, Data Model     |
