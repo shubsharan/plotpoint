@@ -1,8 +1,18 @@
-import { describe, expect, it } from "vitest";
-import { apiBoundary } from "../index.js";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@plotpoint/db", () => ({
+  listStories: vi.fn(),
+  getStory: vi.fn(),
+  createStory: vi.fn(),
+  updateStory: vi.fn(),
+  deleteStory: vi.fn(),
+}));
 
 describe("@plotpoint/api", () => {
-  it("exposes the placeholder api boundary", () => {
-    expect(apiBoundary.packageName).toBe("@plotpoint/api");
+  it("exports a createApp factory and prebuilt app", async () => {
+    const { app, createApp } = await import("../index.js");
+
+    expect(typeof createApp).toBe("function");
+    expect(app).toBeDefined();
   });
 });

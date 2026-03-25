@@ -22,6 +22,9 @@
     "zod": "^4.1.11"
   },
   "devDependencies": {
-    "@plotpoint/config": "workspace:*"
+    "@plotpoint/config": "workspace:*",
+    "tsdown": "^0.21.2",
+    "typescript": "6.0.1-rc",
+    "vitest": "^4.0.18"
   }
 }
