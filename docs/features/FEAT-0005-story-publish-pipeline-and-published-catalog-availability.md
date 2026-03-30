@@ -2,11 +2,11 @@
 | --------------- | ----------------------- |
 | **Type**        | PRD                     |
 | **Feature ID**  | FEAT-0005               |
-| **Status**      | Not Started             |
+| **Status**      | In Progress             |
 | **Epic**        | EPIC-0002               |
 | **Owner**       | product-engineering     |
 | **Domains**     | API, Data Model, Engine |
-| **Last synced** | 2026-03-24              |
+| **Last synced** | 2026-03-30              |
 
 # FEAT-0005 - Story Publish Pipeline and Published Catalog Availability
 

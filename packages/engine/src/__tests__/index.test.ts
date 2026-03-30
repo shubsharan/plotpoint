@@ -14,6 +14,11 @@ describe('@plotpoint/engine', () => {
     expect(engine.getBlockDefinition('code').scope).toBe('user');
     expect(typeof engine.validateStoryBundleStructure).toBe('function');
     expect(typeof engine.validateStoryBundleCompatibility).toBe('function');
+    expect(typeof engine.currentEngineMajor).toBe('number');
+  });
+
+  it('exports the StoryRepo port type support surface', () => {
+    expect('currentEngineMajor' in engine).toBe(true);
   });
 
   it('does not export testing fixtures from the root entrypoint', () => {

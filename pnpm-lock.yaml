@@ -26,6 +26,9 @@ importers:
       '@plotpoint/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@plotpoint/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       hono:
         specifier: ^4.10.4
         version: 4.12.9
@@ -68,6 +71,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@plotpoint/engine':
+        specifier: workspace:*
+        version: link:../engine
       drizzle-orm:
         specifier: 1.0.0-beta.19
         version: 1.0.0-beta.19(@electric-sql/pglite@0.3.16)(@types/mssql@9.1.9(@azure/core-client@1.10.1))(mssql@11.0.1(@azure/core-client@1.10.1))(postgres@3.4.8)(zod@4.3.6)

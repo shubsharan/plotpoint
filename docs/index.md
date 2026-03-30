@@ -20,14 +20,14 @@ Use it as the one-page status rollup across epics and features.
 | FEAT-0002 | EPIC-0001 | Cancelled | [features/FEAT-0002-spec-driven-delivery-automation.md](features/FEAT-0002-spec-driven-delivery-automation.md) |
 | FEAT-0003 | EPIC-0002 | Completed | [features/FEAT-0003-story-bundle-schema-and-validation-contract.md](features/FEAT-0003-story-bundle-schema-and-validation-contract.md) |
 | FEAT-0004 | EPIC-0002 | Completed | [features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md](features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md) |
-| FEAT-0005 | EPIC-0002 | Not Started | [features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md](features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
+| FEAT-0005 | EPIC-0002 | In Progress | [features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md](features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
 
 ### Current Implementation Snapshot
 
 - Foundation baseline is implemented: monorepo structure, shared config ownership, and package boundaries are in place.
 - Story bundle contract and schema validation are implemented and enforced for internal story bundle authoring.
 - Draft story storage and internal CRUD API flows are implemented for draft lifecycle work.
-- Story publish pipeline and published catalog availability are planned next under FEAT-0005.
+- Story publish pipeline and published catalog availability are now in progress under FEAT-0005.
 
 ## Update Rules
 
