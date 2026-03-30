@@ -1,12 +1,14 @@
+
 | Field           | Value                   |
 | --------------- | ----------------------- |
 | **Type**        | PRD                     |
 | **Feature ID**  | FEAT-0005               |
-| **Status**      | In Progress             |
+| **Status**      | Completed               |
 | **Epic**        | EPIC-0002               |
 | **Owner**       | product-engineering     |
 | **Domains**     | API, Data Model, Engine |
 | **Last synced** | 2026-03-30              |
+
 
 # FEAT-0005 - Story Publish Pipeline and Published Catalog Availability
 
@@ -58,11 +60,11 @@ This feature closes EPIC-0002 by making publish a real transition instead of an 
 
 ## Acceptance Criteria
 
-- [ ] Invalid drafts cannot be published and return structured publish-time validation failures.
-- [ ] Successful publish creates a distinct published snapshot with version and publish metadata separate from the draft record.
-- [ ] Re-publishing replaces the current published snapshot by creating a new one, not by mutating the existing artifact in place.
-- [ ] Published-catalog list/get behavior is defined and tested without leaking draft-only fields.
-- [ ] `StoryRepo.getBundle` returns published bundle data suitable for later runtime loading.
+- Invalid drafts cannot be published and return structured publish-time validation failures.
+- Successful publish creates a distinct published snapshot with version and publish metadata separate from the draft record.
+- Re-publishing replaces the current published snapshot by creating a new one, not by mutating the existing artifact in place.
+- Published-catalog list/get behavior is defined and tested without leaking draft-only fields.
+- `StoryRepo.getBundle` returns published bundle data suitable for later runtime loading.
 
 ## Test Plan
 
@@ -86,3 +88,4 @@ This feature closes EPIC-0002 by making publish a real transition instead of an 
 ## Open Questions
 
 - None. This feature resolves the epic-level publish-artifact decision by persisting a distinct published snapshot.
+

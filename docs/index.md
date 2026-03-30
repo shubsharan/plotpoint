@@ -7,20 +7,24 @@ Use it as the one-page status rollup across epics and features.
 
 ### Epic Status Rollup
 
-| Epic | Status | Doc |
-| --- | --- | --- |
-| EPIC-0001 | Completed | [epics/EPIC-0001-platform-and-planning-foundation.md](epics/EPIC-0001-platform-and-planning-foundation.md) |
-| EPIC-0002 | In Progress | [epics/EPIC-0002-story-bundle-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-bundle-contract-and-internal-publishing-pipeline.md) |
+
+| Epic      | Status    | Doc                                                                                                                                                    |
+| --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| EPIC-0001 | Completed | [epics/EPIC-0001-platform-and-planning-foundation.md](epics/EPIC-0001-platform-and-planning-foundation.md)                                             |
+| EPIC-0002 | Completed | [epics/EPIC-0002-story-bundle-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-bundle-contract-and-internal-publishing-pipeline.md) |
+
 
 ### Feature Status Rollup
 
-| Feature | Epic | Status | Doc |
-| --- | --- | --- | --- |
-| FEAT-0001 | EPIC-0001 | Completed | [features/FEAT-0001-monorepo-and-shared-config-finalization.md](features/FEAT-0001-monorepo-and-shared-config-finalization.md) |
-| FEAT-0002 | EPIC-0001 | Cancelled | [features/FEAT-0002-spec-driven-delivery-automation.md](features/FEAT-0002-spec-driven-delivery-automation.md) |
-| FEAT-0003 | EPIC-0002 | Completed | [features/FEAT-0003-story-bundle-schema-and-validation-contract.md](features/FEAT-0003-story-bundle-schema-and-validation-contract.md) |
-| FEAT-0004 | EPIC-0002 | Completed | [features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md](features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md) |
-| FEAT-0005 | EPIC-0002 | In Progress | [features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md](features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
+
+| Feature   | Epic      | Status    | Doc                                                                                                                                                                |
+| --------- | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FEAT-0001 | EPIC-0001 | Completed | [features/FEAT-0001-monorepo-and-shared-config-finalization.md](features/FEAT-0001-monorepo-and-shared-config-finalization.md)                                     |
+| FEAT-0002 | EPIC-0001 | Cancelled | [features/FEAT-0002-spec-driven-delivery-automation.md](features/FEAT-0002-spec-driven-delivery-automation.md)                                                     |
+| FEAT-0003 | EPIC-0002 | Completed | [features/FEAT-0003-story-bundle-schema-and-validation-contract.md](features/FEAT-0003-story-bundle-schema-and-validation-contract.md)                             |
+| FEAT-0004 | EPIC-0002 | Completed | [features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md](features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)                     |
+| FEAT-0005 | EPIC-0002 | Completed | [features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md](features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
+
 
 ### Current Implementation Snapshot
 
@@ -73,3 +77,4 @@ Use it as the one-page status rollup across epics and features.
 
 - [adrs/ADR-story-bundle-object-storage-links.md](adrs/ADR-story-bundle-object-storage-links.md)
 - [adrs/_template.md](adrs/_template.md)
+
