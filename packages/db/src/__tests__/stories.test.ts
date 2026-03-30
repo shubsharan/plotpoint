@@ -5,9 +5,12 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStoryQueries, type StoryQueries } from '../index.js';
-import { stories } from '../schema/stories.js';
+import { storyPublishedSnapshots, stories } from '../schema/stories.js';
 
-const schema = { stories } as const;
+const schema = {
+  stories,
+  storyPublishedSnapshots,
+} as const;
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const migrationsDirectory = join(currentDirectory, '../../supabase/migrations');
 
@@ -33,11 +36,25 @@ const loadMigrations = async (): Promise<string[]> => {
     throw new Error('Expected at least one Drizzle SQL migration in packages/db/supabase/migrations.');
   }
 
-  return Promise.all(
-    migrationFolders.map((migrationFolder) =>
-      readFile(join(migrationsDirectory, migrationFolder, 'migration.sql'), 'utf8'),
-    ),
+  const migrations = await Promise.all(
+    migrationFolders.map(async (migrationFolder) => {
+      try {
+        return await readFile(join(migrationsDirectory, migrationFolder, 'migration.sql'), 'utf8');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          return null;
+        }
+
+        throw error;
+      }
+    }),
   );
+  const sqlMigrations = migrations.filter((migration): migration is string => migration !== null);
+  if (sqlMigrations.length === 0) {
+    throw new Error('Expected at least one migration.sql in packages/db/supabase/migrations.');
+  }
+
+  return sqlMigrations;
 };
 
 const setupDatabase = async (): Promise<{
@@ -76,6 +93,7 @@ describe('@plotpoint/db stories', () => {
   });
 
   beforeEach(async () => {
+    await testDatabase.delete(storyPublishedSnapshots);
     await testDatabase.delete(stories);
   });
 
@@ -239,7 +257,7 @@ describe('@plotpoint/db stories', () => {
     });
   });
 
-  it('returns null/false for not-found reads, updates, and deletes', async () => {
+  it('returns null/not_found for not-found reads, updates, and deletes', async () => {
     const missingStory = await storyQueries.getStory('story-missing');
 
     expect(missingStory).toBeNull();
@@ -259,7 +277,7 @@ describe('@plotpoint/db stories', () => {
       }),
     ).resolves.toBeNull();
 
-    await expect(storyQueries.deleteStory('story-missing')).resolves.toBe(false);
+    await expect(storyQueries.deleteStory('story-missing')).resolves.toBe('not_found');
   });
 
   it('rejects patch requests with no writable fields', async () => {
@@ -273,7 +291,190 @@ describe('@plotpoint/db stories', () => {
   it('deletes existing stories explicitly', async () => {
     await storyQueries.createStory(createStoryInput());
 
-    await expect(storyQueries.deleteStory('story-the-stolen-ledger')).resolves.toBe(true);
+    await expect(storyQueries.deleteStory('story-the-stolen-ledger')).resolves.toBe('deleted');
     await expect(storyQueries.getStory('story-the-stolen-ledger')).resolves.toBeNull();
+  });
+
+  it('publishes stories by creating immutable snapshots and advancing current pointer', async () => {
+    await storyQueries.createStory(createStoryInput());
+
+    const firstPublish = await storyQueries.publishStory({
+      engineMajor: 0,
+      publishedAt: new Date('2026-03-23T16:00:00.000Z'),
+      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      snapshotId: 'snapshot-v1',
+      storyId: 'story-the-stolen-ledger',
+      summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
+      title: 'The Stolen Ledger',
+    });
+
+    expect(firstPublish).toMatchObject({
+      storyId: 'story-the-stolen-ledger',
+      status: 'published',
+      snapshotId: 'snapshot-v1',
+      engineMajor: 0,
+      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+    });
+
+    const secondPublish = await storyQueries.publishStory({
+      engineMajor: 0,
+      publishedAt: new Date('2026-03-23T17:00:00.000Z'),
+      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v2.json',
+      snapshotId: 'snapshot-v2',
+      storyId: 'story-the-stolen-ledger',
+      summary: 'Updated published summary',
+      title: 'The Stolen Ledger Updated',
+    });
+
+    expect(secondPublish).toMatchObject({
+      snapshotId: 'snapshot-v2',
+      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v2.json',
+      status: 'published',
+    });
+
+    const story = await storyQueries.getStory('story-the-stolen-ledger');
+    expect(story).toMatchObject({
+      status: 'published',
+      currentPublishedSnapshotId: 'snapshot-v2',
+    });
+    expect(story?.lastPublishedAt?.toISOString()).toBe('2026-03-23T17:00:00.000Z');
+
+    const publishedList = await storyQueries.listPublishedStories();
+    expect(publishedList).toMatchObject([
+      {
+        id: 'story-the-stolen-ledger',
+        status: 'published',
+        title: 'The Stolen Ledger Updated',
+        summary: 'Updated published summary',
+        publishedAt: new Date('2026-03-23T17:00:00.000Z'),
+      },
+    ]);
+  });
+
+  it('returns published-catalog reads only for published stories', async () => {
+    await storyQueries.createStory({
+      ...createStoryInput(),
+      id: 'story-draft-only',
+      title: 'Draft Only Story',
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-draft-only/v1.json',
+    });
+    await storyQueries.createStory({
+      ...createStoryInput(),
+      id: 'story-published',
+      title: 'Published Story',
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-published/v1.json',
+    });
+
+    await storyQueries.publishStory({
+      engineMajor: 0,
+      publishedAt: new Date('2026-03-23T18:00:00.000Z'),
+      publishedBundleUri: 's3://plotpoint-stories/published/story-published/v1.json',
+      snapshotId: 'snapshot-published',
+      storyId: 'story-published',
+      summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
+      title: 'Published Story',
+    });
+
+    await expect(storyQueries.getPublishedStory('story-draft-only')).resolves.toBeNull();
+    await expect(storyQueries.getPublishedStory('story-published')).resolves.toMatchObject({
+      id: 'story-published',
+      status: 'published',
+      publishedAt: new Date('2026-03-23T18:00:00.000Z'),
+    });
+    await expect(storyQueries.listPublishedStories()).resolves.toMatchObject([
+      {
+        id: 'story-published',
+        status: 'published',
+      },
+    ]);
+  });
+
+  it('keeps published status on draft edits after publish', async () => {
+    await storyQueries.createStory(createStoryInput());
+    await storyQueries.publishStory({
+      engineMajor: 0,
+      publishedAt: new Date('2026-03-23T19:00:00.000Z'),
+      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      snapshotId: 'snapshot-v1',
+      storyId: 'story-the-stolen-ledger',
+      summary: 'Published summary v1',
+      title: 'Published title v1',
+    });
+
+    await storyQueries.updateStory({
+      draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json',
+      id: 'story-the-stolen-ledger',
+      summary: 'Updated summary',
+      title: 'Updated title',
+    });
+
+    const patched = await storyQueries.patchStory({
+      id: 'story-the-stolen-ledger',
+      title: 'Updated title again',
+    });
+    expect(patched).toMatchObject({
+      status: 'published',
+      currentPublishedSnapshotId: 'snapshot-v1',
+    });
+
+    await expect(storyQueries.getPublishedStory('story-the-stolen-ledger')).resolves.toMatchObject({
+      id: 'story-the-stolen-ledger',
+      title: 'Published title v1',
+      summary: 'Published summary v1',
+      status: 'published',
+    });
+    await expect(storyQueries.listPublishedStories()).resolves.toMatchObject([
+      {
+        id: 'story-the-stolen-ledger',
+        title: 'Published title v1',
+        summary: 'Published summary v1',
+        status: 'published',
+      },
+    ]);
+  });
+
+  it('exposes current published bundle reference for runtime lookup', async () => {
+    await storyQueries.createStory(createStoryInput());
+
+    await expect(
+      storyQueries.getCurrentPublishedStoryBundleRef('story-the-stolen-ledger'),
+    ).resolves.toBeNull();
+
+    await storyQueries.publishStory({
+      engineMajor: 0,
+      publishedAt: new Date('2026-03-23T20:00:00.000Z'),
+      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      snapshotId: 'snapshot-runtime',
+      storyId: 'story-the-stolen-ledger',
+      summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
+      title: 'The Stolen Ledger',
+    });
+
+    await expect(
+      storyQueries.getCurrentPublishedStoryBundleRef('story-the-stolen-ledger'),
+    ).resolves.toMatchObject({
+      storyId: 'story-the-stolen-ledger',
+      snapshotId: 'snapshot-runtime',
+      engineMajor: 0,
+      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      publishedAt: new Date('2026-03-23T20:00:00.000Z'),
+    });
+  });
+
+  it('blocks deleting stories with published snapshots', async () => {
+    await storyQueries.createStory(createStoryInput());
+    await storyQueries.publishStory({
+      engineMajor: 0,
+      publishedAt: new Date('2026-03-23T21:00:00.000Z'),
+      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      snapshotId: 'snapshot-delete-guard',
+      storyId: 'story-the-stolen-ledger',
+      summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
+      title: 'The Stolen Ledger',
+    });
+
+    await expect(storyQueries.deleteStory('story-the-stolen-ledger')).resolves.toBe(
+      'has_published_snapshots',
+    );
   });
 });

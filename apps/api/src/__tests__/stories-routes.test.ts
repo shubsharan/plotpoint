@@ -2,17 +2,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../index.js';
 import type { StoriesRouteDeps } from '../routes/stories/route.js';
 
+type FunctionStoryDeps = Omit<StoriesRouteDeps, 'currentEngineMajor'>;
 type StoriesRouteDepsMocks = {
-  [Key in keyof StoriesRouteDeps]: ReturnType<typeof vi.fn<StoriesRouteDeps[Key]>>;
+  currentEngineMajor: number;
+} & {
+  [Key in keyof FunctionStoryDeps]: ReturnType<typeof vi.fn<FunctionStoryDeps[Key]>>;
 };
 
 const createRouteDeps = (): StoriesRouteDepsMocks => ({
+  currentEngineMajor: 0,
   createStory: vi.fn<StoriesRouteDeps['createStory']>(),
   deleteStory: vi.fn<StoriesRouteDeps['deleteStory']>(),
+  getPublishedStory: vi.fn<StoriesRouteDeps['getPublishedStory']>(),
   getStory: vi.fn<StoriesRouteDeps['getStory']>(),
+  listPublishedStories: vi.fn<StoriesRouteDeps['listPublishedStories']>(),
   listStories: vi.fn<StoriesRouteDeps['listStories']>(),
   patchStory: vi.fn<StoriesRouteDeps['patchStory']>(),
+  publishStory: vi.fn<StoriesRouteDeps['publishStory']>(),
+  deletePublishedStoryBundle: vi.fn<StoriesRouteDeps['deletePublishedStoryBundle']>(),
+  readStoryBundle: vi.fn<StoriesRouteDeps['readStoryBundle']>(),
   updateStory: vi.fn<StoriesRouteDeps['updateStory']>(),
+  writePublishedStoryBundle: vi.fn<StoriesRouteDeps['writePublishedStoryBundle']>(),
 });
 
 const buildStoryRow = (
@@ -31,9 +41,72 @@ const buildStoryRow = (
   summary: 'Track the missing ledger.',
   status: 'draft' as const,
   draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
+  currentPublishedSnapshotId: null,
+  lastPublishedAt: null,
   createdAt: new Date('2026-03-24T10:00:00.000Z'),
   updatedAt: new Date('2026-03-24T10:30:00.000Z'),
   ...overrides,
+});
+
+const buildPublishedStory = (
+  overrides?: Partial<{
+    id: string;
+    publishedAt: Date;
+    summary: string | null;
+    title: string;
+  }>,
+) => ({
+  id: 'story-the-stolen-ledger',
+  publishedAt: new Date('2026-03-30T10:35:00.000Z'),
+  status: 'published' as const,
+  summary: 'Track the missing ledger.',
+  title: 'The Stolen Ledger',
+  ...overrides,
+});
+
+const buildValidStoryBundle = (storyId = 'story-the-stolen-ledger') => ({
+  metadata: {
+    storyId,
+    title: 'The Stolen Ledger',
+    summary: 'Track the missing ledger.',
+  },
+  roles: [],
+  graph: {
+    entryNodeId: 'foyer',
+    nodes: [
+      {
+        id: 'foyer',
+        title: 'Gallery Foyer',
+        blocks: [
+          {
+            id: 'briefing',
+            type: 'text',
+            config: {
+              document: {
+                children: [
+                  {
+                    children: [
+                      {
+                        text: 'Briefing note',
+                        type: 'text',
+                      },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'doc',
+              },
+            },
+          },
+        ],
+        edges: [],
+      },
+    ],
+  },
+  version: {
+    schemaVersion: 1,
+    engineMajor: null,
+  },
 });
 
 const createJsonRequest = (
@@ -82,6 +155,8 @@ describe('@plotpoint/api story routes', () => {
       summary: story.summary,
       status: 'draft',
       draftBundleUri: story.draftBundleUri,
+      currentPublishedSnapshotId: null,
+      lastPublishedAt: null,
       createdAt: '2026-03-24T10:00:00.000Z',
       updatedAt: '2026-03-24T10:30:00.000Z',
     });
@@ -164,6 +239,8 @@ describe('@plotpoint/api story routes', () => {
         summary: 'Track the missing ledger.',
         status: 'draft',
         draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
+        currentPublishedSnapshotId: null,
+        lastPublishedAt: null,
         createdAt: '2026-03-24T10:00:00.000Z',
         updatedAt: '2026-03-24T12:00:00.000Z',
       },
@@ -173,6 +250,8 @@ describe('@plotpoint/api story routes', () => {
         summary: 'Track the missing ledger.',
         status: 'draft',
         draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
+        currentPublishedSnapshotId: null,
+        lastPublishedAt: null,
         createdAt: '2026-03-24T10:00:00.000Z',
         updatedAt: '2026-03-24T11:00:00.000Z',
       },
@@ -203,6 +282,54 @@ describe('@plotpoint/api story routes', () => {
       error: {
         code: 'story_not_found',
         storyId: 'story-missing',
+      },
+    });
+  });
+
+  it('lists and gets published catalog view via query param', async () => {
+    deps.listPublishedStories.mockResolvedValueOnce([
+      buildPublishedStory({
+        id: 'story-published',
+      }),
+    ]);
+    deps.getPublishedStory.mockResolvedValueOnce(
+      buildPublishedStory({
+        id: 'story-published',
+      }),
+    );
+
+    let response = await createJsonRequest(deps, '/stories?view=published', 'GET');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual([
+      {
+        id: 'story-published',
+        publishedAt: '2026-03-30T10:35:00.000Z',
+        status: 'published',
+        summary: 'Track the missing ledger.',
+        title: 'The Stolen Ledger',
+      },
+    ]);
+    expect(deps.listPublishedStories).toHaveBeenCalledOnce();
+
+    response = await createJsonRequest(deps, '/stories/story-published?view=published', 'GET');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      id: 'story-published',
+      publishedAt: '2026-03-30T10:35:00.000Z',
+      status: 'published',
+      summary: 'Track the missing ledger.',
+      title: 'The Stolen Ledger',
+    });
+    expect(deps.getPublishedStory).toHaveBeenCalledWith('story-published');
+  });
+
+  it('returns 400 for invalid story view query', async () => {
+    const response = await createJsonRequest(deps, '/stories?view=invalid', 'GET');
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'validation_error',
       },
     });
   });
@@ -312,20 +439,239 @@ describe('@plotpoint/api story routes', () => {
     });
   });
 
+  it('publishes a story from draft bundle and returns snapshot metadata', async () => {
+    deps.getStory.mockResolvedValueOnce(
+      buildStoryRow({
+        draftBundleUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
+        id: 'story-publish',
+      }),
+    );
+    deps.readStoryBundle.mockResolvedValueOnce(buildValidStoryBundle('story-publish'));
+    deps.writePublishedStoryBundle.mockResolvedValueOnce(
+      's3://plotpoint-stories/published/story-publish/v1.json',
+    );
+    deps.publishStory.mockResolvedValueOnce({
+      engineMajor: 0,
+      publishedAt: new Date('2026-03-30T10:35:00.000Z'),
+      publishedBundleUri: 's3://plotpoint-stories/published/story-publish/v1.json',
+      snapshotId: 'snapshot-1',
+      status: 'published',
+      storyId: 'story-publish',
+    });
+
+    const response = await createJsonRequest(deps, '/stories/story-publish/publish', 'POST');
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual({
+      engineMajor: 0,
+      publishedAt: '2026-03-30T10:35:00.000Z',
+      publishedBundleUri: 's3://plotpoint-stories/published/story-publish/v1.json',
+      snapshotId: 'snapshot-1',
+      status: 'published',
+      storyId: 'story-publish',
+    });
+    expect(deps.readStoryBundle).toHaveBeenCalledWith(
+      's3://plotpoint-stories/drafts/story-publish/v1.json',
+    );
+    expect(deps.writePublishedStoryBundle).toHaveBeenCalledWith({
+      bundle: expect.objectContaining({
+        version: {
+          schemaVersion: 1,
+          engineMajor: 0,
+        },
+      }),
+      publishedAt: expect.any(Date),
+      storyId: 'story-publish',
+    });
+    expect(deps.publishStory).toHaveBeenCalledWith({
+      engineMajor: 0,
+      publishedAt: expect.any(Date),
+      publishedBundleUri: 's3://plotpoint-stories/published/story-publish/v1.json',
+      storyId: 'story-publish',
+      summary: 'Track the missing ledger.',
+      title: 'The Stolen Ledger',
+    });
+    expect(deps.deletePublishedStoryBundle).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 when publish validation fails', async () => {
+    deps.getStory.mockResolvedValueOnce(buildStoryRow());
+    deps.readStoryBundle.mockResolvedValueOnce({});
+
+    const response = await createJsonRequest(
+      deps,
+      '/stories/story-the-stolen-ledger/publish',
+      'POST',
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'publish_validation_failed',
+        storyId: 'story-the-stolen-ledger',
+      },
+    });
+    expect(deps.writePublishedStoryBundle).not.toHaveBeenCalled();
+    expect(deps.publishStory).not.toHaveBeenCalled();
+  });
+
+  it('returns 422 when bundle metadata storyId does not match route story id', async () => {
+    deps.getStory.mockResolvedValueOnce(
+      buildStoryRow({
+        draftBundleUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
+        id: 'story-publish',
+      }),
+    );
+    deps.readStoryBundle.mockResolvedValueOnce(buildValidStoryBundle('story-other'));
+
+    const response = await createJsonRequest(deps, '/stories/story-publish/publish', 'POST');
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'publish_validation_failed',
+        issues: [
+          {
+            code: 'story-id-mismatch',
+            layer: 'structure',
+            path: ['metadata', 'storyId'],
+          },
+        ],
+        storyId: 'story-publish',
+      },
+    });
+    expect(deps.writePublishedStoryBundle).not.toHaveBeenCalled();
+    expect(deps.publishStory).not.toHaveBeenCalled();
+  });
+
+  it('rolls back uploaded bundle and returns 404 when publish persistence returns null', async () => {
+    deps.getStory.mockResolvedValueOnce(
+      buildStoryRow({
+        draftBundleUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
+        id: 'story-publish',
+      }),
+    );
+    deps.readStoryBundle.mockResolvedValueOnce(buildValidStoryBundle('story-publish'));
+    deps.writePublishedStoryBundle.mockResolvedValueOnce(
+      's3://plotpoint-stories/published/story-publish/v1.json',
+    );
+    deps.publishStory.mockResolvedValueOnce(null);
+
+    const response = await createJsonRequest(deps, '/stories/story-publish/publish', 'POST');
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'story_not_found',
+        storyId: 'story-publish',
+      },
+    });
+    expect(deps.deletePublishedStoryBundle).toHaveBeenCalledWith(
+      's3://plotpoint-stories/published/story-publish/v1.json',
+    );
+  });
+
+  it('rolls back uploaded bundle and surfaces 500 when publish persistence throws', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    deps.getStory.mockResolvedValueOnce(
+      buildStoryRow({
+        draftBundleUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
+        id: 'story-publish',
+      }),
+    );
+    deps.readStoryBundle.mockResolvedValueOnce(buildValidStoryBundle('story-publish'));
+    deps.writePublishedStoryBundle.mockResolvedValueOnce(
+      's3://plotpoint-stories/published/story-publish/v1.json',
+    );
+    deps.publishStory.mockRejectedValueOnce(new Error('database write failed'));
+
+    try {
+      const response = await createJsonRequest(deps, '/stories/story-publish/publish', 'POST');
+      expect(response.status).toBe(500);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+
+    expect(deps.deletePublishedStoryBundle).toHaveBeenCalledWith(
+      's3://plotpoint-stories/published/story-publish/v1.json',
+    );
+  });
+
+  it('surfaces rollback failures instead of returning 404', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    deps.getStory.mockResolvedValueOnce(
+      buildStoryRow({
+        draftBundleUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
+        id: 'story-publish',
+      }),
+    );
+    deps.readStoryBundle.mockResolvedValueOnce(buildValidStoryBundle('story-publish'));
+    deps.writePublishedStoryBundle.mockResolvedValueOnce(
+      's3://plotpoint-stories/published/story-publish/v1.json',
+    );
+    deps.publishStory.mockResolvedValueOnce(null);
+    deps.deletePublishedStoryBundle.mockRejectedValueOnce(new Error('storage cleanup failed'));
+
+    try {
+      const response = await createJsonRequest(deps, '/stories/story-publish/publish', 'POST');
+      expect(response.status).toBe(500);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it('surfaces rollback failures when publish persistence throws', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    deps.getStory.mockResolvedValueOnce(
+      buildStoryRow({
+        draftBundleUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
+        id: 'story-publish',
+      }),
+    );
+    deps.readStoryBundle.mockResolvedValueOnce(buildValidStoryBundle('story-publish'));
+    deps.writePublishedStoryBundle.mockResolvedValueOnce(
+      's3://plotpoint-stories/published/story-publish/v1.json',
+    );
+    deps.publishStory.mockRejectedValueOnce(new Error('database write failed'));
+    deps.deletePublishedStoryBundle.mockRejectedValueOnce(new Error('storage cleanup failed'));
+
+    try {
+      const response = await createJsonRequest(deps, '/stories/story-publish/publish', 'POST');
+      expect(response.status).toBe(500);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   it('deletes a story and returns 404 when missing', async () => {
-    deps.deleteStory.mockResolvedValueOnce(true);
+    deps.deleteStory.mockResolvedValueOnce('deleted');
     let response = await createJsonRequest(deps, '/stories/story-a', 'DELETE');
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ deleted: true });
     expect(deps.deleteStory).toHaveBeenCalledWith('story-a');
 
-    deps.deleteStory.mockResolvedValueOnce(false);
+    deps.deleteStory.mockResolvedValueOnce('not_found');
     response = await createJsonRequest(deps, '/stories/story-missing', 'DELETE');
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: {
         code: 'story_not_found',
         storyId: 'story-missing',
+      },
+    });
+  });
+
+  it('returns 409 when deleting a story with published snapshots', async () => {
+    deps.deleteStory.mockResolvedValueOnce('has_published_snapshots');
+
+    const response = await createJsonRequest(deps, '/stories/story-live', 'DELETE');
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'story_delete_conflict',
+        reason: 'published_snapshots_exist',
+        storyId: 'story-live',
       },
     });
   });
