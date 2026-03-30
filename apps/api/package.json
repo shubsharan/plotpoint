@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "echo 'api dev not yet implemented'",
-    "build": "pnpm --filter @plotpoint/db build && tsc -p tsconfig.json",
-    "typecheck": "pnpm --filter @plotpoint/db build && tsc --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
     "lint": "oxlint -c ../../packages/config/oxlint.json src/",
     "lint:fix": "oxlint -c ../../packages/config/oxlint.json --fix src/",
-    "test": "pnpm --filter @plotpoint/db build && vitest run"
+    "test": "vitest run"
   },
   "dependencies": {
     "@plotpoint/db": "workspace:*",
+    "@plotpoint/engine": "workspace:*",
     "hono": "^4.10.4",
     "zod": "^4.1.11"
   },

@@ -24,6 +24,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@plotpoint/engine": "workspace:*",
     "drizzle-orm": "1.0.0-beta.19",
     "postgres": "^3.4.7",
     "zod": "^4.1.11"

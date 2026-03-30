@@ -13,21 +13,6 @@ Narrative-first, location-based experience platform. Players run co-op stories (
 - **Testing:** Vitest
 - **Language:** TypeScript (strict)
 
-## Notion-First Workflow
-
-Notion is the source of truth for all product documentation. The repo receives docs via sync/automation workflows. Every piece of work follows: **Roadmap -> current Epic -> Architecture (as needed for the current epic) -> Feature PRD -> branch -> implement -> review**.
-
-### Document Hierarchy
-
-| Notion artifact                               | Purpose                                                                  | Repo location                     |
-| --------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------- |
-| **Roadmap**                                   | Ordered MVP epic queue and high-level sequencing                         | `docs/product/product-roadmap.md` |
-| **Runbook**                                   | Operational guides and repeatable delivery workflows                     | `docs/runbooks/{runbook-slug}.md` |
-| **Epic**                                      | Broader initiative with strategic and sequencing context                 | `docs/epics/{epic-slug}.md`       |
-| **Feature PRD**                               | Actionable implementation unit with requirements and acceptance criteria | `docs/features/{feature-slug}.md` |
-| **ADR** (Docs DB, Type=ADR)                   | Architecture decision record                                             | `docs/adrs/ADR-{slug}.md`         |
-| **Architecture** (Docs DB, Type=Architecture) | System design docs                                                       | `docs/architecture/{slug}.md`     |
-
 ### Documentation Structure
 
 ```
@@ -66,3 +51,4 @@ docs/
 - No default exports. Use named exports everywhere.
 - Barrel exports (`index.ts`) only at the package root level. No nested barrel files — they increase circular dependency risk.
 - Test files go in `__tests__/` folders, not next to source files (e.g., `src/__tests__/foo.test.ts`, not `src/foo.test.ts`).
+- Don't generate migration files manually. Use drizzle to generate migrations from schema files.
