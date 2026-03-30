@@ -4,8 +4,6 @@
 | **Type**             | Epic                |
 | **Epic ID**          | EPIC-0002           |
 | **Status**           | Completed           |
-| **Owner**            | product-engineering |
-| **Target milestone** | MVP-P1              |
 | **Last synced**      | 2026-03-24          |
 
 
@@ -78,4 +76,3 @@ Bundle payload persistence uses object storage pointers in relational tables, as
 ## Open Questions
 
 - None. `FEAT-0005` persists a distinct published bundle artifact so draft content stays mutable while runtime consumers load stable published snapshots.
-

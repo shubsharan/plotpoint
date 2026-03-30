@@ -3,8 +3,6 @@
 | **Type**             | Epic                |
 | **Epic ID**          | EPIC-0001           |
 | **Status**           | Completed           |
-| **Owner**            | product-engineering |
-| **Target milestone** | MVP-P0              |
 | **Last synced**      | 2026-03-19          |
 
 # EPIC-0001 - Platform and Planning Foundation

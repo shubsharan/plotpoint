@@ -5,7 +5,6 @@
 | **Feature ID**  | FEAT-0005               |
 | **Status**      | Completed               |
 | **Epic**        | EPIC-0002               |
-| **Owner**       | product-engineering     |
 | **Domains**     | API, Data Model, Engine |
 | **Last synced** | 2026-03-30              |
 
@@ -88,4 +87,3 @@ This feature closes EPIC-0002 by making publish a real transition instead of an 
 ## Open Questions
 
 - None. This feature resolves the epic-level publish-artifact decision by persisting a distinct published snapshot.
-

@@ -4,7 +4,6 @@
 | **Feature ID**  | FEAT-0004           |
 | **Status**      | Completed           |
 | **Epic**        | EPIC-0002           |
-| **Owner**       | product-engineering |
 | **Domains**     | API, Data Model     |
 | **Last synced** | 2026-03-25          |
 

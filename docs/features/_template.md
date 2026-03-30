@@ -4,7 +4,6 @@
 | **Feature ID**  | FEAT-XXXX        |
 | **Status**      | Not Started      |
 | **Epic**        | EPIC-XXXX        |
-| **Owner**       | team-or-owner    |
 | **Domains**     | DomainA, DomainB |
 | **Last synced** | YYYY-MM-DD       |
 
@@ -13,8 +12,6 @@
 ## Goal
 
 What this feature delivers and why.
-
-Allowed status values: `Not Started`, `In Progress`, `In Review`, `Completed`, `Cancelled`.
 
 ## Background and Context
 

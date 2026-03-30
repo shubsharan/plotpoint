@@ -12,6 +12,7 @@ Use it as the one-page status rollup across epics and features.
 | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | EPIC-0001 | Completed | [epics/EPIC-0001-platform-and-planning-foundation.md](epics/EPIC-0001-platform-and-planning-foundation.md)                                             |
 | EPIC-0002 | Completed | [epics/EPIC-0002-story-bundle-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-bundle-contract-and-internal-publishing-pipeline.md) |
+| EPIC-0003 | Planned   | [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)                     |
 
 
 ### Feature Status Rollup
@@ -24,6 +25,9 @@ Use it as the one-page status rollup across epics and features.
 | FEAT-0003 | EPIC-0002 | Completed | [features/FEAT-0003-story-bundle-schema-and-validation-contract.md](features/FEAT-0003-story-bundle-schema-and-validation-contract.md)                             |
 | FEAT-0004 | EPIC-0002 | Completed | [features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md](features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)                     |
 | FEAT-0005 | EPIC-0002 | Completed | [features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md](features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
+| FEAT-0006 | EPIC-0003 | Not Started | [features/FEAT-0006-runtime-state-model-and-engine-public-surface.md](features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)                       |
+| FEAT-0007 | EPIC-0003 | Not Started | [features/FEAT-0007-block-registry-and-action-executor.md](features/FEAT-0007-block-registry-and-action-executor.md)                                             |
+| FEAT-0008 | EPIC-0003 | Not Started | [features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md](features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)                 |
 
 
 ### Current Implementation Snapshot
@@ -31,7 +35,8 @@ Use it as the one-page status rollup across epics and features.
 - Foundation baseline is implemented: monorepo structure, shared config ownership, and package boundaries are in place.
 - Story bundle contract and schema validation are implemented and enforced for internal story bundle authoring.
 - Draft story storage and internal CRUD API flows are implemented for draft lifecycle work.
-- Story publish pipeline and published catalog availability are now in progress under FEAT-0005.
+- Story publish pipeline and published catalog availability are implemented under FEAT-0005.
+- The next queued epic is EPIC-0003, which defines headless runtime execution semantics inside `packages/engine`.
 
 ## Update Rules
 
@@ -58,6 +63,7 @@ Use it as the one-page status rollup across epics and features.
 
 - [epics/EPIC-0001-platform-and-planning-foundation.md](epics/EPIC-0001-platform-and-planning-foundation.md)
 - [epics/EPIC-0002-story-bundle-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-bundle-contract-and-internal-publishing-pipeline.md)
+- [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)
 - [epics/_template.md](epics/_template.md)
 
 ### `features/`
@@ -67,6 +73,9 @@ Use it as the one-page status rollup across epics and features.
 - [features/FEAT-0003-story-bundle-schema-and-validation-contract.md](features/FEAT-0003-story-bundle-schema-and-validation-contract.md)
 - [features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md](features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)
 - [features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md](features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md)
+- [features/FEAT-0006-runtime-state-model-and-engine-public-surface.md](features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)
+- [features/FEAT-0007-block-registry-and-action-executor.md](features/FEAT-0007-block-registry-and-action-executor.md)
+- [features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md](features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)
 - [features/_template.md](features/_template.md)
 
 ### `architecture/`
@@ -77,4 +86,3 @@ Use it as the one-page status rollup across epics and features.
 
 - [adrs/ADR-story-bundle-object-storage-links.md](adrs/ADR-story-bundle-object-storage-links.md)
 - [adrs/_template.md](adrs/_template.md)
-

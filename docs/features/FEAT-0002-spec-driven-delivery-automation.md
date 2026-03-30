@@ -4,7 +4,6 @@
 | **Feature ID**  | FEAT-0002                   |
 | **Status**      | Cancelled                   |
 | **Epic**        | EPIC-0001                   |
-| **Owner**       | product-engineering         |
 | **Domains**     | Docs, Tooling, Git Workflow |
 | **Last synced** | 2026-03-19                  |
 
