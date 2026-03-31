@@ -1,11 +1,13 @@
-| Field           | Value       |
-| --------------- | ----------- |
-| **Type**        | PRD         |
-| **Feature ID**  | FEAT-0006   |
-| **Status**      | In Progress |
-| **Epic**        | EPIC-0003   |
-| **Domains**     | Engine      |
-| **Last synced** | 2026-03-31  |
+
+| Field           | Value      |
+| --------------- | ---------- |
+| **Type**        | PRD        |
+| **Feature ID**  | FEAT-0006  |
+| **Status**      | Completed  |
+| **Epic**        | EPIC-0003  |
+| **Domains**     | Engine     |
+| **Last synced** | 2026-03-31 |
+
 
 # FEAT-0006 - Runtime State Model and Engine Public Surface
 
@@ -162,3 +164,4 @@ type Engine = {
 - Resolved: FEAT-0006 owns both the resumable `RuntimeState` boundary and the outer `RuntimeSnapshot` result contract, while FEAT-0008 later defines how traversal populates progression fields such as `availableEdges`.
 - Resolved: runtime state is pinned to a published package version via `storyPackageVersionId`; explicit mid-game upgrades remain a separate session orchestration action.
 - Deferred follow-up [DF-0001]: define session upgrade policy for pinned published package versions. Default policy is pin at game start, allow explicit session/API-triggered upgrades, and reject upgrades when runtime compatibility checks fail so the session remains on its prior version. | Owner: EPIC-0003 | Trigger: Session orchestration scope is activated for runtime persistence/resume work. | Exit criteria: A merged feature implementation and docs update define explicit upgrade flow, compatibility failure behavior, and persistence semantics.
+
