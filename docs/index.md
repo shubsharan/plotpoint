@@ -18,6 +18,7 @@ Use it as the one-page status rollup across epics and features.
 ### Feature Status Rollup
 
 
+<<<<<<< HEAD
 | Feature   | Epic      | Status      | Doc                                                                                                                                                                |
 | --------- | --------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | FEAT-0001 | EPIC-0001 | Completed   | [features/FEAT-0001-monorepo-and-shared-config-finalization.md](features/FEAT-0001-monorepo-and-shared-config-finalization.md)                                     |
@@ -28,6 +29,18 @@ Use it as the one-page status rollup across epics and features.
 | FEAT-0006 | EPIC-0003 | Completed   | [features/FEAT-0006-runtime-state-model-and-engine-public-surface.md](features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)                         |
 | FEAT-0007 | EPIC-0003 | In Progress | [features/FEAT-0007-block-registry-and-action-executor.md](features/FEAT-0007-block-registry-and-action-executor.md)                                               |
 | FEAT-0008 | EPIC-0003 | Not Started | [features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md](features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)                   |
+=======
+| Feature   | Epic      | Status    | Doc                                                                                                                                                                |
+| --------- | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FEAT-0001 | EPIC-0001 | Completed | [features/FEAT-0001-monorepo-and-shared-config-finalization.md](features/FEAT-0001-monorepo-and-shared-config-finalization.md)                                     |
+| FEAT-0002 | EPIC-0001 | Cancelled | [features/FEAT-0002-spec-driven-delivery-automation.md](features/FEAT-0002-spec-driven-delivery-automation.md)                                                     |
+| FEAT-0003 | EPIC-0002 | Completed | [features/FEAT-0003-story-package-schema-and-validation-contract.md](features/FEAT-0003-story-package-schema-and-validation-contract.md)                             |
+| FEAT-0004 | EPIC-0002 | Completed | [features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md](features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)                     |
+| FEAT-0005 | EPIC-0002 | Completed | [features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md](features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
+| FEAT-0006 | EPIC-0003 | In Progress | [features/FEAT-0006-runtime-state-model-and-engine-public-surface.md](features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)                       |
+| FEAT-0007 | EPIC-0003 | In Progress | [features/FEAT-0007-block-registry-and-action-executor.md](features/FEAT-0007-block-registry-and-action-executor.md)                                             |
+| FEAT-0008 | EPIC-0003 | Not Started | [features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md](features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)                 |
+>>>>>>> 7e52ef7 (docs: sync FEAT-0007 status in docs index)
 
 
 ### Current Implementation Snapshot
