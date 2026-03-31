@@ -2,10 +2,10 @@
 | --------------- | ----------- |
 | **Type**        | PRD         |
 | **Feature ID**  | FEAT-0007   |
-| **Status**      | Not Started |
+| **Status**      | In Progress |
 | **Epic**        | EPIC-0003   |
 | **Domains**     | Engine      |
-| **Last synced** | 2026-03-30  |
+| **Last synced** | 2026-03-31  |
 
 # FEAT-0007 - Block Registry and Action Executor
 
