@@ -12,7 +12,7 @@ Use it as the one-page status rollup across epics and features.
 | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | EPIC-0001 | Completed | [epics/EPIC-0001-platform-and-planning-foundation.md](epics/EPIC-0001-platform-and-planning-foundation.md)                                             |
 | EPIC-0002 | Completed | [epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md) |
-| EPIC-0003 | Planned   | [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)                     |
+| EPIC-0003 | In Progress | [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)                     |
 
 
 ### Feature Status Rollup
@@ -36,7 +36,7 @@ Use it as the one-page status rollup across epics and features.
 - Story package contract and schema validation are implemented and enforced for internal story package authoring.
 - Draft story storage and internal CRUD API flows are implemented for draft lifecycle work.
 - Story publish pipeline and published catalog availability are implemented under FEAT-0005.
-- Runtime implementation has started with FEAT-0006 under EPIC-0003 to define the headless execution model inside `packages/engine`.
+- Runtime implementation is in progress under EPIC-0003, with FEAT-0006 defining the host-agnostic execution contract and runtime snapshot model inside `packages/engine`.
 
 ## Update Rules
 

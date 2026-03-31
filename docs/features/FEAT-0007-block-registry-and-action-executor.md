@@ -27,7 +27,7 @@ This feature turns that pattern into the concrete PRD for block execution. It ow
 - Define the block registry ownership model for the MVP block set in `packages/engine`.
 - Define how the action executor resolves the targeted block instance from the current story state and published story package.
 - Define how the executor chooses player-scoped versus shared game-scoped state when applying block updates.
-- Define the engine-owned action execution result needed before later traversal semantics evaluate next-step availability.
+- Define how action execution updates and returns the `RuntimeSnapshot` contract introduced by FEAT-0006 before later traversal semantics populate next-step availability.
 
 ### Out of scope
 
@@ -41,7 +41,7 @@ This feature turns that pattern into the concrete PRD for block execution. It ow
 1. The engine must define one block-definition contract that every MVP block implementation conforms to, including scope, initial-state behavior, and pure action update semantics.
 2. The block registry must remain engine-owned and resolve block implementations by authored block type name from the published story package.
 3. The action executor must locate the targeted block instance from the current runtime location and published story package data before attempting to execute a state transition.
-4. The executor must choose the correct state container based on block scope, updating player-scoped state separately from shared game-scoped state.
+4. The executor must choose the correct state container based on block scope, updating player-scoped state separately from shared game-scoped state inside the FEAT-0006 `RuntimeSnapshot`.
 5. Block execution must remain pure at the block-definition level: block reducers cannot perform I/O or depend on API, db, or mobile code.
 6. Unknown block types, invalid action shapes for a block, or invalid execution targets must fail explicitly rather than silently succeeding.
 7. The MVP block catalog for this feature remains the engine-owned baseline from FEAT-0003: `text`, `location`, `code`, `single-choice`, and `multi-choice`.
@@ -52,14 +52,14 @@ This feature turns that pattern into the concrete PRD for block execution. It ow
 - The registry should live in the engine package and map authored block `type` values to engine-owned definitions.
 - Block config schemas remain engine-owned metadata from FEAT-0003; this feature defines how those configs are consumed during runtime execution.
 - The action executor is responsible for orchestration around block resolution and state-bucket selection, while per-block update logic stays in the block definitions themselves.
-- The output of this feature feeds FEAT-0008, which decides how updated state affects available edges and traversal.
+- This feature updates the FEAT-0006 `RuntimeSnapshot`; FEAT-0008 later decides how the reserved progression fields are populated from that updated runtime state.
 - Keep test fixtures internal to the engine package under `__tests__` and avoid creating public test-only exports.
 
 ## Acceptance Criteria
 
 - A single engine-owned block definition contract exists for the MVP block set.
 - The registry resolves authored block types to block implementations without involving API or db layers.
-- The action executor updates the correct runtime state bucket based on block scope.
+- The action executor updates the correct runtime state bucket based on block scope and returns the FEAT-0006 `RuntimeSnapshot` contract.
 - Block execution behavior is deterministic and explicit for known blocks, invalid actions, and unknown targets.
 - The feature leaves traversal decisions to FEAT-0008 instead of mixing progression semantics into block execution.
 
@@ -67,7 +67,7 @@ This feature turns that pattern into the concrete PRD for block execution. It ow
 
 - Add unit tests for registry lookup success and failure cases.
 - Add unit tests for each MVP block definition covering initial state and representative action transitions.
-- Add executor tests that prove user-scoped and game-scoped blocks update the correct state container.
+- Add executor tests that prove user-scoped and game-scoped blocks update the correct state container inside `RuntimeSnapshot`.
 - Add failure-path tests for unknown block types, invalid block targets, and invalid block action payloads.
 
 ## Rollout and Observability

@@ -26,7 +26,7 @@ This is the feature that makes branching narrative semantics concrete without ta
 - Define the condition registry contract and evaluation behavior for the built-in condition set.
 - Define the evaluation context available to conditions during traversal, including runtime state and contextual inputs the engine is allowed to read.
 - Define graph traversal semantics for determining available edges from the current node after state changes.
-- Define the engine-owned output shape for available next-step data returned after action execution or explicit traversal checks.
+- Define the traversal payload that populates FEAT-0006 progression fields such as `RuntimeSnapshot.availableEdges`.
 - Define failure behavior for invalid traversal targets, unknown condition names, and malformed condition trees that survive earlier validation boundaries.
 
 ### Out of scope
@@ -42,7 +42,7 @@ This is the feature that makes branching narrative semantics concrete without ta
 2. Condition evaluation must support the serialized tree forms already established by FEAT-0003: `check`, `and`, `or`, and `always`.
 3. Traversal evaluation must operate against the current runtime state view after block execution, including both player-scoped and shared state where relevant.
 4. The evaluation context must be explicit and limited to engine-approved inputs such as current time or location-reader data exposed through engine ports.
-5. The traversal layer must return deterministic available-edge results for the current node without embedding adapter-specific response shaping.
+5. The traversal layer must return deterministic available-edge results for the current node without redefining the outer runtime result envelope owned by FEAT-0006.
 6. Unknown condition names, invalid current-node references, and malformed traversal inputs must fail explicitly.
 7. This feature must define progression semantics only; it must not decide session persistence timing, realtime broadcast behavior, or mobile UX flow.
 
@@ -52,13 +52,14 @@ This is the feature that makes branching narrative semantics concrete without ta
 - FEAT-0003 already fixes the serialized condition tree contract; this feature owns the runtime interpretation of those trees.
 - The condition registry lives in the engine package and should be extensible through engine-owned additions, not adapter configuration.
 - Traversal operates on the merged runtime state view produced after action execution, but must not own block update logic itself.
+- FEAT-0006 owns the outer `RuntimeSnapshot` contract. This feature defines only the traversal semantics and payload data that populate progression fields such as `availableEdges`.
 - Evaluation context should remain narrow and explicit so future geolocation or time-based conditions do not leak infrastructure concerns into unrelated engine surfaces.
 - No new ADR is required unless condition evaluation needs a new cross-package boundary beyond the current engine-port model.
 
 ## Acceptance Criteria
 
 - The engine defines one condition registry for the built-in condition set and resolves authored condition names deterministically.
-- Traversal produces explicit available-edge results from the current node using the current runtime state view.
+- Traversal produces explicit available-edge results from the current node using the current runtime state view and populates the FEAT-0006 progression fields without replacing the outer runtime contract.
 - Condition evaluation supports compound trees and uses a documented evaluation context rather than hidden globals.
 - Unknown conditions, invalid traversal targets, and malformed runtime inputs fail explicitly.
 - The feature leaves session/save orchestration and mobile presentation to later work.
