@@ -15,26 +15,54 @@ import {
   createValidStoryPackageFixture,
 } from './fixtures/story-packages.js';
 
-const createStoryPackageRepo = (
-  reader: (storyId: string) => Promise<StoryPackage>,
-): StoryPackageRepo => ({
-  getPublishedPackage: async (storyId: string): Promise<StoryPackage> => reader(storyId),
+type StoryPackageRepoReaders = {
+  getCurrentPublishedPackage: (storyId: string) => Promise<{
+    storyPackage: StoryPackage;
+    storyPackageVersionId: string;
+  }>;
+  getPublishedPackage: (storyId: string, storyPackageVersionId: string) => Promise<StoryPackage>;
+};
+
+const createStoryPackageRepo = (readers: StoryPackageRepoReaders): StoryPackageRepo => ({
+  getCurrentPublishedPackage: async (storyId: string) => readers.getCurrentPublishedPackage(storyId),
+  getPublishedPackage: async (storyId: string, storyPackageVersionId: string) =>
+    readers.getPublishedPackage(storyId, storyPackageVersionId),
 });
 
-const createRuntimeEngine = (storyPackage: StoryPackage) =>
+const createRuntimeEngine = (
+  storyPackage: StoryPackage,
+  storyPackageVersionId = 'snapshot-v1',
+) =>
   createEngine({
-    storyPackageRepo: createStoryPackageRepo(async (storyId) => {
-      if (storyId !== storyPackage.metadata.storyId) {
-        throw new Error(`Unexpected story id "${storyId}".`);
-      }
+    storyPackageRepo: createStoryPackageRepo({
+      getCurrentPublishedPackage: async (storyId) => {
+        if (storyId !== storyPackage.metadata.storyId) {
+          throw new Error(`Unexpected story id "${storyId}".`);
+        }
 
-      return storyPackage;
+        return {
+          storyPackage,
+          storyPackageVersionId,
+        };
+      },
+      getPublishedPackage: async (storyId, requestedStoryPackageVersionId) => {
+        if (storyId !== storyPackage.metadata.storyId) {
+          throw new Error(`Unexpected story id "${storyId}".`);
+        }
+
+        if (requestedStoryPackageVersionId !== storyPackageVersionId) {
+          throw new Error(`Unexpected story package version id "${requestedStoryPackageVersionId}".`);
+        }
+
+        return storyPackage;
+      },
     }),
   });
 
 type RuntimeTestContext = {
   engine: Engine;
   storyId: string;
+  storyPackageVersionId: string;
 };
 
 const createRuntimeContext = (): RuntimeTestContext => {
@@ -42,8 +70,9 @@ const createRuntimeContext = (): RuntimeTestContext => {
   storyPackage.version.engineMajor = currentEngineMajor;
 
   return {
-    engine: createRuntimeEngine(storyPackage),
+    engine: createRuntimeEngine(storyPackage, 'snapshot-v1'),
     storyId: storyPackage.metadata.storyId,
+    storyPackageVersionId: 'snapshot-v1',
   };
 };
 
@@ -83,6 +112,7 @@ const expectRuntimeSnapshotShape = (snapshot: RuntimeSnapshot): void => {
       blockStates: expect.any(Object),
     },
     storyId: expect.any(String),
+    storyPackageVersionId: expect.any(String),
   });
   expect(Array.isArray(snapshot.availableEdges)).toBe(true);
 };
@@ -122,6 +152,104 @@ describe('@plotpoint/engine runtime surface', () => {
       expectRuntimeSnapshotShape(snapshot);
       expect(snapshot.roleId).toBe('detective');
     }
+  });
+
+  it('pins runtime resume to the started story package version even after newer publishes', async () => {
+    const storyPackageV1 = createValidStoryPackageFixture();
+    storyPackageV1.version.engineMajor = currentEngineMajor;
+
+    const storyPackageV2 = createValidStoryPackageFixture();
+    storyPackageV2.metadata.storyId = storyPackageV1.metadata.storyId;
+    storyPackageV2.version.engineMajor = currentEngineMajor;
+    storyPackageV2.graph.entryNodeId = 'atrium';
+    storyPackageV2.graph.nodes = [
+      {
+        id: 'atrium',
+        title: 'Atrium',
+        blocks: [
+          {
+            id: 'new-briefing',
+            type: 'text',
+            config: {
+              document: {
+                children: [
+                  {
+                    children: [
+                      {
+                        text: 'New opening',
+                        type: 'text',
+                      },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'doc',
+              },
+            },
+          },
+        ],
+        edges: [],
+      },
+    ];
+
+    const storyPackagesByVersion = new Map<string, StoryPackage>([
+      ['snapshot-v1', storyPackageV1],
+      ['snapshot-v2', storyPackageV2],
+    ]);
+    let currentStoryPackageVersionId = 'snapshot-v1';
+
+    const engine = createEngine({
+      storyPackageRepo: createStoryPackageRepo({
+        getCurrentPublishedPackage: async (storyId) => {
+          if (storyId !== storyPackageV1.metadata.storyId) {
+            throw new Error(`Unexpected story id "${storyId}".`);
+          }
+
+          const storyPackage = storyPackagesByVersion.get(currentStoryPackageVersionId);
+          if (!storyPackage) {
+            throw new Error(`Missing package version "${currentStoryPackageVersionId}".`);
+          }
+
+          return {
+            storyPackage,
+            storyPackageVersionId: currentStoryPackageVersionId,
+          };
+        },
+        getPublishedPackage: async (storyId, storyPackageVersionId) => {
+          if (storyId !== storyPackageV1.metadata.storyId) {
+            throw new Error(`Unexpected story id "${storyId}".`);
+          }
+
+          const storyPackage = storyPackagesByVersion.get(storyPackageVersionId);
+          if (!storyPackage) {
+            throw new Error(`Missing package version "${storyPackageVersionId}".`);
+          }
+
+          return storyPackage;
+        },
+      }),
+    });
+
+    const started = await startRuntime(engine, storyPackageV1.metadata.storyId);
+    currentStoryPackageVersionId = 'snapshot-v2';
+
+    const loaded = await engine.loadRuntime({
+      state: toRuntimeState(started),
+    });
+
+    expect(loaded.storyPackageVersionId).toBe('snapshot-v1');
+    expect(loaded.currentNodeId).toBe('foyer');
+
+    const submitted = await engine.submitAction({
+      action: {
+        type: 'noop',
+      },
+      blockId: 'briefing',
+      state: toRuntimeState(loaded),
+    });
+
+    expect(submitted.storyPackageVersionId).toBe('snapshot-v1');
+    expect(submitted.currentNodeId).toBe('foyer');
   });
 
   it('rehydrates and submits from RuntimeState inputs without persisting derived fields', async () => {
@@ -253,7 +381,13 @@ describe('@plotpoint/engine runtime surface', () => {
     storyPackage.metadata.storyId = 'story-from-published-package';
 
     const engine = createEngine({
-      storyPackageRepo: createStoryPackageRepo(async () => storyPackage),
+      storyPackageRepo: createStoryPackageRepo({
+        getCurrentPublishedPackage: async () => ({
+          storyPackage,
+          storyPackageVersionId: 'snapshot-v1',
+        }),
+        getPublishedPackage: async () => storyPackage,
+      }),
     });
 
     await expectRuntimeError(
@@ -264,8 +398,13 @@ describe('@plotpoint/engine runtime surface', () => {
 
   it('throws runtime_story_package_unavailable when the story package repo read fails', async () => {
     const engine = createEngine({
-      storyPackageRepo: createStoryPackageRepo(async () => {
-        throw new Error('storage offline');
+      storyPackageRepo: createStoryPackageRepo({
+        getCurrentPublishedPackage: async () => {
+          throw new Error('storage offline');
+        },
+        getPublishedPackage: async () => {
+          throw new Error('storage offline');
+        },
       }),
     });
 
@@ -273,6 +412,21 @@ describe('@plotpoint/engine runtime surface', () => {
 
     await expectRuntimeError(startPromise, 'runtime_story_package_unavailable');
     await expect(startPromise).rejects.toThrow('storage offline');
+  });
+
+  it('throws runtime_story_package_version_unavailable when pinned version cannot be loaded', async () => {
+    const { engine, storyId } = createRuntimeContext();
+    const started = await startRuntime(engine, storyId);
+
+    const loadPromise = engine.loadRuntime({
+      state: {
+        ...toRuntimeState(started),
+        storyPackageVersionId: 'snapshot-missing',
+      },
+    });
+
+    await expectRuntimeError(loadPromise, 'runtime_story_package_version_unavailable');
+    await expect(loadPromise).rejects.toThrow('snapshot-missing');
   });
 
   it('throws runtime_story_package_invalid for structurally invalid published packages', async () => {
@@ -318,6 +472,21 @@ describe('@plotpoint/engine runtime surface', () => {
 
     await expectRuntimeError(loadPromise, 'runtime_snapshot_invalid');
     await expect(loadPromise).rejects.toThrow('too_small at state.roleId');
+  });
+
+  it('throws runtime_snapshot_invalid when pinned story package version is missing from loadRuntime state', async () => {
+    const { engine, storyId } = createRuntimeContext();
+    const started = await startRuntime(engine, storyId);
+
+    const runtimeState = toRuntimeState(started) as Record<string, unknown>;
+    delete runtimeState.storyPackageVersionId;
+
+    const loadPromise = engine.loadRuntime({
+      state: runtimeState as unknown as RuntimeState,
+    });
+
+    await expectRuntimeError(loadPromise, 'runtime_snapshot_invalid');
+    await expect(loadPromise).rejects.toThrow('at state.storyPackageVersionId');
   });
 
   it('throws runtime_snapshot_invalid for malformed submitAction payloads', async () => {

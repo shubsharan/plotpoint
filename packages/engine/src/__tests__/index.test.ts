@@ -25,6 +25,10 @@ describe('@plotpoint/engine', () => {
 
     const runtimeEngine = engine.createEngine({
       storyPackageRepo: {
+        getCurrentPublishedPackage: async () => ({
+          storyPackage: runtimeStoryPackage,
+          storyPackageVersionId: 'snapshot-v1',
+        }),
         getPublishedPackage: async () => runtimeStoryPackage,
       },
     });
@@ -38,6 +42,7 @@ describe('@plotpoint/engine', () => {
 
     expect(runtime.currentNodeId).toBe('foyer');
     expect(runtime.storyId).toBe(runtimeStoryPackage.metadata.storyId);
+    expect(runtime.storyPackageVersionId).toBe('snapshot-v1');
   });
 
   it('does not export testing fixtures from the root entrypoint', () => {

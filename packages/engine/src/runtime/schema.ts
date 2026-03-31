@@ -20,6 +20,7 @@ type RuntimeStateShape = {
   roleId: string;
   sharedState: RuntimeStateBucketShape;
   storyId: string;
+  storyPackageVersionId: string;
 };
 
 type RuntimeSnapshotShape = {
@@ -74,6 +75,7 @@ const runtimeStateObjectSchema = z.object({
   roleId: nonEmptyStringSchema,
   sharedState: runtimeStateBucketSchema,
   storyId: nonEmptyStringSchema,
+  storyPackageVersionId: nonEmptyStringSchema,
 });
 
 export const runtimeStateSchema: z.ZodType<RuntimeStateShape> = runtimeStateObjectSchema.strict();

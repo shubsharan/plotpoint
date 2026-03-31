@@ -1,4 +1,5 @@
 import type { ZodError, ZodType } from 'zod';
+import type { PublishedStoryPackage } from '../ports/story-package-repo.js';
 import type { StoryPackage } from '../story-packages/schema.js';
 import type { StoryPackageValidationIssue } from '../story-packages/types.js';
 import { validateStoryPackageCompatibility } from '../story-packages/validate-compatibility.js';
@@ -47,6 +48,15 @@ const runtimeError = {
     new EngineRuntimeError(
       'runtime_story_package_unavailable',
       `Published story package "${storyId}" could not be loaded: ${details}.`,
+    ),
+  storyPackageVersionUnavailable: (
+    storyId: string,
+    storyPackageVersionId: string,
+    details: string,
+  ): EngineRuntimeError =>
+    new EngineRuntimeError(
+      'runtime_story_package_version_unavailable',
+      `Published story package version "${storyPackageVersionId}" for story "${storyId}" could not be loaded: ${details}.`,
     ),
   snapshotInvalid: (details: string): EngineRuntimeError =>
     new EngineRuntimeError(
@@ -111,10 +121,10 @@ const getErrorDetails = (error: unknown): string => {
 export const loadStoryOrThrow = async (
   ports: EnginePorts,
   storyId: string,
-): Promise<StoryPackage> => {
-  let story: StoryPackage;
+): Promise<PublishedStoryPackage> => {
+  let currentPublishedStory: PublishedStoryPackage;
   try {
-    story = await ports.storyPackageRepo.getPublishedPackage(storyId);
+    currentPublishedStory = await ports.storyPackageRepo.getCurrentPublishedPackage(storyId);
   } catch (error) {
     if (error instanceof EngineRuntimeError) {
       throw error;
@@ -123,6 +133,40 @@ export const loadStoryOrThrow = async (
     throw runtimeError.storyPackageUnavailable(storyId, getErrorDetails(error));
   }
 
+  const story = validateStoryOrThrow(currentPublishedStory.storyPackage, storyId);
+  return {
+    storyPackageVersionId: currentPublishedStory.storyPackageVersionId,
+    storyPackage: story,
+  };
+};
+
+export const loadStoryByVersionOrThrow = async (
+  ports: EnginePorts,
+  storyId: string,
+  storyPackageVersionId: string,
+): Promise<StoryPackage> => {
+  let story: StoryPackage;
+  try {
+    story = await ports.storyPackageRepo.getPublishedPackage(storyId, storyPackageVersionId);
+  } catch (error) {
+    if (error instanceof EngineRuntimeError) {
+      throw error;
+    }
+
+    throw runtimeError.storyPackageVersionUnavailable(
+      storyId,
+      storyPackageVersionId,
+      getErrorDetails(error),
+    );
+  }
+
+  return validateStoryOrThrow(story, storyId);
+};
+
+const validateStoryOrThrow = (
+  story: StoryPackage,
+  storyId: string,
+): StoryPackage => {
   if (story.metadata.storyId !== storyId) {
     throw runtimeError.storyIdMismatch(storyId, story.metadata.storyId);
   }
@@ -174,7 +218,11 @@ export const resolveRuntimeSnapshotContextOrThrow = async (
   state: RuntimeState,
   options?: ResolveRuntimeSnapshotOptions,
 ): Promise<ResolvedRuntimeSnapshotContext> => {
-  const story = await loadStoryOrThrow(ports, state.storyId);
+  const story = await loadStoryByVersionOrThrow(
+    ports,
+    state.storyId,
+    state.storyPackageVersionId,
+  );
 
   assertRoleExistsOrThrow(story, state.roleId);
   const currentNode = getNodeOrThrow(story, state.currentNodeId);

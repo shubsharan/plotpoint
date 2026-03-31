@@ -14,11 +14,14 @@ export const startGame = async (
   input: StartGameInput,
 ): Promise<RuntimeSnapshot> => {
   const parsedInput = parseRuntimeInputOrThrow(startGameInputSchema, input);
-  const story = await loadStoryOrThrow(ports, parsedInput.storyId);
+  const { storyPackage, storyPackageVersionId } = await loadStoryOrThrow(
+    ports,
+    parsedInput.storyId,
+  );
 
-  assertRoleExistsOrThrow(story, parsedInput.roleId);
+  assertRoleExistsOrThrow(storyPackage, parsedInput.roleId);
 
-  const entryNode = getNodeOrThrow(story, story.graph.entryNodeId);
+  const entryNode = getNodeOrThrow(storyPackage, storyPackage.graph.entryNodeId);
   const state: RuntimeState = {
     currentNodeId: entryNode.id,
     gameId: parsedInput.gameId,
@@ -31,6 +34,7 @@ export const startGame = async (
       blockStates: {},
     },
     storyId: parsedInput.storyId,
+    storyPackageVersionId,
   };
 
   return createRuntimeSnapshot(state, mapAvailableEdges(entryNode));

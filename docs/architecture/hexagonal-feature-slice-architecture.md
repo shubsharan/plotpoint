@@ -509,7 +509,10 @@ export const executeAction = async (
   },
 ) => {
   const { state, blockId, action } = input;
-  const story = await ports.storyPackageRepo.getPublishedPackage(state.storyId);
+  const story = await ports.storyPackageRepo.getPublishedPackage(
+    state.storyId,
+    state.storyPackageVersionId,
+  );
 
   // 2. Find the target block's type and config from the story package
   const currentNode = story.graph.nodes.find((node) => node.id === state.currentNodeId);

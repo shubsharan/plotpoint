@@ -15,7 +15,7 @@ Define the engine-owned runtime snapshot model and narrow public API that turn p
 
 ## Background and Context
 
-EPIC-0003 starts by locking the engine surface that every later runtime consumer depends on. FEAT-0005 now guarantees that `StoryPackageRepo.getPublishedPackage(storyId)` returns published story package data, so the next step is to define how the engine loads that story package, represents runtime progress, and exposes a small set of deterministic entrypoints for session startup and action execution.
+EPIC-0003 starts by locking the engine surface that every later runtime consumer depends on. FEAT-0005 now guarantees immutable published story package versions plus a current pointer, so the next step is to define how the engine pins runtime state to a package version, loads that package, and exposes deterministic entrypoints for session startup and action execution.
 
 The architecture already sketches the target shape: `createEngine` owns public runtime methods, runtime execution stays inside `packages/engine`, and the engine must remain host-agnostic so both mobile and API adapters can depend on the same gameplay authority. This feature turns those implied examples into an explicit engine contract and deliberately stops short of durable save orchestration, sync timing, or multiplayer authority policy.
 
@@ -54,7 +54,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 
 - Primary reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
 - The runtime surface should stay centered in `packages/engine`, with `createEngine` exporting engine-owned entrypoints and ports living in the engine package.
-- `StoryPackageRepo.getPublishedPackage(storyId)` is the published story package ingress from EPIC-0002; FEAT-0006 defines how the runtime surface consumes that story package, not how publishing works.
+- `StoryPackageRepo.getCurrentPublishedPackage(storyId)` and `getPublishedPackage(storyId, storyPackageVersionId)` are the published story package ingress from EPIC-0002; FEAT-0006 defines how the runtime surface consumes that data, not how publishing works.
 - User-scoped and game-scoped state are engine concepts in this feature. Their durable persistence, hydration, and synchronization behavior remain later adapter concerns in EPIC-0004.
 - The engine is host-agnostic in this feature. Mobile-local play and API-hosted execution both depend on the same `createEngine` surface rather than separate gameplay contracts.
 - Success payloads from engine entrypoints should describe runtime outcomes such as updated state views and reserved next-step data, while route-local request/response DTOs remain adapter-owned in later work.
@@ -63,6 +63,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 ```typescript
 type RuntimeState = {
   storyId: string;
+  storyPackageVersionId: string;
   gameId: string;
   playerId: string;
   roleId: string;
@@ -84,7 +85,16 @@ type RuntimeSnapshot = RuntimeState & {
 };
 
 type EnginePorts = {
-  storyPackageRepo: StoryPackageRepo;
+  storyPackageRepo: {
+    getCurrentPublishedPackage: (storyId: string) => Promise<{
+      storyPackage: StoryPackage;
+      storyPackageVersionId: string;
+    }>;
+    getPublishedPackage: (
+      storyId: string,
+      storyPackageVersionId: string,
+    ) => Promise<StoryPackage>;
+  };
   clock?: {
     now: () => Date;
   };
@@ -119,7 +129,7 @@ type Engine = {
 - The runtime state model is defined clearly enough that later block, traversal, session, and mobile work can build on it without reopening core state-shape questions.
 - `createEngine` and its initial runtime entrypoints are defined as the single public execution surface for gameplay logic.
 - Engine ports describe published story package access plus narrow context dependencies without leaking adapter-specific concerns into the engine.
-- The feature establishes a deterministic engine-owned `RuntimeSnapshot` result shape for runtime operations while keeping resumable `RuntimeState` free of derived progression fields.
+- The feature establishes a deterministic engine-owned `RuntimeSnapshot` result shape for runtime operations while keeping resumable `RuntimeState` free of derived progression fields and pinned to `storyPackageVersionId`.
 - `roleId` is part of runtime startup and runtime state, not an adapter-only concern.
 - The feature explicitly defers durable persistence policy, session lifecycle orchestration, and multiplayer sync semantics to later work.
 
@@ -150,4 +160,5 @@ type Engine = {
 - Resolved: the engine is host-agnostic and may run directly in mobile for offline play or inside the API for hosted execution.
 - Resolved: `roleId` is part of runtime startup and runtime identity in this feature rather than a later adapter-only field.
 - Resolved: FEAT-0006 owns both the resumable `RuntimeState` boundary and the outer `RuntimeSnapshot` result contract, while FEAT-0008 later defines how traversal populates progression fields such as `availableEdges`.
+- Resolved: runtime state is pinned to a published package version via `storyPackageVersionId`; explicit mid-game upgrades remain a separate session orchestration action.
 - Deferred follow-up [DF-0001]: define session upgrade policy for pinned published package versions. Default policy is pin at game start, allow explicit session/API-triggered upgrades, and reject upgrades when runtime compatibility checks fail so the session remains on its prior version. | Owner: EPIC-0003 | Trigger: Session orchestration scope is activated for runtime persistence/resume work. | Exit criteria: A merged feature implementation and docs update define explicit upgrade flow, compatibility failure behavior, and persistence semantics.

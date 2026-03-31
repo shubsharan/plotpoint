@@ -5,6 +5,7 @@ export type EngineRuntimeErrorCode =
   | 'runtime_snapshot_invalid'
   | 'runtime_story_package_invalid'
   | 'runtime_story_package_unavailable'
+  | 'runtime_story_package_version_unavailable'
   | 'runtime_story_id_mismatch';
 
 export class EngineRuntimeError extends Error {
