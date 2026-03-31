@@ -7,7 +7,21 @@ export type {
 } from './blocks/index.js';
 export { conditionRegistry, hasConditionName } from './graph/conditions.js';
 export type { KnownConditionName } from './graph/conditions.js';
+export type { Clock } from './ports/clock.js';
+export type { GeoCoord, LocationReader } from './ports/location-reader.js';
 export type { StoryPackageRepo } from './ports/story-package-repo.js';
+export { createEngine } from './runtime/create-engine.js';
+export { EngineRuntimeError } from './runtime/errors.js';
+export type { EngineRuntimeErrorCode } from './runtime/errors.js';
+export type {
+  AvailableEdge,
+  Engine,
+  EnginePorts,
+  LoadRuntimeInput,
+  RuntimeSnapshot,
+  StartGameInput,
+  SubmitActionInput,
+} from './runtime/types.js';
 export {
   storyPackageBlockSchema,
   storyPackageConditionSchema,
