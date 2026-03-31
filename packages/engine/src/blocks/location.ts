@@ -1,7 +1,25 @@
 import { z } from 'zod';
-import type { BlockConfig, BlockRegistryEntry } from './types.js';
+import { defineBlockDefinition, type BlockRegistryEntry } from './types.js';
 
-export const locationConfigSchema: z.ZodType<BlockConfig> = z
+type LocationBlockConfig = {
+  hint?: string | undefined;
+  radiusMeters: number;
+  target:
+    | {
+        kind: 'coordinates';
+        lat: number;
+        lng: number;
+      }
+    | {
+        kind: 'place';
+        placeId: string;
+      };
+  ui: {
+    variant: 'compass' | 'hint' | 'map';
+  };
+};
+
+const locationConfigSchema: z.ZodType<LocationBlockConfig> = z
   .object({
     hint: z.string().min(1).optional(),
     radiusMeters: z.number().positive(),
@@ -28,7 +46,7 @@ export const locationConfigSchema: z.ZodType<BlockConfig> = z
   })
   .strict();
 
-export const locationBlock: BlockRegistryEntry = {
+export const locationBlock: BlockRegistryEntry<LocationBlockConfig> = defineBlockDefinition({
   configSchema: locationConfigSchema,
   scope: 'user',
-};
+});

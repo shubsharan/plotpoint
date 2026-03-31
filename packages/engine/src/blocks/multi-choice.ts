@@ -1,5 +1,19 @@
 import { z } from 'zod';
-import type { BlockConfig, BlockRegistryEntry } from './types.js';
+import { defineBlockDefinition, type BlockRegistryEntry } from './types.js';
+
+type MultiChoiceOption = {
+  id: string;
+  label: string;
+};
+
+type MultiChoiceBlockConfig = {
+  correctOptionIds: string[];
+  maxSelections?: number | undefined;
+  minSelections?: number | undefined;
+  options: MultiChoiceOption[];
+  prompt: string;
+  shuffle?: boolean | undefined;
+};
 
 const optionSchema = z
   .object({
@@ -8,7 +22,7 @@ const optionSchema = z
   })
   .strict();
 
-export const multiChoiceConfigSchema: z.ZodType<BlockConfig> = z
+const multiChoiceConfigSchema: z.ZodType<MultiChoiceBlockConfig> = z
   .object({
     correctOptionIds: z.array(z.string().min(1)).min(1),
     maxSelections: z.number().int().positive().optional(),
@@ -84,7 +98,7 @@ export const multiChoiceConfigSchema: z.ZodType<BlockConfig> = z
     }
   });
 
-export const multiChoiceBlock: BlockRegistryEntry = {
+export const multiChoiceBlock: BlockRegistryEntry<MultiChoiceBlockConfig> = defineBlockDefinition({
   configSchema: multiChoiceConfigSchema,
   scope: 'user',
-};
+});

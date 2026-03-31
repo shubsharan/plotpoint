@@ -34,7 +34,7 @@ This is the feature that makes branching narrative semantics concrete without ta
 - Block reducer behavior or registry ownership beyond the execution outputs this feature consumes.
 - Session completion, checkpoint orchestration, resume policy, or multiplayer coordination logic.
 - Mobile presentation of available choices or API request/response serialization.
-- New bundle-schema authoring rules beyond the FEAT-0003 condition tree contract.
+- New story package-schema authoring rules beyond the FEAT-0003 condition tree contract.
 
 ## Requirements
 

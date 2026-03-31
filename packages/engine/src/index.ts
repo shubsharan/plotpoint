@@ -7,17 +7,29 @@ export type {
 } from './blocks/index.js';
 export { conditionRegistry, hasConditionName } from './graph/conditions.js';
 export type { KnownConditionName } from './graph/conditions.js';
-export type { StoryRepo } from './ports/story-repo.js';
-export { storyBundleSchema } from './story-bundles/schema.js';
+export type { StoryPackageRepo } from './ports/story-package-repo.js';
+export {
+  storyPackageBlockSchema,
+  storyPackageConditionSchema,
+  storyPackageEdgeSchema,
+  storyPackageGraphSchema,
+  storyPackageJsonObjectSchema,
+  storyPackageJsonValueSchema,
+  storyPackageMetadataSchema,
+  storyPackageNodeSchema,
+  storyPackageRoleSchema,
+  storyPackageSchema,
+  storyPackageVersionSchema,
+} from './story-packages/schema.js';
 export type {
-  StoryBundleCompatibilityMode,
-  StoryBundleCompatibilityOptions,
-  StoryBundleValidationIssue,
-  StoryBundleValidationLayer,
-  StoryBundleValidationPath,
-  StoryBundleValidator,
-} from './story-bundles/types.js';
-export type { StoryBundle, StoryBundleCondition } from './story-bundles/schema.js';
-export { validateStoryBundleCompatibility } from './story-bundles/validate-compatibility.js';
-export { validateStoryBundleStructure } from './story-bundles/validate-structure.js';
+  StoryPackageCompatibilityMode,
+  StoryPackageCompatibilityOptions,
+  StoryPackageValidationIssue,
+  StoryPackageValidationLayer,
+  StoryPackageValidationPath,
+  StoryPackageValidator,
+} from './story-packages/types.js';
+export type { StoryPackage, StoryPackageCondition } from './story-packages/schema.js';
+export { validateStoryPackageCompatibility } from './story-packages/validate-compatibility.js';
+export { validateStoryPackageStructure } from './story-packages/validate-structure.js';
 export { currentEngineMajor } from './version.js';

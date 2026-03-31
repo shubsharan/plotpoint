@@ -1,7 +1,7 @@
-import type { StoryBundle } from '../../story-bundles/schema.js';
-import { storyBundleSchema } from '../../story-bundles/schema.js';
+import type { StoryPackage } from '../../story-packages/schema.js';
+import { storyPackageSchema } from '../../story-packages/schema.js';
 
-const validStoryBundleSeed: StoryBundle = {
+const validStoryPackageSeed: StoryPackage = {
   metadata: {
     storyId: 'story-the-stolen-ledger',
     title: 'The Stolen Ledger',
@@ -145,12 +145,12 @@ const validStoryBundleSeed: StoryBundle = {
   },
 };
 
-export const validStoryBundleFixture: StoryBundle = storyBundleSchema.parse(validStoryBundleSeed);
+export const validStoryPackageFixture: StoryPackage = storyPackageSchema.parse(validStoryPackageSeed);
 
-export const createValidStoryBundleFixture = (): StoryBundle =>
-  JSON.parse(JSON.stringify(validStoryBundleFixture)) as StoryBundle;
+export const createValidStoryPackageFixture = (): StoryPackage =>
+  JSON.parse(JSON.stringify(validStoryPackageFixture)) as StoryPackage;
 
-const invalidStoryBundleFixturesInternal = {
+const invalidStoryPackageFixturesInternal = {
   malformedShape: {
     metadata: {
       storyId: 'story-the-stolen-ledger',
@@ -249,31 +249,31 @@ const invalidStoryBundleFixturesInternal = {
   },
 } as const;
 
-export const invalidStoryBundleFixtures: Readonly<{
+export const invalidStoryPackageFixtures: Readonly<{
   emptyConditionChildren: unknown;
   invalidBlockConfig: unknown;
   malformedShape: unknown;
-}> = invalidStoryBundleFixturesInternal;
+}> = invalidStoryPackageFixturesInternal;
 
-export const createStructurallyInvalidStoryBundleFixture = (): StoryBundle => {
-  const bundle = createValidStoryBundleFixture();
+export const createStructurallyInvalidStoryPackageFixture = (): StoryPackage => {
+  const storyPackage = createValidStoryPackageFixture();
 
-  bundle.graph.nodes.push({
+  storyPackage.graph.nodes.push({
     id: 'archive-door',
     title: 'Duplicate Archive Door',
     blocks: [],
     edges: [],
   });
 
-  return bundle;
+  return storyPackage;
 };
 
-export const createCompatibilityInvalidStoryBundleFixture = (): StoryBundle => {
-  const bundle = createValidStoryBundleFixture();
-  const firstNode = bundle.graph.nodes[0];
+export const createCompatibilityInvalidStoryPackageFixture = (): StoryPackage => {
+  const storyPackage = createValidStoryPackageFixture();
+  const firstNode = storyPackage.graph.nodes[0];
 
   if (!firstNode) {
-    return bundle;
+    return storyPackage;
   }
 
   firstNode.blocks.push({
@@ -282,7 +282,7 @@ export const createCompatibilityInvalidStoryBundleFixture = (): StoryBundle => {
     config: {},
   });
 
-  bundle.version.engineMajor = 9;
+  storyPackage.version.engineMajor = 9;
 
-  return bundle;
+  return storyPackage;
 };

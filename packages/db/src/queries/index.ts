@@ -2,12 +2,13 @@ export {
   createStoryQueries,
 } from './stories.js';
 export type {
-  CurrentPublishedStoryBundleRef,
+  CurrentPublishedStoryPackageVersionRef,
   CreateStoryInput,
   DeleteStoryResult,
   PatchStoryInput,
   PublishStoryInput,
   PublishStoryReadModel,
+  PublishedStoryPackageVersionRef,
   StoryCrudReadModel,
   StoryPublishedCatalogReadModel,
   StoryQueries,

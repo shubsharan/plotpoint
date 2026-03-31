@@ -19,10 +19,10 @@ const createRouteDeps = (): StoriesRouteDepsMocks => ({
   listStories: vi.fn<StoriesRouteDeps['listStories']>(),
   patchStory: vi.fn<StoriesRouteDeps['patchStory']>(),
   publishStory: vi.fn<StoriesRouteDeps['publishStory']>(),
-  deletePublishedStoryBundle: vi.fn<StoriesRouteDeps['deletePublishedStoryBundle']>(),
-  readStoryBundle: vi.fn<StoriesRouteDeps['readStoryBundle']>(),
+  deletePublishedStoryPackage: vi.fn<StoriesRouteDeps['deletePublishedStoryPackage']>(),
+  readStoryPackage: vi.fn<StoriesRouteDeps['readStoryPackage']>(),
   updateStory: vi.fn<StoriesRouteDeps['updateStory']>(),
-  writePublishedStoryBundle: vi.fn<StoriesRouteDeps['writePublishedStoryBundle']>(),
+  writePublishedStoryPackage: vi.fn<StoriesRouteDeps['writePublishedStoryPackage']>(),
 });
 
 const buildStoryRow = (
@@ -31,7 +31,7 @@ const buildStoryRow = (
     title: string;
     summary: string | null;
     status: 'draft' | 'published' | 'archived';
-    draftBundleUri: string;
+    draftPackageUri: string;
     createdAt: Date;
     updatedAt: Date;
   }>,
@@ -40,8 +40,8 @@ const buildStoryRow = (
   title: 'The Stolen Ledger',
   summary: 'Track the missing ledger.',
   status: 'draft' as const,
-  draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
-  currentPublishedSnapshotId: null,
+  draftPackageUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
+  currentPublishedPackageVersionId: null,
   lastPublishedAt: null,
   createdAt: new Date('2026-03-24T10:00:00.000Z'),
   updatedAt: new Date('2026-03-24T10:30:00.000Z'),
@@ -64,7 +64,7 @@ const buildPublishedStory = (
   ...overrides,
 });
 
-const buildValidStoryBundle = (storyId = 'story-the-stolen-ledger') => ({
+const buildValidStoryPackage = (storyId = 'story-the-stolen-ledger') => ({
   metadata: {
     storyId,
     title: 'The Stolen Ledger',
@@ -145,7 +145,7 @@ describe('@plotpoint/api story routes', () => {
       id: story.id,
       title: story.title,
       summary: story.summary,
-      draftBundleUri: story.draftBundleUri,
+      draftPackageUri: story.draftPackageUri,
     });
 
     expect(response.status).toBe(201);
@@ -154,8 +154,8 @@ describe('@plotpoint/api story routes', () => {
       title: story.title,
       summary: story.summary,
       status: 'draft',
-      draftBundleUri: story.draftBundleUri,
-      currentPublishedSnapshotId: null,
+      draftPackageUri: story.draftPackageUri,
+      currentPublishedPackageVersionId: null,
       lastPublishedAt: null,
       createdAt: '2026-03-24T10:00:00.000Z',
       updatedAt: '2026-03-24T10:30:00.000Z',
@@ -164,7 +164,7 @@ describe('@plotpoint/api story routes', () => {
       id: story.id,
       title: story.title,
       summary: story.summary,
-      draftBundleUri: story.draftBundleUri,
+      draftPackageUri: story.draftPackageUri,
     });
   });
 
@@ -188,7 +188,7 @@ describe('@plotpoint/api story routes', () => {
     const response = await createJsonRequest(deps, '/stories', 'POST', {
       id: 'story-invalid-uri',
       title: 'Invalid URI Story',
-      draftBundleUri: 'not-a-uri',
+      draftPackageUri: 'not-a-uri',
     });
 
     expect(response.status).toBe(400);
@@ -205,7 +205,7 @@ describe('@plotpoint/api story routes', () => {
     const response = await createJsonRequest(deps, '/stories', 'POST', {
       id: 'story-the-stolen-ledger',
       title: 'The Stolen Ledger',
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
     });
 
     expect(response.status).toBe(409);
@@ -238,8 +238,8 @@ describe('@plotpoint/api story routes', () => {
         title: 'The Stolen Ledger',
         summary: 'Track the missing ledger.',
         status: 'draft',
-        draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
-        currentPublishedSnapshotId: null,
+        draftPackageUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
+        currentPublishedPackageVersionId: null,
         lastPublishedAt: null,
         createdAt: '2026-03-24T10:00:00.000Z',
         updatedAt: '2026-03-24T12:00:00.000Z',
@@ -249,8 +249,8 @@ describe('@plotpoint/api story routes', () => {
         title: 'The Stolen Ledger',
         summary: 'Track the missing ledger.',
         status: 'draft',
-        draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
-        currentPublishedSnapshotId: null,
+        draftPackageUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
+        currentPublishedPackageVersionId: null,
         lastPublishedAt: null,
         createdAt: '2026-03-24T10:00:00.000Z',
         updatedAt: '2026-03-24T11:00:00.000Z',
@@ -357,7 +357,7 @@ describe('@plotpoint/api story routes', () => {
     const response = await createJsonRequest(deps, '/stories/story-update', 'PUT', {
       title: 'Updated Story',
       summary: null,
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-update/v2.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-update/v2.json',
     });
 
     expect(response.status).toBe(200);
@@ -365,14 +365,14 @@ describe('@plotpoint/api story routes', () => {
       id: 'story-update',
       title: 'Updated Story',
       summary: null,
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-update/v2.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-update/v2.json',
     });
   });
 
   it('returns 400 for invalid put payloads', async () => {
     const response = await createJsonRequest(deps, '/stories/story-update', 'PUT', {
       title: '',
-      draftBundleUri: 'not-a-uri',
+      draftPackageUri: 'not-a-uri',
     });
 
     expect(response.status).toBe(400);
@@ -383,22 +383,22 @@ describe('@plotpoint/api story routes', () => {
     });
   });
 
-  it('patches draft bundle uri only', async () => {
+  it('patches draft package uri only', async () => {
     deps.patchStory.mockResolvedValueOnce(
       buildStoryRow({
         id: 'story-patch',
-        draftBundleUri: 's3://plotpoint-stories/drafts/story-patch/v2.json',
+        draftPackageUri: 's3://plotpoint-stories/drafts/story-patch/v2.json',
       }),
     );
 
     const response = await createJsonRequest(deps, '/stories/story-patch', 'PATCH', {
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-patch/v2.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-patch/v2.json',
     });
 
     expect(response.status).toBe(200);
     expect(deps.patchStory).toHaveBeenCalledWith({
       id: 'story-patch',
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-patch/v2.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-patch/v2.json',
     });
   });
 
@@ -439,22 +439,22 @@ describe('@plotpoint/api story routes', () => {
     });
   });
 
-  it('publishes a story from draft bundle and returns snapshot metadata', async () => {
+  it('publishes a story from a draft package and returns published package version metadata', async () => {
     deps.getStory.mockResolvedValueOnce(
       buildStoryRow({
-        draftBundleUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
+        draftPackageUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
         id: 'story-publish',
       }),
     );
-    deps.readStoryBundle.mockResolvedValueOnce(buildValidStoryBundle('story-publish'));
-    deps.writePublishedStoryBundle.mockResolvedValueOnce(
+    deps.readStoryPackage.mockResolvedValueOnce(buildValidStoryPackage('story-publish'));
+    deps.writePublishedStoryPackage.mockResolvedValueOnce(
       's3://plotpoint-stories/published/story-publish/v1.json',
     );
     deps.publishStory.mockResolvedValueOnce({
       engineMajor: 0,
       publishedAt: new Date('2026-03-30T10:35:00.000Z'),
-      publishedBundleUri: 's3://plotpoint-stories/published/story-publish/v1.json',
-      snapshotId: 'snapshot-1',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-publish/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-1',
       status: 'published',
       storyId: 'story-publish',
     });
@@ -465,16 +465,16 @@ describe('@plotpoint/api story routes', () => {
     await expect(response.json()).resolves.toEqual({
       engineMajor: 0,
       publishedAt: '2026-03-30T10:35:00.000Z',
-      publishedBundleUri: 's3://plotpoint-stories/published/story-publish/v1.json',
-      snapshotId: 'snapshot-1',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-publish/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-1',
       status: 'published',
       storyId: 'story-publish',
     });
-    expect(deps.readStoryBundle).toHaveBeenCalledWith(
+    expect(deps.readStoryPackage).toHaveBeenCalledWith(
       's3://plotpoint-stories/drafts/story-publish/v1.json',
     );
-    expect(deps.writePublishedStoryBundle).toHaveBeenCalledWith({
-      bundle: expect.objectContaining({
+    expect(deps.writePublishedStoryPackage).toHaveBeenCalledWith({
+      storyPackage: expect.objectContaining({
         version: {
           schemaVersion: 1,
           engineMajor: 0,
@@ -486,17 +486,17 @@ describe('@plotpoint/api story routes', () => {
     expect(deps.publishStory).toHaveBeenCalledWith({
       engineMajor: 0,
       publishedAt: expect.any(Date),
-      publishedBundleUri: 's3://plotpoint-stories/published/story-publish/v1.json',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-publish/v1.json',
       storyId: 'story-publish',
       summary: 'Track the missing ledger.',
       title: 'The Stolen Ledger',
     });
-    expect(deps.deletePublishedStoryBundle).not.toHaveBeenCalled();
+    expect(deps.deletePublishedStoryPackage).not.toHaveBeenCalled();
   });
 
   it('returns 422 when publish validation fails', async () => {
     deps.getStory.mockResolvedValueOnce(buildStoryRow());
-    deps.readStoryBundle.mockResolvedValueOnce({});
+    deps.readStoryPackage.mockResolvedValueOnce({});
 
     const response = await createJsonRequest(
       deps,
@@ -511,18 +511,18 @@ describe('@plotpoint/api story routes', () => {
         storyId: 'story-the-stolen-ledger',
       },
     });
-    expect(deps.writePublishedStoryBundle).not.toHaveBeenCalled();
+    expect(deps.writePublishedStoryPackage).not.toHaveBeenCalled();
     expect(deps.publishStory).not.toHaveBeenCalled();
   });
 
-  it('returns 422 when bundle metadata storyId does not match route story id', async () => {
+  it('returns 422 when story package metadata storyId does not match route story id', async () => {
     deps.getStory.mockResolvedValueOnce(
       buildStoryRow({
-        draftBundleUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
+        draftPackageUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
         id: 'story-publish',
       }),
     );
-    deps.readStoryBundle.mockResolvedValueOnce(buildValidStoryBundle('story-other'));
+    deps.readStoryPackage.mockResolvedValueOnce(buildValidStoryPackage('story-other'));
 
     const response = await createJsonRequest(deps, '/stories/story-publish/publish', 'POST');
 
@@ -540,19 +540,19 @@ describe('@plotpoint/api story routes', () => {
         storyId: 'story-publish',
       },
     });
-    expect(deps.writePublishedStoryBundle).not.toHaveBeenCalled();
+    expect(deps.writePublishedStoryPackage).not.toHaveBeenCalled();
     expect(deps.publishStory).not.toHaveBeenCalled();
   });
 
-  it('rolls back uploaded bundle and returns 404 when publish persistence returns null', async () => {
+  it('rolls back uploaded story package and returns 404 when publish persistence returns null', async () => {
     deps.getStory.mockResolvedValueOnce(
       buildStoryRow({
-        draftBundleUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
+        draftPackageUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
         id: 'story-publish',
       }),
     );
-    deps.readStoryBundle.mockResolvedValueOnce(buildValidStoryBundle('story-publish'));
-    deps.writePublishedStoryBundle.mockResolvedValueOnce(
+    deps.readStoryPackage.mockResolvedValueOnce(buildValidStoryPackage('story-publish'));
+    deps.writePublishedStoryPackage.mockResolvedValueOnce(
       's3://plotpoint-stories/published/story-publish/v1.json',
     );
     deps.publishStory.mockResolvedValueOnce(null);
@@ -566,21 +566,21 @@ describe('@plotpoint/api story routes', () => {
         storyId: 'story-publish',
       },
     });
-    expect(deps.deletePublishedStoryBundle).toHaveBeenCalledWith(
+    expect(deps.deletePublishedStoryPackage).toHaveBeenCalledWith(
       's3://plotpoint-stories/published/story-publish/v1.json',
     );
   });
 
-  it('rolls back uploaded bundle and surfaces 500 when publish persistence throws', async () => {
+  it('rolls back uploaded story package and surfaces 500 when publish persistence throws', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     deps.getStory.mockResolvedValueOnce(
       buildStoryRow({
-        draftBundleUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
+        draftPackageUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
         id: 'story-publish',
       }),
     );
-    deps.readStoryBundle.mockResolvedValueOnce(buildValidStoryBundle('story-publish'));
-    deps.writePublishedStoryBundle.mockResolvedValueOnce(
+    deps.readStoryPackage.mockResolvedValueOnce(buildValidStoryPackage('story-publish'));
+    deps.writePublishedStoryPackage.mockResolvedValueOnce(
       's3://plotpoint-stories/published/story-publish/v1.json',
     );
     deps.publishStory.mockRejectedValueOnce(new Error('database write failed'));
@@ -592,7 +592,7 @@ describe('@plotpoint/api story routes', () => {
       consoleErrorSpy.mockRestore();
     }
 
-    expect(deps.deletePublishedStoryBundle).toHaveBeenCalledWith(
+    expect(deps.deletePublishedStoryPackage).toHaveBeenCalledWith(
       's3://plotpoint-stories/published/story-publish/v1.json',
     );
   });
@@ -601,16 +601,16 @@ describe('@plotpoint/api story routes', () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     deps.getStory.mockResolvedValueOnce(
       buildStoryRow({
-        draftBundleUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
+        draftPackageUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
         id: 'story-publish',
       }),
     );
-    deps.readStoryBundle.mockResolvedValueOnce(buildValidStoryBundle('story-publish'));
-    deps.writePublishedStoryBundle.mockResolvedValueOnce(
+    deps.readStoryPackage.mockResolvedValueOnce(buildValidStoryPackage('story-publish'));
+    deps.writePublishedStoryPackage.mockResolvedValueOnce(
       's3://plotpoint-stories/published/story-publish/v1.json',
     );
     deps.publishStory.mockResolvedValueOnce(null);
-    deps.deletePublishedStoryBundle.mockRejectedValueOnce(new Error('storage cleanup failed'));
+    deps.deletePublishedStoryPackage.mockRejectedValueOnce(new Error('storage cleanup failed'));
 
     try {
       const response = await createJsonRequest(deps, '/stories/story-publish/publish', 'POST');
@@ -624,16 +624,16 @@ describe('@plotpoint/api story routes', () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     deps.getStory.mockResolvedValueOnce(
       buildStoryRow({
-        draftBundleUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
+        draftPackageUri: 's3://plotpoint-stories/drafts/story-publish/v1.json',
         id: 'story-publish',
       }),
     );
-    deps.readStoryBundle.mockResolvedValueOnce(buildValidStoryBundle('story-publish'));
-    deps.writePublishedStoryBundle.mockResolvedValueOnce(
+    deps.readStoryPackage.mockResolvedValueOnce(buildValidStoryPackage('story-publish'));
+    deps.writePublishedStoryPackage.mockResolvedValueOnce(
       's3://plotpoint-stories/published/story-publish/v1.json',
     );
     deps.publishStory.mockRejectedValueOnce(new Error('database write failed'));
-    deps.deletePublishedStoryBundle.mockRejectedValueOnce(new Error('storage cleanup failed'));
+    deps.deletePublishedStoryPackage.mockRejectedValueOnce(new Error('storage cleanup failed'));
 
     try {
       const response = await createJsonRequest(deps, '/stories/story-publish/publish', 'POST');
@@ -661,8 +661,8 @@ describe('@plotpoint/api story routes', () => {
     });
   });
 
-  it('returns 409 when deleting a story with published snapshots', async () => {
-    deps.deleteStory.mockResolvedValueOnce('has_published_snapshots');
+  it('returns 409 when deleting a story with published package versions', async () => {
+    deps.deleteStory.mockResolvedValueOnce('has_published_package_versions');
 
     const response = await createJsonRequest(deps, '/stories/story-live', 'DELETE');
 
@@ -670,7 +670,7 @@ describe('@plotpoint/api story routes', () => {
     await expect(response.json()).resolves.toEqual({
       error: {
         code: 'story_delete_conflict',
-        reason: 'published_snapshots_exist',
+        reason: 'published_package_versions_exist',
         storyId: 'story-live',
       },
     });

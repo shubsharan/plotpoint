@@ -1,23 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
-  storyBundleSchema,
-  validateStoryBundleCompatibility,
-  validateStoryBundleStructure,
+  storyPackageSchema,
+  validateStoryPackageCompatibility,
+  validateStoryPackageStructure,
 } from '../index.js';
 import {
-  createCompatibilityInvalidStoryBundleFixture,
-  createStructurallyInvalidStoryBundleFixture,
-  createValidStoryBundleFixture,
-  invalidStoryBundleFixtures,
-} from './fixtures/story-bundles.js';
+  createCompatibilityInvalidStoryPackageFixture,
+  createStructurallyInvalidStoryPackageFixture,
+  createValidStoryPackageFixture,
+  invalidStoryPackageFixtures,
+} from './fixtures/story-packages.js';
 
-describe('@plotpoint/engine story bundle validation', () => {
-  it('accepts a valid rooted DAG bundle', () => {
-    const bundle = createValidStoryBundleFixture();
+describe('@plotpoint/engine story package validation', () => {
+  it('accepts a valid rooted DAG storyPackage', () => {
+    const storyPackage = createValidStoryPackageFixture();
 
-    expect(validateStoryBundleStructure(bundle)).toEqual([]);
+    expect(validateStoryPackageStructure(storyPackage)).toEqual([]);
     expect(
-      validateStoryBundleCompatibility(bundle, {
+      validateStoryPackageCompatibility(storyPackage, {
         currentEngineMajor: 0,
         mode: 'draft',
       }),
@@ -25,9 +25,9 @@ describe('@plotpoint/engine story bundle validation', () => {
   });
 
   it('rejects duplicate node ids deterministically', () => {
-    const bundle = createStructurallyInvalidStoryBundleFixture();
+    const storyPackage = createStructurallyInvalidStoryPackageFixture();
 
-    expect(validateStoryBundleStructure(bundle)).toEqual([
+    expect(validateStoryPackageStructure(storyPackage)).toEqual([
       {
         code: 'duplicate-node-id',
         details: {
@@ -43,10 +43,10 @@ describe('@plotpoint/engine story bundle validation', () => {
   });
 
   it('rejects broken references, unreachable nodes, and cycles', () => {
-    const bundle = createValidStoryBundleFixture();
-    const entryNode = bundle.graph.nodes[0];
-    const archiveNode = bundle.graph.nodes[1];
-    const vaultNode = bundle.graph.nodes[2];
+    const storyPackage = createValidStoryPackageFixture();
+    const entryNode = storyPackage.graph.nodes[0];
+    const archiveNode = storyPackage.graph.nodes[1];
+    const vaultNode = storyPackage.graph.nodes[2];
 
     if (!entryNode || !archiveNode || !vaultNode) {
       throw new Error('Expected seed fixture to include foyer, archive door, and vault nodes.');
@@ -61,7 +61,7 @@ describe('@plotpoint/engine story bundle validation', () => {
       targetNodeId: 'archive-door',
     });
 
-    expect(validateStoryBundleStructure(bundle)).toEqual([
+    expect(validateStoryPackageStructure(storyPackage)).toEqual([
       {
         code: 'unknown-edge-target',
         details: {
@@ -106,14 +106,14 @@ describe('@plotpoint/engine story bundle validation', () => {
   });
 
   it('rejects duplicate role, block, and edge ids', () => {
-    const bundle = createValidStoryBundleFixture();
-    const firstNode = bundle.graph.nodes[0];
+    const storyPackage = createValidStoryPackageFixture();
+    const firstNode = storyPackage.graph.nodes[0];
 
     if (!firstNode) {
-      throw new Error('Expected a first node in the valid story bundle fixture.');
+      throw new Error('Expected a first node in the valid story package fixture.');
     }
 
-    bundle.roles.push({
+    storyPackage.roles.push({
       id: 'detective',
       title: 'Lead Detective',
     });
@@ -127,7 +127,7 @@ describe('@plotpoint/engine story bundle validation', () => {
       targetNodeId: 'archive-door',
     });
 
-    expect(validateStoryBundleStructure(bundle)).toEqual([
+    expect(validateStoryPackageStructure(storyPackage)).toEqual([
       {
         code: 'duplicate-role-id',
         details: {
@@ -165,11 +165,11 @@ describe('@plotpoint/engine story bundle validation', () => {
   });
 
   it('rejects duplicate block ids across different nodes', () => {
-    const bundle = createValidStoryBundleFixture();
-    const vaultNode = bundle.graph.nodes[2];
+    const storyPackage = createValidStoryPackageFixture();
+    const vaultNode = storyPackage.graph.nodes[2];
 
     if (!vaultNode) {
-      throw new Error('Expected vault node in valid story bundle fixture.');
+      throw new Error('Expected vault node in valid story package fixture.');
     }
 
     vaultNode.blocks.push({
@@ -178,7 +178,7 @@ describe('@plotpoint/engine story bundle validation', () => {
       config: {},
     });
 
-    expect(validateStoryBundleStructure(bundle)).toEqual([
+    expect(validateStoryPackageStructure(storyPackage)).toEqual([
       {
         code: 'duplicate-block-id',
         details: {
@@ -198,10 +198,14 @@ describe('@plotpoint/engine story bundle validation', () => {
   });
 
   it('rejects unknown block types and incompatible engine majors', () => {
-    const bundle = createCompatibilityInvalidStoryBundleFixture();
+    const parsed = storyPackageSchema.safeParse(createCompatibilityInvalidStoryPackageFixture());
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) {
+      return;
+    }
 
     expect(
-      validateStoryBundleCompatibility(bundle, {
+      validateStoryPackageCompatibility(parsed.data, {
         currentEngineMajor: 0,
         mode: 'published',
       }),
@@ -225,17 +229,17 @@ describe('@plotpoint/engine story bundle validation', () => {
           mode: 'published',
         },
         layer: 'compatibility',
-        message: 'Bundle engine major 9 does not match current engine major 0.',
+        message: 'Story package engine major 9 does not match current engine major 0.',
         path: ['version', 'engineMajor'],
       },
     ]);
   });
 
   it('rejects invalid block configs for known block types', () => {
-    const bundle = storyBundleSchema.parse(invalidStoryBundleFixtures.invalidBlockConfig);
+    const storyPackage = storyPackageSchema.parse(invalidStoryPackageFixtures.invalidBlockConfig);
 
     expect(
-      validateStoryBundleCompatibility(bundle, {
+      validateStoryPackageCompatibility(storyPackage, {
         currentEngineMajor: 0,
         mode: 'draft',
       }),
@@ -268,8 +272,8 @@ describe('@plotpoint/engine story bundle validation', () => {
   });
 
   it('rejects inconsistent single-choice configs', () => {
-    const bundle = createValidStoryBundleFixture();
-    const singleChoiceBlock = bundle.graph.nodes[1]?.blocks[1];
+    const storyPackage = createValidStoryPackageFixture();
+    const singleChoiceBlock = storyPackage.graph.nodes[1]?.blocks[1];
 
     if (!singleChoiceBlock || singleChoiceBlock.type !== 'single-choice') {
       throw new Error('Expected archive-door node to include a single-choice block.');
@@ -291,7 +295,7 @@ describe('@plotpoint/engine story bundle validation', () => {
     };
 
     expect(
-      validateStoryBundleCompatibility(bundle, {
+      validateStoryPackageCompatibility(storyPackage, {
         currentEngineMajor: 0,
         mode: 'draft',
       }),
@@ -324,11 +328,11 @@ describe('@plotpoint/engine story bundle validation', () => {
   });
 
   it('rejects inconsistent multi-choice configs', () => {
-    const bundle = createValidStoryBundleFixture();
-    const archiveNode = bundle.graph.nodes[1];
+    const storyPackage = createValidStoryPackageFixture();
+    const archiveNode = storyPackage.graph.nodes[1];
 
     if (!archiveNode) {
-      throw new Error('Expected archive-door node in valid story bundle fixture.');
+      throw new Error('Expected archive-door node in valid story package fixture.');
     }
 
     archiveNode.blocks.push({
@@ -353,7 +357,7 @@ describe('@plotpoint/engine story bundle validation', () => {
     });
 
     expect(
-      validateStoryBundleCompatibility(bundle, {
+      validateStoryPackageCompatibility(storyPackage, {
         currentEngineMajor: 0,
         mode: 'draft',
       }),
@@ -422,17 +426,22 @@ describe('@plotpoint/engine story bundle validation', () => {
   });
 
   it('rejects unknown condition names and missing published engine majors', () => {
-    const bundle = createValidStoryBundleFixture();
-    const conditionalEdge = bundle.graph.nodes[1]?.edges[0];
+    const storyPackage = createValidStoryPackageFixture();
+    const conditionalEdge = storyPackage.graph.nodes[1]?.edges[0];
 
     if (!conditionalEdge?.condition || conditionalEdge.condition.type !== 'check') {
       throw new Error('Expected archive-door edge to include a check condition.');
     }
 
     conditionalEdge.condition.condition = 'mystery-check';
+    const parsed = storyPackageSchema.safeParse(storyPackage);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) {
+      return;
+    }
 
     expect(
-      validateStoryBundleCompatibility(bundle, {
+      validateStoryPackageCompatibility(parsed.data, {
         currentEngineMajor: 0,
         mode: 'runtime',
       }),
@@ -455,7 +464,7 @@ describe('@plotpoint/engine story bundle validation', () => {
           mode: 'runtime',
         },
         layer: 'compatibility',
-        message: 'Bundle engine major is required for runtime validation.',
+        message: 'Story package engine major is required for runtime validation.',
         path: ['version', 'engineMajor'],
       },
     ]);

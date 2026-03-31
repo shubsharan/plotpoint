@@ -3,13 +3,18 @@ import { locationBlock } from './location.js';
 import { multiChoiceBlock } from './multi-choice.js';
 import { singleChoiceBlock } from './single-choice.js';
 import { textBlock } from './text.js';
-import type { BlockRegistryEntry } from './types.js';
 
 export type { BlockConfig, BlockRegistryEntry, BlockScope } from './types.js';
 
-export type KnownBlockType = 'code' | 'location' | 'multi-choice' | 'single-choice' | 'text';
+type BlockRegistry = {
+  readonly code: typeof codeBlock;
+  readonly location: typeof locationBlock;
+  readonly 'multi-choice': typeof multiChoiceBlock;
+  readonly 'single-choice': typeof singleChoiceBlock;
+  readonly text: typeof textBlock;
+};
 
-export const blockRegistry: Record<KnownBlockType, BlockRegistryEntry> = {
+export const blockRegistry: BlockRegistry = {
   code: codeBlock,
   location: locationBlock,
   'multi-choice': multiChoiceBlock,
@@ -17,8 +22,12 @@ export const blockRegistry: Record<KnownBlockType, BlockRegistryEntry> = {
   text: textBlock,
 };
 
+export type KnownBlockType = keyof typeof blockRegistry;
+
 export const hasBlockType = (blockType: string): blockType is KnownBlockType =>
   Object.hasOwn(blockRegistry, blockType);
 
-export const getBlockDefinition = (blockType: KnownBlockType): BlockRegistryEntry =>
+export const getBlockDefinition = <TBlockType extends KnownBlockType>(
+  blockType: TBlockType,
+): (typeof blockRegistry)[TBlockType] =>
   blockRegistry[blockType];

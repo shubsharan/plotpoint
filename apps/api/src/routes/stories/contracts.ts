@@ -4,7 +4,7 @@ const storyIdSchema = z.string().trim().min(1);
 const storyViewSchema = z.enum(['draft', 'published']);
 
 const storyWriteFieldsSchema = z.object({
-  draftBundleUri: z.url(),
+  draftPackageUri: z.url(),
   summary: z.string().optional(),
   title: z.string().trim().min(1),
 });
@@ -18,7 +18,7 @@ const patchStoryWriteFieldsSchema = storyWriteFieldsSchema
     (value) =>
       value.title !== undefined ||
       value.summary !== undefined ||
-      value.draftBundleUri !== undefined,
+      value.draftPackageUri !== undefined,
     {
       message: 'At least one field must be provided.',
     },
@@ -44,13 +44,13 @@ export const putStoryRequestSchema = storyWriteFieldsSchema
 
 export const patchStoryRequestSchema = patchStoryWriteFieldsSchema.transform((value) => {
   const normalized: {
-    draftBundleUri?: string;
+    draftPackageUri?: string;
     summary?: string | null;
     title?: string;
   } = {};
 
-  if (value.draftBundleUri !== undefined) {
-    normalized.draftBundleUri = value.draftBundleUri;
+  if (value.draftPackageUri !== undefined) {
+    normalized.draftPackageUri = value.draftPackageUri;
   }
   if (value.summary !== undefined) {
     normalized.summary = value.summary;
@@ -104,7 +104,7 @@ export const storyIdConflictResponseSchema = z.object({
 export const storyDeleteConflictResponseSchema = z.object({
   error: z.object({
     code: z.literal('story_delete_conflict'),
-    reason: z.literal('published_snapshots_exist'),
+    reason: z.literal('published_package_versions_exist'),
     storyId: z.string(),
   }),
 });
@@ -133,8 +133,8 @@ export const publishValidationFailedResponseSchema = z.object({
 export const publishStoryResponseSchema = z.object({
   engineMajor: z.number().int().nonnegative(),
   publishedAt: z.date(),
-  publishedBundleUri: z.url(),
-  snapshotId: z.string(),
+  publishedPackageUri: z.url(),
+  publishedStoryPackageVersionId: z.string(),
   status: z.literal('published'),
   storyId: z.string(),
 });

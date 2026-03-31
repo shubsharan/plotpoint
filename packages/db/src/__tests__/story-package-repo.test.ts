@@ -4,20 +4,20 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createStoryRepo } from '../repos/story-repo.js';
+import { createStoryPackageRepo } from '../repos/story-package-repo.js';
 import { createStoryQueries, type StoryQueries } from '../queries/stories.js';
-import { storyPublishedSnapshots, stories } from '../schema/stories.js';
+import { publishedStoryPackageVersions, stories } from '../schema/stories.js';
 
 const schema = {
   stories,
-  storyPublishedSnapshots,
+  publishedStoryPackageVersions,
 } as const;
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const migrationsDirectory = join(currentDirectory, '../../supabase/migrations');
 
 type TestDatabase = PgliteDatabase<typeof schema>;
 
-const createStoryBundle = (storyId: string, title: string, engineMajor: number | null) => ({
+const createStoryPackage = (storyId: string, title: string, engineMajor: number | null) => ({
   metadata: {
     storyId,
     title,
@@ -101,7 +101,7 @@ describe('@plotpoint/db story repo adapter', () => {
   let client: PGlite;
   let database: TestDatabase;
   let storyQueries: StoryQueries;
-  let bundleStorage: Map<string, unknown>;
+  let packageStorage: Map<string, unknown>;
 
   beforeAll(async () => {
     client = new PGlite();
@@ -113,7 +113,7 @@ describe('@plotpoint/db story repo adapter', () => {
     }
 
     storyQueries = createStoryQueries(database);
-    bundleStorage = new Map<string, unknown>();
+    packageStorage = new Map<string, unknown>();
   });
 
   afterAll(async () => {
@@ -121,60 +121,63 @@ describe('@plotpoint/db story repo adapter', () => {
   });
 
   beforeEach(async () => {
-    bundleStorage.clear();
-    await database.delete(storyPublishedSnapshots);
+    packageStorage.clear();
+    await database.delete(publishedStoryPackageVersions);
     await database.delete(stories);
   });
 
-  it('reads only the current published bundle and ignores newer draft content', async () => {
+  it('reads only the current published package and ignores newer draft content', async () => {
     const storyId = 'story-the-stolen-ledger';
-    const draftBundleUriV1 = 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json';
-    const draftBundleUriV2 = 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json';
-    const publishedBundleUriV1 = 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json';
+    const draftPackageUriV1 = 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json';
+    const draftPackageUriV2 = 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json';
+    const publishedPackageUriV1 = 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json';
 
-    bundleStorage.set(draftBundleUriV1, createStoryBundle(storyId, 'Draft Bundle V1', null));
-    bundleStorage.set(draftBundleUriV2, createStoryBundle(storyId, 'Draft Bundle V2', null));
-    bundleStorage.set(publishedBundleUriV1, createStoryBundle(storyId, 'Published Bundle V1', 0));
+    packageStorage.set(draftPackageUriV1, createStoryPackage(storyId, 'Draft Package V1', null));
+    packageStorage.set(draftPackageUriV2, createStoryPackage(storyId, 'Draft Package V2', null));
+    packageStorage.set(
+      publishedPackageUriV1,
+      createStoryPackage(storyId, 'Published Package V1', 0),
+    );
 
     await storyQueries.createStory({
-      draftBundleUri: draftBundleUriV1,
+      draftPackageUri: draftPackageUriV1,
       id: storyId,
       title: 'The Stolen Ledger',
     });
 
-    const storyRepo = createStoryRepo({
-      readBundle: async (bundleUri: string) => {
-        if (!bundleStorage.has(bundleUri)) {
-          throw new Error(`Missing bundle "${bundleUri}".`);
+    const storyRepo = createStoryPackageRepo({
+      readPackage: async (packageUri: string) => {
+        if (!packageStorage.has(packageUri)) {
+          throw new Error(`Missing package "${packageUri}".`);
         }
 
-        return bundleStorage.get(bundleUri);
+        return packageStorage.get(packageUri);
       },
       storyQueries,
     });
 
-    await expect(storyRepo.getBundle(storyId)).rejects.toThrow(
-      'Published bundle not found for story "story-the-stolen-ledger".',
+    await expect(storyRepo.getPublishedPackage(storyId)).rejects.toThrow(
+      'Published story package not found for story "story-the-stolen-ledger".',
     );
 
     await storyQueries.publishStory({
       engineMajor: 0,
       publishedAt: new Date('2026-03-30T10:00:00.000Z'),
-      publishedBundleUri: publishedBundleUriV1,
-      snapshotId: 'snapshot-v1',
+      publishedPackageUri: publishedPackageUriV1,
+      publishedStoryPackageVersionId: 'snapshot-v1',
       storyId,
       summary: 'Track the missing ledger.',
-      title: 'Published Bundle V1',
+      title: 'Published Package V1',
     });
 
     await storyQueries.patchStory({
-      draftBundleUri: draftBundleUriV2,
+      draftPackageUri: draftPackageUriV2,
       id: storyId,
       title: 'The Stolen Ledger (Draft Updated)',
     });
 
-    const publishedBundle = await storyRepo.getBundle(storyId);
-    expect(publishedBundle.metadata.title).toBe('Published Bundle V1');
-    expect(publishedBundle.version.engineMajor).toBe(0);
+    const publishedPackage = await storyRepo.getPublishedPackage(storyId);
+    expect(publishedPackage.metadata.title).toBe('Published Package V1');
+    expect(publishedPackage.version.engineMajor).toBe(0);
   });
 });

@@ -1,8 +1,8 @@
 export {
-  storyPublishedSnapshotInsertSchema,
-  storyPublishedSnapshotSelectSchema,
-  storyPublishedSnapshotUpdateSchema,
-  storyPublishedSnapshots,
+  publishedStoryPackageVersionInsertSchema,
+  publishedStoryPackageVersionSelectSchema,
+  publishedStoryPackageVersionUpdateSchema,
+  publishedStoryPackageVersions,
   stories,
   storyInsertSchema,
   storySelectSchema,
@@ -11,7 +11,7 @@ export {
 } from './stories.js';
 export type {
   StoryInsert,
-  StoryPublishedSnapshotInsert,
-  StoryPublishedSnapshotRow,
+  PublishedStoryPackageVersionInsert,
+  PublishedStoryPackageVersionRow,
   StoryRow,
 } from './stories.js';

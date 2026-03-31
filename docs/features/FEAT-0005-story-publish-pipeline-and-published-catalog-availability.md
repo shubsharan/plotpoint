@@ -13,11 +13,11 @@
 
 ## Goal
 
-Turn validated draft stories into immutable published bundles and make the current published catalog available to later player-facing and runtime surfaces.
+Turn validated draft stories into immutable published story packages and make the current published catalog available to later player-facing and runtime surfaces.
 
 ## Background and Context
 
-The product strategy defines publishing as the step that validates structure, optimizes bundles, and makes stories available to players inside the single Plotpoint app. The architecture already reserves `publish-story` as a route slice and states that published bundles are stamped with the engine's major version for migration compatibility.
+The product strategy defines publishing as the step that validates structure, optimizes story packages, and makes stories available to players inside the single Plotpoint app. The architecture already reserves `publish-story` as a route slice and states that published story packages are stamped with the engine's major version for migration compatibility.
 
 This feature closes EPIC-0002 by making publish a real transition instead of an implied future step. Draft content stays mutable for internal authors, while published content becomes a stable artifact that later runtime and mobile features can browse and load.
 
@@ -26,10 +26,10 @@ This feature closes EPIC-0002 by making publish a real transition instead of an 
 ### In scope
 
 - Define the `publish-story` request and response contract.
-- Validate the current draft bundle against FEAT-0003 before publish succeeds.
-- Create and persist a distinct published bundle artifact separate from mutable draft storage.
-- Stamp published bundles with engine-compatible version metadata and publish timestamps.
-- Define the published-catalog behavior needed for later consumers of `list-stories`, `get-story`, and `StoryRepo.getBundle`.
+- Validate the current draft story package against FEAT-0003 before publish succeeds.
+- Create and persist a distinct published story package artifact separate from mutable draft storage.
+- Stamp published story packages with engine-compatible version metadata and publish timestamps.
+- Define the published-catalog behavior needed for later consumers of `list-stories`, `get-story`, and `StoryPackageRepo.getPublishedPackage`.
 
 ### Out of scope
 
@@ -41,35 +41,35 @@ This feature closes EPIC-0002 by making publish a real transition instead of an 
 ## Requirements
 
 1. `publish-story` must reject drafts that fail the FEAT-0003 schema and validation rules, with structured errors that explain why publish was blocked.
-2. A successful publish must create a distinct published snapshot that stores a publish-ready bundle object-storage pointer, engine major-version stamp, and publish metadata separately from the mutable draft record.
-3. Story records must track current publish status and the current published snapshot needed for later catalog and runtime lookup.
-4. Re-publishing must create a new current published snapshot from the latest valid draft rather than mutating the previous published artifact in place.
+2. A successful publish must create a distinct published package version that stores a publish-ready story package object-storage pointer, engine major-version stamp, and publish metadata separately from the mutable draft record.
+3. Story records must track current publish status and the current published package version needed for later catalog and runtime lookup.
+4. Re-publishing must create a new current published package version from the latest valid draft rather than mutating the previous published artifact in place.
 5. `list-stories` and `get-story` must support a published-catalog view that exposes only published stories and excludes draft-only fields from player-facing consumers.
-6. `StoryRepo.getBundle(storyId)` must read published bundle data, not mutable draft content.
-7. Publish orchestration must stay in API/db ownership; the engine consumes published bundles but does not own publish workflow state transitions.
+6. `StoryPackageRepo.getPublishedPackage(storyId)` must read published story package data, not mutable draft content.
+7. Publish orchestration must stay in API/db ownership; the engine consumes published story packages but does not own publish workflow state transitions.
 
 ## Architecture and Technical Notes
 
 - Primary reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
 - The architecture explicitly allows `publish-story` to update story status directly through the database without importing from `update-story`.
-- Publish behavior must respect the engine semver rules described in the architecture doc: engine major versions stamp published bundles, and later migrations operate on published bundle data.
-- Expected implementation surfaces include `apps/api/src/routes/publish-story.ts` with route-local DTO schemas, published-story storage in `packages/db`, and `packages/db/src/repos/story-repo.ts` returning the current published bundle.
-- Distinct published snapshots are the default for this repo because publish is defined as validation plus optimization plus making a stable bundle available for runtime consumption.
-- Storage decision: [ADR-story-bundle-object-storage-links](../adrs/ADR-story-bundle-object-storage-links.md).
+- Publish behavior must respect the engine semver rules described in the architecture doc: engine major versions stamp published story packages, and later migrations operate on published story package data.
+- Expected implementation surfaces include `apps/api/src/routes/publish-story.ts` with route-local DTO schemas, published-story storage in `packages/db`, and `packages/db/src/repos/story-package-repo.ts` returning the current published story package.
+- Distinct published package versions are the default for this repo because publish is defined as validation plus optimization plus making a stable story package available for runtime consumption.
+- Storage decision: [ADR-story-package-object-storage-links](../adrs/ADR-story-package-object-storage-links.md).
 
 ## Acceptance Criteria
 
 - Invalid drafts cannot be published and return structured publish-time validation failures.
-- Successful publish creates a distinct published snapshot with version and publish metadata separate from the draft record.
-- Re-publishing replaces the current published snapshot by creating a new one, not by mutating the existing artifact in place.
+- Successful publish creates a distinct published package version with version and publish metadata separate from the draft record.
+- Re-publishing replaces the current published package version by creating a new one, not by mutating the existing artifact in place.
 - Published-catalog list/get behavior is defined and tested without leaking draft-only fields.
-- `StoryRepo.getBundle` returns published bundle data suitable for later runtime loading.
+- `StoryPackageRepo.getPublishedPackage` returns published story package data suitable for later runtime loading.
 
 ## Test Plan
 
 - Add route tests for publish success, publish validation failure, and re-publish behavior.
-- Add db tests covering published snapshot persistence and current-published lookup behavior.
-- Add integration tests showing `StoryRepo.getBundle` resolves published content only.
+- Add db tests covering published package version persistence and current-published lookup behavior.
+- Add integration tests showing `StoryPackageRepo.getPublishedPackage` resolves published content only.
 - Manually verify the flow `create draft -> update draft -> publish -> list published story -> fetch published story`.
 
 ## Rollout and Observability
@@ -80,10 +80,10 @@ This feature closes EPIC-0002 by making publish a real transition instead of an 
 
 ## Risks and Mitigations
 
-- Risk: runtime reads mutable draft content instead of stable published snapshots. Mitigation: make `StoryRepo.getBundle` resolve published artifacts only.
+- Risk: runtime reads mutable draft content instead of stable published package versions. Mitigation: make `StoryPackageRepo.getPublishedPackage` resolve published artifacts only.
 - Risk: published catalog responses leak draft-only fields. Mitigation: define explicit published response shapes and test them.
-- Risk: publish compatibility drifts from engine versioning rules. Mitigation: stamp published bundles at publish time and treat version metadata as part of the persisted artifact.
+- Risk: publish compatibility drifts from engine versioning rules. Mitigation: stamp published story packages at publish time and treat version metadata as part of the persisted artifact.
 
 ## Open Questions
 
-- None. This feature resolves the epic-level publish-artifact decision by persisting a distinct published snapshot.
+- None. This feature resolves the epic-level publish-artifact decision by persisting a distinct published package version.

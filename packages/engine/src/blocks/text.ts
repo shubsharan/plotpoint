@@ -1,5 +1,56 @@
 import { z } from 'zod';
-import type { BlockConfig, BlockRegistryEntry } from './types.js';
+import { defineBlockDefinition, type BlockRegistryEntry } from './types.js';
+
+type TextLeaf = {
+  text: string;
+  type: 'text';
+};
+
+type LinkLeaf = {
+  children: TextLeaf[];
+  href: string;
+  type: 'link';
+};
+
+type ParagraphNode = {
+  children: Array<TextLeaf | LinkLeaf>;
+  type: 'paragraph';
+};
+
+type HeadingNode = {
+  children: TextLeaf[];
+  level: 1 | 2 | 3;
+  type: 'heading';
+};
+
+type ImageNode = {
+  alt?: string | undefined;
+  caption?: string | undefined;
+  type: 'image';
+  url: string;
+};
+
+type AudioNode = {
+  caption?: string | undefined;
+  title?: string | undefined;
+  type: 'audio';
+  url: string;
+};
+
+type VideoNode = {
+  caption?: string | undefined;
+  posterUrl?: string | undefined;
+  title?: string | undefined;
+  type: 'video';
+  url: string;
+};
+
+type TextBlockConfig = {
+  document: {
+    children: Array<ParagraphNode | HeadingNode | ImageNode | AudioNode | VideoNode>;
+    type: 'doc';
+  };
+};
 
 const textLeafSchema = z
   .object({
@@ -69,7 +120,7 @@ const blockNodeSchema = z.union([
   videoNodeSchema,
 ]);
 
-export const textConfigSchema: z.ZodType<BlockConfig> = z
+const textConfigSchema: z.ZodType<TextBlockConfig> = z
   .object({
     document: z
       .object({
@@ -80,7 +131,7 @@ export const textConfigSchema: z.ZodType<BlockConfig> = z
   })
   .strict();
 
-export const textBlock: BlockRegistryEntry = {
+export const textBlock: BlockRegistryEntry<TextBlockConfig> = defineBlockDefinition({
   configSchema: textConfigSchema,
   scope: 'user',
-};
+});

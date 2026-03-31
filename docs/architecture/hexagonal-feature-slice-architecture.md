@@ -20,6 +20,13 @@ Current scaffold baseline: the checked-in foundation workspace contains only `ap
 - `docs/architecture/` captures durable technical boundaries and implementation direction.
 - `docs/epics/`, `docs/features/`, and `docs/adrs/` capture scoped design records and trade-off decisions.
 
+## Canonical Glossary
+
+- `Story`: the business entity record (`id`, title, summary, status, timestamps, and package pointers).
+- `StoryPackage`: the engine-readable serialized payload consumed by validation and runtime.
+- `PublishedStoryPackageVersion`: internal-only immutable published record that wraps a `StoryPackage` version for publish/runtime persistence.
+- `Story.status`: the lifecycle authority (`draft`, `published`, `archived`); do not model `StoryDraft` and `PublishedStory` as separate top-level type families.
+
 ```
 apps/
 ├── api/
@@ -85,7 +92,7 @@ packages/
 │   │   ├── user-saves.ts              Queries + mutations for user saves
 │   │   ├── game-saves.ts              Queries + mutations for game saves
 │   │   ├── repos/
-│   │   │   ├── story-repo.ts          Implements engine StoryRepo port
+│   │   │   ├── story-package-repo.ts          Implements engine StoryPackageRepo port
 │   │   │   ├── user-save-repo.ts      Implements engine UserSaveRepo port
 │   │   │   ├── game-save-repo.ts      Implements engine GameSaveRepo port
 │   │   │   └── index.ts               Barrel export
@@ -104,7 +111,7 @@ packages/
 
 ## Dependency Flow
 
-The dependency direction is the most important architectural invariant to protect. The engine depends on nothing. Everything else depends inward toward it. The engine owns domain contracts and ports (including `StoryBundle`), while adapters own transport DTO schemas.
+The dependency direction is the most important architectural invariant to protect. The engine depends on nothing. Everything else depends inward toward it. The engine owns domain contracts and ports (including `StoryPackage`), while adapters own transport DTO schemas.
 
 ```
 mobile  →  api  →  engine  ←  db
@@ -121,8 +128,8 @@ Ports are the abstract interfaces the engine defines for its external dependenci
 ```typescript
 // engine/ports.ts
 
-export type StoryRepo = {
-  getBundle: (storyId: string) => Promise<StoryBundle>;
+export type StoryPackageRepo = {
+  getPublishedPackage: (storyId: string) => Promise<StoryPackage>;
 };
 
 export type UserSaveRepo = {
@@ -163,11 +170,11 @@ The engine is created in `server.ts` alongside app setup. Routes import the engi
 // api/server.ts
 import { Hono } from 'hono';
 import { createEngine } from '@plotpoint/engine';
-import { storyRepo, userSaveRepo, gameSaveRepo } from '@plotpoint/db/repos';
+import { storyPackageRepo, userSaveRepo, gameSaveRepo } from '@plotpoint/db/repos';
 import submitAction from './routes/submit-action';
 import { storiesRoutes } from './routes/stories/router';
 
-export const engine = createEngine({ storyRepo, userSaveRepo, gameSaveRepo });
+export const engine = createEngine({ storyPackageRepo, userSaveRepo, gameSaveRepo });
 
 const app = new Hono();
 app.route('/api', submitAction);
@@ -178,12 +185,12 @@ export default app;
 
 ```typescript
 // engine/index.ts
-import type { StoryRepo, UserSaveRepo, GameSaveRepo } from './ports';
+import type { StoryPackageRepo, UserSaveRepo, GameSaveRepo } from './ports';
 import { executeAction } from './runtime/executor';
 import { startNewGame } from './runtime/save';
 
 type EnginePorts = {
-  storyRepo: StoryRepo;
+  storyPackageRepo: StoryPackageRepo;
   userSaveRepo: UserSaveRepo;
   gameSaveRepo: GameSaveRepo;
 };
@@ -214,7 +221,7 @@ type BlockInstance = {
 };
 ```
 
-Canonical authored JSON stores nodes, blocks, and edges as ordered arrays. Runtime lookup tables are an engine concern after load, not part of the serialized bundle contract.
+Canonical authored JSON stores nodes, blocks, and edges as ordered arrays. Runtime lookup tables are an engine concern after load, not part of the serialized story package contract.
 
 ### User-Scoped Block Example
 
@@ -381,7 +388,7 @@ type Condition =
 
 ### Named Condition Functions
 
-Condition functions are real TypeScript functions in a registry in `graph/conditions.ts`. The story bundle stores the function name and params as JSON. The engine looks up the real function at runtime. Adding a new condition type means adding one entry to the registry.
+Condition functions are real TypeScript functions in a registry in `graph/conditions.ts`. The story package stores the function name and params as JSON. The engine looks up the real function at runtime. Adding a new condition type means adding one entry to the registry.
 
 Built-in conditions: `field-equals`, `field-compare`, `array-includes`, `array-length`, `time-elapsed`, `within-radius`.
 
@@ -431,7 +438,7 @@ const evaluate = (
 
 ### Example: Compound Condition
 
-"The player can enter the final room if they have the master key, OR if they've solved the puzzle AND at least 3 clues have been found." Stored in the story bundle as:
+"The player can enter the final room if they have the master key, OR if they've solved the puzzle AND at least 3 clues have been found." Stored in the story package as:
 
 ```json
 {
@@ -519,9 +526,9 @@ export const executeAction = async (
   // 1. Load both save states through ports
   const save = await ports.userSaveRepo.get(saveId);
   const gameSave = await ports.gameSaveRepo.get(save.gameId);
-  const story = await ports.storyRepo.getBundle(save.storyId);
+  const story = await ports.storyPackageRepo.getPublishedPackage(save.storyId);
 
-  // 2. Find the target block's type and config from the story bundle
+  // 2. Find the target block's type and config from the story package
   const currentNode = story.graph.nodes.find((node) => node.id === save.currentNodeId);
   const blockConfig = currentNode?.blocks.find((block) => block.id === blockId);
   const blockDef = getBlock(blockConfig.type);
@@ -604,11 +611,11 @@ Phone
 
 ## Versioning
 
-The engine uses semver. The major version is what gets stamped into published story bundles. A story published against engine v2 runs on any engine 2.x.x. It breaks only on engine 3.0.0, at which point the migration chain runs.
+The engine uses semver. The major version is what gets stamped into published story packages. A story published against engine v2 runs on any engine 2.x.x. It breaks only on engine 3.0.0, at which point the migration chain runs.
 
 ### Semver Mapping
 
-**Major:** Breaking changes to story bundle interpretation. Changing how conditions evaluate, restructuring graph traversal, altering block state machine behavior. Requires a migration function.
+**Major:** Breaking changes to story package interpretation. Changing how conditions evaluate, restructuring graph traversal, altering block state machine behavior. Requires a migration function.
 
 **Minor:** Backwards-compatible additions. New block types, new condition functions, new optional fields that default gracefully. Old stories unaffected.
 
@@ -616,18 +623,18 @@ The engine uses semver. The major version is what gets stamped into published st
 
 ### Migration Chain
 
-Migrations live in `runtime/migrations.ts` as an array of pure functions. Each transforms a bundle from one major version to the next. They chain: a v1 story on a v3 engine runs through v1→2 then v2→3. The original bundle in storage is never modified — migration happens in memory at load time.
+Migrations live in `runtime/migrations.ts` as an array of pure functions. Each transforms a story package from one major version to the next. They chain: a v1 story on a v3 engine runs through v1→2 then v2→3. The original story package in storage is never modified; migration happens in memory at load time.
 
 ```typescript
 const migrations = [
   {
     from: 1,
     to: 2,
-    migrate: (bundle) => ({
-      ...bundle,
+    migrate: (storyPackage) => ({
+      ...storyPackage,
       graph: {
-        ...bundle.graph,
-        nodes: bundle.graph.nodes.map((node) => ({
+        ...storyPackage.graph,
+        nodes: storyPackage.graph.nodes.map((node) => ({
           ...node,
           edges: node.edges.map((edge) => ({
             ...edge,
@@ -639,8 +646,11 @@ const migrations = [
   },
 ];
 
-export const migrateBundle = (bundle: StoryBundle, fromVersion: number): StoryBundle => {
-  let current = bundle;
+export const migrateStoryPackage = (
+  storyPackage: StoryPackage,
+  fromVersion: number,
+): StoryPackage => {
+  let current = storyPackage;
   let version = fromVersion;
 
   for (const m of migrations) {
@@ -692,12 +702,12 @@ export const createStory = async (input: CreateStoryInput) => {
 The engine never calls database functions directly. Repos adapt them to port shapes:
 
 ```typescript
-// db/repos/story-repo.ts
-import type { StoryRepo } from '@plotpoint/engine';
-import { getStoryBundle } from '../stories';
+// db/repos/story-package-repo.ts
+import type { StoryPackageRepo } from '@plotpoint/engine';
+import { getStoryPackage } from '../stories';
 
-export const storyRepo: StoryRepo = {
-  getBundle: getStoryBundle,
+export const storyPackageRepo: StoryPackageRepo = {
+  getPublishedPackage: getStoryPackage,
 };
 ```
 
@@ -757,8 +767,8 @@ test('force open works after 3 failed attempts', () => {
 ### Testing with Fake Ports
 
 ```typescript
-const fakeStoryRepo: StoryRepo = {
-  getBundle: async (id) => ({
+const fakeStoryPackageRepo: StoryPackageRepo = {
+  getPublishedPackage: async (id) => ({
     metadata: {
       storyId: id,
       title: 'Story Title',
@@ -819,7 +829,7 @@ const fakeGameSaveRepo: GameSaveRepo = {
 
 // Create engine with fakes
 const engine = createEngine({
-  storyRepo: fakeStoryRepo,
+  storyPackageRepo: fakeStoryPackageRepo,
   userSaveRepo: fakeUserSaveRepo,
   gameSaveRepo: fakeGameSaveRepo,
 });
@@ -843,7 +853,7 @@ test('submitting correct code unlocks door', async () => {
 
 **Two save states, one combined view.** `UserSaveState` tracks per-player progress. `GameSaveState` tracks shared world state. The executor merges both for edge evaluation so conditions can reference either scope.
 
-**Conditions are named functions, not a custom language.** The story bundle stores condition names and params as JSON. The engine maps names to real TypeScript functions at runtime through a registry. Adding a new condition type means adding one function to the registry.
+**Conditions are named functions, not a custom language.** The story package stores condition names and params as JSON. The engine maps names to real TypeScript functions at runtime through a registry. Adding a new condition type means adding one function to the registry.
 
 **All database logic lives in the db package.** Schema files define tables, sibling files define operations. Repos are thin wrappers that adapt operations to engine port shapes. API routes import operations directly for simple queries.
 

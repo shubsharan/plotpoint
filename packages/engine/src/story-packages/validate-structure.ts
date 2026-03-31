@@ -1,5 +1,6 @@
-import type { StoryBundle } from './schema.js';
-import type { StoryBundleValidationIssue } from './types.js';
+import type { StoryPackage } from './schema.js';
+import type { StoryPackageValidationIssue } from './types.js';
+import { createStoryPackageIssueFactory } from './validation-issues.js';
 
 type DuplicateItem = {
   id: string;
@@ -18,29 +19,10 @@ type BlockLocation = {
   nodeIndex: number;
 };
 
-const createIssue = (
-  code: string,
-  path: ReadonlyArray<number | string>,
-  message: string,
-  details?: Record<string, boolean | null | number | string>,
-): StoryBundleValidationIssue =>
-  details === undefined
-    ? {
-        code,
-        layer: 'structure',
-        message,
-        path,
-      }
-    : {
-        code,
-        details,
-        layer: 'structure',
-        message,
-        path,
-      };
+const createIssue = createStoryPackageIssueFactory('structure');
 
 const appendDuplicateIdIssues = (
-  issues: StoryBundleValidationIssue[],
+  issues: StoryPackageValidationIssue[],
   items: readonly DuplicateItem[],
   pathPrefix: ReadonlyArray<number | string>,
   itemLabel: string,
@@ -69,18 +51,18 @@ const appendDuplicateIdIssues = (
   });
 };
 
-export const validateStoryBundleStructure = (bundle: StoryBundle): StoryBundleValidationIssue[] => {
-  const issues: StoryBundleValidationIssue[] = [];
+export const validateStoryPackageStructure = (storyPackage: StoryPackage): StoryPackageValidationIssue[] => {
+  const issues: StoryPackageValidationIssue[] = [];
   const firstCrossNodeBlockById = new Map<string, BlockLocation>();
 
-  appendDuplicateIdIssues(issues, bundle.roles, ['roles'], 'role');
+  appendDuplicateIdIssues(issues, storyPackage.roles, ['roles'], 'role');
 
-  if (bundle.graph.nodes.length === 0) {
+  if (storyPackage.graph.nodes.length === 0) {
     issues.push(
       createIssue(
         'empty-graph',
         ['graph', 'nodes'],
-        'Story bundles must declare at least one node.',
+        'Story packages must declare at least one node.',
       ),
     );
   }
@@ -88,7 +70,7 @@ export const validateStoryBundleStructure = (bundle: StoryBundle): StoryBundleVa
   const nodeIndexById = new Map<string, number>();
   let hasDuplicateNodeIds = false;
 
-  bundle.graph.nodes.forEach((node, nodeIndex) => {
+  storyPackage.graph.nodes.forEach((node, nodeIndex) => {
     const existingIndex = nodeIndexById.get(node.id);
     if (existingIndex === undefined) {
       nodeIndexById.set(node.id, nodeIndex);
@@ -134,23 +116,23 @@ export const validateStoryBundleStructure = (bundle: StoryBundle): StoryBundleVa
     appendDuplicateIdIssues(issues, node.edges, ['graph', 'nodes', nodeIndex, 'edges'], 'edge');
   });
 
-  appendDuplicateIdIssues(issues, bundle.graph.nodes, ['graph', 'nodes'], 'node');
+  appendDuplicateIdIssues(issues, storyPackage.graph.nodes, ['graph', 'nodes'], 'node');
 
-  const entryNodeIndex = nodeIndexById.get(bundle.graph.entryNodeId);
+  const entryNodeIndex = nodeIndexById.get(storyPackage.graph.entryNodeId);
   if (entryNodeIndex === undefined) {
     issues.push(
       createIssue(
         'invalid-entry-node',
         ['graph', 'entryNodeId'],
-        `Entry node "${bundle.graph.entryNodeId}" does not exist.`,
+        `Entry node "${storyPackage.graph.entryNodeId}" does not exist.`,
         {
-          entryNodeId: bundle.graph.entryNodeId,
+          entryNodeId: storyPackage.graph.entryNodeId,
         },
       ),
     );
   }
 
-  const traversableEdgesByNode = bundle.graph.nodes.map<TraversableEdge[]>((node, nodeIndex) => {
+  const traversableEdgesByNode = storyPackage.graph.nodes.map<TraversableEdge[]>((node, nodeIndex) => {
     const traversableEdges: TraversableEdge[] = [];
 
     node.edges.forEach((edge, edgeIndex) => {
@@ -182,7 +164,7 @@ export const validateStoryBundleStructure = (bundle: StoryBundle): StoryBundleVa
   });
 
   if (!hasDuplicateNodeIds && entryNodeIndex !== undefined) {
-    const reachable = new Array(bundle.graph.nodes.length).fill(false);
+    const reachable = new Array(storyPackage.graph.nodes.length).fill(false);
     const stack = [entryNodeIndex];
 
     while (stack.length > 0) {
@@ -199,7 +181,7 @@ export const validateStoryBundleStructure = (bundle: StoryBundle): StoryBundleVa
       }
     }
 
-    bundle.graph.nodes.forEach((node, nodeIndex) => {
+    storyPackage.graph.nodes.forEach((node, nodeIndex) => {
       if (reachable[nodeIndex]) {
         return;
       }
@@ -208,16 +190,16 @@ export const validateStoryBundleStructure = (bundle: StoryBundle): StoryBundleVa
         createIssue(
           'unreachable-node',
           ['graph', 'nodes', nodeIndex, 'id'],
-          `Node "${node.id}" is unreachable from entry node "${bundle.graph.entryNodeId}".`,
+          `Node "${node.id}" is unreachable from entry node "${storyPackage.graph.entryNodeId}".`,
           {
-            entryNodeId: bundle.graph.entryNodeId,
+            entryNodeId: storyPackage.graph.entryNodeId,
             nodeId: node.id,
           },
         ),
       );
     });
 
-    const visitState = new Array(bundle.graph.nodes.length).fill(0);
+    const visitState = new Array(storyPackage.graph.nodes.length).fill(0);
 
     const visitNode = (nodeIndex: number): void => {
       visitState[nodeIndex] = 1;
@@ -246,7 +228,7 @@ export const validateStoryBundleStructure = (bundle: StoryBundle): StoryBundleVa
       visitState[nodeIndex] = 2;
     };
 
-    bundle.graph.nodes.forEach((_, nodeIndex) => {
+    storyPackage.graph.nodes.forEach((_, nodeIndex) => {
       if (visitState[nodeIndex] === 0) {
         visitNode(nodeIndex);
       }

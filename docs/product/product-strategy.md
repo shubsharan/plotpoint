@@ -46,7 +46,7 @@ Local-first architecture means players can progress without a network connection
 
 **Phase 3: AI-assisted story creation.** An AI assistant that understands Plotpoint's story model guides creators through building a story in natural conversation. "I want a murder mystery set in a historic district for four players." This is the thing that makes Plotpoint easier to create for than any competing platform.
 
-Publishing follows the Roblox model: creators publish to the platform, not the App Store. Stories go through a publish pipeline that validates structure, optimizes bundles, and makes them available to players.
+Publishing follows the Roblox model: creators publish to the platform, not the App Store. Stories go through a publish pipeline that validates structure, optimizes story packages, and makes them available to players.
 
 The component registry is fixed and curated. Creators compose from a predefined set of interactive blocks: password puzzles, geolocation gates, QR scanners, timersme etc. The registry expands over time based on what creators need, but creators never write arbitrary code. This constraint is what makes the platform safe, consistent, and AI-authorable.
 

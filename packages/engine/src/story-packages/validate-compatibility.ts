@@ -2,43 +2,25 @@ import type { z } from 'zod';
 import { getBlockDefinition, hasBlockType } from '../blocks/index.js';
 import { hasConditionName } from '../graph/conditions.js';
 import type {
-  StoryBundle,
-  StoryBundleCompatibilityOptions,
-  StoryBundleValidationIssue,
+  StoryPackage,
+  StoryPackageCompatibilityOptions,
+  StoryPackageValidationIssue,
 } from './types.js';
+import {
+  createStoryPackageIssueFactory,
+  normalizeStoryPackageValidationPath,
+} from './validation-issues.js';
 
-type StoryBundleCondition = NonNullable<
-  StoryBundle['graph']['nodes'][number]['edges'][number]['condition']
+type StoryPackageCondition = NonNullable<
+  StoryPackage['graph']['nodes'][number]['edges'][number]['condition']
 >;
 
-const createIssue = (
-  code: string,
-  path: ReadonlyArray<number | string>,
-  message: string,
-  details?: Record<string, boolean | null | number | string>,
-): StoryBundleValidationIssue =>
-  details === undefined
-    ? {
-        code,
-        layer: 'compatibility',
-        message,
-        path,
-      }
-    : {
-        code,
-        details,
-        layer: 'compatibility',
-        message,
-        path,
-      };
-
-const normalizeIssuePath = (path: ReadonlyArray<PropertyKey>): Array<number | string> =>
-  path.map((segment) => (typeof segment === 'number' ? segment : String(segment)));
+const createIssue = createStoryPackageIssueFactory('compatibility');
 
 const visitCondition = (
-  condition: StoryBundleCondition,
+  condition: StoryPackageCondition,
   path: ReadonlyArray<number | string>,
-  visit: (condition: StoryBundleCondition, path: ReadonlyArray<number | string>) => void,
+  visit: (condition: StoryPackageCondition, path: ReadonlyArray<number | string>) => void,
 ): void => {
   visit(condition, path);
 
@@ -56,14 +38,14 @@ const visitCondition = (
   }
 };
 
-export const validateStoryBundleCompatibility = (
-  bundle: StoryBundle,
-  options: StoryBundleCompatibilityOptions,
-): StoryBundleValidationIssue[] => {
-  const issues: StoryBundleValidationIssue[] = [];
+export const validateStoryPackageCompatibility = (
+  storyPackage: StoryPackage,
+  options: StoryPackageCompatibilityOptions,
+): StoryPackageValidationIssue[] => {
+  const issues: StoryPackageValidationIssue[] = [];
   const mode = options.mode ?? 'draft';
 
-  bundle.graph.nodes.forEach((node, nodeIndex) => {
+  storyPackage.graph.nodes.forEach((node, nodeIndex) => {
     node.blocks.forEach((block, blockIndex) => {
       if (!hasBlockType(block.type)) {
         issues.push(
@@ -99,7 +81,7 @@ export const validateStoryBundleCompatibility = (
               'blocks',
               blockIndex,
               'config',
-              ...normalizeIssuePath(issue.path),
+              ...normalizeStoryPackageValidationPath(issue.path),
             ],
             `Block "${block.id}" has invalid config for type "${block.type}".`,
             {
@@ -143,14 +125,14 @@ export const validateStoryBundleCompatibility = (
     });
   });
 
-  const engineMajor = bundle.version.engineMajor;
+  const engineMajor = storyPackage.version.engineMajor;
   if (mode === 'draft') {
     if (engineMajor !== null && engineMajor !== options.currentEngineMajor) {
       issues.push(
         createIssue(
           'incompatible-engine-major',
           ['version', 'engineMajor'],
-          `Draft bundle engine major ${engineMajor} does not match current engine major ${options.currentEngineMajor}.`,
+          `Draft story package engine major ${engineMajor} does not match current engine major ${options.currentEngineMajor}.`,
           {
             currentEngineMajor: options.currentEngineMajor,
             engineMajor,
@@ -168,7 +150,7 @@ export const validateStoryBundleCompatibility = (
       createIssue(
         'missing-engine-major',
         ['version', 'engineMajor'],
-        `Bundle engine major is required for ${mode} validation.`,
+        `Story package engine major is required for ${mode} validation.`,
         {
           currentEngineMajor: options.currentEngineMajor,
           mode,
@@ -183,7 +165,7 @@ export const validateStoryBundleCompatibility = (
       createIssue(
         'incompatible-engine-major',
         ['version', 'engineMajor'],
-        `Bundle engine major ${engineMajor} does not match current engine major ${options.currentEngineMajor}.`,
+        `Story package engine major ${engineMajor} does not match current engine major ${options.currentEngineMajor}.`,
         {
           currentEngineMajor: options.currentEngineMajor,
           engineMajor,

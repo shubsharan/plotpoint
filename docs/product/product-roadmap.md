@@ -14,7 +14,7 @@ Deliver the first playable Plotpoint MVP: a single mobile app where small groups
 ## MVP Outcomes
 
 - Players can browse available stories, join a session, receive a role, and complete a narrative run.
-- Internal creators can publish and update curated story bundles without custom code per story release.
+- Internal creators can publish and update curated story packages without custom code per story release.
 - The runtime supports player-scoped and shared game-scoped state for multiplayer storytelling.
 - The team can run repeatable playtests and ship improvements on a predictable release cadence.
 
@@ -52,7 +52,7 @@ Deliver the first playable Plotpoint MVP: a single mobile app where small groups
 | Epic        | Objective                                                      | MVP                                                  | Status      |
 | ----------- | -------------------------------------------------------------- | ---------------------------------------------------- | ----------- |
 | `EPIC-0001` | Establish planning/docs baseline and foundation cleanup.       | Creates a clean starting point for product delivery. | Complete    |
-| `EPIC-0002` | Define story bundle contract and internal publishing pipeline. | Enables repeatable, non-code content releases.       | In Progress |
+| `EPIC-0002` | Define story package contract and internal publishing pipeline. | Enables repeatable, non-code content releases.       | In Progress |
 | `EPIC-0003` | Build the headless runtime engine and condition system.        | Provides core story execution semantics.             | Not Started |
 | `EPIC-0004` | Add session lifecycle, persistence, and multiplayer state.     | Supports reliable co-op play across sessions.        | Not Started |
 | `EPIC-0005` | Deliver mobile shell, renderer registry, and gameplay UX.      | Makes the runtime playable in the MVP app.           | Not Started |

@@ -5,20 +5,20 @@
 | **Owner**       | product-engineering |
 | **Last synced** | 2026-03-24          |
 
-# ADR - Story Bundle Object Storage Links
+# ADR - Story Package Object Storage Links
 
 ## Context
 
-Story bundles can become large and mutable over time. Storing full bundle JSON blobs directly in the `stories` row couples metadata CRUD to content payload size and makes publish artifact evolution harder.
+Story packages can become large and mutable over time. Storing full story package JSON blobs directly in the `stories` row couples metadata CRUD to content payload size and makes publish artifact evolution harder.
 
 ## Decision
 
-Draft and published story records store object-storage pointers, not full bundle JSON payloads, in relational tables.
+Draft and published story records store object-storage pointers, not full story package JSON payloads, in relational tables.
 
-- `stories` stores a draft bundle pointer (`draft_bundle_uri`) plus metadata.
-- Publish flow stores published snapshot pointers as separate immutable artifacts (defined in FEAT-0005).
+- `stories` stores a draft story package pointer (`draft_package_uri`) plus metadata.
+- Publish flow stores published package version pointers as separate immutable artifacts (defined in FEAT-0005).
 - API/publish layers own upload/download orchestration to object storage (S3-compatible), validation, and pointer lifecycle.
-- Engine consumes bundle JSON through repository ports; it does not own storage transport.
+- Engine consumes story package JSON through repository ports; it does not own storage transport.
 
 ## Consequences
 

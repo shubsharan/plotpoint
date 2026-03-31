@@ -20,9 +20,9 @@ export const stories = pgTable.withRLS('stories', {
   title: text('title').notNull(),
   summary: text('summary'),
   status: storyStatusEnum('status').notNull().default('draft'),
-  draftBundleUri: text('draft_bundle_uri').notNull(),
-  currentPublishedSnapshotId: text('current_published_snapshot_id').references(
-    (): AnyPgColumn => storyPublishedSnapshots.id,
+  draftPackageUri: text('draft_package_uri').notNull(),
+  currentPublishedPackageVersionId: text('current_published_package_version_id').references(
+    (): AnyPgColumn => publishedStoryPackageVersions.id,
     { onDelete: 'set null' },
   ),
   lastPublishedAt: timestamp('last_published_at', {
@@ -43,14 +43,14 @@ export const stories = pgTable.withRLS('stories', {
     .defaultNow(),
 });
 
-export const storyPublishedSnapshots = pgTable.withRLS('story_published_snapshots', {
+export const publishedStoryPackageVersions = pgTable.withRLS('story_published_package_versions', {
   id: text('id').primaryKey(),
   storyId: text('story_id')
     .notNull()
     .references((): AnyPgColumn => stories.id, { onDelete: 'restrict' }),
   title: text('title').notNull(),
   summary: text('summary'),
-  publishedBundleUri: text('published_bundle_uri').notNull(),
+  publishedPackageUri: text('published_package_uri').notNull(),
   engineMajor: integer('engine_major').notNull(),
   publishedAt: timestamp('published_at', {
     mode: 'date',
@@ -66,12 +66,12 @@ export const storyPublishedSnapshots = pgTable.withRLS('story_published_snapshot
 
 export type StoryRow = typeof stories.$inferSelect;
 export type StoryInsert = typeof stories.$inferInsert;
-export type StoryPublishedSnapshotRow = typeof storyPublishedSnapshots.$inferSelect;
-export type StoryPublishedSnapshotInsert = typeof storyPublishedSnapshots.$inferInsert;
+export type PublishedStoryPackageVersionRow = typeof publishedStoryPackageVersions.$inferSelect;
+export type PublishedStoryPackageVersionInsert = typeof publishedStoryPackageVersions.$inferInsert;
 
 export const storySelectSchema = createSelectSchema(stories);
 export const storyInsertSchema = createInsertSchema(stories);
 export const storyUpdateSchema = createUpdateSchema(stories);
-export const storyPublishedSnapshotSelectSchema = createSelectSchema(storyPublishedSnapshots);
-export const storyPublishedSnapshotInsertSchema = createInsertSchema(storyPublishedSnapshots);
-export const storyPublishedSnapshotUpdateSchema = createUpdateSchema(storyPublishedSnapshots);
+export const publishedStoryPackageVersionSelectSchema = createSelectSchema(publishedStoryPackageVersions);
+export const publishedStoryPackageVersionInsertSchema = createInsertSchema(publishedStoryPackageVersions);
+export const publishedStoryPackageVersionUpdateSchema = createUpdateSchema(publishedStoryPackageVersions);

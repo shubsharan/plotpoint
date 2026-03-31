@@ -5,11 +5,11 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStoryQueries, type StoryQueries } from '../index.js';
-import { storyPublishedSnapshots, stories } from '../schema/stories.js';
+import { publishedStoryPackageVersions, stories } from '../schema/stories.js';
 
 const schema = {
   stories,
-  storyPublishedSnapshots,
+  publishedStoryPackageVersions,
 } as const;
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const migrationsDirectory = join(currentDirectory, '../../supabase/migrations');
@@ -17,7 +17,7 @@ const migrationsDirectory = join(currentDirectory, '../../supabase/migrations');
 type TestDatabase = PgliteDatabase<typeof schema>;
 
 const createStoryInput = () => ({
-  draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
+  draftPackageUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
   id: 'story-the-stolen-ledger',
   summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
   title: 'The Stolen Ledger',
@@ -93,7 +93,7 @@ describe('@plotpoint/db stories', () => {
   });
 
   beforeEach(async () => {
-    await testDatabase.delete(storyPublishedSnapshots);
+    await testDatabase.delete(publishedStoryPackageVersions);
     await testDatabase.delete(stories);
   });
 
@@ -117,7 +117,7 @@ describe('@plotpoint/db stories', () => {
       id: 'story-the-stolen-ledger',
       status: 'draft',
     });
-    expect(story?.draftBundleUri).toBe(input.draftBundleUri);
+    expect(story?.draftPackageUri).toBe(input.draftPackageUri);
   });
 
   it('rejects duplicate story ids at the database layer', async () => {
@@ -134,10 +134,10 @@ describe('@plotpoint/db stories', () => {
 
     olderInput.id = 'story-older';
     olderInput.title = 'Older Story';
-    olderInput.draftBundleUri = 's3://plotpoint-stories/drafts/story-older/v1.json';
+    olderInput.draftPackageUri = 's3://plotpoint-stories/drafts/story-older/v1.json';
     newerInput.id = 'story-newer';
     newerInput.title = 'Newer Story';
-    newerInput.draftBundleUri = 's3://plotpoint-stories/drafts/story-newer/v1.json';
+    newerInput.draftPackageUri = 's3://plotpoint-stories/drafts/story-newer/v1.json';
 
     await storyQueries.createStory({
       ...olderInput,
@@ -163,14 +163,14 @@ describe('@plotpoint/db stories', () => {
       ...createStoryInput(),
       id: 'story-a',
       now: new Date('2026-03-23T09:00:00.000Z'),
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-a/v1.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-a/v1.json',
       title: 'Story A',
     });
     await storyQueries.createStory({
       ...createStoryInput(),
       id: 'story-z',
       now: new Date('2026-03-23T09:00:00.000Z'),
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-z/v1.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-z/v1.json',
       title: 'Story Z',
     });
 
@@ -180,13 +180,13 @@ describe('@plotpoint/db stories', () => {
     ]);
   });
 
-  it('replaces a story including null summary and updated bundle uri', async () => {
+  it('replaces a story including null summary and updated package uri', async () => {
     const input = createStoryInput();
 
     await storyQueries.createStory(input);
 
     const result = await storyQueries.updateStory({
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json',
       id: 'story-the-stolen-ledger',
       now: new Date('2026-03-23T13:00:00.000Z'),
       summary: null,
@@ -201,7 +201,7 @@ describe('@plotpoint/db stories', () => {
 
     const story = await storyQueries.getStory('story-the-stolen-ledger');
 
-    expect(story?.draftBundleUri).toBe('s3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json');
+    expect(story?.draftPackageUri).toBe('s3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json');
     expect(story?.updatedAt.toISOString()).toBe('2026-03-23T13:00:00.000Z');
   });
 
@@ -222,22 +222,22 @@ describe('@plotpoint/db stories', () => {
     const story = await storyQueries.getStory('story-the-stolen-ledger');
     expect(story?.title).toBe("The Stolen Ledger: Director's Cut");
     expect(story?.summary).toBe(input.summary);
-    expect(story?.draftBundleUri).toBe(input.draftBundleUri);
+    expect(story?.draftPackageUri).toBe(input.draftPackageUri);
     expect(story?.updatedAt.toISOString()).toBe('2026-03-23T14:00:00.000Z');
   });
 
-  it('patches only draft bundle uri when provided', async () => {
+  it('patches only draft package uri when provided', async () => {
     await storyQueries.createStory(createStoryInput());
 
     const patched = await storyQueries.patchStory({
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json',
       id: 'story-the-stolen-ledger',
       now: new Date('2026-03-23T15:00:00.000Z'),
     });
 
-    expect(patched?.draftBundleUri).toBe('s3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json');
+    expect(patched?.draftPackageUri).toBe('s3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json');
     await expect(storyQueries.getStory('story-the-stolen-ledger')).resolves.toMatchObject({
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json',
       summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
       title: 'The Stolen Ledger',
     });
@@ -264,7 +264,7 @@ describe('@plotpoint/db stories', () => {
 
     await expect(
       storyQueries.updateStory({
-        draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
+        draftPackageUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json',
         id: 'story-the-stolen-ledger',
         summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
         title: 'The Stolen Ledger',
@@ -295,14 +295,14 @@ describe('@plotpoint/db stories', () => {
     await expect(storyQueries.getStory('story-the-stolen-ledger')).resolves.toBeNull();
   });
 
-  it('publishes stories by creating immutable snapshots and advancing current pointer', async () => {
+  it('publishes stories by creating immutable published package versions and advancing current pointer', async () => {
     await storyQueries.createStory(createStoryInput());
 
     const firstPublish = await storyQueries.publishStory({
       engineMajor: 0,
       publishedAt: new Date('2026-03-23T16:00:00.000Z'),
-      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
-      snapshotId: 'snapshot-v1',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-v1',
       storyId: 'story-the-stolen-ledger',
       summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
       title: 'The Stolen Ledger',
@@ -311,31 +311,31 @@ describe('@plotpoint/db stories', () => {
     expect(firstPublish).toMatchObject({
       storyId: 'story-the-stolen-ledger',
       status: 'published',
-      snapshotId: 'snapshot-v1',
+      publishedStoryPackageVersionId: 'snapshot-v1',
       engineMajor: 0,
-      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
     });
 
     const secondPublish = await storyQueries.publishStory({
       engineMajor: 0,
       publishedAt: new Date('2026-03-23T17:00:00.000Z'),
-      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v2.json',
-      snapshotId: 'snapshot-v2',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v2.json',
+      publishedStoryPackageVersionId: 'snapshot-v2',
       storyId: 'story-the-stolen-ledger',
       summary: 'Updated published summary',
       title: 'The Stolen Ledger Updated',
     });
 
     expect(secondPublish).toMatchObject({
-      snapshotId: 'snapshot-v2',
-      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v2.json',
+      publishedStoryPackageVersionId: 'snapshot-v2',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v2.json',
       status: 'published',
     });
 
     const story = await storyQueries.getStory('story-the-stolen-ledger');
     expect(story).toMatchObject({
       status: 'published',
-      currentPublishedSnapshotId: 'snapshot-v2',
+      currentPublishedPackageVersionId: 'snapshot-v2',
     });
     expect(story?.lastPublishedAt?.toISOString()).toBe('2026-03-23T17:00:00.000Z');
 
@@ -356,20 +356,20 @@ describe('@plotpoint/db stories', () => {
       ...createStoryInput(),
       id: 'story-draft-only',
       title: 'Draft Only Story',
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-draft-only/v1.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-draft-only/v1.json',
     });
     await storyQueries.createStory({
       ...createStoryInput(),
       id: 'story-published',
       title: 'Published Story',
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-published/v1.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-published/v1.json',
     });
 
     await storyQueries.publishStory({
       engineMajor: 0,
       publishedAt: new Date('2026-03-23T18:00:00.000Z'),
-      publishedBundleUri: 's3://plotpoint-stories/published/story-published/v1.json',
-      snapshotId: 'snapshot-published',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-published/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-published',
       storyId: 'story-published',
       summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
       title: 'Published Story',
@@ -394,15 +394,15 @@ describe('@plotpoint/db stories', () => {
     await storyQueries.publishStory({
       engineMajor: 0,
       publishedAt: new Date('2026-03-23T19:00:00.000Z'),
-      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
-      snapshotId: 'snapshot-v1',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-v1',
       storyId: 'story-the-stolen-ledger',
       summary: 'Published summary v1',
       title: 'Published title v1',
     });
 
     await storyQueries.updateStory({
-      draftBundleUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json',
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v2.json',
       id: 'story-the-stolen-ledger',
       summary: 'Updated summary',
       title: 'Updated title',
@@ -414,7 +414,7 @@ describe('@plotpoint/db stories', () => {
     });
     expect(patched).toMatchObject({
       status: 'published',
-      currentPublishedSnapshotId: 'snapshot-v1',
+      currentPublishedPackageVersionId: 'snapshot-v1',
     });
 
     await expect(storyQueries.getPublishedStory('story-the-stolen-ledger')).resolves.toMatchObject({
@@ -433,48 +433,48 @@ describe('@plotpoint/db stories', () => {
     ]);
   });
 
-  it('exposes current published bundle reference for runtime lookup', async () => {
+  it('exposes current published package reference for runtime lookup', async () => {
     await storyQueries.createStory(createStoryInput());
 
     await expect(
-      storyQueries.getCurrentPublishedStoryBundleRef('story-the-stolen-ledger'),
+      storyQueries.getCurrentPublishedStoryPackageVersion('story-the-stolen-ledger'),
     ).resolves.toBeNull();
 
     await storyQueries.publishStory({
       engineMajor: 0,
       publishedAt: new Date('2026-03-23T20:00:00.000Z'),
-      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
-      snapshotId: 'snapshot-runtime',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-runtime',
       storyId: 'story-the-stolen-ledger',
       summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
       title: 'The Stolen Ledger',
     });
 
     await expect(
-      storyQueries.getCurrentPublishedStoryBundleRef('story-the-stolen-ledger'),
+      storyQueries.getCurrentPublishedStoryPackageVersion('story-the-stolen-ledger'),
     ).resolves.toMatchObject({
       storyId: 'story-the-stolen-ledger',
-      snapshotId: 'snapshot-runtime',
+      publishedStoryPackageVersionId: 'snapshot-runtime',
       engineMajor: 0,
-      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
       publishedAt: new Date('2026-03-23T20:00:00.000Z'),
     });
   });
 
-  it('blocks deleting stories with published snapshots', async () => {
+  it('blocks deleting stories with published package versions', async () => {
     await storyQueries.createStory(createStoryInput());
     await storyQueries.publishStory({
       engineMajor: 0,
       publishedAt: new Date('2026-03-23T21:00:00.000Z'),
-      publishedBundleUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
-      snapshotId: 'snapshot-delete-guard',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-delete-guard',
       storyId: 'story-the-stolen-ledger',
       summary: 'Track the missing ledger from the gallery foyer to the archive vault.',
       title: 'The Stolen Ledger',
     });
 
     await expect(storyQueries.deleteStory('story-the-stolen-ledger')).resolves.toBe(
-      'has_published_snapshots',
+      'has_published_package_versions',
     );
   });
 });

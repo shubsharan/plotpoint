@@ -34,7 +34,7 @@ The scope stays intentionally narrow: this feature finalizes the platform founda
 
 ### Out of scope
 
-- story bundle schema design and publishing rules for future epics
+- story package schema design and publishing rules for future epics
 - engine runtime logic, traversal, or condition evaluation
 - player-facing mobile gameplay UI
 - auth, deployment, analytics, and launch operations
@@ -55,7 +55,7 @@ The scope stays intentionally narrow: this feature finalizes the platform founda
 - This feature should reinforce the dependency flow `mobile -> api -> engine <- db`.
 - The dependency flow is a boundary target for scaffold ownership in this feature, not yet a requirement for concrete implementations.
 - Zod remains the planned source of truth for shared schema shapes in later feature work.
-- Story bundle schema work is intentionally deferred to `EPIC-0002`.
+- Story package schema work is intentionally deferred to `EPIC-0002`.
 - No new ADR is required unless foundation cleanup reveals a non-obvious package-boundary trade-off.
 
 ## Acceptance Criteria
@@ -82,7 +82,7 @@ The scope stays intentionally narrow: this feature finalizes the platform founda
 
 ## Risks and Mitigations
 
-- Risk: this feature accidentally grows into future story-runtime design. Mitigation: defer story bundle and runtime behavior to later epics.
+- Risk: this feature accidentally grows into future story-runtime design. Mitigation: defer story package and runtime behavior to later epics.
 - Risk: foundation cleanup changes package boundaries in ways that contradict the existing architecture doc. Mitigation: keep `docs/architecture/hexagonal-feature-slice-architecture.md` as the source of truth and update it if a real decision changes.
 
 ## Open Questions

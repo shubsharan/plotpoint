@@ -1,5 +1,17 @@
 import { z } from 'zod';
-import type { BlockConfig, BlockRegistryEntry } from './types.js';
+import { defineBlockDefinition, type BlockRegistryEntry } from './types.js';
+
+type SingleChoiceOption = {
+  id: string;
+  label: string;
+};
+
+type SingleChoiceBlockConfig = {
+  correctOptionId: string;
+  options: SingleChoiceOption[];
+  prompt: string;
+  shuffle?: boolean | undefined;
+};
 
 const optionSchema = z
   .object({
@@ -8,7 +20,7 @@ const optionSchema = z
   })
   .strict();
 
-export const singleChoiceConfigSchema: z.ZodType<BlockConfig> = z
+const singleChoiceConfigSchema: z.ZodType<SingleChoiceBlockConfig> = z
   .object({
     correctOptionId: z.string().min(1),
     options: z.array(optionSchema).min(1),
@@ -41,7 +53,7 @@ export const singleChoiceConfigSchema: z.ZodType<BlockConfig> = z
     }
   });
 
-export const singleChoiceBlock: BlockRegistryEntry = {
+export const singleChoiceBlock: BlockRegistryEntry<SingleChoiceBlockConfig> = defineBlockDefinition({
   configSchema: singleChoiceConfigSchema,
   scope: 'user',
-};
+});

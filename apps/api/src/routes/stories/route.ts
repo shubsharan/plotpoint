@@ -1,11 +1,11 @@
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import {
-  storyBundleSchema,
-  type StoryBundle,
-  type StoryBundleValidationIssue,
-  validateStoryBundleCompatibility,
-  validateStoryBundleStructure,
+  storyPackageSchema,
+  type StoryPackage,
+  type StoryPackageValidationIssue,
+  validateStoryPackageCompatibility,
+  validateStoryPackageStructure,
 } from '@plotpoint/engine';
 import type { StoryQueries } from '@plotpoint/db';
 import { z } from 'zod';
@@ -36,11 +36,11 @@ export type StoriesRouteDeps = {
   listStories: StoryQueries['listStories'];
   patchStory: StoryQueries['patchStory'];
   publishStory: StoryQueries['publishStory'];
-  deletePublishedStoryBundle: (bundleUri: string) => Promise<void>;
-  readStoryBundle: (bundleUri: string) => Promise<unknown>;
+  deletePublishedStoryPackage: (packageUri: string) => Promise<void>;
+  readStoryPackage: (packageUri: string) => Promise<unknown>;
   updateStory: StoryQueries['updateStory'];
-  writePublishedStoryBundle: (input: {
-    bundle: StoryBundle;
+  writePublishedStoryPackage: (input: {
+    storyPackage: StoryPackage;
     publishedAt: Date;
     storyId: string;
   }) => Promise<string>;
@@ -159,19 +159,19 @@ export const createStoriesRoutes = (deps: StoriesRouteDeps) => {
       return storyNotFound(context, path.storyId);
     }
 
-    const rawBundle = await deps.readStoryBundle(story.draftBundleUri);
-    const publishBundle = preparePublishBundle({
+    const rawPackage = await deps.readStoryPackage(story.draftPackageUri);
+    const publishPackage = preparePublishPackage({
       currentEngineMajor: deps.currentEngineMajor,
-      rawBundle,
+      rawPackage,
       storyId: path.storyId,
     });
-    if (!publishBundle.success) {
-      return publishValidationFailed(context, path.storyId, publishBundle.issues);
+    if (!publishPackage.success) {
+      return publishValidationFailed(context, path.storyId, publishPackage.issues);
     }
 
     const publishedAt = new Date();
-    const publishedBundleUri = await deps.writePublishedStoryBundle({
-      bundle: publishBundle.bundle,
+    const publishedPackageUri = await deps.writePublishedStoryPackage({
+      storyPackage: publishPackage.storyPackage,
       publishedAt,
       storyId: path.storyId,
     });
@@ -180,16 +180,16 @@ export const createStoriesRoutes = (deps: StoriesRouteDeps) => {
       publishedStory = await deps.publishStory({
         engineMajor: deps.currentEngineMajor,
         publishedAt,
-        publishedBundleUri,
+        publishedPackageUri,
         storyId: path.storyId,
         summary: story.summary,
         title: story.title,
       });
     } catch (error) {
       const publishError = asError(error);
-      await rollbackPublishedBundleOrThrow({
+      await rollbackPublishedPackageOrThrow({
         deps,
-        publishedBundleUri,
+        publishedPackageUri,
         publishError,
       });
       throw publishError;
@@ -199,9 +199,9 @@ export const createStoriesRoutes = (deps: StoriesRouteDeps) => {
       const publishError = new Error(
         `Story "${path.storyId}" no longer exists while finalizing publish.`,
       );
-      await rollbackPublishedBundleOrThrow({
+      await rollbackPublishedPackageOrThrow({
         deps,
-        publishedBundleUri,
+        publishedPackageUri,
         publishError,
       });
       return storyNotFound(context, path.storyId);
@@ -220,7 +220,7 @@ export const createStoriesRoutes = (deps: StoriesRouteDeps) => {
     if (deleteResult === 'not_found') {
       return storyNotFound(context, path.storyId);
     }
-    if (deleteResult === 'has_published_snapshots') {
+    if (deleteResult === 'has_published_package_versions') {
       return storyDeleteConflict(context, path.storyId);
     }
 
@@ -245,8 +245,8 @@ const mapSchemaIssues = (issues: z.core.$ZodIssue[]): PublishValidationIssue[] =
     path: issue.path.map((segment) => (typeof segment === 'number' ? segment : String(segment))),
   }));
 
-const mapStoryBundleIssues = (
-  issues: ReadonlyArray<StoryBundleValidationIssue>,
+const mapStoryPackageIssues = (
+  issues: ReadonlyArray<StoryPackageValidationIssue>,
 ): PublishValidationIssue[] =>
   issues.map((issue) => ({
     code: issue.code,
@@ -342,18 +342,18 @@ const parseJsonBody = async <TSchema extends z.ZodTypeAny>(
 const asError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
-const rollbackPublishedBundleOrThrow = async (input: {
-  deps: Pick<StoriesRouteDeps, 'deletePublishedStoryBundle'>;
-  publishedBundleUri: string;
+const rollbackPublishedPackageOrThrow = async (input: {
+  deps: Pick<StoriesRouteDeps, 'deletePublishedStoryPackage'>;
+  publishedPackageUri: string;
   publishError: Error;
 }) => {
   try {
-    await input.deps.deletePublishedStoryBundle(input.publishedBundleUri);
+    await input.deps.deletePublishedStoryPackage(input.publishedPackageUri);
   } catch (rollbackError) {
     const rollbackMessage =
       rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
     throw new Error(
-      `Failed to rollback published bundle "${input.publishedBundleUri}": ${rollbackMessage}`,
+      `Failed to rollback published story package "${input.publishedPackageUri}": ${rollbackMessage}`,
       {
         cause: input.publishError,
       },
@@ -361,13 +361,13 @@ const rollbackPublishedBundleOrThrow = async (input: {
   }
 };
 
-const parseDraftBundleForPublish = (
-  rawBundle: unknown,
+const parseDraftPackageForPublish = (
+  rawPackage: unknown,
   currentEngineMajor: number,
 ):
   | { success: false; issues: PublishValidationIssue[] }
-  | { success: true; bundle: StoryBundle } => {
-  const schemaResult = storyBundleSchema.safeParse(rawBundle);
+  | { success: true; storyPackage: StoryPackage } => {
+  const schemaResult = storyPackageSchema.safeParse(rawPackage);
   if (!schemaResult.success) {
     return {
       success: false,
@@ -375,11 +375,11 @@ const parseDraftBundleForPublish = (
     };
   }
 
-  const bundle = schemaResult.data;
+  const storyPackage = schemaResult.data;
   const issues = [
-    ...mapStoryBundleIssues(validateStoryBundleStructure(bundle)),
-    ...mapStoryBundleIssues(
-      validateStoryBundleCompatibility(bundle, {
+    ...mapStoryPackageIssues(validateStoryPackageStructure(storyPackage)),
+    ...mapStoryPackageIssues(
+      validateStoryPackageCompatibility(storyPackage, {
         currentEngineMajor,
         mode: 'draft',
       }),
@@ -394,51 +394,51 @@ const parseDraftBundleForPublish = (
 
   return {
     success: true,
-    bundle,
+    storyPackage,
   };
 };
 
-const preparePublishBundle = (input: {
+const preparePublishPackage = (input: {
   currentEngineMajor: number;
-  rawBundle: unknown;
+  rawPackage: unknown;
   storyId: string;
 }):
   | { success: false; issues: PublishValidationIssue[] }
-  | { success: true; bundle: StoryBundle } => {
-  const draftBundle = parseDraftBundleForPublish(input.rawBundle, input.currentEngineMajor);
-  if (!draftBundle.success) {
-    return draftBundle;
+  | { success: true; storyPackage: StoryPackage } => {
+  const draftPackage = parseDraftPackageForPublish(input.rawPackage, input.currentEngineMajor);
+  if (!draftPackage.success) {
+    return draftPackage;
   }
 
-  const parsedBundle = draftBundle.bundle;
-  if (parsedBundle.metadata.storyId !== input.storyId) {
+  const parsedPackage = draftPackage.storyPackage;
+  if (parsedPackage.metadata.storyId !== input.storyId) {
     return {
       success: false,
       issues: [
         {
           code: 'story-id-mismatch',
           details: {
-            bundleStoryId: parsedBundle.metadata.storyId,
+            packageStoryId: parsedPackage.metadata.storyId,
             storyId: input.storyId,
           },
           layer: 'structure',
-          message: `Bundle metadata storyId "${parsedBundle.metadata.storyId}" does not match requested story "${input.storyId}".`,
+          message: `Story package metadata storyId "${parsedPackage.metadata.storyId}" does not match requested story "${input.storyId}".`,
           path: ['metadata', 'storyId'],
         },
       ],
     };
   }
 
-  const stampedBundle: StoryBundle = {
-    ...parsedBundle,
+  const stampedPackage: StoryPackage = {
+    ...parsedPackage,
     version: {
-      ...parsedBundle.version,
+      ...parsedPackage.version,
       engineMajor: input.currentEngineMajor,
     },
   };
 
-  const publishCompatibilityIssues = mapStoryBundleIssues(
-    validateStoryBundleCompatibility(stampedBundle, {
+  const publishCompatibilityIssues = mapStoryPackageIssues(
+    validateStoryPackageCompatibility(stampedPackage, {
       currentEngineMajor: input.currentEngineMajor,
       mode: 'published',
     }),
@@ -452,7 +452,7 @@ const preparePublishBundle = (input: {
 
   return {
     success: true,
-    bundle: stampedBundle,
+    storyPackage: stampedPackage,
   };
 };
 
@@ -480,7 +480,7 @@ const storyDeleteConflict = (context: Context, storyId: string) =>
     storyDeleteConflictResponseSchema.parse({
       error: {
         code: 'story_delete_conflict',
-        reason: 'published_snapshots_exist',
+        reason: 'published_package_versions_exist',
         storyId,
       },
     }),

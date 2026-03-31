@@ -1,7 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import {
   createStoryQueries,
-  storyPublishedSnapshots as storyPublishedSnapshotsTable,
+  publishedStoryPackageVersions as publishedStoryPackageVersionsTable,
   stories as storiesTable,
 } from '@plotpoint/db';
 import { currentEngineMajor } from '@plotpoint/engine';
@@ -14,14 +14,14 @@ import { createApp } from '../index.js';
 
 const schema = {
   stories: storiesTable,
-  storyPublishedSnapshots: storyPublishedSnapshotsTable,
+  publishedStoryPackageVersions: publishedStoryPackageVersionsTable,
 } as const;
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const migrationsDirectory = join(currentDirectory, '../../../../packages/db/supabase/migrations');
 
 type TestDatabase = PgliteDatabase<typeof schema>;
 
-const createValidStoryBundle = (storyId: string, title: string) => ({
+const createValidStoryPackage = (storyId: string, title: string) => ({
   metadata: {
     storyId,
     title,
@@ -119,20 +119,20 @@ describe('@plotpoint/api stories seam integration', () => {
     app = createApp({
       ...storyQueries,
       currentEngineMajor,
-      readStoryBundle: async (bundleUri: string) => {
-        if (!bundleStorage.has(bundleUri)) {
-          throw new Error(`Bundle "${bundleUri}" not found in test storage.`);
+      readStoryPackage: async (packageUri: string) => {
+        if (!bundleStorage.has(packageUri)) {
+          throw new Error(`Package "${packageUri}" not found in test storage.`);
         }
 
-        return bundleStorage.get(bundleUri);
+        return bundleStorage.get(packageUri);
       },
-      writePublishedStoryBundle: async ({ bundle, publishedAt, storyId }) => {
-        const bundleUri = `s3://plotpoint-stories/published/${storyId}/${publishedAt.toISOString()}.json`;
-        bundleStorage.set(bundleUri, bundle);
-        return bundleUri;
+      writePublishedStoryPackage: async ({ storyPackage, publishedAt, storyId }) => {
+        const packageUri = `s3://plotpoint-stories/published/${storyId}/${publishedAt.toISOString()}.json`;
+        bundleStorage.set(packageUri, storyPackage);
+        return packageUri;
       },
-      deletePublishedStoryBundle: async (bundleUri: string) => {
-        bundleStorage.delete(bundleUri);
+      deletePublishedStoryPackage: async (packageUri: string) => {
+        bundleStorage.delete(packageUri);
       },
     });
   });
@@ -143,15 +143,15 @@ describe('@plotpoint/api stories seam integration', () => {
 
   beforeEach(async () => {
     bundleStorage.clear();
-    await database.delete(storyPublishedSnapshotsTable);
+    await database.delete(publishedStoryPackageVersionsTable);
     await database.delete(storiesTable);
   });
 
   it('creates a draft via api and reads it back', async () => {
-    const draftBundleUri = 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json';
+    const draftPackageUri = 's3://plotpoint-stories/drafts/story-the-stolen-ledger/v1.json';
     bundleStorage.set(
-      draftBundleUri,
-      createValidStoryBundle('story-the-stolen-ledger', 'The Stolen Ledger'),
+      draftPackageUri,
+      createValidStoryPackage('story-the-stolen-ledger', 'The Stolen Ledger'),
     );
 
     const createResponse = await app.request('/stories', {
@@ -162,7 +162,7 @@ describe('@plotpoint/api stories seam integration', () => {
       body: JSON.stringify({
         id: 'story-the-stolen-ledger',
         title: 'The Stolen Ledger',
-        draftBundleUri,
+        draftPackageUri,
       }),
     });
 
@@ -172,8 +172,8 @@ describe('@plotpoint/api stories seam integration', () => {
       title: 'The Stolen Ledger',
       summary: null,
       status: 'draft',
-      draftBundleUri,
-      currentPublishedSnapshotId: null,
+      draftPackageUri,
+      currentPublishedPackageVersionId: null,
       lastPublishedAt: null,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
@@ -188,22 +188,22 @@ describe('@plotpoint/api stories seam integration', () => {
       id: 'story-the-stolen-ledger',
       summary: null,
       status: 'draft',
-      draftBundleUri,
-      currentPublishedSnapshotId: null,
+      draftPackageUri,
+      currentPublishedPackageVersionId: null,
       lastPublishedAt: null,
     });
   });
 
-  it('patches draft bundle uri via api and persists the change', async () => {
-    const originalDraftBundleUri = 's3://plotpoint-stories/drafts/story-bundle-update/v1.json';
-    const updatedDraftBundleUri = 's3://plotpoint-stories/drafts/story-bundle-update/v2.json';
+  it('patches draft package uri via api and persists the change', async () => {
+    const originalDraftPackageUri = 's3://plotpoint-stories/drafts/story-package-update/v1.json';
+    const updatedDraftPackageUri = 's3://plotpoint-stories/drafts/story-package-update/v2.json';
     bundleStorage.set(
-      originalDraftBundleUri,
-      createValidStoryBundle('story-bundle-update', 'Bundle Update Story'),
+      originalDraftPackageUri,
+      createValidStoryPackage('story-package-update', 'Package Update Story'),
     );
     bundleStorage.set(
-      updatedDraftBundleUri,
-      createValidStoryBundle('story-bundle-update', 'Bundle Update Story'),
+      updatedDraftPackageUri,
+      createValidStoryPackage('story-package-update', 'Package Update Story'),
     );
 
     await app.request('/stories', {
@@ -212,31 +212,31 @@ describe('@plotpoint/api stories seam integration', () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        id: 'story-bundle-update',
-        title: 'Bundle Update Story',
+        id: 'story-package-update',
+        title: 'Package Update Story',
         summary: 'Original summary',
-        draftBundleUri: originalDraftBundleUri,
+        draftPackageUri: originalDraftPackageUri,
       }),
     });
 
-    const patchResponse = await app.request('/stories/story-bundle-update', {
+    const patchResponse = await app.request('/stories/story-package-update', {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        draftBundleUri: updatedDraftBundleUri,
+        draftPackageUri: updatedDraftPackageUri,
       }),
     });
 
     expect(patchResponse.status).toBe(200);
     await expect(patchResponse.json()).resolves.toMatchObject({
-      id: 'story-bundle-update',
-      title: 'Bundle Update Story',
+      id: 'story-package-update',
+      title: 'Package Update Story',
       summary: 'Original summary',
-      draftBundleUri: updatedDraftBundleUri,
+      draftPackageUri: updatedDraftPackageUri,
       status: 'draft',
-      currentPublishedSnapshotId: null,
+      currentPublishedPackageVersionId: null,
       lastPublishedAt: null,
     });
 
@@ -247,21 +247,21 @@ describe('@plotpoint/api stories seam integration', () => {
     expect(listResponse.status).toBe(200);
     await expect(listResponse.json()).resolves.toMatchObject([
       {
-        id: 'story-bundle-update',
-        draftBundleUri: updatedDraftBundleUri,
+        id: 'story-package-update',
+        draftPackageUri: updatedDraftPackageUri,
       },
     ]);
   });
 
   it('publishes and re-publishes a story and exposes catalog view', async () => {
     const storyId = 'story-publish-flow';
-    const draftBundleUriV1 = `s3://plotpoint-stories/drafts/${storyId}/v1.json`;
-    const draftBundleUriV2 = `s3://plotpoint-stories/drafts/${storyId}/v2.json`;
+    const draftPackageUriV1 = `s3://plotpoint-stories/drafts/${storyId}/v1.json`;
+    const draftPackageUriV2 = `s3://plotpoint-stories/drafts/${storyId}/v2.json`;
 
-    bundleStorage.set(draftBundleUriV1, createValidStoryBundle(storyId, 'Publish Flow Story'));
+    bundleStorage.set(draftPackageUriV1, createValidStoryPackage(storyId, 'Publish Flow Story'));
     bundleStorage.set(
-      draftBundleUriV2,
-      createValidStoryBundle(storyId, 'Publish Flow Story (Updated Draft)'),
+      draftPackageUriV2,
+      createValidStoryPackage(storyId, 'Publish Flow Story (Updated Draft)'),
     );
 
     const createResponse = await app.request('/stories', {
@@ -272,7 +272,7 @@ describe('@plotpoint/api stories seam integration', () => {
       body: JSON.stringify({
         id: storyId,
         title: 'Publish Flow Story',
-        draftBundleUri: draftBundleUriV1,
+        draftPackageUri: draftPackageUriV1,
       }),
     });
     expect(createResponse.status).toBe(201);
@@ -283,9 +283,9 @@ describe('@plotpoint/api stories seam integration', () => {
     expect(firstPublish.status).toBe(201);
     const firstPublishBody = (await firstPublish.json()) as {
       engineMajor: number;
-      publishedBundleUri: string;
+      publishedPackageUri: string;
       publishedAt: string;
-      snapshotId: string;
+      publishedStoryPackageVersionId: string;
       status: 'published';
       storyId: string;
     };
@@ -293,8 +293,8 @@ describe('@plotpoint/api stories seam integration', () => {
       storyId,
       status: 'published',
       engineMajor: currentEngineMajor,
-      snapshotId: expect.any(String),
-      publishedBundleUri: expect.stringContaining(`/published/${storyId}/`),
+      publishedStoryPackageVersionId: expect.any(String),
+      publishedPackageUri: expect.stringContaining(`/published/${storyId}/`),
     });
 
     const patchResponse = await app.request(`/stories/${storyId}`, {
@@ -303,14 +303,14 @@ describe('@plotpoint/api stories seam integration', () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        draftBundleUri: draftBundleUriV2,
+        draftPackageUri: draftPackageUriV2,
         title: 'Publish Flow Story (Updated Draft)',
       }),
     });
     expect(patchResponse.status).toBe(200);
     await expect(patchResponse.json()).resolves.toMatchObject({
       status: 'published',
-      draftBundleUri: draftBundleUriV2,
+      draftPackageUri: draftPackageUriV2,
     });
 
     const listPublishedBeforeRepublish = await app.request('/stories?view=published', {
@@ -341,9 +341,9 @@ describe('@plotpoint/api stories seam integration', () => {
     expect(secondPublish.status).toBe(201);
     const secondPublishBody = (await secondPublish.json()) as {
       engineMajor: number;
-      publishedBundleUri: string;
+      publishedPackageUri: string;
       publishedAt: string;
-      snapshotId: string;
+      publishedStoryPackageVersionId: string;
       status: 'published';
       storyId: string;
     };
@@ -351,10 +351,10 @@ describe('@plotpoint/api stories seam integration', () => {
       storyId,
       status: 'published',
       engineMajor: currentEngineMajor,
-      snapshotId: expect.any(String),
-      publishedBundleUri: expect.stringContaining(`/published/${storyId}/`),
+      publishedStoryPackageVersionId: expect.any(String),
+      publishedPackageUri: expect.stringContaining(`/published/${storyId}/`),
     });
-    expect(secondPublishBody.snapshotId).not.toBe(firstPublishBody.snapshotId);
+    expect(secondPublishBody.publishedStoryPackageVersionId).not.toBe(firstPublishBody.publishedStoryPackageVersionId);
 
     const listPublishedResponse = await app.request('/stories?view=published', {
       method: 'GET',
@@ -370,7 +370,7 @@ describe('@plotpoint/api stories seam integration', () => {
       },
     ]);
     expect((listPublishedBody as Array<Record<string, unknown>>)[0]).not.toHaveProperty(
-      'draftBundleUri',
+      'draftPackageUri',
     );
 
     const getPublishedResponse = await app.request(`/stories/${storyId}?view=published`, {
@@ -384,10 +384,10 @@ describe('@plotpoint/api stories seam integration', () => {
     });
   });
 
-  it('rejects publish when draft bundle metadata storyId differs from route story id', async () => {
+  it('rejects publish when draft package metadata storyId differs from route story id', async () => {
     const storyId = 'story-publish-mismatch';
-    const draftBundleUri = `s3://plotpoint-stories/drafts/${storyId}/v1.json`;
-    bundleStorage.set(draftBundleUri, createValidStoryBundle('story-other', 'Other Story Bundle'));
+    const draftPackageUri = `s3://plotpoint-stories/drafts/${storyId}/v1.json`;
+    bundleStorage.set(draftPackageUri, createValidStoryPackage('story-other', 'Other Story Package'));
 
     const createResponse = await app.request('/stories', {
       method: 'POST',
@@ -397,7 +397,7 @@ describe('@plotpoint/api stories seam integration', () => {
       body: JSON.stringify({
         id: storyId,
         title: 'Publish Mismatch Story',
-        draftBundleUri,
+        draftPackageUri,
       }),
     });
     expect(createResponse.status).toBe(201);
@@ -427,7 +427,7 @@ describe('@plotpoint/api stories seam integration', () => {
     await expect(getDraftResponse.json()).resolves.toMatchObject({
       id: storyId,
       status: 'draft',
-      currentPublishedSnapshotId: null,
+      currentPublishedPackageVersionId: null,
       lastPublishedAt: null,
     });
   });

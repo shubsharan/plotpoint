@@ -4,13 +4,13 @@ import type { PgAsyncDatabase } from 'drizzle-orm/pg-core/async/db';
 import {
   type StoryRow,
   stories,
-  storyPublishedSnapshots,
+  publishedStoryPackageVersions,
 } from '../schema/stories.js';
 
 const storyCrudReadModelProjection = {
   createdAt: stories.createdAt,
-  currentPublishedSnapshotId: stories.currentPublishedSnapshotId,
-  draftBundleUri: stories.draftBundleUri,
+  currentPublishedPackageVersionId: stories.currentPublishedPackageVersionId,
+  draftPackageUri: stories.draftPackageUri,
   id: stories.id,
   lastPublishedAt: stories.lastPublishedAt,
   status: stories.status,
@@ -20,19 +20,19 @@ const storyCrudReadModelProjection = {
 };
 
 const storyPublishedCatalogProjection = {
-  engineMajor: storyPublishedSnapshots.engineMajor,
-  id: storyPublishedSnapshots.storyId,
-  publishedAt: storyPublishedSnapshots.publishedAt,
-  publishedBundleUri: storyPublishedSnapshots.publishedBundleUri,
-  summary: storyPublishedSnapshots.summary,
-  title: storyPublishedSnapshots.title,
+  engineMajor: publishedStoryPackageVersions.engineMajor,
+  id: publishedStoryPackageVersions.storyId,
+  publishedAt: publishedStoryPackageVersions.publishedAt,
+  publishedPackageUri: publishedStoryPackageVersions.publishedPackageUri,
+  summary: publishedStoryPackageVersions.summary,
+  title: publishedStoryPackageVersions.title,
 };
 
-const currentPublishedBundleProjection = {
-  engineMajor: storyPublishedSnapshots.engineMajor,
-  publishedAt: storyPublishedSnapshots.publishedAt,
-  publishedBundleUri: storyPublishedSnapshots.publishedBundleUri,
-  snapshotId: storyPublishedSnapshots.id,
+const currentPublishedPackageVersionProjection = {
+  engineMajor: publishedStoryPackageVersions.engineMajor,
+  publishedAt: publishedStoryPackageVersions.publishedAt,
+  publishedPackageUri: publishedStoryPackageVersions.publishedPackageUri,
+  publishedStoryPackageVersionId: publishedStoryPackageVersions.id,
   storyId: stories.id,
 };
 
@@ -42,8 +42,8 @@ export type StoryCrudReadModel = Pick<
   | 'title'
   | 'summary'
   | 'status'
-  | 'draftBundleUri'
-  | 'currentPublishedSnapshotId'
+  | 'draftPackageUri'
+  | 'currentPublishedPackageVersionId'
   | 'lastPublishedAt'
   | 'createdAt'
   | 'updatedAt'
@@ -58,7 +58,7 @@ export type StoryPublishedCatalogReadModel = {
 };
 
 export type CreateStoryInput = {
-  draftBundleUri: string;
+  draftPackageUri: string;
   id: string;
   now?: Date;
   summary?: string | null;
@@ -66,7 +66,7 @@ export type CreateStoryInput = {
 };
 
 export type UpdateStoryInput = {
-  draftBundleUri: string;
+  draftPackageUri: string;
   id: string;
   now?: Date;
   summary?: string | null;
@@ -74,7 +74,7 @@ export type UpdateStoryInput = {
 };
 
 export type PatchStoryInput = {
-  draftBundleUri?: string;
+  draftPackageUri?: string;
   id: string;
   now?: Date;
   summary?: string | null;
@@ -84,37 +84,34 @@ export type PatchStoryInput = {
 export type PublishStoryInput = {
   engineMajor: number;
   publishedAt?: Date;
-  publishedBundleUri: string;
-  snapshotId?: string;
+  publishedPackageUri: string;
+  publishedStoryPackageVersionId?: string;
   storyId: string;
   summary: string | null;
   title: string;
 };
 
-export type PublishStoryReadModel = {
+export type PublishedStoryPackageVersionRef = {
   engineMajor: number;
   publishedAt: Date;
-  publishedBundleUri: string;
-  snapshotId: string;
+  publishedPackageUri: string;
+  publishedStoryPackageVersionId: string;
+  storyId: string;
+};
+
+export type PublishStoryReadModel = PublishedStoryPackageVersionRef & {
   status: 'published';
-  storyId: string;
 };
 
-export type CurrentPublishedStoryBundleRef = {
-  engineMajor: number;
-  publishedAt: Date;
-  publishedBundleUri: string;
-  snapshotId: string;
-  storyId: string;
-};
+export type CurrentPublishedStoryPackageVersionRef = PublishedStoryPackageVersionRef;
 
-export type DeleteStoryResult = 'deleted' | 'has_published_snapshots' | 'not_found';
+export type DeleteStoryResult = 'deleted' | 'has_published_package_versions' | 'not_found';
 
 type StoryPublishedCatalogRow = {
   engineMajor: number;
   id: string;
   publishedAt: Date;
-  publishedBundleUri: string;
+  publishedPackageUri: string;
   summary: string | null;
   title: string;
 };
@@ -147,7 +144,9 @@ const isForeignKeyViolation = (error: unknown): boolean => {
 export type StoryQueries = {
   createStory: (input: CreateStoryInput) => Promise<StoryCrudReadModel>;
   deleteStory: (storyId: string) => Promise<DeleteStoryResult>;
-  getCurrentPublishedStoryBundleRef: (storyId: string) => Promise<CurrentPublishedStoryBundleRef | null>;
+  getCurrentPublishedStoryPackageVersion: (
+    storyId: string,
+  ) => Promise<CurrentPublishedStoryPackageVersionRef | null>;
   getPublishedStory: (storyId: string) => Promise<StoryPublishedCatalogReadModel | null>;
   getStory: (storyId: string) => Promise<StoryCrudReadModel | null>;
   listPublishedStories: () => Promise<StoryPublishedCatalogReadModel[]>;
@@ -179,11 +178,11 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
       .select(storyPublishedCatalogProjection)
       .from(stories)
       .innerJoin(
-        storyPublishedSnapshots,
-        eq(stories.currentPublishedSnapshotId, storyPublishedSnapshots.id),
+        publishedStoryPackageVersions,
+        eq(stories.currentPublishedPackageVersionId, publishedStoryPackageVersions.id),
       )
       .where(eq(stories.status, 'published'))
-      .orderBy(desc(storyPublishedSnapshots.publishedAt), desc(stories.id));
+      .orderBy(desc(publishedStoryPackageVersions.publishedAt), desc(stories.id));
 
     return rows.map(mapPublishedCatalogRow);
   };
@@ -203,8 +202,8 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
       .select(storyPublishedCatalogProjection)
       .from(stories)
       .innerJoin(
-        storyPublishedSnapshots,
-        eq(stories.currentPublishedSnapshotId, storyPublishedSnapshots.id),
+        publishedStoryPackageVersions,
+        eq(stories.currentPublishedPackageVersionId, publishedStoryPackageVersions.id),
       )
       .where(and(eq(stories.id, storyId), eq(stories.status, 'published')))
       .limit(1);
@@ -216,20 +215,20 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
     return mapPublishedCatalogRow(story);
   };
 
-  const getCurrentPublishedStoryBundleRef = async (
+  const getCurrentPublishedStoryPackageVersion = async (
     storyId: string,
-  ): Promise<CurrentPublishedStoryBundleRef | null> => {
-    const [bundleRef] = await database
-      .select(currentPublishedBundleProjection)
+  ): Promise<CurrentPublishedStoryPackageVersionRef | null> => {
+    const [packageVersion] = await database
+      .select(currentPublishedPackageVersionProjection)
       .from(stories)
       .innerJoin(
-        storyPublishedSnapshots,
-        eq(stories.currentPublishedSnapshotId, storyPublishedSnapshots.id),
+        publishedStoryPackageVersions,
+        eq(stories.currentPublishedPackageVersionId, publishedStoryPackageVersions.id),
       )
       .where(and(eq(stories.id, storyId), eq(stories.status, 'published')))
       .limit(1);
 
-    return bundleRef ?? null;
+    return packageVersion ?? null;
   };
 
   const createStory = async (input: CreateStoryInput) => {
@@ -237,13 +236,13 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
     const [story] = await database
       .insert(stories)
       .values({
-        currentPublishedSnapshotId: null,
+        currentPublishedPackageVersionId: null,
         id: input.id,
         lastPublishedAt: null,
         title: input.title,
         summary: input.summary ?? null,
         status: 'draft',
-        draftBundleUri: input.draftBundleUri,
+        draftPackageUri: input.draftPackageUri,
         createdAt: timestamp,
         updatedAt: timestamp,
       })
@@ -261,7 +260,7 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
     const [story] = await database
       .update(stories)
       .set({
-        draftBundleUri: input.draftBundleUri,
+        draftPackageUri: input.draftPackageUri,
         summary: input.summary ?? null,
         title: input.title,
         updatedAt: timestamp,
@@ -275,7 +274,7 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
   const patchStory = async (input: PatchStoryInput) => {
     const timestamp = input.now ?? new Date();
     const hasNoPatchFields =
-      input.title === undefined && input.summary === undefined && input.draftBundleUri === undefined;
+      input.title === undefined && input.summary === undefined && input.draftPackageUri === undefined;
     if (hasNoPatchFields) {
       throw new Error('At least one story field must be provided for patch.');
     }
@@ -283,7 +282,7 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
     const [story] = await database
       .update(stories)
       .set({
-        ...(input.draftBundleUri !== undefined ? { draftBundleUri: input.draftBundleUri } : {}),
+        ...(input.draftPackageUri !== undefined ? { draftPackageUri: input.draftPackageUri } : {}),
         ...(input.summary !== undefined ? { summary: input.summary } : {}),
         ...(input.title !== undefined ? { title: input.title } : {}),
         updatedAt: timestamp,
@@ -298,7 +297,7 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
     input: PublishStoryInput,
   ): Promise<PublishStoryReadModel | null> => {
     const timestamp = input.publishedAt ?? new Date();
-    const snapshotId = input.snapshotId ?? randomUUID();
+    const publishedStoryPackageVersionId = input.publishedStoryPackageVersionId ?? randomUUID();
 
     return database.transaction(async (transaction) => {
       const [existingStory] = await transaction
@@ -311,12 +310,12 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
         return null;
       }
 
-      const [publishedSnapshot] = await transaction
-        .insert(storyPublishedSnapshots)
+      const [publishedPackageVersion] = await transaction
+        .insert(publishedStoryPackageVersions)
         .values({
           engineMajor: input.engineMajor,
-          id: snapshotId,
-          publishedBundleUri: input.publishedBundleUri,
+          id: publishedStoryPackageVersionId,
+          publishedPackageUri: input.publishedPackageUri,
           createdAt: timestamp,
           publishedAt: timestamp,
           storyId: input.storyId,
@@ -324,21 +323,23 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
           title: input.title,
         })
         .returning({
-          engineMajor: storyPublishedSnapshots.engineMajor,
-          id: storyPublishedSnapshots.id,
-          publishedAt: storyPublishedSnapshots.publishedAt,
-          publishedBundleUri: storyPublishedSnapshots.publishedBundleUri,
+          engineMajor: publishedStoryPackageVersions.engineMajor,
+          id: publishedStoryPackageVersions.id,
+          publishedAt: publishedStoryPackageVersions.publishedAt,
+          publishedPackageUri: publishedStoryPackageVersions.publishedPackageUri,
         });
 
-      if (!publishedSnapshot) {
-        throw new Error(`Failed to create published snapshot for story "${input.storyId}".`);
+      if (!publishedPackageVersion) {
+        throw new Error(
+          `Failed to create published story package version for story "${input.storyId}".`,
+        );
       }
 
       const [story] = await transaction
         .update(stories)
         .set({
-          currentPublishedSnapshotId: publishedSnapshot.id,
-          lastPublishedAt: publishedSnapshot.publishedAt,
+          currentPublishedPackageVersionId: publishedPackageVersion.id,
+          lastPublishedAt: publishedPackageVersion.publishedAt,
           status: 'published',
           updatedAt: timestamp,
         })
@@ -352,13 +353,17 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
         throw new Error(`Failed to mark story "${input.storyId}" as published.`);
       }
 
-      return {
-        engineMajor: publishedSnapshot.engineMajor,
-        publishedAt: publishedSnapshot.publishedAt,
-        publishedBundleUri: publishedSnapshot.publishedBundleUri,
-        snapshotId: publishedSnapshot.id,
-        status: 'published',
+      const packageVersionRef: PublishedStoryPackageVersionRef = {
+        engineMajor: publishedPackageVersion.engineMajor,
+        publishedAt: publishedPackageVersion.publishedAt,
+        publishedPackageUri: publishedPackageVersion.publishedPackageUri,
+        publishedStoryPackageVersionId: publishedPackageVersion.id,
         storyId: story.id,
+      };
+
+      return {
+        ...packageVersionRef,
+        status: 'published',
       };
     });
   };
@@ -372,7 +377,7 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
         .returning({ id: stories.id });
     } catch (error) {
       if (isForeignKeyViolation(error)) {
-        return 'has_published_snapshots' as const;
+        return 'has_published_package_versions' as const;
       }
 
       throw error;
@@ -384,7 +389,7 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
   return {
     createStory,
     deleteStory,
-    getCurrentPublishedStoryBundleRef,
+    getCurrentPublishedStoryPackageVersion,
     getPublishedStory,
     getStory,
     listPublishedStories,

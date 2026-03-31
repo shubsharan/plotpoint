@@ -1,7 +1,20 @@
 import { z } from 'zod';
-import type { BlockConfig, BlockRegistryEntry } from './types.js';
+import { defineBlockDefinition, type BlockRegistryEntry } from './types.js';
 
-export const codeConfigSchema: z.ZodType<BlockConfig> = z
+type CodeBlockConfig = {
+  caseSensitive?: boolean | undefined;
+  expected: string;
+  length?:
+    | {
+        max?: number | undefined;
+        min?: number | undefined;
+      }
+    | undefined;
+  maxAttempts?: number | undefined;
+  mode: 'passcode' | 'password';
+};
+
+const codeConfigSchema: z.ZodType<CodeBlockConfig> = z
   .object({
     caseSensitive: z.boolean().optional(),
     expected: z.string().min(1),
@@ -17,7 +30,7 @@ export const codeConfigSchema: z.ZodType<BlockConfig> = z
   })
   .strict();
 
-export const codeBlock: BlockRegistryEntry = {
+export const codeBlock: BlockRegistryEntry<CodeBlockConfig> = defineBlockDefinition({
   configSchema: codeConfigSchema,
   scope: 'user',
-};
+});

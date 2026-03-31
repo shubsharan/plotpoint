@@ -25,7 +25,7 @@ This feature turns that pattern into the concrete PRD for block execution. It ow
 
 - Define the block definition contract used by the engine registry, including scope, initial-state behavior, action handling, and config interpretation.
 - Define the block registry ownership model for the MVP block set in `packages/engine`.
-- Define how the action executor resolves the targeted block instance from the current story state and published bundle.
+- Define how the action executor resolves the targeted block instance from the current story state and published story package.
 - Define how the executor chooses player-scoped versus shared game-scoped state when applying block updates.
 - Define the engine-owned action execution result needed before later traversal semantics evaluate next-step availability.
 
@@ -39,8 +39,8 @@ This feature turns that pattern into the concrete PRD for block execution. It ow
 ## Requirements
 
 1. The engine must define one block-definition contract that every MVP block implementation conforms to, including scope, initial-state behavior, and pure action update semantics.
-2. The block registry must remain engine-owned and resolve block implementations by authored block type name from the published story bundle.
-3. The action executor must locate the targeted block instance from the current runtime location and published bundle data before attempting to execute a state transition.
+2. The block registry must remain engine-owned and resolve block implementations by authored block type name from the published story package.
+3. The action executor must locate the targeted block instance from the current runtime location and published story package data before attempting to execute a state transition.
 4. The executor must choose the correct state container based on block scope, updating player-scoped state separately from shared game-scoped state.
 5. Block execution must remain pure at the block-definition level: block reducers cannot perform I/O or depend on API, db, or mobile code.
 6. Unknown block types, invalid action shapes for a block, or invalid execution targets must fail explicitly rather than silently succeeding.

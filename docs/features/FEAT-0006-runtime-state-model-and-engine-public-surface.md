@@ -11,11 +11,11 @@
 
 ## Goal
 
-Define the engine-owned runtime state model and narrow public API that turn published story bundles into executable gameplay sessions for later API and mobile adapters.
+Define the engine-owned runtime state model and narrow public API that turn published story packages into executable gameplay sessions for later API and mobile adapters.
 
 ## Background and Context
 
-EPIC-0003 starts by locking the engine surface that every later runtime consumer depends on. FEAT-0005 now guarantees that `StoryRepo.getBundle(storyId)` returns published bundle data, so the next step is to define how the engine loads that bundle, represents runtime progress, and exposes a small set of deterministic entrypoints for session startup and action execution.
+EPIC-0003 starts by locking the engine surface that every later runtime consumer depends on. FEAT-0005 now guarantees that `StoryPackageRepo.getPublishedPackage(storyId)` returns published story package data, so the next step is to define how the engine loads that story package, represents runtime progress, and exposes a small set of deterministic entrypoints for session startup and action execution.
 
 The architecture already sketches the target shape: `createEngine` owns public runtime methods, the engine depends on abstract ports instead of concrete db or API code, and runtime execution must stay inside `packages/engine`. This feature is where those contracts stop being implied architecture examples and become the explicit PRD for the engine-facing surface.
 
@@ -24,7 +24,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 ### In scope
 
 - Define the runtime state types the engine operates on, including per-player progress state and shared game state as engine contracts.
-- Define the engine port surface required to load published bundles and read/write runtime state through adapters.
+- Define the engine port surface required to load published story packages and read/write runtime state through adapters.
 - Define the public `createEngine` API and its first-class runtime entrypoints for starting a game, loading state, and submitting actions.
 - Define the result shape returned by runtime entrypoints so later API routes and mobile clients can consume one engine-owned execution contract.
 - Define the runtime lifecycle responsibilities that belong to the engine versus those deferred to later session and persistence features.
@@ -41,7 +41,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 1. The engine must expose a single public construction surface, `createEngine`, that accepts abstract runtime ports rather than concrete adapter implementations.
 2. The public engine API must define narrow entrypoints for starting runtime state from a published story, loading existing runtime state, and submitting actions against the current runtime state.
 3. Runtime state contracts must distinguish player-scoped progress from shared game-scoped progress without pushing storage or transport details into engine-owned types.
-4. The engine port surface must include the minimum dependencies needed to load published bundles and read/write runtime state, while preserving the dependency direction `mobile -> api -> engine <- db`.
+4. The engine port surface must include the minimum dependencies needed to load published story packages and read/write runtime state, while preserving the dependency direction `mobile -> api -> engine <- db`.
 5. Engine-owned runtime result shapes must be deterministic and rich enough for later API/mobile surfaces to render updated block state and available next-step information without reimplementing gameplay logic.
 6. Runtime state and public engine APIs must be documented as engine contracts, not API DTOs, and remain framework-free.
 7. This feature must define which lifecycle responsibilities remain inside the engine and which are explicitly deferred to later session persistence and multiplayer features.
@@ -50,7 +50,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 
 - Primary reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
 - The runtime surface should stay centered in `packages/engine`, with `createEngine` exporting engine-owned entrypoints and ports living in the engine package.
-- `StoryRepo.getBundle(storyId)` is the published bundle ingress from EPIC-0002; FEAT-0006 defines how the runtime surface consumes that bundle, not how publishing works.
+- `StoryPackageRepo.getPublishedPackage(storyId)` is the published story package ingress from EPIC-0002; FEAT-0006 defines how the runtime surface consumes that story package, not how publishing works.
 - User-scoped and game-scoped state are engine concepts in this feature. Their durable persistence and synchronization behavior remain later adapter concerns.
 - Success payloads from engine entrypoints should describe runtime outcomes such as updated state views and available next-step data, while route-local request/response DTOs remain adapter-owned in later work.
 - No new ADR is required unless the current engine-port boundary proves insufficient for headless runtime orchestration.
@@ -59,7 +59,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 
 - The runtime state model is defined clearly enough that later block, traversal, session, and mobile work can build on it without reopening core state-shape questions.
 - `createEngine` and its initial runtime entrypoints are defined as the single public execution surface for gameplay logic.
-- Engine ports describe published bundle access and runtime state persistence needs without leaking adapter-specific concerns into the engine.
+- Engine ports describe published story package access and runtime state persistence needs without leaking adapter-specific concerns into the engine.
 - The feature establishes a deterministic engine-owned result shape for runtime operations.
 - The feature explicitly defers persistence policy, session lifecycle orchestration, and multiplayer sync semantics to later work.
 
@@ -67,7 +67,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 
 - Add unit tests that exercise `createEngine` surface construction with stubbed ports.
 - Add unit tests that prove runtime state types and entrypoint result shapes can be consumed without adapter-specific casting or transport concerns.
-- Add focused engine tests for start/load/action entrypoint behavior using published bundle fixtures and fake repos.
+- Add focused engine tests for start/load/action entrypoint behavior using published story package fixtures and fake repos.
 - Manually verify the documented public API remains consistent with the architecture examples for `createEngine`, `startGame`, `loadSave`, and `submitAction`.
 
 ## Rollout and Observability

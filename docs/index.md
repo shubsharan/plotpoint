@@ -11,7 +11,7 @@ Use it as the one-page status rollup across epics and features.
 | Epic      | Status    | Doc                                                                                                                                                    |
 | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | EPIC-0001 | Completed | [epics/EPIC-0001-platform-and-planning-foundation.md](epics/EPIC-0001-platform-and-planning-foundation.md)                                             |
-| EPIC-0002 | Completed | [epics/EPIC-0002-story-bundle-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-bundle-contract-and-internal-publishing-pipeline.md) |
+| EPIC-0002 | Completed | [epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md) |
 | EPIC-0003 | Planned   | [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)                     |
 
 
@@ -22,7 +22,7 @@ Use it as the one-page status rollup across epics and features.
 | --------- | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | FEAT-0001 | EPIC-0001 | Completed | [features/FEAT-0001-monorepo-and-shared-config-finalization.md](features/FEAT-0001-monorepo-and-shared-config-finalization.md)                                     |
 | FEAT-0002 | EPIC-0001 | Cancelled | [features/FEAT-0002-spec-driven-delivery-automation.md](features/FEAT-0002-spec-driven-delivery-automation.md)                                                     |
-| FEAT-0003 | EPIC-0002 | Completed | [features/FEAT-0003-story-bundle-schema-and-validation-contract.md](features/FEAT-0003-story-bundle-schema-and-validation-contract.md)                             |
+| FEAT-0003 | EPIC-0002 | Completed | [features/FEAT-0003-story-package-schema-and-validation-contract.md](features/FEAT-0003-story-package-schema-and-validation-contract.md)                             |
 | FEAT-0004 | EPIC-0002 | Completed | [features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md](features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)                     |
 | FEAT-0005 | EPIC-0002 | Completed | [features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md](features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
 | FEAT-0006 | EPIC-0003 | Not Started | [features/FEAT-0006-runtime-state-model-and-engine-public-surface.md](features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)                       |
@@ -33,7 +33,7 @@ Use it as the one-page status rollup across epics and features.
 ### Current Implementation Snapshot
 
 - Foundation baseline is implemented: monorepo structure, shared config ownership, and package boundaries are in place.
-- Story bundle contract and schema validation are implemented and enforced for internal story bundle authoring.
+- Story package contract and schema validation are implemented and enforced for internal story package authoring.
 - Draft story storage and internal CRUD API flows are implemented for draft lifecycle work.
 - Story publish pipeline and published catalog availability are implemented under FEAT-0005.
 - The next queued epic is EPIC-0003, which defines headless runtime execution semantics inside `packages/engine`.
@@ -62,7 +62,7 @@ Use it as the one-page status rollup across epics and features.
 ### `epics/`
 
 - [epics/EPIC-0001-platform-and-planning-foundation.md](epics/EPIC-0001-platform-and-planning-foundation.md)
-- [epics/EPIC-0002-story-bundle-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-bundle-contract-and-internal-publishing-pipeline.md)
+- [epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md)
 - [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)
 - [epics/_template.md](epics/_template.md)
 
@@ -70,7 +70,7 @@ Use it as the one-page status rollup across epics and features.
 
 - [features/FEAT-0001-monorepo-and-shared-config-finalization.md](features/FEAT-0001-monorepo-and-shared-config-finalization.md)
 - [features/FEAT-0002-spec-driven-delivery-automation.md](features/FEAT-0002-spec-driven-delivery-automation.md)
-- [features/FEAT-0003-story-bundle-schema-and-validation-contract.md](features/FEAT-0003-story-bundle-schema-and-validation-contract.md)
+- [features/FEAT-0003-story-package-schema-and-validation-contract.md](features/FEAT-0003-story-package-schema-and-validation-contract.md)
 - [features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md](features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)
 - [features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md](features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md)
 - [features/FEAT-0006-runtime-state-model-and-engine-public-surface.md](features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)
@@ -84,5 +84,5 @@ Use it as the one-page status rollup across epics and features.
 
 ### `adrs/`
 
-- [adrs/ADR-story-bundle-object-storage-links.md](adrs/ADR-story-bundle-object-storage-links.md)
+- [adrs/ADR-story-package-object-storage-links.md](adrs/ADR-story-package-object-storage-links.md)
 - [adrs/_template.md](adrs/_template.md)
