@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   Engine,
   EngineRuntimeErrorCode,
+  RuntimeState,
   RuntimeSnapshot,
   StartGameInput,
   StoryPackage,
@@ -63,16 +64,11 @@ const startRuntime = async (
   overrides?: Partial<StartGameInput>,
 ): Promise<RuntimeSnapshot> => engine.startGame(createStartInput(storyId, overrides));
 
-const withStaleAvailableEdges = (snapshot: RuntimeSnapshot): RuntimeSnapshot => ({
-  ...snapshot,
-  availableEdges: [
-    {
-      edgeId: 'stale-edge',
-      label: 'Stale Edge',
-      targetNodeId: 'stale-node',
-    },
-  ],
-});
+const toRuntimeState = (snapshot: RuntimeSnapshot): RuntimeState => {
+  const { availableEdges: _availableEdges, ...state } = snapshot;
+
+  return state;
+};
 
 const expectRuntimeSnapshotShape = (snapshot: RuntimeSnapshot): void => {
   expect(snapshot).toMatchObject({
@@ -112,14 +108,14 @@ describe('@plotpoint/engine runtime surface', () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
     const loaded = await engine.loadRuntime({
-      snapshot: withStaleAvailableEdges(started),
+      state: toRuntimeState(started),
     });
     const submitted = await engine.submitAction({
       action: {
         type: 'noop',
       },
       blockId: 'briefing',
-      runtime: withStaleAvailableEdges(loaded),
+      state: toRuntimeState(loaded),
     });
 
     for (const snapshot of [started, loaded, submitted]) {
@@ -128,18 +124,18 @@ describe('@plotpoint/engine runtime surface', () => {
     }
   });
 
-  it('recomputes availableEdges on loadRuntime and submitAction, ignoring caller-provided edges', async () => {
+  it('rehydrates and submits from RuntimeState inputs without persisting derived fields', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
     const loaded = await engine.loadRuntime({
-      snapshot: withStaleAvailableEdges(started),
+      state: toRuntimeState(started),
     });
     const submitted = await engine.submitAction({
       action: {
         type: 'noop',
       },
       blockId: 'briefing',
-      runtime: withStaleAvailableEdges(loaded),
+      state: toRuntimeState(loaded),
     });
 
     expect(started.availableEdges).toEqual([
@@ -153,12 +149,33 @@ describe('@plotpoint/engine runtime surface', () => {
     expect(submitted.availableEdges).toEqual(started.availableEdges);
   });
 
-  it('clones block-state maps when normalizing snapshots', async () => {
+  it('accepts snapshot-shaped state inputs and strips derived fields before rehydration', async () => {
+    const { engine, storyId } = createRuntimeContext();
+    const started = await startRuntime(engine, storyId);
+    const staleSnapshot: RuntimeSnapshot = {
+      ...started,
+      availableEdges: [
+        {
+          edgeId: 'stale-edge',
+          label: 'Stale Edge',
+          targetNodeId: 'stale-node',
+        },
+      ],
+    };
+
+    const loaded = await engine.loadRuntime({
+      state: staleSnapshot,
+    });
+
+    expect(loaded.availableEdges).toEqual(started.availableEdges);
+  });
+
+  it('clones block-state maps when normalizing runtime state into a snapshot', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    const snapshotWithState: RuntimeSnapshot = {
-      ...started,
+    const stateWithBlockState: RuntimeState = {
+      ...toRuntimeState(started),
       playerState: {
         blockStates: {
           briefing: {
@@ -175,11 +192,11 @@ describe('@plotpoint/engine runtime surface', () => {
       },
     };
 
-    const loaded = await engine.loadRuntime({ snapshot: snapshotWithState });
+    const loaded = await engine.loadRuntime({ state: stateWithBlockState });
 
-    expect(loaded).not.toBe(snapshotWithState);
-    expect(loaded.playerState.blockStates).not.toBe(snapshotWithState.playerState.blockStates);
-    expect(loaded.sharedState.blockStates).not.toBe(snapshotWithState.sharedState.blockStates);
+    expect(loaded).not.toBe(stateWithBlockState);
+    expect(loaded.playerState.blockStates).not.toBe(stateWithBlockState.playerState.blockStates);
+    expect(loaded.sharedState.blockStates).not.toBe(stateWithBlockState.sharedState.blockStates);
   });
 
   const runtimeErrorCases: Array<{
@@ -199,8 +216,8 @@ describe('@plotpoint/engine runtime surface', () => {
         const started = await startRuntime(engine, storyId);
 
         return engine.loadRuntime({
-          snapshot: {
-            ...started,
+          state: {
+            ...toRuntimeState(started),
             currentNodeId: 'missing-node',
           },
         });
@@ -217,7 +234,7 @@ describe('@plotpoint/engine runtime surface', () => {
             type: 'noop',
           },
           blockId: 'missing-block',
-          runtime: started,
+          state: toRuntimeState(started),
         });
       },
     },
@@ -288,19 +305,19 @@ describe('@plotpoint/engine runtime surface', () => {
     await expect(startPromise).rejects.toThrow('too_small at gameId');
   });
 
-  it('throws runtime_snapshot_invalid for malformed loadRuntime snapshot payloads', async () => {
+  it('throws runtime_snapshot_invalid for malformed loadRuntime state payloads', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
     const loadPromise = engine.loadRuntime({
-      snapshot: {
-        ...started,
+      state: {
+        ...toRuntimeState(started),
         roleId: '',
-      } as unknown as RuntimeSnapshot,
+      } as unknown as RuntimeState,
     });
 
     await expectRuntimeError(loadPromise, 'runtime_snapshot_invalid');
-    await expect(loadPromise).rejects.toThrow('too_small at snapshot.roleId');
+    await expect(loadPromise).rejects.toThrow('too_small at state.roleId');
   });
 
   it('throws runtime_snapshot_invalid for malformed submitAction payloads', async () => {
@@ -312,7 +329,7 @@ describe('@plotpoint/engine runtime surface', () => {
         type: 'noop',
       },
       blockId: '',
-      runtime: started,
+      state: toRuntimeState(started),
     });
 
     await expectRuntimeError(submitPromise, 'runtime_snapshot_invalid');
@@ -325,7 +342,7 @@ describe('@plotpoint/engine runtime surface', () => {
 
     const submitPromise = engine.submitAction({
       blockId: 'briefing',
-      runtime: started,
+      state: toRuntimeState(started),
     } as unknown as Parameters<Engine['submitAction']>[0]);
 
     await expectRuntimeError(submitPromise, 'runtime_snapshot_invalid');
@@ -345,10 +362,10 @@ describe('@plotpoint/engine runtime surface', () => {
       ),
       expectRuntimeError(
         engine.loadRuntime({
-          snapshot: {
-            ...started,
+          state: {
+            ...toRuntimeState(started),
             roleId: '',
-          } as unknown as RuntimeSnapshot,
+          } as unknown as RuntimeState,
         }),
         'runtime_snapshot_invalid',
       ),
@@ -358,7 +375,7 @@ describe('@plotpoint/engine runtime surface', () => {
             type: 'noop',
           },
           blockId: '',
-          runtime: started,
+          state: toRuntimeState(started),
         }),
         'runtime_snapshot_invalid',
       ),

@@ -5,7 +5,7 @@ import { validateStoryPackageCompatibility } from '../story-packages/validate-co
 import { validateStoryPackageStructure } from '../story-packages/validate-structure.js';
 import { currentEngineMajor } from '../version.js';
 import { EngineRuntimeError } from './errors.js';
-import type { AvailableEdge, EnginePorts, RuntimeSnapshot } from './types.js';
+import type { AvailableEdge, EnginePorts, RuntimeSnapshot, RuntimeState } from './types.js';
 
 type StoryNode = StoryPackage['graph']['nodes'][number];
 
@@ -171,13 +171,13 @@ export const assertBlockInNodeOrThrow = (
 
 export const resolveRuntimeSnapshotContextOrThrow = async (
   ports: EnginePorts,
-  snapshot: RuntimeSnapshot,
+  state: RuntimeState,
   options?: ResolveRuntimeSnapshotOptions,
 ): Promise<ResolvedRuntimeSnapshotContext> => {
-  const story = await loadStoryOrThrow(ports, snapshot.storyId);
+  const story = await loadStoryOrThrow(ports, state.storyId);
 
-  assertRoleExistsOrThrow(story, snapshot.roleId);
-  const currentNode = getNodeOrThrow(story, snapshot.currentNodeId);
+  assertRoleExistsOrThrow(story, state.roleId);
+  const currentNode = getNodeOrThrow(story, state.currentNodeId);
 
   if (options?.blockId !== undefined) {
     assertBlockInNodeOrThrow(story, currentNode, options.blockId);
@@ -216,18 +216,22 @@ export const parseRuntimeInputOrThrow = <TInput>(
 export const mapAvailableEdges = (node: StoryNode): AvailableEdge[] =>
   node.edges.map((edge) => createAvailableEdge(edge));
 
-export const normalizeRuntimeSnapshot = (
-  snapshot: RuntimeSnapshot,
-  availableEdges: AvailableEdge[],
-): RuntimeSnapshot => ({
-  ...snapshot,
+export const normalizeRuntimeState = (state: RuntimeState): RuntimeState => ({
+  ...state,
   playerState: {
-    ...snapshot.playerState,
-    blockStates: { ...snapshot.playerState.blockStates },
+    ...state.playerState,
+    blockStates: { ...state.playerState.blockStates },
   },
   sharedState: {
-    ...snapshot.sharedState,
-    blockStates: { ...snapshot.sharedState.blockStates },
+    ...state.sharedState,
+    blockStates: { ...state.sharedState.blockStates },
   },
+});
+
+export const createRuntimeSnapshot = (
+  state: RuntimeState,
+  availableEdges: AvailableEdge[],
+): RuntimeSnapshot => ({
+  ...normalizeRuntimeState(state),
   availableEdges,
 });

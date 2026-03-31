@@ -1,6 +1,6 @@
 import {
+  createRuntimeSnapshot,
   mapAvailableEdges,
-  normalizeRuntimeSnapshot,
   parseRuntimeInputOrThrow,
   resolveRuntimeSnapshotContextOrThrow,
 } from './snapshot.js';
@@ -11,10 +11,10 @@ export const submitAction = async (
   ports: EnginePorts,
   input: SubmitActionInput,
 ): Promise<RuntimeSnapshot> => {
-  const { runtime, blockId } = parseRuntimeInputOrThrow(submitActionInputSchema, input);
-  const { currentNode } = await resolveRuntimeSnapshotContextOrThrow(ports, runtime, {
+  const { state, blockId } = parseRuntimeInputOrThrow(submitActionInputSchema, input);
+  const { currentNode } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
     blockId,
   });
 
-  return normalizeRuntimeSnapshot(runtime, mapAvailableEdges(currentNode));
+  return createRuntimeSnapshot(state, mapAvailableEdges(currentNode));
 };

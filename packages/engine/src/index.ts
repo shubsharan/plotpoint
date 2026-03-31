@@ -18,6 +18,7 @@ export type {
   Engine,
   EnginePorts,
   LoadRuntimeInput,
+  RuntimeState,
   RuntimeSnapshot,
   StartGameInput,
   SubmitActionInput,

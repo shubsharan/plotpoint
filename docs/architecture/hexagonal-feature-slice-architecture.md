@@ -73,10 +73,10 @@ packages/
 │   │   │   ├── multi-choice.ts      Config schema + runtime definition metadata
 │   │   │   └── index.ts             Block registry lookup
 │   │   ├── runtime/
-│   │   │   ├── start-game.ts         Creates a RuntimeSnapshot from a published story
-│   │   │   ├── load-runtime.ts       Rehydrates an adapter-supplied RuntimeSnapshot
-│   │   │   ├── submit-action.ts      Applies block execution to a RuntimeSnapshot
-│   │   │   └── types.ts              RuntimeSnapshot and progression types
+│   │   │   ├── start-game.ts         Creates a RuntimeSnapshot from published story + runtime state
+│   │   │   ├── load-runtime.ts       Rehydrates adapter-supplied RuntimeState
+│   │   │   ├── submit-action.ts      Applies block execution to RuntimeState
+│   │   │   └── types.ts              RuntimeState, RuntimeSnapshot, and progression types
 │   │   ├── ports.ts                   Abstract dependency types
 │   │   └── index.ts                   Public API: createEngine()
 │   └── package.json
@@ -213,11 +213,11 @@ export const createEngine = (ports: EnginePorts) => ({
   }) => startGame(ports, input),
 
   loadRuntime: (input: {
-    snapshot: RuntimeSnapshot;
+    state: RuntimeState;
   }) => loadRuntime(ports, input),
 
   submitAction: (input: {
-    runtime: RuntimeSnapshot;
+    state: RuntimeState;
     blockId: string;
     action: BlockAction;
   }) => submitAction(ports, input),
@@ -325,10 +325,10 @@ export const updateBlock = (
 
 Plotpoint has two kinds of engine-owned runtime state. Player-scoped state tracks an individual player's progress through a story. Shared state tracks world state that every player in the same game instance can read and affect. FEAT-0006 keeps these as engine contracts, while durable persistence and sync policy are deferred to later adapters.
 
-### RuntimeSnapshot
+### RuntimeState
 
 ```typescript
-type RuntimeSnapshot = {
+type RuntimeState = {
   playerId: string;
   roleId: string;
   storyId: string;
@@ -340,11 +340,16 @@ type RuntimeSnapshot = {
   sharedState: {
     blockStates: Record<string, unknown>;
   };
+};
+
+type RuntimeSnapshot = RuntimeState & {
   availableEdges: AvailableEdge[];
 };
 ```
 
-When processing an action, the executor reads the relevant bucket from the current `RuntimeSnapshot`, determines the target block's scope (`user` or `game`), updates the correct bucket, then produces a new `RuntimeSnapshot` with refreshed progression data.
+`RuntimeState` is the authoritative, resumable engine state. `RuntimeSnapshot` is the engine-computed result view returned after startup, rehydration, or action execution.
+
+When processing an action, the executor reads the relevant bucket from the current `RuntimeState`, determines the target block's scope (`user` or `game`), updates the correct bucket, then produces a new `RuntimeSnapshot` with refreshed progression data.
 
 ## Condition System
 
@@ -457,11 +462,11 @@ A complete trace of a player submitting an unlock code to a locked door, first i
 
 ### 1. Mobile App
 
-Player taps "Enter Code", types "1847", hits submit. The mobile app can call `engine.submitAction()` directly against its current `RuntimeSnapshot` for offline play. If the host is API-backed, the app POSTs the current runtime payload, `blockId`, and action payload to `/actions`, where a route-local DTO schema validates transport details before delegating to the same engine surface.
+Player taps "Enter Code", types "1847", hits submit. The mobile app can call `engine.submitAction()` against the current runtime state it is carrying for offline play. If the host is API-backed, the app POSTs the current runtime state payload, `blockId`, and action payload to `/actions`, where a route-local DTO schema validates transport details before delegating to the same engine surface.
 
 ### 2. API Route
 
-The route in `routes/submit-action.ts` parses the request, validates with Zod, and calls `engine.submitAction({ runtime, blockId, action })`. The route doesn't know about blocks, graphs, or game logic.
+The route in `routes/submit-action.ts` parses the request, validates with Zod, and calls `engine.submitAction({ state, blockId, action })`. The route doesn't know about blocks, graphs, or game logic.
 
 ```typescript
 // api/routes/submit-action.ts
@@ -476,8 +481,8 @@ app.post('/actions', async (c) => {
   const parsed = submitActionRequest.safeParse(body);
   if (!parsed.success) return c.json(parsed.error, 400);
 
-  const { runtime, blockId, action } = parsed.data;
-  const result = await engine.submitAction({ runtime, blockId, action });
+  const { state, blockId, action } = parsed.data;
+  const result = await engine.submitAction({ state, blockId, action });
 
   return c.json(result);
 });
@@ -498,24 +503,24 @@ import type { EnginePorts } from '../ports';
 export const executeAction = async (
   ports: EnginePorts,
   input: {
-    runtime: RuntimeSnapshot;
+    state: RuntimeState;
     blockId: string;
     action: unknown;
   },
 ) => {
-  const { runtime, blockId, action } = input;
-  const story = await ports.storyPackageRepo.getPublishedPackage(runtime.storyId);
+  const { state, blockId, action } = input;
+  const story = await ports.storyPackageRepo.getPublishedPackage(state.storyId);
 
   // 2. Find the target block's type and config from the story package
-  const currentNode = story.graph.nodes.find((node) => node.id === runtime.currentNodeId);
+  const currentNode = story.graph.nodes.find((node) => node.id === state.currentNodeId);
   const blockConfig = currentNode?.blocks.find((block) => block.id === blockId);
   const blockDef = getBlock(blockConfig.type);
 
   // 3. Read current state from the appropriate runtime bucket based on scope
   const currentBlockState =
     blockDef.scope === 'game'
-      ? runtime.sharedState.blockStates[blockId]
-      : runtime.playerState.blockStates[blockId];
+      ? state.sharedState.blockStates[blockId]
+      : state.playerState.blockStates[blockId];
 
   // 4. Run the pure block update
   const nextBlockState = updateBlock(
@@ -527,27 +532,27 @@ export const executeAction = async (
 
   // 5. Merge both buckets for edge evaluation
   const allBlockStates = {
-    ...runtime.sharedState.blockStates,
-    ...runtime.playerState.blockStates,
+    ...state.sharedState.blockStates,
+    ...state.playerState.blockStates,
     [blockId]: nextBlockState,
   };
 
   // 6. Evaluate which edges are now available
   const context = {
     now: ports.clock?.now() ?? new Date(),
-    playerLocation: await ports.locationReader?.getCurrent(runtime.playerId),
+    playerLocation: await ports.locationReader?.getCurrent(state.playerId),
   };
-  const availableEdges = evaluateEdges(story.graph, runtime.currentNodeId, allBlockStates, context);
+  const availableEdges = evaluateEdges(story.graph, state.currentNodeId, allBlockStates, context);
 
   // 7. Return the next runtime snapshot
   return {
-    ...runtime,
+    ...state,
     playerState:
       blockDef.scope === 'game'
-        ? runtime.playerState
+        ? state.playerState
         : {
             blockStates: {
-              ...runtime.playerState.blockStates,
+              ...state.playerState.blockStates,
               [blockId]: nextBlockState,
             },
           },
@@ -555,11 +560,11 @@ export const executeAction = async (
       blockDef.scope === 'game'
         ? {
             blockStates: {
-              ...runtime.sharedState.blockStates,
+              ...state.sharedState.blockStates,
               [blockId]: nextBlockState,
             },
           }
-        : runtime.sharedState,
+        : state.sharedState,
     availableEdges,
   };
 };
@@ -575,7 +580,7 @@ The traversal engine merges player and shared runtime state and evaluates every 
 
 ### 6. Response
 
-The executor returns the next `RuntimeSnapshot`, which an API route can serialize or a mobile host can use directly. The mobile app receives the updated snapshot, the block renderer registry maps `code` to its renderer, and it re-renders with the solved state.
+The executor returns the next `RuntimeSnapshot`, which an API route can serialize or a mobile host can use directly. The mobile app receives the updated snapshot, the block renderer registry maps `code` to its renderer, and it re-renders with the solved state while persisting only the `RuntimeState` subset if it wants a durable save.
 
 ### Full Call Chain
 
@@ -792,7 +797,7 @@ const engine = createEngine({
 
 test('submitting correct code unlocks door', async () => {
   const result = await engine.submitAction({
-    runtime: {
+    state: {
       playerId: 'player-1',
       roleId: 'detective',
       storyId: 'story-1',
@@ -804,7 +809,6 @@ test('submitting correct code unlocks door', async () => {
       sharedState: {
         blockStates: {},
       },
-      availableEdges: [],
     },
     blockId: 'door-1',
     action: {

@@ -1,12 +1,13 @@
 import {
   assertRoleExistsOrThrow,
+  createRuntimeSnapshot,
   getNodeOrThrow,
   loadStoryOrThrow,
   mapAvailableEdges,
   parseRuntimeInputOrThrow,
 } from './snapshot.js';
 import { startGameInputSchema } from './schema.js';
-import type { EnginePorts, RuntimeSnapshot, StartGameInput } from './types.js';
+import type { EnginePorts, RuntimeSnapshot, RuntimeState, StartGameInput } from './types.js';
 
 export const startGame = async (
   ports: EnginePorts,
@@ -18,8 +19,7 @@ export const startGame = async (
   assertRoleExistsOrThrow(story, parsedInput.roleId);
 
   const entryNode = getNodeOrThrow(story, story.graph.entryNodeId);
-
-  return {
+  const state: RuntimeState = {
     currentNodeId: entryNode.id,
     gameId: parsedInput.gameId,
     playerId: parsedInput.playerId,
@@ -31,6 +31,7 @@ export const startGame = async (
       blockStates: {},
     },
     storyId: parsedInput.storyId,
-    availableEdges: mapAvailableEdges(entryNode),
   };
+
+  return createRuntimeSnapshot(state, mapAvailableEdges(entryNode));
 };

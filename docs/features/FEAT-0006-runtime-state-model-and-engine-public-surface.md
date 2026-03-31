@@ -23,7 +23,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 
 ### In scope
 
-- Define the canonical `RuntimeSnapshot` contract the engine operates on, including runtime identity, player-scoped state, shared game-scoped state, and derived progression data.
+- Define the canonical runtime contracts the engine operates on: `RuntimeState` for resumable engine-owned state and `RuntimeSnapshot` for engine-computed result views that add derived progression data.
 - Define the minimal engine port surface required in this feature to load published story packages and read external runtime context.
 - Define the public `createEngine` API and its first-class runtime entrypoints for starting a game, loading runtime state, and submitting actions.
 - Define the engine-owned result shape returned by runtime entrypoints so later API routes and mobile clients can consume one execution contract.
@@ -43,7 +43,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 2. `createEngine` must accept only the dependencies needed in this feature: published story package loading plus narrow runtime-context ports such as a clock and optional location reader.
 3. The public engine API must define narrow runtime-first entrypoints: `startGame`, `loadRuntime`, and `submitAction`.
 4. Every public runtime entrypoint must return the same engine-owned `RuntimeSnapshot` family rather than a persistence-shaped save record.
-5. `RuntimeSnapshot` must distinguish player-scoped progress from shared game-scoped progress without pushing storage or transport details into engine-owned types.
+5. `RuntimeState` must distinguish player-scoped progress from shared game-scoped progress without pushing storage or transport details into engine-owned types, and `RuntimeSnapshot` must extend that state with derived progression data.
 6. `roleId` must be required at runtime startup and preserved in the player-scoped runtime identity contract.
 7. Engine-owned runtime result shapes must be deterministic and rich enough for later API/mobile surfaces to render updated block state and available next-step information without reimplementing gameplay logic.
 8. Runtime state and public engine APIs must be documented as engine contracts, not API DTOs, and remain framework-free.
@@ -58,10 +58,10 @@ The architecture already sketches the target shape: `createEngine` owns public r
 - User-scoped and game-scoped state are engine concepts in this feature. Their durable persistence, hydration, and synchronization behavior remain later adapter concerns in EPIC-0004.
 - The engine is host-agnostic in this feature. Mobile-local play and API-hosted execution both depend on the same `createEngine` surface rather than separate gameplay contracts.
 - Success payloads from engine entrypoints should describe runtime outcomes such as updated state views and reserved next-step data, while route-local request/response DTOs remain adapter-owned in later work.
-- The public surface for this feature is intentionally runtime-shaped rather than save-shaped:
+- The public surface for this feature is intentionally runtime-shaped rather than save-shaped, with a deliberate split between resumable state and engine-derived result fields:
 
 ```typescript
-type RuntimeSnapshot = {
+type RuntimeState = {
   storyId: string;
   gameId: string;
   playerId: string;
@@ -73,6 +73,9 @@ type RuntimeSnapshot = {
   sharedState: {
     blockStates: Record<string, unknown>;
   };
+};
+
+type RuntimeSnapshot = RuntimeState & {
   availableEdges: Array<{
     edgeId: string;
     label?: string | undefined;
@@ -98,17 +101,17 @@ type Engine = {
     roleId: string;
   }) => Promise<RuntimeSnapshot>;
   loadRuntime: (input: {
-    snapshot: RuntimeSnapshot;
+    state: RuntimeState;
   }) => Promise<RuntimeSnapshot>;
   submitAction: (input: {
-    runtime: RuntimeSnapshot;
+    state: RuntimeState;
     blockId: string;
     action: unknown;
   }) => Promise<RuntimeSnapshot>;
 };
 ```
 
-- `loadRuntime` rehydrates an adapter-supplied runtime snapshot into the engine surface for continued execution; it does not imply engine-owned durable storage in this feature.
+- `loadRuntime` rehydrates adapter-supplied `RuntimeState` into the engine surface for continued execution and returns a fresh `RuntimeSnapshot`; it does not imply engine-owned durable storage in this feature.
 - No new ADR is required unless the current engine-port boundary proves insufficient for headless runtime orchestration.
 
 ## Acceptance Criteria
@@ -116,14 +119,14 @@ type Engine = {
 - The runtime state model is defined clearly enough that later block, traversal, session, and mobile work can build on it without reopening core state-shape questions.
 - `createEngine` and its initial runtime entrypoints are defined as the single public execution surface for gameplay logic.
 - Engine ports describe published story package access plus narrow context dependencies without leaking adapter-specific concerns into the engine.
-- The feature establishes a deterministic engine-owned `RuntimeSnapshot` result shape for runtime operations.
+- The feature establishes a deterministic engine-owned `RuntimeSnapshot` result shape for runtime operations while keeping resumable `RuntimeState` free of derived progression fields.
 - `roleId` is part of runtime startup and runtime state, not an adapter-only concern.
 - The feature explicitly defers durable persistence policy, session lifecycle orchestration, and multiplayer sync semantics to later work.
 
 ## Test Plan
 
 - Add unit tests that exercise `createEngine` surface construction with stubbed story package and context ports.
-- Add contract-oriented tests that prove `startGame`, `loadRuntime`, and `submitAction` all return the same `RuntimeSnapshot` shape.
+- Add contract-oriented tests that prove `startGame`, `loadRuntime`, and `submitAction` all return the same `RuntimeSnapshot` shape while `loadRuntime` and `submitAction` accept minimal `RuntimeState` input.
 - Add focused engine tests for start/load/action entrypoint behavior using published story package fixtures and in-memory adapters suitable for mobile-local execution.
 - Add tests that prove `roleId` is required at startup and preserved across runtime transitions.
 - Add tests that prove progression output fields are engine-owned contract fields even before FEAT-0008 finalizes traversal behavior.
@@ -146,5 +149,5 @@ type Engine = {
 
 - Resolved: the engine is host-agnostic and may run directly in mobile for offline play or inside the API for hosted execution.
 - Resolved: `roleId` is part of runtime startup and runtime identity in this feature rather than a later adapter-only field.
-- Resolved: FEAT-0006 owns the outer `RuntimeSnapshot` contract, while FEAT-0008 later defines how traversal populates progression fields such as `availableEdges`.
+- Resolved: FEAT-0006 owns both the resumable `RuntimeState` boundary and the outer `RuntimeSnapshot` result contract, while FEAT-0008 later defines how traversal populates progression fields such as `availableEdges`.
 - Resolved: durable save repos, sync timing, and multiplayer authority policy remain deferred to EPIC-0004.

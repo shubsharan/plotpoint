@@ -4,12 +4,20 @@ import type { StoryPackageRepo } from '../ports/story-package-repo.js';
 import type {
   AvailableEdge,
   LoadRuntimeInput,
+  RuntimeState,
   RuntimeSnapshot,
   StartGameInput,
   SubmitActionInput,
 } from './schema.js';
 
-export type { AvailableEdge, LoadRuntimeInput, RuntimeSnapshot, StartGameInput, SubmitActionInput };
+export type {
+  AvailableEdge,
+  LoadRuntimeInput,
+  RuntimeState,
+  RuntimeSnapshot,
+  StartGameInput,
+  SubmitActionInput,
+};
 
 export type EnginePorts = {
   storyPackageRepo: StoryPackageRepo;
