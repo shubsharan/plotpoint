@@ -3,31 +3,34 @@ import {
   getNodeOrThrow,
   loadStoryOrThrow,
   mapAvailableEdges,
+  parseRuntimeInputOrThrow,
 } from './snapshot.js';
+import { startGameInputSchema } from './schema.js';
 import type { EnginePorts, RuntimeSnapshot, StartGameInput } from './types.js';
 
 export const startGame = async (
   ports: EnginePorts,
   input: StartGameInput,
 ): Promise<RuntimeSnapshot> => {
-  const story = await loadStoryOrThrow(ports, input.storyId);
+  const parsedInput = parseRuntimeInputOrThrow(startGameInputSchema, input);
+  const story = await loadStoryOrThrow(ports, parsedInput.storyId);
 
-  assertRoleExistsOrThrow(story, input.roleId);
+  assertRoleExistsOrThrow(story, parsedInput.roleId);
 
   const entryNode = getNodeOrThrow(story, story.graph.entryNodeId);
 
   return {
     currentNodeId: entryNode.id,
-    gameId: input.gameId,
-    playerId: input.playerId,
+    gameId: parsedInput.gameId,
+    playerId: parsedInput.playerId,
     playerState: {
       blockStates: {},
     },
-    roleId: input.roleId,
+    roleId: parsedInput.roleId,
     sharedState: {
       blockStates: {},
     },
-    storyId: input.storyId,
+    storyId: parsedInput.storyId,
     availableEdges: mapAvailableEdges(entryNode),
   };
 };

@@ -1,4 +1,4 @@
-import type { ZodError } from 'zod';
+import type { ZodError, ZodType } from 'zod';
 import type { StoryPackage } from '../story-packages/schema.js';
 import type { StoryPackageValidationIssue } from '../story-packages/types.js';
 import { validateStoryPackageCompatibility } from '../story-packages/validate-compatibility.js';
@@ -198,6 +198,19 @@ export const createRuntimeSnapshotInvalidError = (error: ZodError): EngineRuntim
   return runtimeError.snapshotInvalid(
     `${firstIssue.code} at ${formatIssuePath(firstIssue.path)}`
   );
+};
+
+export const parseRuntimeInputOrThrow = <TInput>(
+  schema: ZodType<TInput>,
+  input: unknown,
+): TInput => {
+  const parsed = schema.safeParse(input);
+
+  if (!parsed.success) {
+    throw createRuntimeSnapshotInvalidError(parsed.error);
+  }
+
+  return parsed.data;
 };
 
 export const mapAvailableEdges = (node: StoryNode): AvailableEdge[] =>

@@ -27,6 +27,13 @@ type LoadRuntimeInputShape = {
   snapshot: RuntimeSnapshotShape;
 };
 
+type StartGameInputShape = {
+  gameId: string;
+  playerId: string;
+  roleId: string;
+  storyId: string;
+};
+
 type SubmitActionInputShape = {
   action: unknown;
   blockId: string;
@@ -43,6 +50,10 @@ const runtimeStateBucketSchema: z.ZodType<RuntimeStateBucketShape> = z
     blockStates: runtimeBlockStatesSchema,
   })
   .strict();
+
+const requiredUnknownSchema: z.ZodType<unknown> = z.unknown().refine(
+  (value) => value !== undefined,
+);
 
 export const availableEdgeSchema: z.ZodType<AvailableEdgeShape> = z
   .object({
@@ -71,9 +82,18 @@ export const loadRuntimeInputSchema: z.ZodType<LoadRuntimeInputShape> = z
   })
   .strict();
 
+export const startGameInputSchema: z.ZodType<StartGameInputShape> = z
+  .object({
+    gameId: nonEmptyStringSchema,
+    playerId: nonEmptyStringSchema,
+    roleId: nonEmptyStringSchema,
+    storyId: nonEmptyStringSchema,
+  })
+  .strict();
+
 export const submitActionInputSchema: z.ZodType<SubmitActionInputShape> = z
   .object({
-    action: z.unknown(),
+    action: requiredUnknownSchema,
     blockId: nonEmptyStringSchema,
     runtime: runtimeSnapshotSchema,
   })
@@ -82,4 +102,5 @@ export const submitActionInputSchema: z.ZodType<SubmitActionInputShape> = z
 export type AvailableEdge = z.infer<typeof availableEdgeSchema>;
 export type RuntimeSnapshot = z.infer<typeof runtimeSnapshotSchema>;
 export type LoadRuntimeInput = z.infer<typeof loadRuntimeInputSchema>;
+export type StartGameInput = z.infer<typeof startGameInputSchema>;
 export type SubmitActionInput = z.infer<typeof submitActionInputSchema>;

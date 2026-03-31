@@ -278,6 +278,16 @@ describe('@plotpoint/engine runtime surface', () => {
     await expect(startPromise).rejects.toThrow(/unknown-block-type|incompatible-engine-major/);
   });
 
+  it('throws runtime_snapshot_invalid for malformed startGame payloads', async () => {
+    const { engine, storyId } = createRuntimeContext();
+    const startPromise = startRuntime(engine, storyId, {
+      gameId: '',
+    });
+
+    await expectRuntimeError(startPromise, 'runtime_snapshot_invalid');
+    await expect(startPromise).rejects.toThrow('too_small at gameId');
+  });
+
   it('throws runtime_snapshot_invalid for malformed loadRuntime snapshot payloads', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
@@ -307,5 +317,51 @@ describe('@plotpoint/engine runtime surface', () => {
 
     await expectRuntimeError(submitPromise, 'runtime_snapshot_invalid');
     await expect(submitPromise).rejects.toThrow('too_small at blockId');
+  });
+
+  it('throws runtime_snapshot_invalid when submitAction action is missing', async () => {
+    const { engine, storyId } = createRuntimeContext();
+    const started = await startRuntime(engine, storyId);
+
+    const submitPromise = engine.submitAction({
+      blockId: 'briefing',
+      runtime: started,
+    } as unknown as Parameters<Engine['submitAction']>[0]);
+
+    await expectRuntimeError(submitPromise, 'runtime_snapshot_invalid');
+    await expect(submitPromise).rejects.toThrow(/at action/);
+  });
+
+  it('uses runtime_snapshot_invalid across all runtime entrypoints for malformed input', async () => {
+    const { engine, storyId } = createRuntimeContext();
+    const started = await startRuntime(engine, storyId);
+
+    await Promise.all([
+      expectRuntimeError(
+        startRuntime(engine, storyId, {
+          playerId: '',
+        }),
+        'runtime_snapshot_invalid',
+      ),
+      expectRuntimeError(
+        engine.loadRuntime({
+          snapshot: {
+            ...started,
+            roleId: '',
+          } as unknown as RuntimeSnapshot,
+        }),
+        'runtime_snapshot_invalid',
+      ),
+      expectRuntimeError(
+        engine.submitAction({
+          action: {
+            type: 'noop',
+          },
+          blockId: '',
+          runtime: started,
+        }),
+        'runtime_snapshot_invalid',
+      ),
+    ]);
   });
 });

@@ -1,7 +1,7 @@
 import {
-  createRuntimeSnapshotInvalidError,
   mapAvailableEdges,
   normalizeRuntimeSnapshot,
+  parseRuntimeInputOrThrow,
   resolveRuntimeSnapshotContextOrThrow,
 } from './snapshot.js';
 import { submitActionInputSchema } from './schema.js';
@@ -11,12 +11,7 @@ export const submitAction = async (
   ports: EnginePorts,
   input: SubmitActionInput,
 ): Promise<RuntimeSnapshot> => {
-  const parsed = submitActionInputSchema.safeParse(input);
-  if (!parsed.success) {
-    throw createRuntimeSnapshotInvalidError(parsed.error);
-  }
-
-  const { runtime, blockId } = parsed.data;
+  const { runtime, blockId } = parseRuntimeInputOrThrow(submitActionInputSchema, input);
   const { currentNode } = await resolveRuntimeSnapshotContextOrThrow(ports, runtime, {
     blockId,
   });

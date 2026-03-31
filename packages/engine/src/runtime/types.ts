@@ -5,22 +5,16 @@ import type {
   AvailableEdge,
   LoadRuntimeInput,
   RuntimeSnapshot,
+  StartGameInput,
   SubmitActionInput,
 } from './schema.js';
 
-export type { AvailableEdge, LoadRuntimeInput, RuntimeSnapshot, SubmitActionInput };
+export type { AvailableEdge, LoadRuntimeInput, RuntimeSnapshot, StartGameInput, SubmitActionInput };
 
 export type EnginePorts = {
   storyPackageRepo: StoryPackageRepo;
   clock?: Clock | undefined;
   locationReader?: LocationReader | undefined;
-};
-
-export type StartGameInput = {
-  gameId: string;
-  playerId: string;
-  roleId: string;
-  storyId: string;
 };
 
 export type Engine = {
