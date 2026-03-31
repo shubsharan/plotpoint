@@ -12,7 +12,7 @@ Use it as the one-page status rollup across epics and features.
 | --------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | EPIC-0001 | Completed | [epics/EPIC-0001-platform-and-planning-foundation.md](epics/EPIC-0001-platform-and-planning-foundation.md)                                             |
 | EPIC-0002 | Completed | [epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md) |
-| EPIC-0003 | Planned   | [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)                     |
+| EPIC-0003 | In Progress | [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)                     |
 
 
 ### Feature Status Rollup
@@ -25,7 +25,7 @@ Use it as the one-page status rollup across epics and features.
 | FEAT-0003 | EPIC-0002 | Completed | [features/FEAT-0003-story-package-schema-and-validation-contract.md](features/FEAT-0003-story-package-schema-and-validation-contract.md)                             |
 | FEAT-0004 | EPIC-0002 | Completed | [features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md](features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)                     |
 | FEAT-0005 | EPIC-0002 | Completed | [features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md](features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
-| FEAT-0006 | EPIC-0003 | Not Started | [features/FEAT-0006-runtime-state-model-and-engine-public-surface.md](features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)                       |
+| FEAT-0006 | EPIC-0003 | In Progress | [features/FEAT-0006-runtime-state-model-and-engine-public-surface.md](features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)                       |
 | FEAT-0007 | EPIC-0003 | Not Started | [features/FEAT-0007-block-registry-and-action-executor.md](features/FEAT-0007-block-registry-and-action-executor.md)                                             |
 | FEAT-0008 | EPIC-0003 | Not Started | [features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md](features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)                 |
 
@@ -36,7 +36,7 @@ Use it as the one-page status rollup across epics and features.
 - Story package contract and schema validation are implemented and enforced for internal story package authoring.
 - Draft story storage and internal CRUD API flows are implemented for draft lifecycle work.
 - Story publish pipeline and published catalog availability are implemented under FEAT-0005.
-- The next queued epic is EPIC-0003, which defines headless runtime execution semantics inside `packages/engine`.
+- Runtime implementation is in progress under EPIC-0003, with FEAT-0006 defining the host-agnostic execution contract and runtime snapshot model inside `packages/engine`.
 
 ## Update Rules
 
@@ -55,6 +55,7 @@ Use it as the one-page status rollup across epics and features.
 
 ### `runbooks/`
 
+- [runbooks/deferred-followups.md](runbooks/deferred-followups.md)
 - [runbooks/doc-authoring-quickstart.md](runbooks/doc-authoring-quickstart.md)
 - [runbooks/spec-driven-delivery-workflow.md](runbooks/spec-driven-delivery-workflow.md)
 - [runbooks/_template.md](runbooks/_template.md)

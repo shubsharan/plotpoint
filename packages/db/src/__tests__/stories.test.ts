@@ -459,6 +459,56 @@ describe('@plotpoint/db stories', () => {
       publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
       publishedAt: new Date('2026-03-23T20:00:00.000Z'),
     });
+
+    await expect(
+      storyQueries.getPublishedStoryPackageVersion('story-the-stolen-ledger', 'snapshot-runtime'),
+    ).resolves.toMatchObject({
+      storyId: 'story-the-stolen-ledger',
+      publishedStoryPackageVersionId: 'snapshot-runtime',
+      engineMajor: 0,
+      publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      publishedAt: new Date('2026-03-23T20:00:00.000Z'),
+    });
+  });
+
+  it('reads non-current published package versions for pinned runtime resume', async () => {
+    await storyQueries.createStory(createStoryInput());
+    await storyQueries.publishStory({
+      engineMajor: 0,
+      publishedAt: new Date('2026-03-23T20:30:00.000Z'),
+      publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-v1',
+      storyId: 'story-the-stolen-ledger',
+      summary: 'Summary v1',
+      title: 'Title v1',
+    });
+    await storyQueries.publishStory({
+      engineMajor: 0,
+      publishedAt: new Date('2026-03-23T20:45:00.000Z'),
+      publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v2.json',
+      publishedStoryPackageVersionId: 'snapshot-v2',
+      storyId: 'story-the-stolen-ledger',
+      summary: 'Summary v2',
+      title: 'Title v2',
+    });
+
+    await expect(
+      storyQueries.getCurrentPublishedStoryPackageVersion('story-the-stolen-ledger'),
+    ).resolves.toMatchObject({
+      publishedStoryPackageVersionId: 'snapshot-v2',
+    });
+
+    await expect(
+      storyQueries.getPublishedStoryPackageVersion('story-the-stolen-ledger', 'snapshot-v1'),
+    ).resolves.toMatchObject({
+      publishedStoryPackageVersionId: 'snapshot-v1',
+      publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
+      publishedAt: new Date('2026-03-23T20:30:00.000Z'),
+    });
+
+    await expect(
+      storyQueries.getPublishedStoryPackageVersion('story-the-stolen-ledger', 'snapshot-missing'),
+    ).resolves.toBeNull();
   });
 
   it('blocks deleting stories with published package versions', async () => {

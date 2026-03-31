@@ -3,7 +3,7 @@
 | **Source**      | [Hexagonal + Feature-Slice Architecture](https://www.notion.so/321997b3842e815c9c79ecdfc2f0e06d) |
 | **Type**        | Architecture                                                                                     |
 | **Domains**     | Engine, API, Data Model, Mobile                                                                  |
-| **Last synced** | 2026-03-25                                                                                       |
+| **Last synced** | 2026-03-30                                                                                       |
 
 ## Repository Structure
 
@@ -46,10 +46,11 @@ apps/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── block-renderers/
-│   │   │   │   ├── code-lock.tsx     Renders LockedDoorState
-│   │   │   │   ├── clue.tsx            Renders ClueState
-│   │   │   │   ├── timer.tsx           Renders TimerState
-│   │   │   │   ├── qr-scanner.tsx      Renders QrScannerState
+│   │   │   │   ├── text.tsx            Renders text block state
+│   │   │   │   ├── location.tsx        Renders location block state
+│   │   │   │   ├── code.tsx            Renders code block state
+│   │   │   │   ├── single-choice.tsx   Renders single-choice block state
+│   │   │   │   ├── multi-choice.tsx    Renders multi-choice block state
 │   │   │   │   └── registry.tsx        Maps block type names to renderers
 │   │   │   └── ui/                     Shared design system components
 │   │   └── (rest of Expo app)
@@ -65,16 +66,17 @@ packages/
 │   │   │   ├── traversal.ts           Edge evaluation against block states
 │   │   │   └── validation.ts          Story graph integrity checks
 │   │   ├── blocks/
-│   │   │   ├── code-lock.ts         State, Action, initialState, update()
-│   │   │   ├── clue.ts                State, Action, initialState, update()
-│   │   │   ├── timer.ts               State, Action, initialState, update()
-│   │   │   ├── qr-scanner.ts          State, Action, initialState, update()
-│   │   │   └── index.ts              Block registry + updateBlock() lookup
+│   │   │   ├── text.ts              Config schema + runtime definition metadata
+│   │   │   ├── location.ts          Config schema + runtime definition metadata
+│   │   │   ├── code.ts              Config schema + runtime definition metadata
+│   │   │   ├── single-choice.ts     Config schema + runtime definition metadata
+│   │   │   ├── multi-choice.ts      Config schema + runtime definition metadata
+│   │   │   └── index.ts             Block registry lookup
 │   │   ├── runtime/
-│   │   │   ├── executor.ts            Core gameplay loop
-│   │   │   ├── save.ts                Game save management
-│   │   │   ├── state-tracker.ts       Per-player state over shared state
-│   │   │   └── migrations.ts          Version migration chain
+│   │   │   ├── start-game.ts         Creates a RuntimeSnapshot from published story + runtime state
+│   │   │   ├── load-runtime.ts       Rehydrates adapter-supplied RuntimeState
+│   │   │   ├── submit-action.ts      Applies block execution to RuntimeState
+│   │   │   └── types.ts              RuntimeState, RuntimeSnapshot, and progression types
 │   │   ├── ports.ts                   Abstract dependency types
 │   │   └── index.ts                   Public API: createEngine()
 │   └── package.json
@@ -111,13 +113,15 @@ packages/
 
 ## Dependency Flow
 
-The dependency direction is the most important architectural invariant to protect. The engine depends on nothing. Everything else depends inward toward it. The engine owns domain contracts and ports (including `StoryPackage`), while adapters own transport DTO schemas.
+The dependency direction is the most important architectural invariant to protect. The engine depends on nothing. Mobile and API both depend inward toward the engine, while only API owns database wiring. The engine owns domain contracts and ports (including `StoryPackage` and runtime snapshots), while adapters own transport DTO schemas.
 
 ```
-mobile  →  api  →  engine  ←  db
+mobile  →  engine
+api     →  engine
+api     →  db
 ```
 
-The engine's runtime execution code imports nothing from outside its own package. The `db` package imports from `engine/ports.ts` so its repos can implement those interfaces. The API imports from both `engine` and `db` to wire them together, keeps request validation plus error-response contracts route-local in `apps/api/src/routes/*`, and returns db CRUD read models directly via JSON for internal CRUD routes. If the engine ever imports from `db`, the hexagonal boundary is broken.
+The engine's runtime execution code imports nothing from outside its own package. Mobile can execute the engine directly for offline play. The API also imports from the engine to host runtime execution or orchestrate sync flows, and it imports from `db` for publish, catalog, and later session persistence concerns. If the engine ever imports from `db`, the hexagonal boundary is broken.
 
 ## Engine Ports
 
@@ -132,14 +136,13 @@ export type StoryPackageRepo = {
   getPublishedPackage: (storyId: string) => Promise<StoryPackage>;
 };
 
-export type UserSaveRepo = {
-  get: (saveId: string) => Promise<UserSaveState | null>;
-  save: (state: UserSaveState) => Promise<void>;
+export type Clock = {
+  now: () => Date;
 };
 
-export type GameSaveRepo = {
-  get: (gameId: string) => Promise<GameSaveState | null>;
-  update: (gameId: string, state: SharedBlockStates) => Promise<void>;
+export type GeoCoord = {
+  lat: number;
+  lng: number;
 };
 
 export type LocationReader = {
@@ -147,34 +150,39 @@ export type LocationReader = {
 };
 ```
 
-### Port Implementation (Repo)
+### Port Implementation (Adapters)
 
-Repos in `db/repos/` are thin wrappers that map database operation functions to the engine's port shapes:
+Ports are intentionally narrow so mobile-local and API-hosted adapters can both satisfy them:
 
 ```typescript
-// db/repos/user-save-repo.ts
-import type { UserSaveRepo } from '@plotpoint/engine';
-import { getUserSave, upsertUserSave } from '../user-saves';
+// mobile/runtime-adapters.ts
+import type { Clock, LocationReader } from '@plotpoint/engine';
 
-export const userSaveRepo: UserSaveRepo = {
-  get: getUserSave,
-  save: upsertUserSave,
+export const deviceClock: Clock = {
+  now: () => new Date(),
+};
+
+export const deviceLocationReader: LocationReader = {
+  getCurrent: async (_playerId) => null,
 };
 ```
 
 ### Engine Creation
 
-The engine is created in `server.ts` alongside app setup. Routes import the engine directly — no factory functions, no dependency injection at the route level.
+The engine is created wherever a host needs gameplay execution. Mobile can construct it directly for offline play. The API can also construct it in `server.ts` alongside app setup. Routes import the engine directly — no route-level dependency injection needed.
 
 ```typescript
 // api/server.ts
 import { Hono } from 'hono';
 import { createEngine } from '@plotpoint/engine';
-import { storyPackageRepo, userSaveRepo, gameSaveRepo } from '@plotpoint/db/repos';
+import { storyPackageRepo } from '@plotpoint/db/repos';
 import submitAction from './routes/submit-action';
 import { storiesRoutes } from './routes/stories/router';
 
-export const engine = createEngine({ storyPackageRepo, userSaveRepo, gameSaveRepo });
+export const engine = createEngine({
+  storyPackageRepo,
+  clock: { now: () => new Date() },
+});
 
 const app = new Hono();
 app.route('/api', submitAction);
@@ -185,23 +193,34 @@ export default app;
 
 ```typescript
 // engine/index.ts
-import type { StoryPackageRepo, UserSaveRepo, GameSaveRepo } from './ports';
-import { executeAction } from './runtime/executor';
-import { startNewGame } from './runtime/save';
+import type { Clock, LocationReader, StoryPackageRepo } from './ports';
+import { loadRuntime } from './runtime/load-runtime';
+import { startGame } from './runtime/start-game';
+import { submitAction } from './runtime/submit-action';
 
 type EnginePorts = {
   storyPackageRepo: StoryPackageRepo;
-  userSaveRepo: UserSaveRepo;
-  gameSaveRepo: GameSaveRepo;
+  clock?: Clock;
+  locationReader?: LocationReader;
 };
 
 export const createEngine = (ports: EnginePorts) => ({
-  submitAction: (saveId: string, blockId: string, action: BlockAction) =>
-    executeAction(ports, saveId, blockId, action),
+  startGame: (input: {
+    storyId: string;
+    gameId: string;
+    playerId: string;
+    roleId: string;
+  }) => startGame(ports, input),
 
-  startGame: (storyId: string, playerId: string) => startNewGame(ports, storyId, playerId),
+  loadRuntime: (input: {
+    state: RuntimeState;
+  }) => loadRuntime(ports, input),
 
-  loadSave: (saveId: string) => ports.userSaveRepo.get(saveId),
+  submitAction: (input: {
+    state: RuntimeState;
+    blockId: string;
+    action: BlockAction;
+  }) => submitAction(ports, input),
 });
 ```
 
@@ -209,15 +228,15 @@ export const createEngine = (ports: EnginePorts) => ({
 
 Blocks are the interactive building blocks of a story. Each block exports a `State` type, an `Action` type, an `initialState`, a `scope` (`'user'` or `'game'`), and an `update` function. The update function is a pure reducer: given state + action + config, return new state. No I/O, no side effects.
 
-A `BlockInstance` is a specific usage of a block type within a story node, configured by the story author. The block definition is the template (code-lock logic). The instance is a specific door in a specific story with a specific correct code.
+A `BlockInstance` is a specific usage of a block type within a story node, configured by the story author. The block definition is the template (`code` logic). The instance is a specific puzzle in a specific story with a specific expected answer.
 
 ```typescript
 // engine/graph/types.ts
 
 type BlockInstance = {
   id: string; // authored instance id: "front-door"
-  type: string; // which block definition: "code-lock"
-  config: unknown; // author's settings: { correctCode: "1847" }
+  type: string; // which block definition: "code"
+  config: unknown; // author's settings: { expected: "1847", mode: "passcode" }
 };
 ```
 
@@ -226,72 +245,38 @@ Canonical authored JSON stores nodes, blocks, and edges as ordered arrays. Runti
 ### User-Scoped Block Example
 
 ```typescript
-// engine/blocks/code-lock.ts
+// engine/blocks/code.ts
 
 export const scope = 'user' as const;
 
 export type State = {
-  locked: boolean;
   attempts: number;
+  solved: boolean;
 };
 
 export type Action = { type: 'attempt-unlock'; code: string } | { type: 'force-open' };
 
 export const initialState: State = {
-  locked: true,
   attempts: 0,
+  solved: false,
 };
 
 export const update = (
   state: State,
   action: Action,
-  config: { correctCode: string; maxAttempts?: number },
+  config: { expected: string; maxAttempts?: number; mode: 'passcode' | 'password' },
 ): State => {
   switch (action.type) {
     case 'attempt-unlock': {
-      const correct = action.code === config.correctCode;
+      const correct = action.code === config.expected;
       const newAttempts = state.attempts + 1;
       if (config.maxAttempts && newAttempts > config.maxAttempts) {
-        return { locked: true, attempts: newAttempts };
+        return { solved: false, attempts: newAttempts };
       }
-      return { locked: !correct, attempts: newAttempts };
+      return { solved: correct, attempts: newAttempts };
     }
     case 'force-open':
-      return state.attempts >= 3 ? { locked: false, attempts: state.attempts } : state;
-  }
-};
-```
-
-### Game-Scoped Block Example
-
-```typescript
-// engine/blocks/crime-scene.ts
-
-export const scope = 'game' as const;
-
-export type State = {
-  sealed: boolean;
-  openedBy: string | null;
-  openedAt: Date | null;
-};
-
-export type Action = { type: 'unseal'; playerId: string; openedAt: Date };
-
-export const initialState: State = {
-  sealed: true,
-  openedBy: null,
-  openedAt: null,
-};
-
-export const update = (state: State, action: Action, config: {}): State => {
-  switch (action.type) {
-    case 'unseal':
-      if (!state.sealed) return state;
-      return {
-        sealed: false,
-        openedBy: action.playerId,
-        openedAt: action.openedAt,
-      };
+      return state.attempts >= 3 ? { solved: true, attempts: state.attempts } : state;
   }
 };
 ```
@@ -302,10 +287,11 @@ The registry in `blocks/index.ts` maps block type names to their definitions. Th
 
 ```typescript
 // engine/blocks/index.ts
-import * as lockedDoor from './code-lock';
-import * as clue from './clue';
-import * as timer from './timer';
-import * as qrScanner from './qr-scanner';
+import * as code from './code';
+import * as location from './location';
+import * as multiChoice from './multi-choice';
+import * as singleChoice from './single-choice';
+import * as text from './text';
 
 export type BlockDefinition = {
   initialState: unknown;
@@ -314,10 +300,11 @@ export type BlockDefinition = {
 };
 
 const registry: Record<string, BlockDefinition> = {
-  'code-lock': lockedDoor,
-  clue: clue,
-  timer: timer,
-  'qr-scanner': qrScanner,
+  code: code,
+  location: location,
+  'multi-choice': multiChoice,
+  'single-choice': singleChoice,
+  text: text,
 };
 
 export const getBlock = (blockType: string): BlockDefinition | undefined => registry[blockType];
@@ -334,39 +321,35 @@ export const updateBlock = (
 };
 ```
 
-## Save State Model
+## Runtime Snapshot Model
 
-Plotpoint has two kinds of save state. `UserSaveState` tracks an individual player's progress through a story. `GameSaveState` tracks shared world state that all players in the same game instance can see and affect.
+Plotpoint has two kinds of engine-owned runtime state. Player-scoped state tracks an individual player's progress through a story. Shared state tracks world state that every player in the same game instance can read and affect. FEAT-0006 keeps these as engine contracts, while durable persistence and sync policy are deferred to later adapters.
 
-### UserSaveState (Per-Player)
+### RuntimeState
 
 ```typescript
-type UserSaveState = {
-  id: string;
+type RuntimeState = {
   playerId: string;
+  roleId: string;
   storyId: string;
-  gameId: string; // which game instance
-  currentNodeId: string; // position in story graph
-  blockStates: Record<string, unknown>; // per-player block states
-  startedAt: Date;
-  updatedAt: Date;
+  gameId: string;
+  currentNodeId: string;
+  playerState: {
+    blockStates: Record<string, unknown>;
+  };
+  sharedState: {
+    blockStates: Record<string, unknown>;
+  };
+};
+
+type RuntimeSnapshot = RuntimeState & {
+  availableEdges: AvailableEdge[];
 };
 ```
 
-### GameSaveState (Shared)
+`RuntimeState` is the authoritative, resumable engine state. `RuntimeSnapshot` is the engine-computed result view returned after startup, rehydration, or action execution.
 
-```typescript
-type GameSaveState = {
-  id: string;
-  storyId: string;
-  sharedBlockStates: Record<string, unknown>;
-  status: 'active' | 'completed' | 'expired';
-  startedAt: Date;
-  updatedAt: Date;
-};
-```
-
-When processing an action, the executor loads both save states, determines the target block's scope (user or game), reads from and writes to the appropriate save, then merges both into a combined view for edge condition evaluation.
+When processing an action, the executor reads the relevant bucket from the current `RuntimeState`, determines the target block's scope (`user` or `game`), updates the correct bucket, then produces a new `RuntimeSnapshot` with refreshed progression data.
 
 ## Condition System
 
@@ -473,17 +456,17 @@ const evaluate = (
 }
 ```
 
-## Request Lifecycle: Submit Action
+## Runtime Lifecycle: Submit Action
 
-A complete trace of a player submitting an unlock code to a locked door, from the phone to the database and back.
+A complete trace of a player submitting an unlock code to a locked door, first in mobile-local execution and then through an API host if server-backed orchestration is involved.
 
 ### 1. Mobile App
 
-Player taps "Enter Code", types "1847", hits submit. The app POSTs to `/actions` with the `saveId`, `blockId`, and action payload. Request shape is validated against a route-local DTO schema.
+Player taps "Enter Code", types "1847", hits submit. The mobile app can call `engine.submitAction()` against the current runtime state it is carrying for offline play. If the host is API-backed, the app POSTs the current runtime state payload, `blockId`, and action payload to `/actions`, where a route-local DTO schema validates transport details before delegating to the same engine surface.
 
 ### 2. API Route
 
-The route in `routes/submit-action.ts` parses the request, validates with Zod, and calls `engine.submitAction(saveId, blockId, action)`. The route doesn't know about blocks, graphs, or game logic.
+The route in `routes/submit-action.ts` parses the request, validates with Zod, and calls `engine.submitAction({ state, blockId, action })`. The route doesn't know about blocks, graphs, or game logic.
 
 ```typescript
 // api/routes/submit-action.ts
@@ -498,8 +481,8 @@ app.post('/actions', async (c) => {
   const parsed = submitActionRequest.safeParse(body);
   if (!parsed.success) return c.json(parsed.error, 400);
 
-  const { saveId, blockId, action } = parsed.data;
-  const result = await engine.submitAction(saveId, blockId, action);
+  const { state, blockId, action } = parsed.data;
+  const result = await engine.submitAction({ state, blockId, action });
 
   return c.json(result);
 });
@@ -509,33 +492,38 @@ export default app;
 
 ### 3. Engine Executor
 
-The executor in `runtime/executor.ts` orchestrates the gameplay loop:
+The executor in `runtime/submit-action.ts` orchestrates the gameplay loop:
 
 ```typescript
-// engine/runtime/executor.ts
+// engine/runtime/submit-action.ts
 import { getBlock, updateBlock } from '../blocks';
 import { evaluateEdges } from '../graph/traversal';
 import type { EnginePorts } from '../ports';
 
 export const executeAction = async (
   ports: EnginePorts,
-  saveId: string,
-  blockId: string,
-  action: unknown,
+  input: {
+    state: RuntimeState;
+    blockId: string;
+    action: unknown;
+  },
 ) => {
-  // 1. Load both save states through ports
-  const save = await ports.userSaveRepo.get(saveId);
-  const gameSave = await ports.gameSaveRepo.get(save.gameId);
-  const story = await ports.storyPackageRepo.getPublishedPackage(save.storyId);
+  const { state, blockId, action } = input;
+  const story = await ports.storyPackageRepo.getPublishedPackage(
+    state.storyId,
+    state.storyPackageVersionId,
+  );
 
   // 2. Find the target block's type and config from the story package
-  const currentNode = story.graph.nodes.find((node) => node.id === save.currentNodeId);
+  const currentNode = story.graph.nodes.find((node) => node.id === state.currentNodeId);
   const blockConfig = currentNode?.blocks.find((block) => block.id === blockId);
   const blockDef = getBlock(blockConfig.type);
 
-  // 3. Read current state from the appropriate save based on scope
+  // 3. Read current state from the appropriate runtime bucket based on scope
   const currentBlockState =
-    blockDef.scope === 'game' ? gameSave.sharedBlockStates[blockId] : save.blockStates[blockId];
+    blockDef.scope === 'game'
+      ? state.sharedState.blockStates[blockId]
+      : state.playerState.blockStates[blockId];
 
   // 4. Run the pure block update
   const nextBlockState = updateBlock(
@@ -545,34 +533,41 @@ export const executeAction = async (
     blockConfig.config,
   );
 
-  // 5. Write updated state to the appropriate save
-  if (blockDef.scope === 'game') {
-    await ports.gameSaveRepo.update(gameSave.id, {
-      ...gameSave.sharedBlockStates,
-      [blockId]: nextBlockState,
-    });
-  } else {
-    await ports.userSaveRepo.save({
-      ...save,
-      blockStates: { ...save.blockStates, [blockId]: nextBlockState },
-      updatedAt: new Date(),
-    });
-  }
-
-  // 6. Merge both saves for edge evaluation
+  // 5. Merge both buckets for edge evaluation
   const allBlockStates = {
-    ...gameSave.sharedBlockStates,
-    ...save.blockStates,
+    ...state.sharedState.blockStates,
+    ...state.playerState.blockStates,
     [blockId]: nextBlockState,
   };
 
-  // 7. Evaluate which edges are now available
-  const context = { now: new Date(), playerLocation: null };
-  const availableEdges = evaluateEdges(story.graph, save.currentNodeId, allBlockStates, context);
+  // 6. Evaluate which edges are now available
+  const context = {
+    now: ports.clock?.now() ?? new Date(),
+    playerLocation: await ports.locationReader?.getCurrent(state.playerId),
+  };
+  const availableEdges = evaluateEdges(story.graph, state.currentNodeId, allBlockStates, context);
 
-  // 8. Return result to the route
+  // 7. Return the next runtime snapshot
   return {
-    blockStates: allBlockStates,
+    ...state,
+    playerState:
+      blockDef.scope === 'game'
+        ? state.playerState
+        : {
+            blockStates: {
+              ...state.playerState.blockStates,
+              [blockId]: nextBlockState,
+            },
+          },
+    sharedState:
+      blockDef.scope === 'game'
+        ? {
+            blockStates: {
+              ...state.sharedState.blockStates,
+              [blockId]: nextBlockState,
+            },
+          }
+        : state.sharedState,
     availableEdges,
   };
 };
@@ -580,33 +575,28 @@ export const executeAction = async (
 
 ### 4. Block Update (Pure)
 
-The registry looks up `'code-lock'` and calls its `update()` with state `{ locked: true, attempts: 1 }` and action `{ type: 'attempt-unlock', code: '1847' }`. The code matches. Returns `{ locked: false, attempts: 2 }`. No I/O occurs.
+The registry looks up `code` and calls its `update()` with state `{ solved: false, attempts: 1 }` and action `{ type: 'attempt-unlock', code: '1847' }`. The code matches. Returns `{ solved: true, attempts: 2 }`. No I/O occurs.
 
 ### 5. Edge Evaluation (Pure)
 
-The traversal engine merges both save states and evaluates every edge's condition tree on the current node. With the door now unlocked, an edge condition like `field-equals(front-door, locked, false)` passes, making "Enter the corridor" available.
+The traversal engine merges player and shared runtime state and evaluates every edge's condition tree on the current node. With the puzzle now solved, an edge condition like `field-equals(vault-code, solved, true)` passes, making "Enter the corridor" available.
 
-### 6. Persistence
+### 6. Response
 
-The executor calls `ports.userSaveRepo.save(updatedSave)`. This passes through the thin repo wrapper in `db/repos/user-save-repo.ts` to the `upsertUserSave()` function in `db/user-saves.ts`, which runs the actual Drizzle upsert against Supabase.
-
-### 7. Response
-
-The executor returns updated block states and available edges to the route, which serializes them as JSON. The mobile app receives the response, the block renderer registry maps `'code-lock'` to `LockedDoor.tsx`, and it re-renders with the unlocked state.
+The executor returns the next `RuntimeSnapshot`, which an API route can serialize or a mobile host can use directly. The mobile app receives the updated snapshot, the block renderer registry maps `code` to its renderer, and it re-renders with the solved state while persisting only the `RuntimeState` subset if it wants a durable save.
 
 ### Full Call Chain
 
 ```
 Phone
+  → engine.submitAction()           (public API, mobile-local host)
+    → runtime/submit-action.ts      (orchestrates gameplay loop)
+      → blocks/code.ts              (pure state transition)
+      → graph/traversal.ts          (pure edge evaluation)
+
+API host
   → routes/submit-action.ts         (validates, delegates)
-    → engine.submitAction()          (public API)
-      → runtime/executor.ts          (orchestrates gameplay loop)
-        → blocks/code-lock.ts      (pure state transition)
-        → graph/traversal.ts         (pure edge evaluation)
-        → ports.userSaveRepo.save()  (abstract persistence)
-          → db/repos/user-save-repo  (thin port wrapper)
-            → db/user-saves.ts       (Drizzle query)
-              → Supabase
+    → engine.submitAction()         (same public API)
 ```
 
 ## Versioning
@@ -741,26 +731,26 @@ Current repo testing standard for story CRUD:
 ### Testing a Block
 
 ```typescript
-import { update, initialState } from './code-lock';
+import { update, initialState } from './code';
 
-const config = { correctCode: '1847' };
+const config = { expected: '1847', mode: 'passcode' };
 
-test('correct code unlocks', () => {
+test('correct code solves the block', () => {
   const result = update(initialState, { type: 'attempt-unlock', code: '1847' }, config);
-  expect(result.locked).toBe(false);
+  expect(result.solved).toBe(true);
   expect(result.attempts).toBe(1);
 });
 
-test('wrong code stays locked', () => {
+test('wrong code remains unsolved', () => {
   const result = update(initialState, { type: 'attempt-unlock', code: 'wrong' }, config);
-  expect(result.locked).toBe(true);
+  expect(result.solved).toBe(false);
   expect(result.attempts).toBe(1);
 });
 
 test('force open works after 3 failed attempts', () => {
-  const stateAfterFailures = { locked: true, attempts: 3 };
+  const stateAfterFailures = { solved: false, attempts: 3 };
   const result = update(stateAfterFailures, { type: 'force-open' }, config);
-  expect(result.locked).toBe(false);
+  expect(result.solved).toBe(true);
 });
 ```
 
@@ -783,8 +773,8 @@ const fakeStoryPackageRepo: StoryPackageRepo = {
           blocks: [
             {
               id: 'door-1',
-              type: 'code-lock',
-              config: { correctCode: '1847' },
+              type: 'code',
+              config: { expected: '1847', mode: 'passcode' },
             },
           ],
           edges: [],
@@ -798,48 +788,38 @@ const fakeStoryPackageRepo: StoryPackageRepo = {
   }),
 };
 
-const saved: UserSaveState[] = [];
-const fakeUserSaveRepo: UserSaveRepo = {
-  get: async () => ({
-    id: 'save-1',
-    playerId: 'player-1',
-    storyId: 'story-1',
-    gameId: 'game-1',
-    currentNodeId: 'node-1',
-    blockStates: { 'door-1': { locked: true, attempts: 0 } },
-    startedAt: new Date(),
-    updatedAt: new Date(),
-  }),
-  save: async (state) => {
-    saved.push(state);
-  },
-};
-
-const fakeGameSaveRepo: GameSaveRepo = {
-  get: async () => ({
-    id: 'game-1',
-    storyId: 'story-1',
-    sharedBlockStates: {},
-    status: 'active',
-    startedAt: new Date(),
-    updatedAt: new Date(),
-  }),
-  update: async () => {},
+const fakeClock: Clock = {
+  now: () => new Date('2026-03-30T12:00:00.000Z'),
 };
 
 // Create engine with fakes
 const engine = createEngine({
   storyPackageRepo: fakeStoryPackageRepo,
-  userSaveRepo: fakeUserSaveRepo,
-  gameSaveRepo: fakeGameSaveRepo,
+  clock: fakeClock,
 });
 
 test('submitting correct code unlocks door', async () => {
-  const result = await engine.submitAction('save-1', 'door-1', {
-    type: 'attempt-unlock',
-    code: '1847',
+  const result = await engine.submitAction({
+    state: {
+      playerId: 'player-1',
+      roleId: 'detective',
+      storyId: 'story-1',
+      gameId: 'game-1',
+      currentNodeId: 'node-1',
+      playerState: {
+        blockStates: { 'door-1': { solved: false, attempts: 0 } },
+      },
+      sharedState: {
+        blockStates: {},
+      },
+    },
+    blockId: 'door-1',
+    action: {
+      type: 'attempt-unlock',
+      code: '1847',
+    },
   });
-  expect(result.blockStates['door-1'].locked).toBe(false);
+  expect(result.playerState.blockStates['door-1'].solved).toBe(true);
 });
 ```
 
@@ -847,11 +827,11 @@ test('submitting correct code unlocks door', async () => {
 
 **Engine depends on nothing.** The engine defines what it needs as abstract port types and receives concrete implementations at runtime. If the engine ever imports from the db package, the architecture is broken.
 
-**Blocks are pure reducers.** A block's `update` function takes state + action + config and returns new state. No I/O, no side effects, no dependencies. Persistence is the executor's job.
+**Blocks are pure reducers.** A block's `update` function takes state + action + config and returns new state. No I/O, no side effects, no dependencies. Runtime snapshot orchestration is the executor's job.
 
 **Feature slices don't call each other.** API routes are independent vertical slices. If `publish-story` needs to update the story's status, it calls the database directly — it doesn't import from `update-story`.
 
-**Two save states, one combined view.** `UserSaveState` tracks per-player progress. `GameSaveState` tracks shared world state. The executor merges both for edge evaluation so conditions can reference either scope.
+**Two state buckets, one runtime snapshot.** `playerState` tracks per-player progress. `sharedState` tracks shared world state. The executor merges both for edge evaluation so conditions can reference either scope.
 
 **Conditions are named functions, not a custom language.** The story package stores condition names and params as JSON. The engine maps names to real TypeScript functions at runtime through a registry. Adding a new condition type means adding one function to the registry.
 

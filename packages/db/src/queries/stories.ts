@@ -36,6 +36,14 @@ const currentPublishedPackageVersionProjection = {
   storyId: stories.id,
 };
 
+const publishedPackageVersionProjection = {
+  engineMajor: publishedStoryPackageVersions.engineMajor,
+  publishedAt: publishedStoryPackageVersions.publishedAt,
+  publishedPackageUri: publishedStoryPackageVersions.publishedPackageUri,
+  publishedStoryPackageVersionId: publishedStoryPackageVersions.id,
+  storyId: publishedStoryPackageVersions.storyId,
+};
+
 export type StoryCrudReadModel = Pick<
   StoryRow,
   | 'id'
@@ -147,6 +155,10 @@ export type StoryQueries = {
   getCurrentPublishedStoryPackageVersion: (
     storyId: string,
   ) => Promise<CurrentPublishedStoryPackageVersionRef | null>;
+  getPublishedStoryPackageVersion: (
+    storyId: string,
+    publishedStoryPackageVersionId: string,
+  ) => Promise<PublishedStoryPackageVersionRef | null>;
   getPublishedStory: (storyId: string) => Promise<StoryPublishedCatalogReadModel | null>;
   getStory: (storyId: string) => Promise<StoryCrudReadModel | null>;
   listPublishedStories: () => Promise<StoryPublishedCatalogReadModel[]>;
@@ -226,6 +238,29 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
         eq(stories.currentPublishedPackageVersionId, publishedStoryPackageVersions.id),
       )
       .where(and(eq(stories.id, storyId), eq(stories.status, 'published')))
+      .limit(1);
+
+    return packageVersion ?? null;
+  };
+
+  const getPublishedStoryPackageVersion = async (
+    storyId: string,
+    publishedStoryPackageVersionId: string,
+  ): Promise<PublishedStoryPackageVersionRef | null> => {
+    const [packageVersion] = await database
+      .select(publishedPackageVersionProjection)
+      .from(stories)
+      .innerJoin(
+        publishedStoryPackageVersions,
+        eq(stories.id, publishedStoryPackageVersions.storyId),
+      )
+      .where(
+        and(
+          eq(stories.id, storyId),
+          eq(stories.status, 'published'),
+          eq(publishedStoryPackageVersions.id, publishedStoryPackageVersionId),
+        ),
+      )
       .limit(1);
 
     return packageVersion ?? null;
@@ -390,6 +425,7 @@ export const createStoryQueries = (database: StoryCrudDatabase): StoryQueries =>
     createStory,
     deleteStory,
     getCurrentPublishedStoryPackageVersion,
+    getPublishedStoryPackageVersion,
     getPublishedStory,
     getStory,
     listPublishedStories,

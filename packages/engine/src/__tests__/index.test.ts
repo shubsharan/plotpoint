@@ -15,10 +15,34 @@ describe('@plotpoint/engine', () => {
     expect(typeof engine.validateStoryPackageStructure).toBe('function');
     expect(typeof engine.validateStoryPackageCompatibility).toBe('function');
     expect(typeof engine.currentEngineMajor).toBe('number');
+    expect(typeof engine.createEngine).toBe('function');
+    expect(typeof engine.EngineRuntimeError).toBe('function');
   });
 
-  it('exports the StoryPackageRepo port type support surface', () => {
-    expect('currentEngineMajor' in engine).toBe(true);
+  it('supports runtime surface creation from the root entrypoint', async () => {
+    const runtimeStoryPackage = JSON.parse(JSON.stringify(validStoryPackageFixture));
+    runtimeStoryPackage.version.engineMajor = engine.currentEngineMajor;
+
+    const runtimeEngine = engine.createEngine({
+      storyPackageRepo: {
+        getCurrentPublishedPackage: async () => ({
+          storyPackage: runtimeStoryPackage,
+          storyPackageVersionId: 'snapshot-v1',
+        }),
+        getPublishedPackage: async () => runtimeStoryPackage,
+      },
+    });
+
+    const runtime = await runtimeEngine.startGame({
+      gameId: 'game-1',
+      playerId: 'player-1',
+      roleId: 'detective',
+      storyId: runtimeStoryPackage.metadata.storyId,
+    });
+
+    expect(runtime.currentNodeId).toBe('foyer');
+    expect(runtime.storyId).toBe(runtimeStoryPackage.metadata.storyId);
+    expect(runtime.storyPackageVersionId).toBe('snapshot-v1');
   });
 
   it('does not export testing fixtures from the root entrypoint', () => {

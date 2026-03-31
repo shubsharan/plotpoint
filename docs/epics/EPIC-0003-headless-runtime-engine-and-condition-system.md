@@ -2,8 +2,8 @@
 | -------------------- | ------------------- |
 | **Type**             | Epic                |
 | **Epic ID**          | EPIC-0003           |
-| **Status**           | Planned             |
-| **Last synced**      | 2026-03-30          |
+| **Status**           | In Progress         |
+| **Last synced**      | 2026-03-31          |
 
 # EPIC-0003 - Headless Runtime Engine and Condition System
 
@@ -15,7 +15,7 @@ Turn published `StoryPackage` artifacts into executable gameplay semantics insid
 
 The roadmap already sequences runtime execution immediately after the story package and publishing pipeline work: once internal creators can publish stable PublishedStoryPackageVersion records, Plotpoint needs a headless engine that can load those story packages and run story logic consistently. The product strategy defines stories as directed graphs of scenes connected by conditional paths, with local-first play and a split between player-scoped state and shared game-scoped state.
 
-The architecture makes the boundary explicit. The engine owns runtime contracts and execution semantics, remains pure TypeScript with no UI or infrastructure dependencies, and sits behind the dependency flow `mobile -> api -> engine <- db`. Published story package loading must enter through `StoryPackageRepo.getPublishedPackage`, while transport, persistence, and mobile rendering concerns stay outside this epic.
+The architecture makes the boundary explicit. The engine owns runtime contracts and execution semantics, remains pure TypeScript with no UI or infrastructure dependencies, and must be host-agnostic so both mobile-local and API-hosted adapters can depend on the same gameplay authority. Published story package loading must enter through `StoryPackageRepo.getPublishedPackage`, while durable persistence, sync orchestration, and mobile rendering concerns stay outside this epic.
 
 ## Scope
 
@@ -55,7 +55,7 @@ The architecture makes the boundary explicit. The engine owns runtime contracts 
 - Risk: runtime semantics blur with session persistence or multiplayer coordination concerns. Mitigation: keep this epic focused on headless execution contracts and defer save/sync orchestration to `EPIC-0004`.
 - Risk: API or mobile layers reintroduce gameplay logic outside the engine. Mitigation: define the engine public surface and runtime semantics as the only execution authority for story progression.
 - Risk: story package contract assumptions from `EPIC-0002` get reopened during runtime implementation. Mitigation: treat published `StoryPackage` artifacts as the fixed input boundary and evolve runtime behavior around that contract.
-- Risk: runtime APIs overfit to current transport or storage decisions. Mitigation: keep ports and runtime inputs infrastructure-neutral and preserve the dependency flow `mobile -> api -> engine <- db`.
+- Risk: runtime APIs overfit to one host or storage strategy. Mitigation: keep ports and runtime inputs infrastructure-neutral so the same engine surface can run in mobile or API hosts while durable persistence remains deferred to `EPIC-0004`.
 
 ## Feature Breakdown
 
@@ -72,4 +72,4 @@ The architecture makes the boundary explicit. The engine owns runtime contracts 
 
 ## Open Questions
 
-- None. This epic intentionally stops at runtime semantics and leaves save orchestration, sync authority, and player-facing rendering to later epics.
+- Deferred follow-up [DF-0001]: finalize session-layer orchestration for explicit mid-game upgrades of pinned published package versions. Default policy is pin on game start, allow explicit upgrade actions, and reject upgrades that fail runtime compatibility checks so sessions remain on their prior pinned version. | Owner: EPIC-0003 | Trigger: Session orchestration implementation begins for persisted runtime resume and upgrade controls. | Exit criteria: Runtime/session docs and implementation ship an explicit upgrade action with reject-on-incompatibility behavior and pinned-version preservation.

@@ -6,7 +6,7 @@
 | **Status**      | Completed                                                                               |
 | **Epic**        | EPIC-0001                                                                               |
 | **Domains**     | Infrastructure, Engine, API, Data Model                                                 |
-| **Last synced** | 2026-03-19                                                                              |
+| **Last synced** | 2026-03-30                                                                              |
 
 # FEAT-0001 - Monorepo and Shared Config Finalization
 
@@ -52,7 +52,7 @@ The scope stays intentionally narrow: this feature finalizes the platform founda
 ## Architecture and Technical Notes
 
 - Primary architecture reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
-- This feature should reinforce the dependency flow `mobile -> api -> engine <- db`.
+- This feature should reinforce the boundary where mobile and API both depend on engine while API owns db wiring.
 - The dependency flow is a boundary target for scaffold ownership in this feature, not yet a requirement for concrete implementations.
 - Zod remains the planned source of truth for shared schema shapes in later feature work.
 - Story package schema work is intentionally deferred to `EPIC-0002`.

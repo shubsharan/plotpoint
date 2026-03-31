@@ -4,7 +4,7 @@
 | **Type**             | Epic                |
 | **Epic ID**          | EPIC-0002           |
 | **Status**           | Completed           |
-| **Last synced**      | 2026-03-24          |
+| **Last synced**      | 2026-03-30          |
 
 
 # EPIC-0002 - Story Package Contract and Internal Publishing Pipeline
@@ -56,7 +56,7 @@ Story package payload persistence uses object storage pointers in relational tab
 ## Risks and Mitigations
 
 - Risk: the story package contract over-optimizes for a future open creator ecosystem instead of the current internal workflow. Mitigation: scope this epic to internal JSON authoring and curated releases only.
-- Risk: publishing concerns leak into engine or mobile ownership boundaries. Mitigation: keep publishing orchestration in API/db adapters and preserve the architecture dependency flow `mobile -> api -> engine <- db`.
+- Risk: publishing concerns leak into engine or mobile ownership boundaries. Mitigation: keep publishing orchestration in API/db adapters and preserve the architecture boundary where mobile and API depend on engine while API owns db wiring.
 - Risk: published story package compatibility drifts from engine versioning. Mitigation: treat engine major version stamping and migration compatibility as part of the publish contract, not an afterthought.
 - Risk: docs claim implementation details that are not yet present in the scaffold repo. Mitigation: describe this epic as the target contract and pipeline to implement next, grounded only in routes and boundaries already established by the architecture doc.
 
