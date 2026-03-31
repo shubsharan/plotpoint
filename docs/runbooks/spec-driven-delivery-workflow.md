@@ -2,7 +2,7 @@
 | --------------- | ---------- |
 | **Type**        | Workflow   |
 | **Status**      | Active     |
-| **Last synced** | 2026-03-24 |
+| **Last synced** | 2026-03-31 |
 
 # Plotpoint - Spec-Driven Delivery Workflow
 
@@ -24,6 +24,7 @@ Define the update contract for planning, implementation, and docs maintenance in
 3. Strategy and roadmap sequencing changes update `docs/product/`.
 4. Architecture or package-boundary changes update `docs/architecture/`.
 5. Non-obvious trade-offs update `docs/adrs/`.
+6. Deferred TODOs in feature/epic docs use `Deferred follow-up [DF-XXXX]: ... | Owner: ... | Trigger: ... | Exit criteria: ...` and must be mirrored in `docs/runbooks/deferred-followups.md`.
 
 ## Delivery Flow
 

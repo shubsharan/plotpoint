@@ -5,7 +5,7 @@
 | **Status**      | In Progress |
 | **Epic**        | EPIC-0003   |
 | **Domains**     | Engine      |
-| **Last synced** | 2026-03-30  |
+| **Last synced** | 2026-03-31  |
 
 # FEAT-0006 - Runtime State Model and Engine Public Surface
 
@@ -150,4 +150,4 @@ type Engine = {
 - Resolved: the engine is host-agnostic and may run directly in mobile for offline play or inside the API for hosted execution.
 - Resolved: `roleId` is part of runtime startup and runtime identity in this feature rather than a later adapter-only field.
 - Resolved: FEAT-0006 owns both the resumable `RuntimeState` boundary and the outer `RuntimeSnapshot` result contract, while FEAT-0008 later defines how traversal populates progression fields such as `availableEdges`.
-- Resolved: durable save repos, sync timing, and multiplayer authority policy remain deferred to EPIC-0004.
+- Deferred follow-up [DF-0001]: define session upgrade policy for pinned published package versions. Default policy is pin at game start, allow explicit session/API-triggered upgrades, and reject upgrades when runtime compatibility checks fail so the session remains on its prior version. | Owner: EPIC-0003 | Trigger: Session orchestration scope is activated for runtime persistence/resume work. | Exit criteria: A merged feature implementation and docs update define explicit upgrade flow, compatibility failure behavior, and persistence semantics.

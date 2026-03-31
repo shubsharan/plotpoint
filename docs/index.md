@@ -55,6 +55,7 @@ Use it as the one-page status rollup across epics and features.
 
 ### `runbooks/`
 
+- [runbooks/deferred-followups.md](runbooks/deferred-followups.md)
 - [runbooks/doc-authoring-quickstart.md](runbooks/doc-authoring-quickstart.md)
 - [runbooks/spec-driven-delivery-workflow.md](runbooks/spec-driven-delivery-workflow.md)
 - [runbooks/_template.md](runbooks/_template.md)

@@ -3,7 +3,7 @@
 | **Type**             | Epic                |
 | **Epic ID**          | EPIC-0003           |
 | **Status**           | In Progress         |
-| **Last synced**      | 2026-03-30          |
+| **Last synced**      | 2026-03-31          |
 
 # EPIC-0003 - Headless Runtime Engine and Condition System
 
@@ -72,4 +72,4 @@ The architecture makes the boundary explicit. The engine owns runtime contracts 
 
 ## Open Questions
 
-- None. This epic intentionally stops at runtime semantics and leaves save orchestration, sync authority, and player-facing rendering to later epics.
+- Deferred follow-up [DF-0001]: finalize session-layer orchestration for explicit mid-game upgrades of pinned published package versions. Default policy is pin on game start, allow explicit upgrade actions, and reject upgrades that fail runtime compatibility checks so sessions remain on their prior pinned version. | Owner: EPIC-0003 | Trigger: Session orchestration implementation begins for persisted runtime resume and upgrade controls. | Exit criteria: Runtime/session docs and implementation ship an explicit upgrade action with reject-on-incompatibility behavior and pinned-version preservation.
