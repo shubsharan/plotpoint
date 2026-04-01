@@ -27,7 +27,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Define the block registry ownership model for the MVP block set in `packages/engine`.
 - Define deterministic `performBlockAction` orchestration and validation/error order.
 - Define state-bucket routing behavior for `playerState.blockStates` vs `sharedState.blockStates`.
-- Define interactive vs non-interactive block execution policy (`text` is non-interactive and auto-materialized).
+- Define interactive vs non-interactive block execution policy (`text` is non-interactive and resolves its unlocked state through the hydrated current-node snapshot).
 - Define typed runtime error surface for all block execution failures.
 - Define ordered implementation and test sequence for this feature.
 
@@ -60,7 +60,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Registry lives in `packages/engine` and maps authored `type` to engine-owned definition objects.
 - Config/state/action validation is schema-owned at block-definition level, orchestrated by executor.
 - Action context is value-only (`now`, `playerLocation`) resolved at executor boundary; block behaviors never receive ports.
-- `loadRuntime` remains non-mutating rehydration; node-entry effects occur only on entry events (`startGame` now, traversal later in FEAT-0008).
+- `loadRuntime` remains non-mutating rehydration and resolves effective current-node block state from sparse persisted runtime data.
 - Shell owns navigation UX from `traversableEdges`; blocks do not own graph navigation controls.
 - FEAT-0007 intentionally exposes only unconditional edges in `traversableEdges`; conditioned authored edges remain non-executable metadata until FEAT-0008 defines traversal semantics.
 - Keep test fixtures internal to engine `__tests__`; no public test-only exports.
@@ -81,7 +81,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 ### Interactive policy
 
 - `text` is non-interactive for FEAT-0007.
-- Node-entry policy auto-materializes `text` block state as unlocked.
+- `text` block state resolves deterministically as unlocked in the hydrated current-node snapshot and does not require persisted state.
 - `performBlockAction` on `text` fails explicitly as non-actionable.
 
 ### Canonical state semantics
@@ -144,7 +144,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - `performBlockAction` enforces current-node-only, single-target, strict action contracts, and deterministic validation/error order.
 - Executor updates exactly one scoped bucket key and returns FEAT-0006 `RuntimeSnapshot`.
 - Canonical terminal field across executable blocks is `unlocked`.
-- `text` behavior is non-interactive and auto-materialized on node entry.
+- `text` behavior is non-interactive and resolves its state from deterministic defaults in the current-node snapshot.
 - Error surface is explicit and typed for all execution failure classes in this PRD.
 - Traversal/navigation semantics remain deferred to FEAT-0008.
 
@@ -181,10 +181,10 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 
 - Risk: block implementations absorb orchestration concerns. Mitigation: enforce reducer-local responsibilities and executor-owned sequencing.
 - Risk: terminal state semantics drift (`solved` vs `unlocked`). Mitigation: hard-standardize on `unlocked` and update fixtures/conditions accordingly.
-- Risk: hydration and execution boundaries blur. Mitigation: keep `loadRuntime` non-mutating and scope node-entry effects to entry events.
+- Risk: hydration and execution boundaries blur. Mitigation: keep persisted runtime state sparse and make current-node hydration a read-side projection rather than a persistence mutation.
 - Risk: adapters parse messages instead of contracts. Mitigation: include structured error details in runtime errors.
 - Risk: FEAT-0008 receives unstable execution contracts. Mitigation: lock the generic `submit` action envelope and deterministic executor behavior in this feature.
-- Deferred follow-up [DF-0002]: conditioned-edge derivation and `traverseEdge` validation against persisted block unlock state remain deferred to FEAT-0008. FEAT-0007 intentionally exposes only unconditional edges in `traversableEdges` and rejects conditioned-edge traversal with a typed runtime error. | Owner: FEAT-0008 | Trigger: FEAT-0008 implementation begins for real traversal semantics. | Exit criteria: Engine derives `traversableEdges` from persisted runtime state and validates `traverseEdge` against that derived set.
+- Deferred follow-up [DF-0002]: conditioned-edge derivation and `traverseEdge` validation against effective block state remain deferred to FEAT-0008. FEAT-0007 intentionally exposes only unconditional edges in `traversableEdges` and rejects conditioned-edge traversal with a typed runtime error. | Owner: FEAT-0008 | Trigger: FEAT-0008 implementation begins for real traversal semantics. | Exit criteria: Engine derives `traversableEdges` from effective runtime state and validates `traverseEdge` against that derived set.
 
 ## Implementation Order (Do In This Sequence)
 
@@ -198,7 +198,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 
 3. Implement non-interactive text policy
 - Mark `text` non-actionable for executor.
-- Add node-entry materialization path for text unlocked state at runtime entrypoints that perform node entry.
+- Resolve text unlocked state through sparse effective-state hydration instead of writing default block state into persistence.
 
 4. Implement executor orchestration
 - Enforce fixed validation/execution order.

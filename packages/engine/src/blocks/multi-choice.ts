@@ -123,7 +123,7 @@ const multiChoiceConfigSchema: z.ZodType<MultiChoiceBlockConfig> = z
 
 const multiChoiceActionSchema: z.ZodType<MultiChoiceBlockAction> = z
   .object({
-    optionIds: z.array(z.string().min(1)),
+    optionIds: z.array(z.string().min(1)).min(1),
     type: z.literal('submit'),
   })
   .strict();

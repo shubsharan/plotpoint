@@ -1,6 +1,6 @@
 import { EngineRuntimeError } from './errors.js';
-import { materializeNodeEntryStateOrThrow } from './node-entry.js';
 import {
+  createCurrentNodeSnapshotOrThrow,
   createRuntimeSnapshot,
   getNodeOrThrow,
   mapTraversableEdges,
@@ -43,13 +43,11 @@ export const traverseEdge = async (
   }
 
   const nextNode = getNodeOrThrow(story, edge.targetNodeId);
-  const nextState = materializeNodeEntryStateOrThrow(
-    {
-      ...state,
-      currentNodeId: nextNode.id,
-    },
-    nextNode,
-  );
+  const nextState = {
+    ...state,
+    currentNodeId: nextNode.id,
+  };
+  const hydratedCurrentNode = createCurrentNodeSnapshotOrThrow(nextState, nextNode);
 
-  return createRuntimeSnapshot(nextState, mapTraversableEdges(nextNode));
+  return createRuntimeSnapshot(nextState, hydratedCurrentNode, mapTraversableEdges(nextNode));
 };

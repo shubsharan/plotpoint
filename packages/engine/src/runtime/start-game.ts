@@ -1,12 +1,12 @@
 import {
   assertRoleExistsOrThrow,
+  createCurrentNodeSnapshotOrThrow,
   createRuntimeSnapshot,
   getNodeOrThrow,
   loadStoryOrThrow,
   mapTraversableEdges,
   parseRuntimeInputOrThrow,
 } from './snapshot.js';
-import { materializeNodeEntryStateOrThrow } from './node-entry.js';
 import { startGameInputSchema } from './schema.js';
 import type { EnginePorts, RuntimeSnapshot, RuntimeState, StartGameInput } from './types.js';
 
@@ -37,7 +37,7 @@ export const startGame = async (
     storyId: parsedInput.storyId,
     storyPackageVersionId,
   };
-  const state = materializeNodeEntryStateOrThrow(initialState, entryNode);
+  const currentNode = createCurrentNodeSnapshotOrThrow(initialState, entryNode);
 
-  return createRuntimeSnapshot(state, mapTraversableEdges(entryNode));
+  return createRuntimeSnapshot(initialState, currentNode, mapTraversableEdges(entryNode));
 };

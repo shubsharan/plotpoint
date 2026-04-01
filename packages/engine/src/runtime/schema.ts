@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { storyPackageJsonObjectSchema } from '../story-packages/schema.js';
 
 const nonEmptyStringSchema = z.string().min(1);
 
@@ -23,7 +24,22 @@ type RuntimeStateShape = {
   storyPackageVersionId: string;
 };
 
+type CurrentNodeBlockShape = {
+  config: Record<string, unknown>;
+  id: string;
+  interactive: boolean;
+  state: unknown;
+  type: string;
+};
+
+type CurrentNodeShape = {
+  blocks: CurrentNodeBlockShape[];
+  id: string;
+  title: string;
+};
+
 type RuntimeSnapshotShape = {
+  currentNode: CurrentNodeShape;
   traversableEdges: TraversableEdgeShape[];
 } & RuntimeStateShape;
 
@@ -72,6 +88,24 @@ export const traversableEdgeSchema: z.ZodType<TraversableEdgeShape> = z
   })
   .strict();
 
+export const currentNodeBlockSchema: z.ZodType<CurrentNodeBlockShape> = z
+  .object({
+    config: storyPackageJsonObjectSchema,
+    id: nonEmptyStringSchema,
+    interactive: z.boolean(),
+    state: z.unknown(),
+    type: nonEmptyStringSchema,
+  })
+  .strict();
+
+export const currentNodeSchema: z.ZodType<CurrentNodeShape> = z
+  .object({
+    blocks: z.array(currentNodeBlockSchema),
+    id: nonEmptyStringSchema,
+    title: nonEmptyStringSchema,
+  })
+  .strict();
+
 const runtimeStateObjectSchema = z.object({
   currentNodeId: nonEmptyStringSchema,
   gameId: nonEmptyStringSchema,
@@ -89,6 +123,7 @@ const runtimeStateInputSchema: z.ZodType<RuntimeStateShape> = runtimeStateObject
 
 export const runtimeSnapshotSchema: z.ZodType<RuntimeSnapshotShape> = runtimeStateObjectSchema
   .extend({
+    currentNode: currentNodeSchema,
     traversableEdges: z.array(traversableEdgeSchema),
   })
   .strict();
@@ -124,6 +159,8 @@ export const traverseEdgeInputSchema: z.ZodType<TraverseEdgeInputShape> = z
   .strict();
 
 export type TraversableEdge = z.infer<typeof traversableEdgeSchema>;
+export type CurrentNodeBlockSnapshot = z.infer<typeof currentNodeBlockSchema>;
+export type CurrentNodeSnapshot = z.infer<typeof currentNodeSchema>;
 export type RuntimeState = z.infer<typeof runtimeStateSchema>;
 export type RuntimeSnapshot = z.infer<typeof runtimeSnapshotSchema>;
 export type LoadRuntimeInput = z.infer<typeof loadRuntimeInputSchema>;

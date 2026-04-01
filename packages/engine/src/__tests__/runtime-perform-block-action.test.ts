@@ -96,7 +96,11 @@ const startRuntime = async (
   });
 
 const toRuntimeState = (snapshot: RuntimeSnapshot): RuntimeState => {
-  const { traversableEdges: _traversableEdges, ...state } = snapshot;
+  const {
+    currentNode: _currentNode,
+    traversableEdges: _traversableEdges,
+    ...state
+  } = snapshot;
   return state;
 };
 
@@ -117,14 +121,21 @@ const expectRuntimeError = async (
   return runtimeError;
 };
 
+const getCurrentNodeBlock = (snapshot: RuntimeSnapshot, blockId: string) => {
+  const block = snapshot.currentNode.blocks.find((candidate) => candidate.id === blockId);
+  expect(block).toBeDefined();
+  return block!;
+};
+
 describe('@plotpoint/engine performBlockAction execution contracts', () => {
-  it('auto-materializes text blocks as unlocked on node entry', async () => {
+  it('hydrates text blocks as unlocked on node entry without persisting defaults', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    expect(started.playerState.blockStates.briefing).toEqual({
+    expect(getCurrentNodeBlock(started, 'briefing').state).toEqual({
       unlocked: true,
     });
+    expect(Object.hasOwn(started.playerState.blockStates, 'briefing')).toBe(false);
   });
 
   it('rejects performBlockAction for text blocks as non-actionable', async () => {
@@ -179,6 +190,9 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
           submittedAt: '2026-03-31T18:00:00.000Z',
         },
       ],
+    });
+    expect(getCurrentNodeBlock(submitted, 'vault-code').state).toMatchObject({
+      unlocked: true,
     });
   });
 
@@ -457,6 +471,56 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     });
   });
 
+  it('rejects empty multi-choice submissions before consuming the block attempt', async () => {
+    const storyPackage = createRuntimePackage();
+    const archiveNode = storyPackage.graph.nodes.find((node) => node.id === 'archive-door');
+    if (!archiveNode) {
+      throw new Error('Expected archive-door node in runtime fixture.');
+    }
+
+    archiveNode.blocks.push({
+      config: {
+        correctOptionIds: ['archivist', 'curator'],
+        options: [
+          {
+            id: 'curator',
+            label: 'Curator',
+          },
+          {
+            id: 'archivist',
+            label: 'Archivist',
+          },
+        ],
+        prompt: 'Who handled the key transfer?',
+      },
+      id: 'team-theory-empty',
+      type: 'multi-choice',
+    });
+
+    const { engine, storyId } = createRuntimeContext({
+      storyPackage,
+    });
+    const started = await startRuntime(engine, storyId);
+
+    const error = await expectRuntimeError(
+      engine.performBlockAction({
+        action: {
+          optionIds: [],
+          type: 'submit',
+        },
+        blockId: 'team-theory-empty',
+        state: toRuntimeStateAtNode(started, 'archive-door'),
+      }),
+      'runtime_block_action_invalid',
+    );
+
+    expect(error.details).toMatchObject({
+      actionType: 'submit',
+      blockId: 'team-theory-empty',
+      blockType: 'multi-choice',
+    });
+  });
+
   it('declares runtime stateType and requiredContext metadata per block type', () => {
     expect(getBlockDefinition('code').policy).toEqual({
       requiredContext: ['nowIso'],
@@ -507,7 +571,7 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     });
   });
 
-  it('materializes non-interactive entry block states for __proto__ ids as own keys', async () => {
+  it('hydrates non-interactive blocks for __proto__ ids without persisting them', async () => {
     const storyPackage = createRuntimePackage();
     const foyerNode = storyPackage.graph.nodes.find((node) => node.id === 'foyer');
     if (!foyerNode) {
@@ -530,10 +594,10 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     });
     const started = await startRuntime(engine, storyId);
 
-    expect(Object.hasOwn(started.playerState.blockStates, '__proto__')).toBe(true);
-    expect(started.playerState.blockStates.__proto__).toEqual({
+    expect(getCurrentNodeBlock(started, '__proto__').state).toEqual({
       unlocked: true,
     });
+    expect(Object.hasOwn(started.playerState.blockStates, '__proto__')).toBe(false);
   });
 
   it('maps clock.now failures to typed runtime_block_execution_failed errors', async () => {

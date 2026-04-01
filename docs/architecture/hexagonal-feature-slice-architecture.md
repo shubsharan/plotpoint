@@ -369,13 +369,24 @@ type RuntimeState = {
 };
 
 type RuntimeSnapshot = RuntimeState & {
+  currentNode: {
+    id: string;
+    title: string;
+    blocks: Array<{
+      id: string;
+      type: string;
+      interactive: boolean;
+      config: Record<string, unknown>;
+      state: unknown;
+    }>;
+  };
   traversableEdges: TraversableEdge[];
 };
 ```
 
-`RuntimeState` is the authoritative, resumable engine state. `RuntimeSnapshot` is the engine-computed result view returned after startup, rehydration, block action execution, or edge traversal.
+`RuntimeState` is the authoritative, resumable engine state and stores only sparse progression facts. `RuntimeSnapshot` is the engine-computed result view returned after startup, rehydration, block action execution, or edge traversal.
 
-When processing a block action, the engine reads the relevant bucket from the current `RuntimeState`, determines the target block's runtime policy, updates the correct bucket, then produces a new `RuntimeSnapshot` with refreshed `traversableEdges`. When processing traversal, the engine validates the selected edge, updates `currentNodeId`, materializes entry-node block state, and returns a fresh snapshot for the next node.
+When processing a block action, the engine reads the relevant bucket from the current `RuntimeState`, determines the target block's runtime policy, updates the correct bucket, then produces a new `RuntimeSnapshot` with refreshed `currentNode` hydration and `traversableEdges`. When processing traversal, the engine validates the selected edge, updates `currentNodeId`, and returns a fresh snapshot whose `currentNode.blocks[*].state` values resolve from persisted state or deterministic block defaults.
 
 ## Condition System
 
@@ -524,20 +535,19 @@ The engine keeps block interaction and graph movement as separate commands:
 // engine/runtime/perform-block-action.ts
 export const performBlockAction = async (ports: EnginePorts, input: PerformBlockActionInput) => {
   const { state, blockId, action } = parseRuntimeInputOrThrow(performBlockActionInputSchema, input);
-  const { targetBlock, targetNode } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
+  const { currentNode, targetBlock } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
     blockId,
   });
-  const definition = getBlockDefinition(targetBlock.type);
   const nextState = await applyBlockActionOrThrow({
     action,
     blockId,
-    definition,
     state,
     targetBlock,
-    targetNode,
+    currentNode,
   });
+  const hydratedCurrentNode = createCurrentNodeSnapshotOrThrow(nextState, currentNode);
 
-  return createRuntimeSnapshot(nextState, mapTraversableEdges(targetNode));
+  return createRuntimeSnapshot(nextState, hydratedCurrentNode, mapTraversableEdges(currentNode));
 };
 
 // engine/runtime/traverse-edge.ts
@@ -547,12 +557,10 @@ export const traverseEdge = async (ports: EnginePorts, input: TraverseEdgeInput)
     edgeId,
   });
   const nextNode = getNodeOrThrow(story, targetEdge.targetNodeId);
-  const nextState = materializeNodeEntryStateOrThrow(
-    { ...state, currentNodeId: nextNode.id },
-    nextNode,
-  );
+  const nextState = { ...state, currentNodeId: nextNode.id };
+  const hydratedCurrentNode = createCurrentNodeSnapshotOrThrow(nextState, nextNode);
 
-  return createRuntimeSnapshot(nextState, mapTraversableEdges(nextNode));
+  return createRuntimeSnapshot(nextState, hydratedCurrentNode, mapTraversableEdges(nextNode));
 };
 ```
 
@@ -566,7 +574,7 @@ After `performBlockAction`, the engine recomputes the current node's `traversabl
 
 ### 6. Response
 
-Each command returns the next `RuntimeSnapshot`, which an API route can serialize or a mobile host can use directly. The mobile app receives the updated snapshot, the block renderer registry maps `code` to its renderer, and it re-renders with the latest block state while persisting only the `RuntimeState` subset if it wants a durable save.
+Each command returns the next `RuntimeSnapshot`, which an API route can serialize or a mobile host can use directly. The mobile app receives the updated snapshot, the block renderer registry maps `code` to its renderer, and it re-renders from the hydrated `currentNode` view while persisting only the sparse `RuntimeState` subset if it wants a durable save.
 
 ### Full Call Chain
 
@@ -575,12 +583,11 @@ Phone
   → engine.performBlockAction()           (public API, mobile-local host)
     → runtime/perform-block-action.ts     (orchestrates block interaction)
       → blocks/code.ts                    (pure onAction transition)
-      → runtime/snapshot.ts               (derive traversableEdges)
+      → runtime/snapshot.ts               (hydrate currentNode + derive traversableEdges)
 
   → engine.traverseEdge()                 (public API, mobile-local host)
     → runtime/traverse-edge.ts            (changes current node)
-      → runtime/node-entry.ts             (materialize entry-node block state)
-      → runtime/snapshot.ts               (derive traversableEdges for next node)
+      → runtime/snapshot.ts               (hydrate next currentNode + derive traversableEdges)
 
 API host
   → routes/perform-block-action.ts         (validates, delegates)

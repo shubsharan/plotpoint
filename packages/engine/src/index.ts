@@ -17,6 +17,8 @@ export { createEngine } from './runtime/create-engine.js';
 export { EngineRuntimeError } from './runtime/errors.js';
 export type { EngineRuntimeErrorCode } from './runtime/errors.js';
 export type {
+  CurrentNodeBlockSnapshot,
+  CurrentNodeSnapshot,
   Engine,
   EnginePorts,
   LoadRuntimeInput,

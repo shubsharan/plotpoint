@@ -41,6 +41,7 @@ describe('@plotpoint/engine', () => {
     });
 
     expect(runtime.currentNodeId).toBe('foyer');
+    expect(runtime.currentNode.id).toBe('foyer');
     expect(runtime.storyId).toBe(runtimeStoryPackage.metadata.storyId);
     expect(runtime.storyPackageVersionId).toBe('snapshot-v1');
   });

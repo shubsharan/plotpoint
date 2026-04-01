@@ -45,9 +45,9 @@ The architecture already sketches the target shape: `createEngine` owns public r
 2. `createEngine` must accept only the dependencies needed in this feature: published story package loading plus narrow runtime-context ports such as a clock and optional location reader.
 3. The public engine API must define narrow runtime-first entrypoints: `startGame`, `loadRuntime`, `performBlockAction`, and `traverseEdge`.
 4. Every public runtime entrypoint must return the same engine-owned `RuntimeSnapshot` family rather than a persistence-shaped save record.
-5. `RuntimeState` must distinguish player-scoped progress from shared game-scoped progress without pushing storage or transport details into engine-owned types, and `RuntimeSnapshot` must extend that state with derived progression data.
+5. `RuntimeState` must distinguish player-scoped progress from shared game-scoped progress without pushing storage or transport details into engine-owned types, and `RuntimeSnapshot` must extend that state with derived progression data plus a hydrated current-node view.
 6. `roleId` must be required at runtime startup and preserved in the player-scoped runtime identity contract.
-7. Engine-owned runtime result shapes must be deterministic and rich enough for later API/mobile surfaces to render updated block state and available next-step information without reimplementing gameplay logic.
+7. Engine-owned runtime result shapes must be deterministic and rich enough for later API/mobile surfaces to render updated current-node block state and available next-step information without reimplementing gameplay logic.
 8. Runtime state and public engine APIs must be documented as engine contracts, not API DTOs, and remain framework-free.
 9. FEAT-0006 must define the outer runtime result envelope, while FEAT-0008 later defines the traversal semantics that populate progression fields such as `traversableEdges`.
 10. This feature must define which lifecycle responsibilities remain inside the engine and which are explicitly deferred to later session persistence and multiplayer features.
@@ -60,7 +60,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 - User-scoped and game-scoped state are engine concepts in this feature. Their durable persistence, hydration, and synchronization behavior remain later adapter concerns in EPIC-0004.
 - The engine is host-agnostic in this feature. Mobile-local play and API-hosted execution both depend on the same `createEngine` surface rather than separate gameplay contracts.
 - Success payloads from engine entrypoints should describe runtime outcomes such as updated state views and reserved next-step data, while route-local request/response DTOs remain adapter-owned in later work.
-- The public surface for this feature is intentionally runtime-shaped rather than save-shaped, with a deliberate split between resumable state and engine-derived result fields:
+- The public surface for this feature is intentionally runtime-shaped rather than save-shaped, with a deliberate split between sparse resumable state and engine-derived result fields:
 
 ```typescript
 type RuntimeState = {
@@ -79,6 +79,17 @@ type RuntimeState = {
 };
 
 type RuntimeSnapshot = RuntimeState & {
+  currentNode: {
+    id: string;
+    title: string;
+    blocks: Array<{
+      id: string;
+      type: string;
+      interactive: boolean;
+      config: Record<string, StoryPackageJsonValue>;
+      state: unknown;
+    }>;
+  };
   traversableEdges: Array<{
     edgeId: string;
     label?: string | undefined;
@@ -127,7 +138,8 @@ type Engine = {
 };
 ```
 
-- `loadRuntime` rehydrates adapter-supplied `RuntimeState` into the engine surface for continued execution and returns a fresh `RuntimeSnapshot`; it does not imply engine-owned durable storage in this feature.
+- Persisted `RuntimeState` stays sparse: missing block-state entries mean "use the block definition's deterministic `initialState(config)`" rather than "this state must be materialized before use."
+- `loadRuntime` rehydrates adapter-supplied sparse `RuntimeState` into the engine surface for continued execution and returns a fresh `RuntimeSnapshot` with a hydrated `currentNode`; it does not imply engine-owned durable storage in this feature.
 - No new ADR is required unless the current engine-port boundary proves insufficient for headless runtime orchestration.
 
 ## Acceptance Criteria
@@ -135,7 +147,7 @@ type Engine = {
 - The runtime state model is defined clearly enough that later block, traversal, session, and mobile work can build on it without reopening core state-shape questions.
 - `createEngine` and its initial runtime entrypoints are defined as the single public execution surface for gameplay logic.
 - Engine ports describe published story package access plus narrow context dependencies without leaking adapter-specific concerns into the engine.
-- The feature establishes a deterministic engine-owned `RuntimeSnapshot` result shape for runtime operations while keeping resumable `RuntimeState` free of derived progression fields and pinned to `storyPackageVersionId`.
+- The feature establishes a deterministic engine-owned `RuntimeSnapshot` result shape for runtime operations while keeping resumable `RuntimeState` sparse, free of derived progression fields, and pinned to `storyPackageVersionId`.
 - `roleId` is part of runtime startup and runtime state, not an adapter-only concern.
 - The feature explicitly defers durable persistence policy, session lifecycle orchestration, and multiplayer sync semantics to later work.
 
@@ -157,7 +169,7 @@ type Engine = {
 ## Risks and Mitigations
 
 - Risk: the engine API grows into an adapter-shaped surface. Mitigation: keep entrypoints and result types engine-centric and leave HTTP/mobile concerns to later layers.
-- Risk: runtime state contracts blur with storage schemas. Mitigation: define runtime types as engine semantics first and let later persistence adapters map them in EPIC-0004.
+- Risk: runtime state contracts blur with storage schemas. Mitigation: keep `RuntimeState` as sparse progression facts and let `RuntimeSnapshot.currentNode` carry the hydrated read model adapters need.
 - Risk: lifecycle responsibilities remain ambiguous between engine and session features. Mitigation: document exact ownership boundaries in this feature and defer orchestration policy to EPIC-0004.
 - Risk: FEAT-0008 widens the engine surface opportunistically. Mitigation: reserve the progression fields and minimal context ports now so later traversal work fills the contract rather than replacing it.
 

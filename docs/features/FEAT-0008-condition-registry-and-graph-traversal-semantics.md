@@ -74,7 +74,7 @@ This is the feature that makes branching narrative semantics concrete without ta
 
 - Risk: traversal starts owning block execution or session orchestration concerns. Mitigation: keep this feature focused on post-update evaluation and edge availability only.
 - Risk: runtime interpretation diverges from the FEAT-0003 serialized contract. Mitigation: treat the existing authored edge condition schema as fixed input and only define execution semantics here.
-- Deferred follow-up [DF-0002]: conditioned-edge derivation and `traverseEdge` validation against persisted block unlock state remain deferred to FEAT-0008. FEAT-0007 intentionally exposes only unconditional edges in `traversableEdges` and rejects conditioned-edge traversal with a typed runtime error. | Owner: FEAT-0008 | Trigger: FEAT-0008 implementation begins for real traversal semantics. | Exit criteria: Engine derives `traversableEdges` from persisted runtime state and validates `traverseEdge` against that derived set.
+- Deferred follow-up [DF-0002]: conditioned-edge derivation and `traverseEdge` validation against effective block state remain deferred to FEAT-0008. FEAT-0007 intentionally exposes only unconditional edges in `traversableEdges` and rejects conditioned-edge traversal with a typed runtime error. | Owner: FEAT-0008 | Trigger: FEAT-0008 implementation begins for real traversal semantics. | Exit criteria: Engine derives `traversableEdges` from effective runtime state and validates `traverseEdge` against that derived set.
 
 ## Open Questions
 

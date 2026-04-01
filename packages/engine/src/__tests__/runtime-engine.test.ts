@@ -94,7 +94,11 @@ const startRuntime = async (
 ): Promise<RuntimeSnapshot> => engine.startGame(createStartInput(storyId, overrides));
 
 const toRuntimeState = (snapshot: RuntimeSnapshot): RuntimeState => {
-  const { traversableEdges: _traversableEdges, ...state } = snapshot;
+  const {
+    currentNode: _currentNode,
+    traversableEdges: _traversableEdges,
+    ...state
+  } = snapshot;
 
   return state;
 };
@@ -107,6 +111,11 @@ const toRuntimeStateAtNode = (snapshot: RuntimeSnapshot, nodeId: string): Runtim
 const expectRuntimeSnapshotShape = (snapshot: RuntimeSnapshot): void => {
   expect(snapshot).toMatchObject({
     currentNodeId: expect.any(String),
+    currentNode: {
+      blocks: expect.any(Array),
+      id: expect.any(String),
+      title: expect.any(String),
+    },
     gameId: expect.any(String),
     playerId: expect.any(String),
     playerState: {
@@ -120,6 +129,12 @@ const expectRuntimeSnapshotShape = (snapshot: RuntimeSnapshot): void => {
     storyPackageVersionId: expect.any(String),
   });
   expect(Array.isArray(snapshot.traversableEdges)).toBe(true);
+};
+
+const getCurrentNodeBlock = (snapshot: RuntimeSnapshot, blockId: string) => {
+  const block = snapshot.currentNode.blocks.find((candidate) => candidate.id === blockId);
+  expect(block).toBeDefined();
+  return block!;
 };
 
 const expectRuntimeError = async (
@@ -312,7 +327,7 @@ describe('@plotpoint/engine runtime surface', () => {
     expect(traversed.traversableEdges).toEqual([]);
   });
 
-  it('materializes non-interactive node-entry state when traversing into a node', async () => {
+  it('hydrates non-interactive current-node block state when traversing into a node', async () => {
     const storyPackage = createValidStoryPackageFixture();
     storyPackage.version.engineMajor = currentEngineMajor;
     const archiveNode = storyPackage.graph.nodes.find((node) => node.id === 'archive-door');
@@ -349,9 +364,27 @@ describe('@plotpoint/engine runtime surface', () => {
       state: toRuntimeState(started),
     });
 
-    expect(traversed.playerState.blockStates['archive-briefing']).toEqual({
+    expect(getCurrentNodeBlock(traversed, 'archive-briefing').state).toEqual({
       unlocked: true,
     });
+    expect(Object.hasOwn(traversed.playerState.blockStates, 'archive-briefing')).toBe(false);
+  });
+
+  it('rehydrates the same hydrated current-node view from sparse runtime state', async () => {
+    const { engine, storyId } = createRuntimeContext();
+    const started = await startRuntime(engine, storyId);
+    const traversed = await engine.traverseEdge({
+      edgeId: 'foyer-to-archive',
+      state: toRuntimeState(started),
+    });
+
+    const loaded = await engine.loadRuntime({
+      state: toRuntimeStateAtNode(started, 'archive-door'),
+    });
+
+    expect(loaded.currentNode).toEqual(traversed.currentNode);
+    expect(loaded.traversableEdges).toEqual(traversed.traversableEdges);
+    expect(loaded.playerState.blockStates).toEqual(traversed.playerState.blockStates);
   });
 
   it('omits conditioned edges from traversableEdges until FEAT-0008 defines traversal semantics', async () => {
@@ -403,6 +436,10 @@ describe('@plotpoint/engine runtime surface', () => {
     const started = await startRuntime(engine, storyId);
     const staleSnapshot: RuntimeSnapshot = {
       ...started,
+      currentNode: {
+        ...started.currentNode,
+        title: 'Stale Node',
+      },
       traversableEdges: [
         {
           edgeId: 'stale-edge',
@@ -417,6 +454,7 @@ describe('@plotpoint/engine runtime surface', () => {
     });
 
     expect(loaded.traversableEdges).toEqual(started.traversableEdges);
+    expect(loaded.currentNode).toEqual(started.currentNode);
   });
 
   it('clones block-state maps when normalizing runtime state into a snapshot', async () => {
@@ -428,7 +466,7 @@ describe('@plotpoint/engine runtime surface', () => {
       playerState: {
         blockStates: {
           briefing: {
-            seen: true,
+            unlocked: true,
           },
         },
       },

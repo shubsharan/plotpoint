@@ -7,20 +7,21 @@ import {
   type InteractiveBlockBehavior,
 } from '../blocks/types.js';
 import {
-  readOwnBlockState,
   type RuntimeStateType,
   writeBlockStateByType,
 } from './block-state-bucket.js';
 import { EngineRuntimeError } from './errors.js';
 import {
   createRuntimeSnapshot,
+  createCurrentNodeSnapshotOrThrow,
   formatIssuePath,
   mapTraversableEdges,
   parseRuntimeInputOrThrow,
+  resolveEffectiveBlockStateOrThrow,
   resolveRuntimeSnapshotContextOrThrow,
 } from './snapshot.js';
 import { performBlockActionInputSchema } from './schema.js';
-import type { EnginePorts, RuntimeSnapshot, RuntimeState, PerformBlockActionInput } from './types.js';
+import type { EnginePorts, RuntimeSnapshot, PerformBlockActionInput } from './types.js';
 
 type ActionExecutionResult = {
   stateType: RuntimeStateType;
@@ -33,11 +34,12 @@ type ActionBehaviorParams = {
   behavior: InteractiveBlockBehavior<any, any, any>;
   blockId: string;
   nodeId: string;
+  parsedConfig: any;
+  parsedState: any;
+  playerId: string;
   ports: EnginePorts;
   requiredContext: BlockContextKey[];
-  state: RuntimeState;
   stateType: RuntimeStateType;
-  targetBlockConfig: unknown;
   targetBlockType: string;
 };
 
@@ -138,54 +140,14 @@ const executeActionForBehavior = async (
     behavior,
     blockId,
     nodeId,
+    parsedConfig,
+    parsedState,
+    playerId,
     ports,
     requiredContext,
-    state,
     stateType,
-    targetBlockConfig,
     targetBlockType,
   } = params;
-
-  const parsedConfig = behavior.configSchema.safeParse(targetBlockConfig);
-  if (!parsedConfig.success) {
-    const firstIssue = parsedConfig.error.issues[0];
-    throw new EngineRuntimeError(
-      'runtime_block_config_invalid',
-      `Runtime block "${blockId}" has invalid config for type "${targetBlockType}".`,
-      {
-        details: {
-          actionType,
-          blockId,
-          blockType: targetBlockType,
-          nodeId,
-          ...(firstIssue === undefined ? {} : toValidationDetails(firstIssue)),
-        },
-      },
-    );
-  }
-
-  const scopedBucket = state[stateType].blockStates;
-  const existingState = readOwnBlockState(scopedBucket, blockId);
-  const parsedStateResult = existingState.found
-    ? behavior.stateSchema.safeParse(existingState.value)
-    : behavior.stateSchema.safeParse(behavior.initialState(parsedConfig.data));
-  if (!parsedStateResult.success) {
-    const firstIssue = parsedStateResult.error.issues[0];
-    throw new EngineRuntimeError(
-      'runtime_block_state_invalid',
-      `Runtime block "${blockId}" has invalid persisted state for type "${targetBlockType}".`,
-      {
-        details: {
-          actionType,
-          blockId,
-          blockType: targetBlockType,
-          nodeId,
-          ...(firstIssue === undefined ? {} : toValidationDetails(firstIssue)),
-        },
-      },
-    );
-  }
-  const parsedState = parsedStateResult.data;
 
   if (toBlockStateRecord(parsedState).unlocked === true) {
     throw new EngineRuntimeError(
@@ -204,7 +166,7 @@ const executeActionForBehavior = async (
 
   if (
     behavior.isActionable !== undefined &&
-    !behavior.isActionable(parsedState, parsedConfig.data)
+    !behavior.isActionable(parsedState, parsedConfig)
   ) {
     throw new EngineRuntimeError(
       'runtime_block_not_actionable',
@@ -244,7 +206,7 @@ const executeActionForBehavior = async (
     blockId,
     blockType: targetBlockType,
     nodeId,
-    playerId: state.playerId,
+    playerId,
     ports,
     requiredContext,
   });
@@ -255,7 +217,7 @@ const executeActionForBehavior = async (
       parsedState,
       parsedAction.data,
       actionContext,
-      parsedConfig.data,
+      parsedConfig,
     );
   } catch (error) {
     if (error instanceof BlockUpdateError && error.code === 'unsupported_location_target') {
@@ -368,6 +330,7 @@ export const performBlockAction = async (
   }
 
   const actionType = resolveActionType(action);
+  const { parsedConfig, parsedState } = resolveEffectiveBlockStateOrThrow(state, currentNode.id, targetBlock);
   const definition = getBlockDefinition(targetBlock.type);
   const { behavior, policy } = definition;
   if (!behavior.interactive) {
@@ -392,11 +355,12 @@ export const performBlockAction = async (
     behavior,
     blockId,
     nodeId: currentNode.id,
+    parsedConfig,
+    parsedState,
+    playerId: state.playerId,
     ports,
     requiredContext: policy.requiredContext,
-    state,
     stateType: policy.stateType,
-    targetBlockConfig: targetBlock.config,
     targetBlockType: targetBlock.type,
   });
 
@@ -406,8 +370,9 @@ export const performBlockAction = async (
     blockId,
     actionResult.updatedBlockState,
   );
+  const hydratedCurrentNode = createCurrentNodeSnapshotOrThrow(nextState, currentNode);
 
-  return createRuntimeSnapshot(nextState, mapTraversableEdges(currentNode), {
+  return createRuntimeSnapshot(nextState, hydratedCurrentNode, mapTraversableEdges(currentNode), {
     normalizeState: false,
   });
 };

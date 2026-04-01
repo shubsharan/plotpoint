@@ -2,6 +2,8 @@ import type { Clock } from '../ports/clock.js';
 import type { LocationReader } from '../ports/location-reader.js';
 import type { StoryPackageRepo } from '../ports/story-package-repo.js';
 import type {
+  CurrentNodeBlockSnapshot,
+  CurrentNodeSnapshot,
   PerformBlockActionInput,
   LoadRuntimeInput,
   RuntimeState,
@@ -12,6 +14,8 @@ import type {
 } from './schema.js';
 
 export type {
+  CurrentNodeBlockSnapshot,
+  CurrentNodeSnapshot,
   PerformBlockActionInput,
   LoadRuntimeInput,
   RuntimeState,
