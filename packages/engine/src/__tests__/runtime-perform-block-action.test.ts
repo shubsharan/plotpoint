@@ -219,6 +219,64 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     expect(submitted.playerState.blockStates['vault-code']).toBeDefined();
   });
 
+  it('routes block updates to sharedState when block policy requests the shared bucket', async () => {
+    const { engine, storyId } = createRuntimeContext();
+    const started = await startRuntime(engine, storyId);
+    const codeDefinition = getBlockDefinition('code');
+    const originalStateType = codeDefinition.policy.stateType;
+    const untouchedPlayerTargetState = {
+      marker: 'player-target',
+    };
+    const preservedPlayerState = {
+      marker: 'player',
+    };
+    const preservedSharedState = {
+      marker: 'shared',
+    };
+
+    codeDefinition.policy.stateType = 'sharedState';
+
+    try {
+      const state: RuntimeState = {
+        ...toRuntimeStateAtNode(started, 'archive-door'),
+        playerState: {
+          blockStates: {
+            ...toRuntimeState(started).playerState.blockStates,
+            preservedPlayerState,
+            'vault-code': untouchedPlayerTargetState,
+          },
+        },
+        sharedState: {
+          blockStates: {
+            preservedSharedState,
+          },
+        },
+      };
+
+      const submitted = await engine.performBlockAction({
+        action: {
+          type: 'submit',
+          value: '1847',
+        },
+        blockId: 'vault-code',
+        state,
+      });
+
+      expect(submitted.playerState.blockStates['vault-code']).toBe(untouchedPlayerTargetState);
+      expect(submitted.playerState.blockStates.preservedPlayerState).toBe(preservedPlayerState);
+
+      expect(submitted.sharedState).not.toBe(state.sharedState);
+      expect(submitted.sharedState.blockStates).not.toBe(state.sharedState.blockStates);
+      expect(submitted.sharedState.blockStates.preservedSharedState).toBe(preservedSharedState);
+      expect(submitted.sharedState.blockStates['vault-code']).toMatchObject({
+        unlocked: true,
+      });
+      expect(Array.isArray(submitted.traversableEdges)).toBe(true);
+    } finally {
+      codeDefinition.policy.stateType = originalStateType;
+    }
+  });
+
   it('rejects invalid action payloads with typed runtime_block_action_invalid', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);

@@ -2,7 +2,7 @@
 | --------------- | ----------- |
 | **Type**        | PRD         |
 | **Feature ID**  | FEAT-0007   |
-| **Status**      | In Progress |
+| **Status**      | Completed   |
 | **Epic**        | EPIC-0003   |
 | **Domains**     | Engine      |
 | **Last synced** | 2026-03-31  |
@@ -94,10 +94,11 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 
 ### Action vocabulary (MVP)
 
-- `code`: `attempt`
-- `single-choice`: `select`
-- `multi-choice`: `submit-selection`
-- `location`: `check`
+- Interactive block actions use a generic `type: 'submit'` envelope.
+- `code`: `{ type: 'submit', value: string }`
+- `single-choice`: `{ type: 'submit', optionId: string }`
+- `multi-choice`: `{ type: 'submit', optionIds: string[] }`
+- `location`: `{ type: 'submit' }`
 - `text`: no `performBlockAction` path
 
 ### Deterministic execution order
@@ -180,7 +181,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Risk: terminal state semantics drift (`solved` vs `unlocked`). Mitigation: hard-standardize on `unlocked` and update fixtures/conditions accordingly.
 - Risk: hydration and execution boundaries blur. Mitigation: keep `loadRuntime` non-mutating and scope node-entry effects to entry events.
 - Risk: adapters parse messages instead of contracts. Mitigation: include structured error details in runtime errors.
-- Risk: FEAT-0008 receives unstable execution contracts. Mitigation: lock action vocabulary and deterministic behavior in this feature.
+- Risk: FEAT-0008 receives unstable execution contracts. Mitigation: lock the generic `submit` action envelope and deterministic executor behavior in this feature.
 
 ## Implementation Order (Do In This Sequence)
 
