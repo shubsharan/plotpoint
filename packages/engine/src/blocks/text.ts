@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
-  defineBlockDefinition,
-  type NonInteractiveBlockDefinition,
+  defineBlockBehavior,
+  type NonInteractiveBlockBehavior,
 } from './types.js';
 
 type TextLeaf = {
@@ -144,12 +144,14 @@ const textStateSchema: z.ZodType<TextBlockState> = z
   })
   .strict();
 
-export const textBlock: NonInteractiveBlockDefinition<TextBlockConfig, TextBlockState> = defineBlockDefinition({
+export const textBlockBehavior: NonInteractiveBlockBehavior<
+  TextBlockConfig,
+  TextBlockState
+> = defineBlockBehavior({
   configSchema: textConfigSchema,
   initialState: () => ({
     unlocked: true as const,
   }),
   interactive: false,
-  scope: 'user',
   stateSchema: textStateSchema,
 });

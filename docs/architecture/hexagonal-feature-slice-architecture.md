@@ -33,7 +33,8 @@ apps/
 │   ├── src/
 │   │   ├── routes/
 │   │   │   ├── start-session.ts        POST /sessions/start
-│   │   │   ├── submit-action.ts        POST /actions
+│   │   │   ├── perform-block-action.ts POST /actions
+│   │   │   ├── traverse-edge.ts        POST /traverse
 │   │   │   ├── stories/
 │   │   │   │   ├── route.ts           GET/POST/PUT/PATCH/DELETE /stories*
 │   │   │   │   └── contracts.ts       Route-local request + error response contracts
@@ -75,7 +76,8 @@ packages/
 │   │   ├── runtime/
 │   │   │   ├── start-game.ts         Creates a RuntimeSnapshot from published story + runtime state
 │   │   │   ├── load-runtime.ts       Rehydrates adapter-supplied RuntimeState
-│   │   │   ├── submit-action.ts      Applies block execution to RuntimeState
+│   │   │   ├── perform-block-action.ts Applies block execution to RuntimeState
+│   │   │   ├── traverse-edge.ts        Advances RuntimeState across graph edges
 │   │   │   └── types.ts              RuntimeState, RuntimeSnapshot, and progression types
 │   │   ├── ports.ts                   Abstract dependency types
 │   │   └── index.ts                   Public API: createEngine()
@@ -176,7 +178,8 @@ The engine is created wherever a host needs gameplay execution. Mobile can const
 import { Hono } from 'hono';
 import { createEngine } from '@plotpoint/engine';
 import { storyPackageRepo } from '@plotpoint/db/repos';
-import submitAction from './routes/submit-action';
+import performBlockAction from './routes/perform-block-action';
+import traverseEdge from './routes/traverse-edge';
 import { storiesRoutes } from './routes/stories/router';
 
 export const engine = createEngine({
@@ -185,7 +188,8 @@ export const engine = createEngine({
 });
 
 const app = new Hono();
-app.route('/api', submitAction);
+app.route('/api', performBlockAction);
+app.route('/api', traverseEdge);
 app.route('/stories', storiesRoutes);
 
 export default app;
@@ -196,7 +200,8 @@ export default app;
 import type { Clock, LocationReader, StoryPackageRepo } from './ports';
 import { loadRuntime } from './runtime/load-runtime';
 import { startGame } from './runtime/start-game';
-import { submitAction } from './runtime/submit-action';
+import { performBlockAction } from './runtime/perform-block-action';
+import { traverseEdge } from './runtime/traverse-edge';
 
 type EnginePorts = {
   storyPackageRepo: StoryPackageRepo;
@@ -216,17 +221,22 @@ export const createEngine = (ports: EnginePorts) => ({
     state: RuntimeState;
   }) => loadRuntime(ports, input),
 
-  submitAction: (input: {
+  performBlockAction: (input: {
     state: RuntimeState;
     blockId: string;
     action: BlockAction;
-  }) => submitAction(ports, input),
+  }) => performBlockAction(ports, input),
+
+  traverseEdge: (input: {
+    state: RuntimeState;
+    edgeId: string;
+  }) => traverseEdge(ports, input),
 });
 ```
 
 ## Blocks
 
-Blocks are the interactive building blocks of a story. Each block exports a `State` type, an `Action` type, an `initialState`, a `scope` (`'user'` or `'game'`), and an `update` function. The update function is a pure reducer: given state + action + config, return new state. No I/O, no side effects.
+Blocks are the interactive building blocks of a story. Each block exports a `State` type, an `Action` type, an `initialState`, an `actionSchema`, and an `onAction` function. Runtime bucket policy stays in the engine registry. `onAction` is pure: given state + action + config + value-only context, return new state. No I/O, no side effects.
 
 A `BlockInstance` is a specific usage of a block type within a story node, configured by the story author. The block definition is the template (`code` logic). The instance is a specific puzzle in a specific story with a specific expected answer.
 
@@ -242,83 +252,98 @@ type BlockInstance = {
 
 Canonical authored JSON stores nodes, blocks, and edges as ordered arrays. Runtime lookup tables are an engine concern after load, not part of the serialized story package contract.
 
-### User-Scoped Block Example
+### Player-State Block Example
 
 ```typescript
 // engine/blocks/code.ts
 
-export const scope = 'user' as const;
+import { z } from 'zod';
+import { defineBlockBehavior, type InteractiveBlockBehavior } from './types';
 
-export type State = {
-  attempts: number;
-  solved: boolean;
+type CodeBlockConfig = {
+  expected: string;
+  maxAttempts?: number;
+  mode: 'passcode' | 'password';
 };
 
-export type Action = { type: 'attempt-unlock'; code: string } | { type: 'force-open' };
-
-export const initialState: State = {
-  attempts: 0,
-  solved: false,
+type CodeBlockAction = {
+  type: 'submit';
+  value: string;
 };
 
-export const update = (
-  state: State,
-  action: Action,
-  config: { expected: string; maxAttempts?: number; mode: 'passcode' | 'password' },
-): State => {
-  switch (action.type) {
-    case 'attempt-unlock': {
-      const correct = action.code === config.expected;
-      const newAttempts = state.attempts + 1;
-      if (config.maxAttempts && newAttempts > config.maxAttempts) {
-        return { solved: false, attempts: newAttempts };
-      }
-      return { solved: correct, attempts: newAttempts };
-    }
-    case 'force-open':
-      return state.attempts >= 3 ? { solved: true, attempts: state.attempts } : state;
-  }
+type CodeBlockState = {
+  attempts: CodeBlockAction[];
+  unlocked: boolean;
 };
+
+const codeConfigSchema = z.object({
+  expected: z.string().min(1),
+  maxAttempts: z.number().int().positive().optional(),
+  mode: z.enum(['passcode', 'password']),
+});
+
+const codeActionSchema = z.object({
+  type: z.literal('submit'),
+  value: z.string(),
+});
+
+const codeStateSchema = z.object({
+  attempts: z.array(codeActionSchema),
+  unlocked: z.boolean(),
+});
+
+export const codeBlockBehavior: InteractiveBlockBehavior<
+  CodeBlockConfig,
+  CodeBlockState,
+  CodeBlockAction
+> = defineBlockBehavior({
+  configSchema: codeConfigSchema,
+  stateSchema: codeStateSchema,
+  actionSchema: codeActionSchema,
+  initialState: () => ({
+    attempts: [],
+    unlocked: false,
+  }),
+  interactive: true,
+  onAction: (state, action, _context, config) => {
+    const isCorrect = action.value === config.expected;
+    return {
+      attempts: [...state.attempts, action],
+      unlocked: state.unlocked || isCorrect,
+    };
+  },
+});
 ```
 
 ### Block Registry
 
-The registry in `blocks/index.ts` maps block type names to their definitions. The executor calls `updateBlock()` which looks up the block and calls its `update` function. Adding a new block type means creating one file and adding one import to the registry.
+The registry in `blocks/index.ts` maps block type names to engine-owned definitions. Each entry combines pure block behavior with runtime policy that says which state bucket the block owns and which host-backed context values it may read. Adding a new block type still means creating one file and adding one import to the registry.
 
 ```typescript
 // engine/blocks/index.ts
-import * as code from './code';
-import * as location from './location';
-import * as multiChoice from './multi-choice';
-import * as singleChoice from './single-choice';
-import * as text from './text';
+import { codeBlockBehavior } from './code';
+import { locationBlockBehavior } from './location';
+import type { BlockRegistryEntry } from './types';
 
-export type BlockDefinition = {
-  initialState: unknown;
-  scope: 'user' | 'game';
-  update: (state: any, action: any, config: any) => unknown;
+const registry: Record<string, BlockRegistryEntry> = {
+  code: {
+    behavior: codeBlockBehavior,
+    policy: {
+      stateType: 'playerState',
+      requiredContext: ['nowIso'],
+    },
+  },
+  location: {
+    behavior: locationBlockBehavior,
+    policy: {
+      stateType: 'playerState',
+      requiredContext: ['playerLocation', 'nowIso'],
+    },
+  },
 };
 
-const registry: Record<string, BlockDefinition> = {
-  code: code,
-  location: location,
-  'multi-choice': multiChoice,
-  'single-choice': singleChoice,
-  text: text,
-};
-
-export const getBlock = (blockType: string): BlockDefinition | undefined => registry[blockType];
-
-export const updateBlock = (
-  blockType: string,
-  currentState: unknown,
-  action: unknown,
-  config: unknown,
-): unknown => {
-  const block = registry[blockType];
-  if (!block) throw new Error(`Unknown block: ${blockType}`);
-  return block.update(currentState, action, config);
-};
+export const getBlockDefinition = (blockType: string): BlockRegistryEntry | undefined =>
+  registry[blockType];
 ```
 
 ## Runtime Snapshot Model
@@ -332,6 +357,7 @@ type RuntimeState = {
   playerId: string;
   roleId: string;
   storyId: string;
+  storyPackageVersionId: string;
   gameId: string;
   currentNodeId: string;
   playerState: {
@@ -343,13 +369,13 @@ type RuntimeState = {
 };
 
 type RuntimeSnapshot = RuntimeState & {
-  availableEdges: AvailableEdge[];
+  traversableEdges: TraversableEdge[];
 };
 ```
 
-`RuntimeState` is the authoritative, resumable engine state. `RuntimeSnapshot` is the engine-computed result view returned after startup, rehydration, or action execution.
+`RuntimeState` is the authoritative, resumable engine state. `RuntimeSnapshot` is the engine-computed result view returned after startup, rehydration, block action execution, or edge traversal.
 
-When processing an action, the executor reads the relevant bucket from the current `RuntimeState`, determines the target block's scope (`user` or `game`), updates the correct bucket, then produces a new `RuntimeSnapshot` with refreshed progression data.
+When processing a block action, the engine reads the relevant bucket from the current `RuntimeState`, determines the target block's runtime policy, updates the correct bucket, then produces a new `RuntimeSnapshot` with refreshed `traversableEdges`. When processing traversal, the engine validates the selected edge, updates `currentNodeId`, materializes entry-node block state, and returns a fresh snapshot for the next node.
 
 ## Condition System
 
@@ -386,7 +412,7 @@ export const evaluateEdges = (
   currentNodeId: string,
   allBlockStates: Record<string, unknown>,
   context: EvaluationContext,
-): AvailableEdge[] => {
+): TraversableEdge[] => {
   const node = graph.nodes.find((node) => node.id === currentNodeId);
   if (!node) throw new Error(`Unknown node: ${currentNodeId}`);
 
@@ -421,7 +447,7 @@ const evaluate = (
 
 ### Example: Compound Condition
 
-"The player can enter the final room if they have the master key, OR if they've solved the puzzle AND at least 3 clues have been found." Stored in the story package as:
+"The player can enter the final room if they have the master key, OR if they've unlocked the puzzle AND at least 3 clues have been found." Stored in the story package as:
 
 ```json
 {
@@ -438,7 +464,7 @@ const evaluate = (
         {
           "type": "check",
           "condition": "field-equals",
-          "params": { "blockId": "puzzle", "field": "solved", "value": true }
+          "params": { "blockId": "puzzle", "field": "unlocked", "value": true }
         },
         {
           "type": "check",
@@ -456,33 +482,33 @@ const evaluate = (
 }
 ```
 
-## Runtime Lifecycle: Submit Action
+## Runtime Lifecycle: Block Action and Edge Traversal
 
-A complete trace of a player submitting an unlock code to a locked door, first in mobile-local execution and then through an API host if server-backed orchestration is involved.
+A complete trace of a player submitting an unlock code to a locked door and then moving through the newly opened edge, first in mobile-local execution and then through an API host if server-backed orchestration is involved.
 
 ### 1. Mobile App
 
-Player taps "Enter Code", types "1847", hits submit. The mobile app can call `engine.submitAction()` against the current runtime state it is carrying for offline play. If the host is API-backed, the app POSTs the current runtime state payload, `blockId`, and action payload to `/actions`, where a route-local DTO schema validates transport details before delegating to the same engine surface.
+Player taps "Enter Code", types "1847", hits submit. The mobile app calls `engine.performBlockAction()` against the current runtime state it is carrying for offline play. If the host is API-backed, the app POSTs the current runtime state payload, `blockId`, and action payload to `/actions`, where a route-local DTO schema validates transport details before delegating to the same engine surface. After the response comes back with refreshed `traversableEdges`, the shell decides whether to present a navigation choice and, when the player selects one, calls `engine.traverseEdge()`.
 
 ### 2. API Route
 
-The route in `routes/submit-action.ts` parses the request, validates with Zod, and calls `engine.submitAction({ state, blockId, action })`. The route doesn't know about blocks, graphs, or game logic.
+The route in `routes/perform-block-action.ts` parses the request, validates with Zod, and calls `engine.performBlockAction({ state, blockId, action })`. A sibling traversal route does the same for `engine.traverseEdge({ state, edgeId })`. The routes don't know about blocks, graphs, or game logic.
 
 ```typescript
-// api/routes/submit-action.ts
+// api/routes/perform-block-action.ts
 import { Hono } from 'hono';
 import { engine } from '../server';
-import { submitActionRequest } from './submit-action.dto';
+import { performBlockActionRequest } from './perform-block-action.dto';
 
 const app = new Hono();
 
 app.post('/actions', async (c) => {
   const body = await c.req.json();
-  const parsed = submitActionRequest.safeParse(body);
+  const parsed = performBlockActionRequest.safeParse(body);
   if (!parsed.success) return c.json(parsed.error, 400);
 
   const { state, blockId, action } = parsed.data;
-  const result = await engine.submitAction({ state, blockId, action });
+  const result = await engine.performBlockAction({ state, blockId, action });
 
   return c.json(result);
 });
@@ -490,113 +516,77 @@ app.post('/actions', async (c) => {
 export default app;
 ```
 
-### 3. Engine Executor
+### 3. Engine Runtime Commands
 
-The executor in `runtime/submit-action.ts` orchestrates the gameplay loop:
+The engine keeps block interaction and graph movement as separate commands:
 
 ```typescript
-// engine/runtime/submit-action.ts
-import { getBlock, updateBlock } from '../blocks';
-import { evaluateEdges } from '../graph/traversal';
-import type { EnginePorts } from '../ports';
-
-export const executeAction = async (
-  ports: EnginePorts,
-  input: {
-    state: RuntimeState;
-    blockId: string;
-    action: unknown;
-  },
-) => {
-  const { state, blockId, action } = input;
-  const story = await ports.storyPackageRepo.getPublishedPackage(
-    state.storyId,
-    state.storyPackageVersionId,
-  );
-
-  // 2. Find the target block's type and config from the story package
-  const currentNode = story.graph.nodes.find((node) => node.id === state.currentNodeId);
-  const blockConfig = currentNode?.blocks.find((block) => block.id === blockId);
-  const blockDef = getBlock(blockConfig.type);
-
-  // 3. Read current state from the appropriate runtime bucket based on scope
-  const currentBlockState =
-    blockDef.scope === 'game'
-      ? state.sharedState.blockStates[blockId]
-      : state.playerState.blockStates[blockId];
-
-  // 4. Run the pure block update
-  const nextBlockState = updateBlock(
-    blockConfig.type,
-    currentBlockState,
+// engine/runtime/perform-block-action.ts
+export const performBlockAction = async (ports: EnginePorts, input: PerformBlockActionInput) => {
+  const { state, blockId, action } = parseRuntimeInputOrThrow(performBlockActionInputSchema, input);
+  const { targetBlock, targetNode } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
+    blockId,
+  });
+  const definition = getBlockDefinition(targetBlock.type);
+  const nextState = await applyBlockActionOrThrow({
     action,
-    blockConfig.config,
+    blockId,
+    definition,
+    state,
+    targetBlock,
+    targetNode,
+  });
+
+  return createRuntimeSnapshot(nextState, mapTraversableEdges(targetNode));
+};
+
+// engine/runtime/traverse-edge.ts
+export const traverseEdge = async (ports: EnginePorts, input: TraverseEdgeInput) => {
+  const { edgeId, state } = parseRuntimeInputOrThrow(traverseEdgeInputSchema, input);
+  const { story, targetEdge } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
+    edgeId,
+  });
+  const nextNode = getNodeOrThrow(story, targetEdge.targetNodeId);
+  const nextState = materializeNodeEntryStateOrThrow(
+    { ...state, currentNodeId: nextNode.id },
+    nextNode,
   );
 
-  // 5. Merge both buckets for edge evaluation
-  const allBlockStates = {
-    ...state.sharedState.blockStates,
-    ...state.playerState.blockStates,
-    [blockId]: nextBlockState,
-  };
-
-  // 6. Evaluate which edges are now available
-  const context = {
-    now: ports.clock?.now() ?? new Date(),
-    playerLocation: await ports.locationReader?.getCurrent(state.playerId),
-  };
-  const availableEdges = evaluateEdges(story.graph, state.currentNodeId, allBlockStates, context);
-
-  // 7. Return the next runtime snapshot
-  return {
-    ...state,
-    playerState:
-      blockDef.scope === 'game'
-        ? state.playerState
-        : {
-            blockStates: {
-              ...state.playerState.blockStates,
-              [blockId]: nextBlockState,
-            },
-          },
-    sharedState:
-      blockDef.scope === 'game'
-        ? {
-            blockStates: {
-              ...state.sharedState.blockStates,
-              [blockId]: nextBlockState,
-            },
-          }
-        : state.sharedState,
-    availableEdges,
-  };
+  return createRuntimeSnapshot(nextState, mapTraversableEdges(nextNode));
 };
 ```
 
-### 4. Block Update (Pure)
+### 4. Block Action (Pure)
 
-The registry looks up `code` and calls its `update()` with state `{ solved: false, attempts: 1 }` and action `{ type: 'attempt-unlock', code: '1847' }`. The code matches. Returns `{ solved: true, attempts: 2 }`. No I/O occurs.
+The registry looks up `code` and calls its `onAction()` with parsed state, parsed action, parsed config, and value-only context. The code matches. It returns a new block state with the latest submission recorded and `unlocked: true`. No I/O occurs.
 
 ### 5. Edge Evaluation (Pure)
 
-The traversal engine merges player and shared runtime state and evaluates every edge's condition tree on the current node. With the puzzle now solved, an edge condition like `field-equals(vault-code, solved, true)` passes, making "Enter the corridor" available.
+After `performBlockAction`, the engine recomputes the current node's `traversableEdges`. With the puzzle now solved, an edge condition like `field-equals(vault-code, unlocked, true)` passes, making "Enter the corridor" available. When the player selects that option, the shell calls `traverseEdge`, and the engine changes `currentNodeId` only through that command.
 
 ### 6. Response
 
-The executor returns the next `RuntimeSnapshot`, which an API route can serialize or a mobile host can use directly. The mobile app receives the updated snapshot, the block renderer registry maps `code` to its renderer, and it re-renders with the solved state while persisting only the `RuntimeState` subset if it wants a durable save.
+Each command returns the next `RuntimeSnapshot`, which an API route can serialize or a mobile host can use directly. The mobile app receives the updated snapshot, the block renderer registry maps `code` to its renderer, and it re-renders with the latest block state while persisting only the `RuntimeState` subset if it wants a durable save.
 
 ### Full Call Chain
 
 ```
 Phone
-  → engine.submitAction()           (public API, mobile-local host)
-    → runtime/submit-action.ts      (orchestrates gameplay loop)
-      → blocks/code.ts              (pure state transition)
-      → graph/traversal.ts          (pure edge evaluation)
+  → engine.performBlockAction()           (public API, mobile-local host)
+    → runtime/perform-block-action.ts     (orchestrates block interaction)
+      → blocks/code.ts                    (pure onAction transition)
+      → runtime/snapshot.ts               (derive traversableEdges)
+
+  → engine.traverseEdge()                 (public API, mobile-local host)
+    → runtime/traverse-edge.ts            (changes current node)
+      → runtime/node-entry.ts             (materialize entry-node block state)
+      → runtime/snapshot.ts               (derive traversableEdges for next node)
 
 API host
-  → routes/submit-action.ts         (validates, delegates)
-    → engine.submitAction()         (same public API)
+  → routes/perform-block-action.ts         (validates, delegates)
+    → engine.performBlockAction()          (same public API)
+  → routes/traverse-edge.ts                (validates, delegates)
+    → engine.traverseEdge()                (same public API)
 ```
 
 ## Versioning
@@ -731,61 +721,83 @@ Current repo testing standard for story CRUD:
 ### Testing a Block
 
 ```typescript
-import { update, initialState } from './code';
+import { codeBlockBehavior } from './code';
 
-const config = { expected: '1847', mode: 'passcode' };
-
-test('correct code solves the block', () => {
-  const result = update(initialState, { type: 'attempt-unlock', code: '1847' }, config);
-  expect(result.solved).toBe(true);
-  expect(result.attempts).toBe(1);
+const config = codeBlockBehavior.configSchema.parse({
+  expected: '1847',
+  mode: 'passcode',
 });
 
-test('wrong code remains unsolved', () => {
-  const result = update(initialState, { type: 'attempt-unlock', code: 'wrong' }, config);
-  expect(result.solved).toBe(false);
-  expect(result.attempts).toBe(1);
+test('correct code unlocks the block', () => {
+  const initialState = codeBlockBehavior.initialState(config);
+  const result = codeBlockBehavior.onAction(
+    initialState,
+    { type: 'submit', value: '1847' },
+    {},
+    config,
+  );
+
+  expect(result.unlocked).toBe(true);
+  expect(result.attempts).toHaveLength(1);
 });
 
-test('force open works after 3 failed attempts', () => {
-  const stateAfterFailures = { solved: false, attempts: 3 };
-  const result = update(stateAfterFailures, { type: 'force-open' }, config);
-  expect(result.solved).toBe(true);
+test('wrong code remains locked', () => {
+  const initialState = codeBlockBehavior.initialState(config);
+  const result = codeBlockBehavior.onAction(
+    initialState,
+    { type: 'submit', value: 'wrong' },
+    {},
+    config,
+  );
+
+  expect(result.unlocked).toBe(false);
+  expect(result.attempts).toHaveLength(1);
 });
 ```
 
 ### Testing with Fake Ports
 
 ```typescript
+const fakeStoryPackage = {
+  metadata: {
+    storyId: 'story-1',
+    title: 'Story Title',
+  },
+  roles: [
+    {
+      id: 'detective',
+      name: 'Detective',
+    },
+  ],
+  graph: {
+    entryNodeId: 'node-1',
+    nodes: [
+      {
+        id: 'node-1',
+        title: 'Intro Node',
+        blocks: [
+          {
+            id: 'door-1',
+            type: 'code',
+            config: { expected: '1847', mode: 'passcode' },
+          },
+        ],
+        edges: [],
+      },
+    ],
+  },
+  version: {
+    schemaVersion: 1,
+    engineMajor: 2,
+  },
+};
+
 const fakeStoryPackageRepo: StoryPackageRepo = {
-  getPublishedPackage: async (id) => ({
-    metadata: {
-      storyId: id,
-      title: 'Story Title',
-    },
-    roles: [],
-    graph: {
-      entryNodeId: 'node-1',
-      nodes: [
-        {
-          id: 'node-1',
-          title: 'Intro Node',
-          blocks: [
-            {
-              id: 'door-1',
-              type: 'code',
-              config: { expected: '1847', mode: 'passcode' },
-            },
-          ],
-          edges: [],
-        },
-      ],
-    },
-    version: {
-      schemaVersion: 1,
-      engineMajor: 2,
-    },
+  getCurrentPublishedPackage: async () => ({
+    storyPackage: fakeStoryPackage,
+    storyPackageVersionId: 'pkg-1',
   }),
+  getPublishedPackage: async () => fakeStoryPackage,
 };
 
 const fakeClock: Clock = {
@@ -799,15 +811,16 @@ const engine = createEngine({
 });
 
 test('submitting correct code unlocks door', async () => {
-  const result = await engine.submitAction({
+  const result = await engine.performBlockAction({
     state: {
       playerId: 'player-1',
       roleId: 'detective',
       storyId: 'story-1',
+      storyPackageVersionId: 'pkg-1',
       gameId: 'game-1',
       currentNodeId: 'node-1',
       playerState: {
-        blockStates: { 'door-1': { solved: false, attempts: 0 } },
+        blockStates: { 'door-1': { unlocked: false, attempts: [] } },
       },
       sharedState: {
         blockStates: {},
@@ -815,11 +828,11 @@ test('submitting correct code unlocks door', async () => {
     },
     blockId: 'door-1',
     action: {
-      type: 'attempt-unlock',
-      code: '1847',
+      type: 'submit',
+      value: '1847',
     },
   });
-  expect(result.playerState.blockStates['door-1'].solved).toBe(true);
+  expect(result.playerState.blockStates['door-1'].unlocked).toBe(true);
 });
 ```
 
@@ -827,11 +840,11 @@ test('submitting correct code unlocks door', async () => {
 
 **Engine depends on nothing.** The engine defines what it needs as abstract port types and receives concrete implementations at runtime. If the engine ever imports from the db package, the architecture is broken.
 
-**Blocks are pure reducers.** A block's `update` function takes state + action + config and returns new state. No I/O, no side effects, no dependencies. Runtime snapshot orchestration is the executor's job.
+**Blocks are pure behaviors.** A block's `onAction` function takes state + action + config + value-only context and returns new state. No I/O, no side effects, no dependencies. Runtime snapshot orchestration stays in the engine runtime commands.
 
 **Feature slices don't call each other.** API routes are independent vertical slices. If `publish-story` needs to update the story's status, it calls the database directly — it doesn't import from `update-story`.
 
-**Two state buckets, one runtime snapshot.** `playerState` tracks per-player progress. `sharedState` tracks shared world state. The executor merges both for edge evaluation so conditions can reference either scope.
+**Two state buckets, one runtime snapshot.** `playerState` tracks per-player progress. `sharedState` tracks shared world state. The engine runtime commands merge both for edge evaluation so conditions can reference either scope.
 
 **Conditions are named functions, not a custom language.** The story package stores condition names and params as JSON. The engine maps names to real TypeScript functions at runtime through a registry. Adding a new condition type means adding one function to the registry.
 

@@ -17,7 +17,7 @@ Define the engine-owned condition evaluation and graph traversal semantics that 
 
 With FEAT-0006 defining the runtime surface and FEAT-0007 defining action execution, the remaining core runtime behavior is story progression. Plotpoint stories are directed graphs with conditional edges, and the architecture already describes a condition tree model backed by a named condition registry and a pure traversal evaluator. This feature turns that architectural direction into the PRD for determining what a player can do next.
 
-This is the feature that makes branching narrative semantics concrete without taking on broader session orchestration. It owns condition evaluation, traversal results, and progression rules after runtime state changes, while leaving persistence, sync, and UI consequences to later layers.
+This is the feature that makes branching narrative semantics concrete without taking on broader session orchestration. It owns condition evaluation, traversal results, and progression rules after runtime state changes, while leaving persistence, sync, and UI consequences to later layers. The shell renders traversal choices, but the engine remains the authority for traversal state changes through `traverseEdge`.
 
 ## Scope
 
@@ -26,7 +26,8 @@ This is the feature that makes branching narrative semantics concrete without ta
 - Define the condition registry contract and evaluation behavior for the built-in condition set.
 - Define the evaluation context available to conditions during traversal, including runtime state and contextual inputs the engine is allowed to read.
 - Define graph traversal semantics for determining available edges from the current node after state changes.
-- Define the traversal payload that populates FEAT-0006 progression fields such as `RuntimeSnapshot.availableEdges`.
+- Define the `traverseEdge` runtime command that validates a selected traversable edge and advances the runtime to the target node.
+- Define the traversal payload that populates FEAT-0006 progression fields such as `RuntimeSnapshot.traversableEdges`.
 - Define failure behavior for invalid traversal targets, unknown condition names, and malformed condition trees that survive earlier validation boundaries.
 
 ### Out of scope
@@ -51,15 +52,16 @@ This is the feature that makes branching narrative semantics concrete without ta
 - Primary reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
 - FEAT-0003 already fixes the serialized condition tree contract; this feature owns the runtime interpretation of those trees.
 - The condition registry lives in the engine package and should be extensible through engine-owned additions, not adapter configuration.
-- Traversal operates on the merged runtime state view produced after action execution, but must not own block update logic itself.
-- FEAT-0006 owns the outer `RuntimeSnapshot` contract. This feature defines only the traversal semantics and payload data that populate progression fields such as `availableEdges`.
+- Traversal operates on the merged runtime state view produced after block action execution, but must not own block update logic itself.
+- `traverseEdge` is the only runtime command that changes `currentNodeId`; shell/UI layers choose when to invoke it.
+- FEAT-0006 owns the outer `RuntimeSnapshot` contract. This feature defines only the traversal semantics and payload data that populate progression fields such as `traversableEdges`.
 - Evaluation context should remain narrow and explicit so future geolocation or time-based conditions do not leak infrastructure concerns into unrelated engine surfaces.
 - No new ADR is required unless condition evaluation needs a new cross-package boundary beyond the current engine-port model.
 
 ## Acceptance Criteria
 
 - The engine defines one condition registry for the built-in condition set and resolves authored condition names deterministically.
-- Traversal produces explicit available-edge results from the current node using the current runtime state view and populates the FEAT-0006 progression fields without replacing the outer runtime contract.
+- Traversal produces explicit edge results from the current node using the current runtime state view, populates `RuntimeSnapshot.traversableEdges`, and validates `traverseEdge` selections without replacing the outer runtime contract.
 - Condition evaluation supports compound trees and uses a documented evaluation context rather than hidden globals.
 - Unknown conditions, invalid traversal targets, and malformed runtime inputs fail explicitly.
 - The feature leaves session/save orchestration and mobile presentation to later work.
@@ -68,7 +70,7 @@ This is the feature that makes branching narrative semantics concrete without ta
 
 - Add unit tests for each built-in condition and representative parameter combinations.
 - Add unit tests for compound `and` / `or` / `always` trees and mixed-condition scenarios.
-- Add traversal tests that verify available-edge resolution for current-node success, blocked edges, and invalid node references.
+- Add traversal tests that verify traversable-edge resolution, successful `traverseEdge` transitions, blocked edges, and invalid node or edge references.
 - Add tests that prove player-scoped and shared-state values are both available to traversal after execution updates.
 
 ## Rollout and Observability

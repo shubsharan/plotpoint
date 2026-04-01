@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import {
   BlockUpdateError,
-  defineBlockDefinition,
-  type ExecutableBlockDefinition,
+  defineBlockBehavior,
+  type InteractiveBlockBehavior,
 } from './types.js';
 
 type LocationBlockConfig = {
@@ -145,12 +145,11 @@ const calculateDistanceMeters = (
   return earthRadiusMeters * c;
 };
 
-export const locationBlock: ExecutableBlockDefinition<
+export const locationBlockBehavior: InteractiveBlockBehavior<
   LocationBlockConfig,
   LocationBlockState,
   LocationBlockAction
-> = defineBlockDefinition({
-  actionSchema: locationActionSchema,
+> = defineBlockBehavior({
   configSchema: locationConfigSchema,
   initialState: (): LocationBlockState => ({
     checks: [],
@@ -159,9 +158,8 @@ export const locationBlock: ExecutableBlockDefinition<
   }),
   interactive: true,
   isActionable: (state) => !state.unlocked,
-  scope: 'user',
   stateSchema: locationStateSchema,
-  update: (state, action, context, config) => {
+  onAction: (state, action, context, config) => {
     if (config.target.kind === 'place') {
       throw new BlockUpdateError(
         'unsupported_location_target',
@@ -207,4 +205,5 @@ export const locationBlock: ExecutableBlockDefinition<
       unlocked: state.unlocked || withinRadius,
     };
   },
+  actionSchema: locationActionSchema,
 });

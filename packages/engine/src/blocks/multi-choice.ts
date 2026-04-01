@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import {
   BlockUpdateError,
-  defineBlockDefinition,
-  type ExecutableBlockDefinition,
+  defineBlockBehavior,
+  type InteractiveBlockBehavior,
 } from './types.js';
 
 type MultiChoiceOption = {
@@ -152,12 +152,11 @@ const normalizeOptionIds = (optionIds: string[]): string[] =>
 const hasSameOptions = (left: string[], right: string[]): boolean =>
   left.length === right.length && left.every((optionId, index) => optionId === right[index]);
 
-export const multiChoiceBlock: ExecutableBlockDefinition<
+export const multiChoiceBlockBehavior: InteractiveBlockBehavior<
   MultiChoiceBlockConfig,
   MultiChoiceBlockState,
   MultiChoiceBlockAction
-> = defineBlockDefinition({
-  actionSchema: multiChoiceActionSchema,
+> = defineBlockBehavior({
   configSchema: multiChoiceConfigSchema,
   initialState: (): MultiChoiceBlockState => ({
     attempts: [],
@@ -167,9 +166,8 @@ export const multiChoiceBlock: ExecutableBlockDefinition<
   interactive: true,
   isActionable: (state) =>
     !state.unlocked && state.selectedOptionIds.length === 0 && state.attempts.length === 0,
-  scope: 'user',
   stateSchema: multiChoiceStateSchema,
-  update: (state, action, context, config) => {
+  onAction: (state, action, context, config) => {
     const normalizedOptionIds = normalizeOptionIds(action.optionIds);
     const allowedOptionIds = config.options.map((option) => option.id);
     const unknownOptionIds = normalizedOptionIds.filter(
@@ -234,4 +232,5 @@ export const multiChoiceBlock: ExecutableBlockDefinition<
       unlocked: previouslyUnlocked || isCorrect,
     };
   },
+  actionSchema: multiChoiceActionSchema,
 });

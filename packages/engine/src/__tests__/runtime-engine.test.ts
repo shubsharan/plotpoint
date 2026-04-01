@@ -94,7 +94,7 @@ const startRuntime = async (
 ): Promise<RuntimeSnapshot> => engine.startGame(createStartInput(storyId, overrides));
 
 const toRuntimeState = (snapshot: RuntimeSnapshot): RuntimeState => {
-  const { availableEdges: _availableEdges, ...state } = snapshot;
+  const { traversableEdges: _traversableEdges, ...state } = snapshot;
 
   return state;
 };
@@ -119,7 +119,7 @@ const expectRuntimeSnapshotShape = (snapshot: RuntimeSnapshot): void => {
     storyId: expect.any(String),
     storyPackageVersionId: expect.any(String),
   });
-  expect(Array.isArray(snapshot.availableEdges)).toBe(true);
+  expect(Array.isArray(snapshot.traversableEdges)).toBe(true);
 };
 
 const expectRuntimeError = async (
@@ -136,7 +136,8 @@ describe('@plotpoint/engine runtime surface', () => {
 
     expect(typeof engine.startGame).toBe('function');
     expect(typeof engine.loadRuntime).toBe('function');
-    expect(typeof engine.submitAction).toBe('function');
+    expect(typeof engine.performBlockAction).toBe('function');
+    expect(typeof engine.traverseEdge).toBe('function');
   });
 
   it('returns the RuntimeSnapshot contract and preserves roleId across runtime transitions', async () => {
@@ -145,16 +146,20 @@ describe('@plotpoint/engine runtime surface', () => {
     const loaded = await engine.loadRuntime({
       state: toRuntimeState(started),
     });
-    const submitted = await engine.submitAction({
+    const traversed = await engine.traverseEdge({
+      edgeId: 'foyer-to-archive',
+      state: toRuntimeState(loaded),
+    });
+    const submitted = await engine.performBlockAction({
       action: {
         type: 'submit',
         value: '1847',
       },
       blockId: 'vault-code',
-      state: toRuntimeStateAtNode(loaded, 'archive-door'),
+      state: toRuntimeState(traversed),
     });
 
-    for (const snapshot of [started, loaded, submitted]) {
+    for (const snapshot of [started, loaded, traversed, submitted]) {
       expectRuntimeSnapshotShape(snapshot);
       expect(snapshot.roleId).toBe('detective');
     }
@@ -246,7 +251,7 @@ describe('@plotpoint/engine runtime surface', () => {
     expect(loaded.storyPackageVersionId).toBe('snapshot-v1');
     expect(loaded.currentNodeId).toBe('foyer');
 
-    const submitted = await engine.submitAction({
+    const submitted = await engine.performBlockAction({
       action: {
         type: 'submit',
         value: '1847',
@@ -265,24 +270,48 @@ describe('@plotpoint/engine runtime surface', () => {
     const loaded = await engine.loadRuntime({
       state: toRuntimeState(started),
     });
-    const submitted = await engine.submitAction({
+    const traversed = await engine.traverseEdge({
+      edgeId: 'foyer-to-archive',
+      state: toRuntimeState(loaded),
+    });
+    const submitted = await engine.performBlockAction({
       action: {
         type: 'submit',
         value: '1847',
       },
       blockId: 'vault-code',
-      state: toRuntimeStateAtNode(loaded, 'archive-door'),
+      state: toRuntimeState(traversed),
     });
 
-    expect(started.availableEdges).toEqual([
+    expect(started.traversableEdges).toEqual([
       {
         edgeId: 'foyer-to-archive',
         label: 'Head to the archive',
         targetNodeId: 'archive-door',
       },
     ]);
-    expect(loaded.availableEdges).toEqual(started.availableEdges);
-    expect(submitted.availableEdges).toEqual([
+    expect(loaded.traversableEdges).toEqual(started.traversableEdges);
+    expect(traversed.traversableEdges).toEqual([
+      {
+        edgeId: 'archive-to-vault',
+        label: 'Open the archive vault',
+        targetNodeId: 'vault',
+      },
+    ]);
+    expect(submitted.traversableEdges).toEqual(traversed.traversableEdges);
+  });
+
+  it('traverses to the selected edge target and updates current node state', async () => {
+    const { engine, storyId } = createRuntimeContext();
+    const started = await startRuntime(engine, storyId);
+
+    const traversed = await engine.traverseEdge({
+      edgeId: 'foyer-to-archive',
+      state: toRuntimeState(started),
+    });
+
+    expect(traversed.currentNodeId).toBe('archive-door');
+    expect(traversed.traversableEdges).toEqual([
       {
         edgeId: 'archive-to-vault',
         label: 'Open the archive vault',
@@ -291,12 +320,54 @@ describe('@plotpoint/engine runtime surface', () => {
     ]);
   });
 
+  it('materializes non-interactive node-entry state when traversing into a node', async () => {
+    const storyPackage = createValidStoryPackageFixture();
+    storyPackage.version.engineMajor = currentEngineMajor;
+    const archiveNode = storyPackage.graph.nodes.find((node) => node.id === 'archive-door');
+    if (!archiveNode) {
+      throw new Error('Expected archive-door node in runtime fixture.');
+    }
+
+    archiveNode.blocks.unshift({
+      id: 'archive-briefing',
+      type: 'text',
+      config: {
+        document: {
+          type: 'doc',
+          children: [
+            {
+              type: 'paragraph',
+              children: [
+                {
+                  type: 'text',
+                  text: 'Archive entry note.',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+
+    const engine = createRuntimeEngine(storyPackage);
+    const started = await startRuntime(engine, storyPackage.metadata.storyId);
+
+    const traversed = await engine.traverseEdge({
+      edgeId: 'foyer-to-archive',
+      state: toRuntimeState(started),
+    });
+
+    expect(traversed.playerState.blockStates['archive-briefing']).toEqual({
+      unlocked: true,
+    });
+  });
+
   it('accepts snapshot-shaped state inputs and strips derived fields before rehydration', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
     const staleSnapshot: RuntimeSnapshot = {
       ...started,
-      availableEdges: [
+      traversableEdges: [
         {
           edgeId: 'stale-edge',
           label: 'Stale Edge',
@@ -309,7 +380,7 @@ describe('@plotpoint/engine runtime surface', () => {
       state: staleSnapshot,
     });
 
-    expect(loaded.availableEdges).toEqual(started.availableEdges);
+    expect(loaded.traversableEdges).toEqual(started.traversableEdges);
   });
 
   it('clones block-state maps when normalizing runtime state into a snapshot', async () => {
@@ -371,12 +442,24 @@ describe('@plotpoint/engine runtime surface', () => {
       run: async ({ engine, storyId }) => {
         const started = await startRuntime(engine, storyId);
 
-        return engine.submitAction({
+        return engine.performBlockAction({
           action: {
             type: 'submit',
             value: '1847',
           },
           blockId: 'missing-block',
+          state: toRuntimeState(started),
+        });
+      },
+    },
+    {
+      code: 'runtime_edge_not_found',
+      name: 'edge target is unknown during traversal',
+      run: async ({ engine, storyId }) => {
+        const started = await startRuntime(engine, storyId);
+
+        return engine.traverseEdge({
+          edgeId: 'missing-edge',
           state: toRuntimeState(started),
         });
       },
@@ -504,11 +587,11 @@ describe('@plotpoint/engine runtime surface', () => {
     await expect(loadPromise).rejects.toThrow('at state.storyPackageVersionId');
   });
 
-  it('throws runtime_snapshot_invalid for malformed submitAction payloads', async () => {
+  it('throws runtime_snapshot_invalid for malformed performBlockAction payloads', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    const submitPromise = engine.submitAction({
+    const submitPromise = engine.performBlockAction({
       action: {
         type: 'submit',
         value: '1847',
@@ -521,17 +604,30 @@ describe('@plotpoint/engine runtime surface', () => {
     await expect(submitPromise).rejects.toThrow('too_small at blockId');
   });
 
-  it('throws runtime_snapshot_invalid when submitAction action is missing', async () => {
+  it('throws runtime_snapshot_invalid when performBlockAction action is missing', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    const submitPromise = engine.submitAction({
+    const submitPromise = engine.performBlockAction({
       blockId: 'briefing',
       state: toRuntimeState(started),
-    } as unknown as Parameters<Engine['submitAction']>[0]);
+    } as unknown as Parameters<Engine['performBlockAction']>[0]);
 
     await expectRuntimeError(submitPromise, 'runtime_snapshot_invalid');
     await expect(submitPromise).rejects.toThrow(/at action/);
+  });
+
+  it('throws runtime_snapshot_invalid for malformed traverseEdge payloads', async () => {
+    const { engine, storyId } = createRuntimeContext();
+    const started = await startRuntime(engine, storyId);
+
+    const traversePromise = engine.traverseEdge({
+      edgeId: '',
+      state: toRuntimeState(started),
+    });
+
+    await expectRuntimeError(traversePromise, 'runtime_snapshot_invalid');
+    await expect(traversePromise).rejects.toThrow('too_small at edgeId');
   });
 
   it('uses runtime_snapshot_invalid across all runtime entrypoints for malformed input', async () => {
@@ -555,12 +651,19 @@ describe('@plotpoint/engine runtime surface', () => {
         'runtime_snapshot_invalid',
       ),
       expectRuntimeError(
-        engine.submitAction({
+        engine.performBlockAction({
           action: {
             type: 'submit',
             value: '1847',
           },
           blockId: '',
+          state: toRuntimeState(started),
+        }),
+        'runtime_snapshot_invalid',
+      ),
+      expectRuntimeError(
+        engine.traverseEdge({
+          edgeId: '',
           state: toRuntimeState(started),
         }),
         'runtime_snapshot_invalid',

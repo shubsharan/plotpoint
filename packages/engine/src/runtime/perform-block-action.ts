@@ -2,41 +2,41 @@ import type { z } from 'zod';
 import { getBlockDefinition, hasBlockType } from '../blocks/index.js';
 import {
   BlockUpdateError,
-  type BlockAction,
-  type BlockConfig,
-  type BlockRegistryEntry,
-  type BlockState,
+  type BlockContextKey,
+  type BlockActionContext,
+  type InteractiveBlockBehavior,
 } from '../blocks/types.js';
+import {
+  readOwnBlockState,
+  type RuntimeStateType,
+  writeBlockStateByType,
+} from './block-state-bucket.js';
 import { EngineRuntimeError } from './errors.js';
-import { resolveRuntimeStateScopeKey, type RuntimeStateScopeKey } from './block-state-bucket.js';
 import {
   createRuntimeSnapshot,
   formatIssuePath,
-  mapAvailableEdges,
+  mapTraversableEdges,
   parseRuntimeInputOrThrow,
   resolveRuntimeSnapshotContextOrThrow,
 } from './snapshot.js';
-import { submitActionInputSchema } from './schema.js';
-import type { EnginePorts, RuntimeSnapshot, RuntimeState, SubmitActionInput } from './types.js';
+import { performBlockActionInputSchema } from './schema.js';
+import type { EnginePorts, RuntimeSnapshot, RuntimeState, PerformBlockActionInput } from './types.js';
 
-type SubmitExecutionResult = {
-  scopeKey: RuntimeStateScopeKey;
+type ActionExecutionResult = {
+  stateType: RuntimeStateType;
   updatedBlockState: unknown;
 };
 
-type SubmitDefinitionParams<
-  TConfig extends BlockConfig,
-  TState extends BlockState,
-  TAction extends BlockAction,
-> = {
+type ActionBehaviorParams = {
   action: unknown;
   actionType?: string | undefined;
+  behavior: InteractiveBlockBehavior<any, any, any>;
   blockId: string;
-  definition: BlockRegistryEntry<TConfig, TState, TAction>;
   nodeId: string;
   ports: EnginePorts;
-  readLocation: boolean;
+  requiredContext: BlockContextKey[];
   state: RuntimeState;
+  stateType: RuntimeStateType;
   targetBlockConfig: unknown;
   targetBlockType: string;
 };
@@ -62,27 +62,91 @@ const toValidationDetails = (issue: z.core.$ZodIssue): Record<string, unknown> =
 const toBlockStateRecord = (value: unknown): Record<string, unknown> =>
   (value ?? {}) as Record<string, unknown>;
 
-const executeSubmitForDefinition = async <
-  TConfig extends BlockConfig,
-  TState extends BlockState,
-  TAction extends BlockAction,
->(
-  params: SubmitDefinitionParams<TConfig, TState, TAction>,
-): Promise<SubmitExecutionResult> => {
+const resolveExecutionContextOrThrow = async (
+  params: {
+    actionType?: string | undefined;
+    blockId: string;
+    blockType: string;
+    nodeId: string;
+    playerId: string;
+    ports: EnginePorts;
+    requiredContext: BlockContextKey[];
+  },
+): Promise<BlockActionContext> => {
+  const context: BlockActionContext = {};
+  const requiredContext = new Set(params.requiredContext);
+
+  if (requiredContext.has('nowIso')) {
+    if (params.ports.clock === undefined) {
+      context.nowIso = undefined;
+    } else {
+      try {
+        context.nowIso = params.ports.clock.now().toISOString();
+      } catch (error) {
+        throw new EngineRuntimeError(
+          'runtime_block_execution_failed',
+          `Runtime clock resolution failed for block "${params.blockId}".`,
+          {
+            cause: error,
+            details: {
+              actionType: params.actionType,
+              blockId: params.blockId,
+              blockType: params.blockType,
+              nodeId: params.nodeId,
+              playerId: params.playerId,
+            },
+          },
+        );
+      }
+    }
+  }
+
+  if (requiredContext.has('playerLocation')) {
+    if (params.ports.locationReader === undefined) {
+      context.playerLocation = null;
+    } else {
+      try {
+        context.playerLocation = await params.ports.locationReader.getCurrent(params.playerId);
+      } catch (error) {
+        throw new EngineRuntimeError(
+          'runtime_block_location_read_failed',
+          `Runtime location lookup failed for block "${params.blockId}".`,
+          {
+            cause: error,
+            details: {
+              actionType: params.actionType,
+              blockId: params.blockId,
+              blockType: params.blockType,
+              nodeId: params.nodeId,
+              playerId: params.playerId,
+            },
+          },
+        );
+      }
+    }
+  }
+
+  return context;
+};
+
+const executeActionForBehavior = async (
+  params: ActionBehaviorParams,
+): Promise<ActionExecutionResult> => {
   const {
     action,
     actionType,
+    behavior,
     blockId,
-    definition,
     nodeId,
     ports,
-    readLocation,
+    requiredContext,
     state,
+    stateType,
     targetBlockConfig,
     targetBlockType,
   } = params;
 
-  const parsedConfig = definition.configSchema.safeParse(targetBlockConfig);
+  const parsedConfig = behavior.configSchema.safeParse(targetBlockConfig);
   if (!parsedConfig.success) {
     const firstIssue = parsedConfig.error.issues[0];
     throw new EngineRuntimeError(
@@ -100,13 +164,11 @@ const executeSubmitForDefinition = async <
     );
   }
 
-  const scopeKey = resolveRuntimeStateScopeKey(definition.scope);
-  const scopedBucket = state[scopeKey].blockStates;
-  const existingState = scopedBucket[blockId];
-  const parsedStateResult =
-    existingState === undefined
-      ? definition.stateSchema.safeParse(definition.initialState(parsedConfig.data))
-      : definition.stateSchema.safeParse(existingState);
+  const scopedBucket = state[stateType].blockStates;
+  const existingState = readOwnBlockState(scopedBucket, blockId);
+  const parsedStateResult = existingState.found
+    ? behavior.stateSchema.safeParse(existingState.value)
+    : behavior.stateSchema.safeParse(behavior.initialState(parsedConfig.data));
   if (!parsedStateResult.success) {
     const firstIssue = parsedStateResult.error.issues[0];
     throw new EngineRuntimeError(
@@ -125,26 +187,10 @@ const executeSubmitForDefinition = async <
   }
   const parsedState = parsedStateResult.data;
 
-  if (!definition.interactive) {
-    throw new EngineRuntimeError(
-      'runtime_block_not_actionable',
-      `Runtime block "${blockId}" is non-interactive and cannot accept submissions.`,
-      {
-        details: {
-          actionType,
-          blockId,
-          blockType: targetBlockType,
-          nodeId,
-          reason: 'non_interactive',
-        },
-      },
-    );
-  }
-
   if (toBlockStateRecord(parsedState).unlocked === true) {
     throw new EngineRuntimeError(
       'runtime_block_already_unlocked',
-      `Runtime block "${blockId}" is already unlocked and cannot accept further submissions.`,
+      `Runtime block "${blockId}" is already unlocked and cannot accept further actions.`,
       {
         details: {
           actionType,
@@ -157,8 +203,8 @@ const executeSubmitForDefinition = async <
   }
 
   if (
-    definition.isActionable !== undefined &&
-    !definition.isActionable(parsedState, parsedConfig.data)
+    behavior.isActionable !== undefined &&
+    !behavior.isActionable(parsedState, parsedConfig.data)
   ) {
     throw new EngineRuntimeError(
       'runtime_block_not_actionable',
@@ -175,7 +221,7 @@ const executeSubmitForDefinition = async <
     );
   }
 
-  const parsedAction = definition.actionSchema.safeParse(action);
+  const parsedAction = behavior.actionSchema.safeParse(action);
   if (!parsedAction.success) {
     const firstIssue = parsedAction.error.issues[0];
     throw new EngineRuntimeError(
@@ -193,42 +239,22 @@ const executeSubmitForDefinition = async <
     );
   }
 
-  let playerLocation: { lat: number; lng: number } | null | undefined;
-  if (readLocation) {
-    if (ports.locationReader === undefined) {
-      playerLocation = null;
-    } else {
-      try {
-        playerLocation = await ports.locationReader.getCurrent(state.playerId);
-      } catch (error) {
-        throw new EngineRuntimeError(
-          'runtime_block_location_read_failed',
-          `Runtime location lookup failed for block "${blockId}".`,
-          {
-            cause: error,
-            details: {
-              actionType,
-              blockId,
-              blockType: targetBlockType,
-              nodeId,
-              playerId: state.playerId,
-            },
-          },
-        );
-      }
-    }
-  }
+  const actionContext = await resolveExecutionContextOrThrow({
+    actionType,
+    blockId,
+    blockType: targetBlockType,
+    nodeId,
+    playerId: state.playerId,
+    ports,
+    requiredContext,
+  });
 
-  const nowIso = ports.clock?.now().toISOString();
   let updatedState: unknown;
   try {
-    updatedState = definition.update(
+    updatedState = behavior.onAction(
       parsedState,
       parsedAction.data,
-      {
-        nowIso,
-        playerLocation,
-      },
+      actionContext,
       parsedConfig.data,
     );
   } catch (error) {
@@ -252,7 +278,7 @@ const executeSubmitForDefinition = async <
     if (error instanceof BlockUpdateError && error.code === 'action_invalid_for_config') {
       throw new EngineRuntimeError(
         'runtime_block_action_invalid',
-        `Runtime block "${blockId}" rejected the submit action for type "${targetBlockType}".`,
+        `Runtime block "${blockId}" rejected the action for type "${targetBlockType}".`,
         {
           cause: error,
           details: {
@@ -281,7 +307,7 @@ const executeSubmitForDefinition = async <
     );
   }
 
-  const parsedUpdatedState = definition.stateSchema.safeParse(updatedState);
+  const parsedUpdatedState = behavior.stateSchema.safeParse(updatedState);
   if (!parsedUpdatedState.success) {
     const firstIssue = parsedUpdatedState.error.issues[0];
     throw new EngineRuntimeError(
@@ -300,16 +326,16 @@ const executeSubmitForDefinition = async <
   }
 
   return {
-    scopeKey,
+    stateType,
     updatedBlockState: parsedUpdatedState.data,
   };
 };
 
-export const submitAction = async (
+export const performBlockAction = async (
   ports: EnginePorts,
-  input: SubmitActionInput,
+  input: PerformBlockActionInput,
 ): Promise<RuntimeSnapshot> => {
-  const { action, state, blockId } = parseRuntimeInputOrThrow(submitActionInputSchema, input);
+  const { action, state, blockId } = parseRuntimeInputOrThrow(performBlockActionInputSchema, input);
   const { currentNode, targetBlock } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
     blockId,
   });
@@ -342,103 +368,46 @@ export const submitAction = async (
   }
 
   const actionType = resolveActionType(action);
-  let submitResult: SubmitExecutionResult;
-  switch (targetBlock.type) {
-    case 'code':
-      submitResult = await executeSubmitForDefinition({
-        action,
-        actionType,
-        blockId,
-        definition: getBlockDefinition('code'),
-        nodeId: currentNode.id,
-        ports,
-        readLocation: false,
-        state,
-        targetBlockConfig: targetBlock.config,
-        targetBlockType: 'code',
-      });
-      break;
-    case 'single-choice':
-      submitResult = await executeSubmitForDefinition({
-        action,
-        actionType,
-        blockId,
-        definition: getBlockDefinition('single-choice'),
-        nodeId: currentNode.id,
-        ports,
-        readLocation: false,
-        state,
-        targetBlockConfig: targetBlock.config,
-        targetBlockType: 'single-choice',
-      });
-      break;
-    case 'multi-choice':
-      submitResult = await executeSubmitForDefinition({
-        action,
-        actionType,
-        blockId,
-        definition: getBlockDefinition('multi-choice'),
-        nodeId: currentNode.id,
-        ports,
-        readLocation: false,
-        state,
-        targetBlockConfig: targetBlock.config,
-        targetBlockType: 'multi-choice',
-      });
-      break;
-    case 'location':
-      submitResult = await executeSubmitForDefinition({
-        action,
-        actionType,
-        blockId,
-        definition: getBlockDefinition('location'),
-        nodeId: currentNode.id,
-        ports,
-        readLocation: true,
-        state,
-        targetBlockConfig: targetBlock.config,
-        targetBlockType: 'location',
-      });
-      break;
-    case 'text':
-      submitResult = await executeSubmitForDefinition({
-        action,
-        actionType,
-        blockId,
-        definition: getBlockDefinition('text'),
-        nodeId: currentNode.id,
-        ports,
-        readLocation: false,
-        state,
-        targetBlockConfig: targetBlock.config,
-        targetBlockType: 'text',
-      });
-      break;
+  const definition = getBlockDefinition(targetBlock.type);
+  const { behavior, policy } = definition;
+  if (!behavior.interactive) {
+    throw new EngineRuntimeError(
+      'runtime_block_not_actionable',
+      `Runtime block "${blockId}" is non-interactive and cannot accept actions.`,
+      {
+        details: {
+          actionType,
+          blockId,
+          blockType: targetBlock.type,
+          nodeId: currentNode.id,
+          reason: 'non_interactive',
+        },
+      },
+    );
   }
 
-  const scopedBucket = state[submitResult.scopeKey].blockStates;
-  const nextScopedBucket = {
-    ...scopedBucket,
-    [blockId]: submitResult.updatedBlockState,
-  };
-  const nextState =
-    submitResult.scopeKey === 'playerState'
-      ? {
-          ...state,
-          playerState: {
-            ...state.playerState,
-            blockStates: nextScopedBucket,
-          },
-        }
-      : {
-          ...state,
-          sharedState: {
-            ...state.sharedState,
-            blockStates: nextScopedBucket,
-          },
-        };
+  const actionResult = await executeActionForBehavior({
+    action,
+    actionType,
+    behavior,
+    blockId,
+    nodeId: currentNode.id,
+    ports,
+    requiredContext: policy.requiredContext,
+    state,
+    stateType: policy.stateType,
+    targetBlockConfig: targetBlock.config,
+    targetBlockType: targetBlock.type,
+  });
 
-  return createRuntimeSnapshot(nextState, mapAvailableEdges(currentNode), {
+  const nextState = writeBlockStateByType(
+    state,
+    actionResult.stateType,
+    blockId,
+    actionResult.updatedBlockState,
+  );
+
+  return createRuntimeSnapshot(nextState, mapTraversableEdges(currentNode), {
     normalizeState: false,
   });
 };

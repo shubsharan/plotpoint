@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { defineBlockDefinition, type ExecutableBlockDefinition } from './types.js';
+import { defineBlockBehavior, type InteractiveBlockBehavior } from './types.js';
 
 type CodeBlockConfig = {
   caseSensitive?: boolean | undefined;
@@ -97,8 +97,11 @@ const resolveIsCorrect = (config: CodeBlockConfig, submittedValue: string): bool
   return normalizedSubmitted === expectedValue;
 };
 
-export const codeBlock: ExecutableBlockDefinition<CodeBlockConfig, CodeBlockState, CodeBlockAction> = defineBlockDefinition({
-  actionSchema: codeActionSchema,
+export const codeBlockBehavior: InteractiveBlockBehavior<
+  CodeBlockConfig,
+  CodeBlockState,
+  CodeBlockAction
+> = defineBlockBehavior({
   configSchema: codeConfigSchema,
   initialState: (): CodeBlockState => ({
     attempts: [],
@@ -109,9 +112,8 @@ export const codeBlock: ExecutableBlockDefinition<CodeBlockConfig, CodeBlockStat
     !state.unlocked &&
     !state.attempts.some((attempt) => attempt.isCorrect) &&
     (config.maxAttempts === undefined || state.attempts.length < config.maxAttempts),
-  scope: 'user',
   stateSchema: codeStateSchema,
-  update: (state, action, context, config) => {
+  onAction: (state, action, context, config) => {
     const isCorrect = resolveIsCorrect(config, action.value);
     const previouslyUnlocked = state.unlocked || state.attempts.some((attempt) => attempt.isCorrect);
 
@@ -133,4 +135,5 @@ export const codeBlock: ExecutableBlockDefinition<CodeBlockConfig, CodeBlockStat
       unlocked: previouslyUnlocked || isCorrect,
     };
   },
+  actionSchema: codeActionSchema,
 });

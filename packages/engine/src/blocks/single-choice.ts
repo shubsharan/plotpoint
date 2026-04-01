@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import {
   BlockUpdateError,
-  defineBlockDefinition,
-  type ExecutableBlockDefinition,
+  defineBlockBehavior,
+  type InteractiveBlockBehavior,
 } from './types.js';
 
 type SingleChoiceOption = {
@@ -99,12 +99,11 @@ const singleChoiceStateSchema: z.ZodType<SingleChoiceBlockState> = z
   })
   .strict();
 
-export const singleChoiceBlock: ExecutableBlockDefinition<
+export const singleChoiceBlockBehavior: InteractiveBlockBehavior<
   SingleChoiceBlockConfig,
   SingleChoiceBlockState,
   SingleChoiceBlockAction
-> = defineBlockDefinition({
-  actionSchema: singleChoiceActionSchema,
+> = defineBlockBehavior({
   configSchema: singleChoiceConfigSchema,
   initialState: (): SingleChoiceBlockState => ({
     attempts: [],
@@ -114,9 +113,8 @@ export const singleChoiceBlock: ExecutableBlockDefinition<
   interactive: true,
   isActionable: (state) =>
     !state.unlocked && state.selectedOptionId === null && state.attempts.length === 0,
-  scope: 'user',
   stateSchema: singleChoiceStateSchema,
-  update: (state, action, context, config) => {
+  onAction: (state, action, context, config) => {
     const optionIds = config.options.map((option) => option.id);
     if (!optionIds.includes(action.optionId)) {
       throw new BlockUpdateError(
@@ -149,4 +147,5 @@ export const singleChoiceBlock: ExecutableBlockDefinition<
       unlocked: previouslyUnlocked || isCorrect,
     };
   },
+  actionSchema: singleChoiceActionSchema,
 });

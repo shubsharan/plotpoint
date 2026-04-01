@@ -6,18 +6,22 @@ import { validateStoryPackageCompatibility } from '../story-packages/validate-co
 import { validateStoryPackageStructure } from '../story-packages/validate-structure.js';
 import { currentEngineMajor } from '../version.js';
 import { EngineRuntimeError } from './errors.js';
-import type { AvailableEdge, EnginePorts, RuntimeSnapshot, RuntimeState } from './types.js';
+import type { EnginePorts, RuntimeSnapshot, RuntimeState, TraversableEdge } from './types.js';
 
 type StoryNode = StoryPackage['graph']['nodes'][number];
 type StoryBlock = StoryNode['blocks'][number];
+type StoryEdge = StoryNode['edges'][number];
 
 type ResolveRuntimeSnapshotOptions = {
   blockId?: string | undefined;
+  edgeId?: string | undefined;
 };
 
 type ResolvedRuntimeSnapshotContext = {
   currentNode: StoryNode;
+  story: StoryPackage;
   targetBlock?: StoryBlock | undefined;
+  targetEdge?: StoryEdge | undefined;
 };
 
 const runtimeError = {
@@ -25,6 +29,11 @@ const runtimeError = {
     new EngineRuntimeError(
       'runtime_block_not_found',
       `Runtime block "${blockId}" was not found in node "${nodeId}" for story "${storyId}".`,
+    ),
+  edgeNotFound: (storyId: string, nodeId: string, edgeId: string): EngineRuntimeError =>
+    new EngineRuntimeError(
+      'runtime_edge_not_found',
+      `Runtime edge "${edgeId}" was not found in node "${nodeId}" for story "${storyId}".`,
     ),
   nodeNotFound: (storyId: string, nodeId: string): EngineRuntimeError =>
     new EngineRuntimeError(
@@ -67,9 +76,9 @@ const runtimeError = {
     ),
 } as const;
 
-const createAvailableEdge = (
+const createTraversableEdge = (
   edge: StoryPackage['graph']['nodes'][number]['edges'][number],
-): AvailableEdge => {
+): TraversableEdge => {
   if (edge.label === undefined) {
     return {
       edgeId: edge.id,
@@ -224,6 +233,19 @@ export const assertBlockInNodeOrThrow = (
   getBlockInNodeOrThrow(story, node, blockId);
 };
 
+export const getEdgeInNodeOrThrow = (
+  story: StoryPackage,
+  node: StoryNode,
+  edgeId: string,
+): StoryEdge => {
+  const edge = node.edges.find((candidate) => candidate.id === edgeId);
+  if (!edge) {
+    throw runtimeError.edgeNotFound(story.metadata.storyId, node.id, edgeId);
+  }
+
+  return edge;
+};
+
 export const resolveRuntimeSnapshotContextOrThrow = async (
   ports: EnginePorts,
   state: RuntimeState,
@@ -242,10 +264,16 @@ export const resolveRuntimeSnapshotContextOrThrow = async (
     options?.blockId === undefined
       ? undefined
       : getBlockInNodeOrThrow(story, currentNode, options.blockId);
+  const targetEdge =
+    options?.edgeId === undefined
+      ? undefined
+      : getEdgeInNodeOrThrow(story, currentNode, options.edgeId);
 
   return {
     currentNode,
+    story,
     targetBlock,
+    targetEdge,
   };
 };
 
@@ -274,8 +302,8 @@ export const parseRuntimeInputOrThrow = <TInput>(
   return parsed.data;
 };
 
-export const mapAvailableEdges = (node: StoryNode): AvailableEdge[] =>
-  node.edges.map((edge) => createAvailableEdge(edge));
+export const mapTraversableEdges = (node: StoryNode): TraversableEdge[] =>
+  node.edges.map((edge) => createTraversableEdge(edge));
 
 export const normalizeRuntimeState = (state: RuntimeState): RuntimeState => ({
   ...state,
@@ -291,11 +319,11 @@ export const normalizeRuntimeState = (state: RuntimeState): RuntimeState => ({
 
 export const createRuntimeSnapshot = (
   state: RuntimeState,
-  availableEdges: AvailableEdge[],
+  traversableEdges: TraversableEdge[],
   options?: {
     normalizeState?: boolean | undefined;
   },
 ): RuntimeSnapshot => ({
   ...(options?.normalizeState === false ? state : normalizeRuntimeState(state)),
-  availableEdges,
+  traversableEdges,
 });

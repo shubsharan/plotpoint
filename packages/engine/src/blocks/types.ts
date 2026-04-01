@@ -1,18 +1,19 @@
 import type { z } from 'zod';
 import type { GeoCoord } from '../ports/location-reader.js';
 
-export type BlockScope = 'game' | 'user';
-
 export type BlockConfig = Record<string, unknown>;
 export type BlockState = Record<string, unknown>;
 export type BlockAction = {
   type: 'submit';
 };
 
-export type BlockUpdateContext = {
+export type BlockActionContext = {
   nowIso?: string | undefined;
   playerLocation?: GeoCoord | null | undefined;
 };
+
+export type BlockContextKey = keyof BlockActionContext;
+export type BlockStateType = 'playerState' | 'sharedState';
 
 export type BlockUpdateErrorCode = 'action_invalid_for_config' | 'unsupported_location_target';
 
@@ -39,48 +40,66 @@ type BlockBaseDefinition<
   configSchema: z.ZodType<TConfig>;
   initialState: (config: TConfig) => TState;
   isActionable?: ((state: TState, config: TConfig) => boolean) | undefined;
-  scope: BlockScope;
   stateSchema: z.ZodType<TState>;
 };
 
-export type ExecutableBlockDefinition<
+export type InteractiveBlockBehavior<
   TConfig extends BlockConfig = BlockConfig,
   TState extends BlockState = BlockState,
   TAction extends BlockAction = BlockAction,
 > = BlockBaseDefinition<TConfig, TState> & {
-  actionSchema: z.ZodType<TAction>;
   interactive: true;
-  update: (state: TState, action: TAction, context: BlockUpdateContext, config: TConfig) => TState;
+  onAction: (
+    state: TState,
+    action: TAction,
+    context: BlockActionContext,
+    config: TConfig,
+  ) => TState;
+  actionSchema: z.ZodType<TAction>;
 };
 
-export type NonInteractiveBlockDefinition<
+export type NonInteractiveBlockBehavior<
   TConfig extends BlockConfig = BlockConfig,
   TState extends BlockState = BlockState,
 > = BlockBaseDefinition<TConfig, TState> & {
   interactive: false;
 };
 
+export type BlockBehavior<
+  TConfig extends BlockConfig = BlockConfig,
+  TState extends BlockState = BlockState,
+  TAction extends BlockAction = BlockAction,
+> =
+  | InteractiveBlockBehavior<TConfig, TState, TAction>
+  | NonInteractiveBlockBehavior<TConfig, TState>;
+
 export type BlockRegistryEntry<
   TConfig extends BlockConfig = BlockConfig,
   TState extends BlockState = BlockState,
   TAction extends BlockAction = BlockAction,
-> = ExecutableBlockDefinition<TConfig, TState, TAction> | NonInteractiveBlockDefinition<TConfig, TState>;
+> = {
+  behavior: BlockBehavior<TConfig, TState, TAction>;
+  policy: {
+    requiredContext: BlockContextKey[];
+    stateType: BlockStateType;
+  };
+};
 
-export function defineBlockDefinition<
+export function defineBlockBehavior<
   TConfig extends BlockConfig,
   TState extends BlockState,
   TAction extends BlockAction,
 >(
-  definition: ExecutableBlockDefinition<TConfig, TState, TAction>,
-): ExecutableBlockDefinition<TConfig, TState, TAction>;
-export function defineBlockDefinition<
+  behavior: InteractiveBlockBehavior<TConfig, TState, TAction>,
+): InteractiveBlockBehavior<TConfig, TState, TAction>;
+export function defineBlockBehavior<
   TConfig extends BlockConfig,
   TState extends BlockState,
 >(
-  definition: NonInteractiveBlockDefinition<TConfig, TState>,
-): NonInteractiveBlockDefinition<TConfig, TState>;
-export function defineBlockDefinition(
-  definition: BlockRegistryEntry,
-): BlockRegistryEntry {
-  return definition;
+  behavior: NonInteractiveBlockBehavior<TConfig, TState>,
+): NonInteractiveBlockBehavior<TConfig, TState>;
+export function defineBlockBehavior(
+  behavior: BlockBehavior,
+): BlockBehavior {
+  return behavior;
 }

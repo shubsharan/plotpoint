@@ -64,7 +64,7 @@ export const validateStoryPackageCompatibility = (
       }
 
       const definition = getBlockDefinition(block.type);
-      const configResult = definition.configSchema.safeParse(block.config);
+      const configResult = definition.behavior.configSchema.safeParse(block.config);
 
       if (configResult.success) {
         return;
