@@ -1,21 +1,36 @@
 import type { ZodError, ZodType } from 'zod';
+import { getBlockDefinition, hasBlockType } from '../blocks/index.js';
 import type { PublishedStoryPackage } from '../ports/story-package-repo.js';
 import type { StoryPackage } from '../story-packages/schema.js';
 import type { StoryPackageValidationIssue } from '../story-packages/types.js';
 import { validateStoryPackageCompatibility } from '../story-packages/validate-compatibility.js';
 import { validateStoryPackageStructure } from '../story-packages/validate-structure.js';
 import { currentEngineMajor } from '../version.js';
+import { readOwnBlockState } from './block-state-bucket.js';
 import { EngineRuntimeError } from './errors.js';
-import type { AvailableEdge, EnginePorts, RuntimeSnapshot, RuntimeState } from './types.js';
+import type {
+  CurrentNodeBlockSnapshot,
+  CurrentNodeSnapshot,
+  EnginePorts,
+  RuntimeSnapshot,
+  RuntimeState,
+  TraversableEdge,
+} from './types.js';
 
 type StoryNode = StoryPackage['graph']['nodes'][number];
+type StoryBlock = StoryNode['blocks'][number];
+type StoryEdge = StoryNode['edges'][number];
 
 type ResolveRuntimeSnapshotOptions = {
   blockId?: string | undefined;
+  edgeId?: string | undefined;
 };
 
 type ResolvedRuntimeSnapshotContext = {
   currentNode: StoryNode;
+  story: StoryPackage;
+  targetBlock?: StoryBlock | undefined;
+  targetEdge?: StoryEdge | undefined;
 };
 
 const runtimeError = {
@@ -23,6 +38,11 @@ const runtimeError = {
     new EngineRuntimeError(
       'runtime_block_not_found',
       `Runtime block "${blockId}" was not found in node "${nodeId}" for story "${storyId}".`,
+    ),
+  edgeNotFound: (storyId: string, nodeId: string, edgeId: string): EngineRuntimeError =>
+    new EngineRuntimeError(
+      'runtime_edge_not_found',
+      `Runtime edge "${edgeId}" was not found in node "${nodeId}" for story "${storyId}".`,
     ),
   nodeNotFound: (storyId: string, nodeId: string): EngineRuntimeError =>
     new EngineRuntimeError(
@@ -65,9 +85,9 @@ const runtimeError = {
     ),
 } as const;
 
-const createAvailableEdge = (
+const createTraversableEdge = (
   edge: StoryPackage['graph']['nodes'][number]['edges'][number],
-): AvailableEdge => {
+): TraversableEdge => {
   if (edge.label === undefined) {
     return {
       edgeId: edge.id,
@@ -82,7 +102,12 @@ const createAvailableEdge = (
   };
 };
 
-const formatIssuePath = (path: ReadonlyArray<number | string | symbol>): string => {
+const toValidationDetails = (path: ReadonlyArray<number | string | symbol>, code: string) => ({
+  validationCode: code,
+  validationPath: formatIssuePath(path),
+});
+
+export const formatIssuePath = (path: ReadonlyArray<number | string | symbol>): string => {
   if (path.length === 0) {
     return '<root>';
   }
@@ -201,17 +226,156 @@ export const assertRoleExistsOrThrow = (story: StoryPackage, roleId: string): vo
   }
 };
 
+export const getBlockInNodeOrThrow = (
+  story: StoryPackage,
+  node: StoryNode,
+  blockId: string,
+): StoryBlock => {
+  const block = node.blocks.find((candidate) => candidate.id === blockId);
+  if (!block) {
+    throw runtimeError.blockNotFound(story.metadata.storyId, node.id, blockId);
+  }
+
+  return block;
+};
+
 export const assertBlockInNodeOrThrow = (
   story: StoryPackage,
   node: StoryNode,
   blockId: string,
 ): void => {
-  const hasBlock = node.blocks.some((block) => block.id === blockId);
-
-  if (!hasBlock) {
-    throw runtimeError.blockNotFound(story.metadata.storyId, node.id, blockId);
-  }
+  getBlockInNodeOrThrow(story, node, blockId);
 };
+
+export const getEdgeInNodeOrThrow = (
+  story: StoryPackage,
+  node: StoryNode,
+  edgeId: string,
+): StoryEdge => {
+  const edge = node.edges.find((candidate) => candidate.id === edgeId);
+  if (!edge) {
+    throw runtimeError.edgeNotFound(story.metadata.storyId, node.id, edgeId);
+  }
+
+  return edge;
+};
+
+type ResolvedEffectiveBlockState = {
+  currentNodeBlock: CurrentNodeBlockSnapshot;
+  parsedConfig: Record<string, unknown>;
+  parsedState: Record<string, unknown>;
+};
+
+const resolveBlockDefinitionOrThrow = (nodeId: string, block: StoryBlock) => {
+  if (!hasBlockType(block.type)) {
+    throw new EngineRuntimeError(
+      'runtime_block_type_unregistered',
+      `Runtime block type "${block.type}" is not registered in the block registry.`,
+      {
+        details: {
+          blockId: block.id,
+          blockType: block.type,
+          nodeId,
+        },
+      },
+    );
+  }
+
+  return getBlockDefinition(block.type);
+};
+
+export const resolveEffectiveBlockStateOrThrow = (
+  state: RuntimeState,
+  nodeId: string,
+  block: StoryBlock,
+): ResolvedEffectiveBlockState => {
+  const definition = resolveBlockDefinitionOrThrow(nodeId, block);
+  const { behavior, policy } = definition;
+  const parsedConfig = behavior.configSchema.safeParse(block.config);
+  if (!parsedConfig.success) {
+    const firstIssue = parsedConfig.error.issues[0];
+    throw new EngineRuntimeError(
+      'runtime_block_config_invalid',
+      `Runtime block "${block.id}" has invalid config for type "${block.type}".`,
+      {
+        details: {
+          blockId: block.id,
+          blockType: block.type,
+          nodeId,
+          ...(firstIssue === undefined
+            ? {}
+            : toValidationDetails(firstIssue.path, firstIssue.code)),
+        },
+      },
+    );
+  }
+
+  const persistedState = readOwnBlockState(state[policy.stateType].blockStates, block.id);
+  let candidateState: unknown;
+  if (persistedState.found) {
+    candidateState = persistedState.value;
+  } else {
+    try {
+      candidateState = behavior.initialState(parsedConfig.data);
+    } catch (error) {
+      throw new EngineRuntimeError(
+        'runtime_block_execution_failed',
+        `Runtime block "${block.id}" initial state resolution failed for type "${block.type}".`,
+        {
+          cause: error,
+          details: {
+            blockId: block.id,
+            blockType: block.type,
+            nodeId,
+            phase: 'initial_state',
+          },
+        },
+      );
+    }
+  }
+
+  const parsedState = behavior.stateSchema.safeParse(candidateState);
+  if (!parsedState.success) {
+    const firstIssue = parsedState.error.issues[0];
+    throw new EngineRuntimeError(
+      'runtime_block_state_invalid',
+      persistedState.found
+        ? `Runtime block "${block.id}" has invalid persisted state for type "${block.type}".`
+        : `Runtime block "${block.id}" produced invalid initial state for type "${block.type}".`,
+      {
+        details: {
+          blockId: block.id,
+          blockType: block.type,
+          nodeId,
+          ...(firstIssue === undefined
+            ? {}
+            : toValidationDetails(firstIssue.path, firstIssue.code)),
+        },
+      },
+    );
+  }
+
+  return {
+    currentNodeBlock: {
+      config: block.config,
+      id: block.id,
+      interactive: behavior.interactive,
+      state: parsedState.data,
+      type: block.type,
+    },
+    parsedConfig: parsedConfig.data,
+    parsedState: parsedState.data,
+  };
+};
+
+export const createCurrentNodeSnapshotOrThrow = (
+  state: RuntimeState,
+  node: StoryNode,
+): CurrentNodeSnapshot => ({
+  blocks: node.blocks.map((block) => resolveEffectiveBlockStateOrThrow(state, node.id, block).currentNodeBlock),
+  id: node.id,
+  title: node.title,
+});
 
 export const resolveRuntimeSnapshotContextOrThrow = async (
   ports: EnginePorts,
@@ -227,12 +391,20 @@ export const resolveRuntimeSnapshotContextOrThrow = async (
   assertRoleExistsOrThrow(story, state.roleId);
   const currentNode = getNodeOrThrow(story, state.currentNodeId);
 
-  if (options?.blockId !== undefined) {
-    assertBlockInNodeOrThrow(story, currentNode, options.blockId);
-  }
+  const targetBlock =
+    options?.blockId === undefined
+      ? undefined
+      : getBlockInNodeOrThrow(story, currentNode, options.blockId);
+  const targetEdge =
+    options?.edgeId === undefined
+      ? undefined
+      : getEdgeInNodeOrThrow(story, currentNode, options.edgeId);
 
   return {
     currentNode,
+    story,
+    targetBlock,
+    targetEdge,
   };
 };
 
@@ -261,8 +433,10 @@ export const parseRuntimeInputOrThrow = <TInput>(
   return parsed.data;
 };
 
-export const mapAvailableEdges = (node: StoryNode): AvailableEdge[] =>
-  node.edges.map((edge) => createAvailableEdge(edge));
+export const mapTraversableEdges = (node: StoryNode): TraversableEdge[] =>
+  node.edges
+    .filter((edge) => edge.condition === undefined)
+    .map((edge) => createTraversableEdge(edge));
 
 export const normalizeRuntimeState = (state: RuntimeState): RuntimeState => ({
   ...state,
@@ -278,8 +452,13 @@ export const normalizeRuntimeState = (state: RuntimeState): RuntimeState => ({
 
 export const createRuntimeSnapshot = (
   state: RuntimeState,
-  availableEdges: AvailableEdge[],
+  currentNode: CurrentNodeSnapshot,
+  traversableEdges: TraversableEdge[],
+  options?: {
+    normalizeState?: boolean | undefined;
+  },
 ): RuntimeSnapshot => ({
-  ...normalizeRuntimeState(state),
-  availableEdges,
+  ...(options?.normalizeState === false ? state : normalizeRuntimeState(state)),
+  currentNode,
+  traversableEdges,
 });

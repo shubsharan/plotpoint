@@ -1,25 +1,56 @@
-import { codeBlock } from './code.js';
-import { locationBlock } from './location.js';
-import { multiChoiceBlock } from './multi-choice.js';
-import { singleChoiceBlock } from './single-choice.js';
-import { textBlock } from './text.js';
+import { codeBlockBehavior } from './code.js';
+import { locationBlockBehavior } from './location.js';
+import { multiChoiceBlockBehavior } from './multi-choice.js';
+import { singleChoiceBlockBehavior } from './single-choice.js';
+import { textBlockBehavior } from './text.js';
+import type { BlockRegistryEntry } from './types.js';
 
-export type { BlockConfig, BlockRegistryEntry, BlockScope } from './types.js';
+export type { BlockConfig, BlockRegistryEntry, BlockStateType } from './types.js';
 
 type BlockRegistry = {
-  readonly code: typeof codeBlock;
-  readonly location: typeof locationBlock;
-  readonly 'multi-choice': typeof multiChoiceBlock;
-  readonly 'single-choice': typeof singleChoiceBlock;
-  readonly text: typeof textBlock;
+  readonly code: BlockRegistryEntry<any, any, any>;
+  readonly location: BlockRegistryEntry<any, any, any>;
+  readonly 'multi-choice': BlockRegistryEntry<any, any, any>;
+  readonly 'single-choice': BlockRegistryEntry<any, any, any>;
+  readonly text: BlockRegistryEntry<any, any, any>;
 };
 
 export const blockRegistry: BlockRegistry = {
-  code: codeBlock,
-  location: locationBlock,
-  'multi-choice': multiChoiceBlock,
-  'single-choice': singleChoiceBlock,
-  text: textBlock,
+  code: {
+    behavior: codeBlockBehavior,
+    policy: {
+      requiredContext: ['nowIso'],
+      stateType: 'playerState',
+    },
+  },
+  location: {
+    behavior: locationBlockBehavior,
+    policy: {
+      requiredContext: ['nowIso', 'playerLocation'],
+      stateType: 'playerState',
+    },
+  },
+  'multi-choice': {
+    behavior: multiChoiceBlockBehavior,
+    policy: {
+      requiredContext: ['nowIso'],
+      stateType: 'playerState',
+    },
+  },
+  'single-choice': {
+    behavior: singleChoiceBlockBehavior,
+    policy: {
+      requiredContext: ['nowIso'],
+      stateType: 'playerState',
+    },
+  },
+  text: {
+    behavior: textBlockBehavior,
+    policy: {
+      requiredContext: [],
+      stateType: 'playerState',
+    },
+  },
 };
 
 export type KnownBlockType = keyof typeof blockRegistry;

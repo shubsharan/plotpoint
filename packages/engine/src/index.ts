@@ -2,7 +2,7 @@ export { blockRegistry, getBlockDefinition, hasBlockType } from './blocks/index.
 export type {
   BlockConfig,
   BlockRegistryEntry,
-  BlockScope,
+  BlockStateType,
   KnownBlockType,
 } from './blocks/index.js';
 export { conditionRegistry, hasConditionName } from './graph/conditions.js';
@@ -17,14 +17,17 @@ export { createEngine } from './runtime/create-engine.js';
 export { EngineRuntimeError } from './runtime/errors.js';
 export type { EngineRuntimeErrorCode } from './runtime/errors.js';
 export type {
-  AvailableEdge,
+  CurrentNodeBlockSnapshot,
+  CurrentNodeSnapshot,
   Engine,
   EnginePorts,
   LoadRuntimeInput,
+  PerformBlockActionInput,
   RuntimeState,
   RuntimeSnapshot,
   StartGameInput,
-  SubmitActionInput,
+  TraversableEdge,
+  TraverseEdgeInput,
 } from './runtime/types.js';
 export {
   storyPackageBlockSchema,

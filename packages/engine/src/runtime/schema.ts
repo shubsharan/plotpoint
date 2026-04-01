@@ -1,8 +1,9 @@
 import { z } from 'zod';
+import { storyPackageJsonObjectSchema } from '../story-packages/schema.js';
 
 const nonEmptyStringSchema = z.string().min(1);
 
-type AvailableEdgeShape = {
+type TraversableEdgeShape = {
   edgeId: string;
   label?: string | undefined;
   targetNodeId: string;
@@ -23,8 +24,23 @@ type RuntimeStateShape = {
   storyPackageVersionId: string;
 };
 
+type CurrentNodeBlockShape = {
+  config: Record<string, unknown>;
+  id: string;
+  interactive: boolean;
+  state: unknown;
+  type: string;
+};
+
+type CurrentNodeShape = {
+  blocks: CurrentNodeBlockShape[];
+  id: string;
+  title: string;
+};
+
 type RuntimeSnapshotShape = {
-  availableEdges: AvailableEdgeShape[];
+  currentNode: CurrentNodeShape;
+  traversableEdges: TraversableEdgeShape[];
 } & RuntimeStateShape;
 
 type LoadRuntimeInputShape = {
@@ -38,9 +54,14 @@ type StartGameInputShape = {
   storyId: string;
 };
 
-type SubmitActionInputShape = {
+type PerformBlockActionInputShape = {
   action: unknown;
   blockId: string;
+  state: RuntimeStateShape;
+};
+
+type TraverseEdgeInputShape = {
+  edgeId: string;
   state: RuntimeStateShape;
 };
 
@@ -59,11 +80,29 @@ const requiredUnknownSchema: z.ZodType<unknown> = z.unknown().refine(
   (value) => value !== undefined,
 );
 
-export const availableEdgeSchema: z.ZodType<AvailableEdgeShape> = z
+export const traversableEdgeSchema: z.ZodType<TraversableEdgeShape> = z
   .object({
     edgeId: nonEmptyStringSchema,
     label: nonEmptyStringSchema.optional(),
     targetNodeId: nonEmptyStringSchema,
+  })
+  .strict();
+
+export const currentNodeBlockSchema: z.ZodType<CurrentNodeBlockShape> = z
+  .object({
+    config: storyPackageJsonObjectSchema,
+    id: nonEmptyStringSchema,
+    interactive: z.boolean(),
+    state: z.unknown(),
+    type: nonEmptyStringSchema,
+  })
+  .strict();
+
+export const currentNodeSchema: z.ZodType<CurrentNodeShape> = z
+  .object({
+    blocks: z.array(currentNodeBlockSchema),
+    id: nonEmptyStringSchema,
+    title: nonEmptyStringSchema,
   })
   .strict();
 
@@ -84,7 +123,8 @@ const runtimeStateInputSchema: z.ZodType<RuntimeStateShape> = runtimeStateObject
 
 export const runtimeSnapshotSchema: z.ZodType<RuntimeSnapshotShape> = runtimeStateObjectSchema
   .extend({
-    availableEdges: z.array(availableEdgeSchema),
+    currentNode: currentNodeSchema,
+    traversableEdges: z.array(traversableEdgeSchema),
   })
   .strict();
 
@@ -103,7 +143,7 @@ export const startGameInputSchema: z.ZodType<StartGameInputShape> = z
   })
   .strict();
 
-export const submitActionInputSchema: z.ZodType<SubmitActionInputShape> = z
+export const performBlockActionInputSchema: z.ZodType<PerformBlockActionInputShape> = z
   .object({
     action: requiredUnknownSchema,
     blockId: nonEmptyStringSchema,
@@ -111,9 +151,19 @@ export const submitActionInputSchema: z.ZodType<SubmitActionInputShape> = z
   })
   .strict();
 
-export type AvailableEdge = z.infer<typeof availableEdgeSchema>;
+export const traverseEdgeInputSchema: z.ZodType<TraverseEdgeInputShape> = z
+  .object({
+    edgeId: nonEmptyStringSchema,
+    state: runtimeStateInputSchema,
+  })
+  .strict();
+
+export type TraversableEdge = z.infer<typeof traversableEdgeSchema>;
+export type CurrentNodeBlockSnapshot = z.infer<typeof currentNodeBlockSchema>;
+export type CurrentNodeSnapshot = z.infer<typeof currentNodeSchema>;
 export type RuntimeState = z.infer<typeof runtimeStateSchema>;
 export type RuntimeSnapshot = z.infer<typeof runtimeSnapshotSchema>;
 export type LoadRuntimeInput = z.infer<typeof loadRuntimeInputSchema>;
 export type StartGameInput = z.infer<typeof startGameInputSchema>;
-export type SubmitActionInput = z.infer<typeof submitActionInputSchema>;
+export type PerformBlockActionInput = z.infer<typeof performBlockActionInputSchema>;
+export type TraverseEdgeInput = z.infer<typeof traverseEdgeInputSchema>;

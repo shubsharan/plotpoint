@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { defineBlockDefinition, type BlockRegistryEntry } from './types.js';
+import { defineBlockBehavior, type InteractiveBlockBehavior } from './types.js';
 
 type CodeBlockConfig = {
   caseSensitive?: boolean | undefined;
@@ -12,6 +12,23 @@ type CodeBlockConfig = {
     | undefined;
   maxAttempts?: number | undefined;
   mode: 'passcode' | 'password';
+};
+
+type CodeBlockAction = {
+  type: 'submit';
+  value: string;
+};
+
+type CodeBlockAttempt = {
+  isCorrect: boolean;
+  submitted: CodeBlockAction;
+  submittedAt?: string | undefined;
+};
+
+type CodeBlockState = {
+  attempts: CodeBlockAttempt[];
+  lastSubmittedAt?: string | undefined;
+  unlocked: boolean;
 };
 
 const codeConfigSchema: z.ZodType<CodeBlockConfig> = z
@@ -28,9 +45,95 @@ const codeConfigSchema: z.ZodType<CodeBlockConfig> = z
     maxAttempts: z.number().int().positive().optional(),
     mode: z.enum(['passcode', 'password']),
   })
+  .superRefine((config, context) => {
+    if (config.length?.min !== undefined && config.length?.max !== undefined && config.length.min > config.length.max) {
+      context.addIssue({
+        code: 'custom',
+        message: 'length.min cannot be greater than length.max.',
+        path: ['length', 'min'],
+      });
+    }
+  })
   .strict();
 
-export const codeBlock: BlockRegistryEntry<CodeBlockConfig> = defineBlockDefinition({
+const codeActionSchema: z.ZodType<CodeBlockAction> = z
+  .object({
+    type: z.literal('submit'),
+    value: z.string(),
+  })
+  .strict();
+
+const codeAttemptSchema: z.ZodType<CodeBlockAttempt> = z
+  .object({
+    isCorrect: z.boolean(),
+    submitted: codeActionSchema,
+    submittedAt: z.string().min(1).optional(),
+  })
+  .strict();
+
+const codeStateSchema: z.ZodType<CodeBlockState> = z
+  .object({
+    attempts: z.array(codeAttemptSchema),
+    lastSubmittedAt: z.string().min(1).optional(),
+    unlocked: z.boolean(),
+  })
+  .strict();
+
+const resolveIsCorrect = (config: CodeBlockConfig, submittedValue: string): boolean => {
+  const caseSensitive = config.caseSensitive ?? false;
+  const expectedValue = caseSensitive ? config.expected : config.expected.toLowerCase();
+  const normalizedSubmitted = caseSensitive
+    ? submittedValue
+    : submittedValue.toLowerCase();
+
+  if (config.length?.min !== undefined && submittedValue.length < config.length.min) {
+    return false;
+  }
+
+  if (config.length?.max !== undefined && submittedValue.length > config.length.max) {
+    return false;
+  }
+
+  return normalizedSubmitted === expectedValue;
+};
+
+export const codeBlockBehavior: InteractiveBlockBehavior<
+  CodeBlockConfig,
+  CodeBlockState,
+  CodeBlockAction
+> = defineBlockBehavior({
   configSchema: codeConfigSchema,
-  scope: 'user',
+  initialState: (): CodeBlockState => ({
+    attempts: [],
+    unlocked: false,
+  }),
+  interactive: true,
+  isActionable: (state, config) =>
+    !state.unlocked &&
+    !state.attempts.some((attempt) => attempt.isCorrect) &&
+    (config.maxAttempts === undefined || state.attempts.length < config.maxAttempts),
+  stateSchema: codeStateSchema,
+  onAction: (state, action, context, config) => {
+    const isCorrect = resolveIsCorrect(config, action.value);
+    const previouslyUnlocked = state.unlocked || state.attempts.some((attempt) => attempt.isCorrect);
+
+    const submittedAt = context.nowIso;
+    const attempt: CodeBlockAttempt = submittedAt === undefined
+      ? {
+          isCorrect,
+          submitted: action,
+        }
+      : {
+          isCorrect,
+          submitted: action,
+          submittedAt,
+        };
+
+    return {
+      attempts: [...state.attempts, attempt],
+      lastSubmittedAt: submittedAt,
+      unlocked: previouslyUnlocked || isCorrect,
+    };
+  },
+  actionSchema: codeActionSchema,
 });

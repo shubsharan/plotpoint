@@ -2,21 +2,27 @@ import type { Clock } from '../ports/clock.js';
 import type { LocationReader } from '../ports/location-reader.js';
 import type { StoryPackageRepo } from '../ports/story-package-repo.js';
 import type {
-  AvailableEdge,
+  CurrentNodeBlockSnapshot,
+  CurrentNodeSnapshot,
+  PerformBlockActionInput,
   LoadRuntimeInput,
   RuntimeState,
   RuntimeSnapshot,
   StartGameInput,
-  SubmitActionInput,
+  TraversableEdge,
+  TraverseEdgeInput,
 } from './schema.js';
 
 export type {
-  AvailableEdge,
+  CurrentNodeBlockSnapshot,
+  CurrentNodeSnapshot,
+  PerformBlockActionInput,
   LoadRuntimeInput,
   RuntimeState,
   RuntimeSnapshot,
   StartGameInput,
-  SubmitActionInput,
+  TraversableEdge,
+  TraverseEdgeInput,
 };
 
 export type EnginePorts = {
@@ -28,5 +34,6 @@ export type EnginePorts = {
 export type Engine = {
   startGame: (input: StartGameInput) => Promise<RuntimeSnapshot>;
   loadRuntime: (input: LoadRuntimeInput) => Promise<RuntimeSnapshot>;
-  submitAction: (input: SubmitActionInput) => Promise<RuntimeSnapshot>;
+  performBlockAction: (input: PerformBlockActionInput) => Promise<RuntimeSnapshot>;
+  traverseEdge: (input: TraverseEdgeInput) => Promise<RuntimeSnapshot>;
 };

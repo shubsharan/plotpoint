@@ -1,6 +1,7 @@
 import {
+  createCurrentNodeSnapshotOrThrow,
   createRuntimeSnapshot,
-  mapAvailableEdges,
+  mapTraversableEdges,
   parseRuntimeInputOrThrow,
   resolveRuntimeSnapshotContextOrThrow,
 } from './snapshot.js';
@@ -13,6 +14,7 @@ export const loadRuntime = async (
 ): Promise<RuntimeSnapshot> => {
   const { state } = parseRuntimeInputOrThrow(loadRuntimeInputSchema, input);
   const { currentNode } = await resolveRuntimeSnapshotContextOrThrow(ports, state);
+  const hydratedCurrentNode = createCurrentNodeSnapshotOrThrow(state, currentNode);
 
-  return createRuntimeSnapshot(state, mapAvailableEdges(currentNode));
+  return createRuntimeSnapshot(state, hydratedCurrentNode, mapTraversableEdges(currentNode));
 };

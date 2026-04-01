@@ -11,7 +11,7 @@ describe('@plotpoint/engine', () => {
     expect(engine.blockRegistry.text).toBeDefined();
     expect(engine.conditionRegistry['field-equals']).toBe(true);
     expect(engine.storyPackageSchema.safeParse(validStoryPackageFixture).success).toBe(true);
-    expect(engine.getBlockDefinition('code').scope).toBe('user');
+    expect(engine.getBlockDefinition('code').policy.stateType).toBe('playerState');
     expect(typeof engine.validateStoryPackageStructure).toBe('function');
     expect(typeof engine.validateStoryPackageCompatibility).toBe('function');
     expect(typeof engine.currentEngineMajor).toBe('number');
@@ -41,6 +41,7 @@ describe('@plotpoint/engine', () => {
     });
 
     expect(runtime.currentNodeId).toBe('foyer');
+    expect(runtime.currentNode.id).toBe('foyer');
     expect(runtime.storyId).toBe(runtimeStoryPackage.metadata.storyId);
     expect(runtime.storyPackageVersionId).toBe('snapshot-v1');
   });

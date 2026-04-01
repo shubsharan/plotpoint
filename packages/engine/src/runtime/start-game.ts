@@ -1,9 +1,10 @@
 import {
   assertRoleExistsOrThrow,
+  createCurrentNodeSnapshotOrThrow,
   createRuntimeSnapshot,
   getNodeOrThrow,
   loadStoryOrThrow,
-  mapAvailableEdges,
+  mapTraversableEdges,
   parseRuntimeInputOrThrow,
 } from './snapshot.js';
 import { startGameInputSchema } from './schema.js';
@@ -22,7 +23,7 @@ export const startGame = async (
   assertRoleExistsOrThrow(storyPackage, parsedInput.roleId);
 
   const entryNode = getNodeOrThrow(storyPackage, storyPackage.graph.entryNodeId);
-  const state: RuntimeState = {
+  const initialState: RuntimeState = {
     currentNodeId: entryNode.id,
     gameId: parsedInput.gameId,
     playerId: parsedInput.playerId,
@@ -36,6 +37,7 @@ export const startGame = async (
     storyId: parsedInput.storyId,
     storyPackageVersionId,
   };
+  const currentNode = createCurrentNodeSnapshotOrThrow(initialState, entryNode);
 
-  return createRuntimeSnapshot(state, mapAvailableEdges(entryNode));
+  return createRuntimeSnapshot(initialState, currentNode, mapTraversableEdges(entryNode));
 };
