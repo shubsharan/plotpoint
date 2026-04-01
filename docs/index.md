@@ -27,7 +27,7 @@ Use it as the one-page status rollup across epics and features.
 | FEAT-0005 | EPIC-0002 | Completed | [features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md](features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
 | FEAT-0006 | EPIC-0003 | Completed | [features/FEAT-0006-runtime-state-model-and-engine-public-surface.md](features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)                       |
 | FEAT-0007 | EPIC-0003 | Completed | [features/FEAT-0007-block-registry-and-action-executor.md](features/FEAT-0007-block-registry-and-action-executor.md)                                             |
-| FEAT-0008 | EPIC-0003 | Not Started | [features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md](features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)                 |
+| FEAT-0008 | EPIC-0003 | In Progress | [features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md](features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)                 |
 
 
 ### Current Implementation Snapshot
@@ -36,7 +36,7 @@ Use it as the one-page status rollup across epics and features.
 - Story package contract and schema validation are implemented and enforced for internal story package authoring.
 - Draft story storage and internal CRUD API flows are implemented for draft lifecycle work.
 - Story publish pipeline and published catalog availability are implemented under FEAT-0005.
-- Runtime implementation under EPIC-0003 now includes FEAT-0006 runtime contracts and FEAT-0007 block action execution inside `packages/engine`. Persisted runtime state is intentionally sparse (`playerState`/`sharedState` store only mutated block state), while `RuntimeSnapshot.currentNode` exposes hydrated current-node block state for hosts. Current `traversableEdges` behavior remains fail-safe and exposes only unconditional edges; FEAT-0008 remains for real conditioned traversal semantics.
+- Runtime implementation under EPIC-0003 now includes FEAT-0006 runtime contracts and FEAT-0007 block action execution inside `packages/engine`. Persisted runtime state is intentionally sparse (`playerState`/`sharedState` store only mutated block state), while `RuntimeSnapshot.currentNode` exposes hydrated current-node block state for hosts. FEAT-0008 is now in progress to replace the conditional-edge fail-safe behavior with real conditioned traversal semantics.
 
 ## Update Rules
 

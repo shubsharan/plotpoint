@@ -2,7 +2,7 @@
 | --------------- | ----------- |
 | **Type**        | PRD         |
 | **Feature ID**  | FEAT-0008   |
-| **Status**      | Not Started |
+| **Status**      | In Progress |
 | **Epic**        | EPIC-0003   |
 | **Domains**     | Engine      |
 | **Last synced** | 2026-04-01  |
