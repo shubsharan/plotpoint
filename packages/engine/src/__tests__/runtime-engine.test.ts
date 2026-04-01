@@ -126,10 +126,12 @@ const expectRuntimeError = async (
   promise: Promise<unknown>,
   code: EngineRuntimeErrorCode,
 ): Promise<EngineRuntimeError> => {
-  await expect(promise).rejects.toBeInstanceOf(EngineRuntimeError);
-  await expect(promise).rejects.toMatchObject({ code });
+  const error = await promise.catch((resolvedError) => resolvedError as unknown);
 
-  return promise.catch((error) => error as EngineRuntimeError);
+  expect(error).toBeInstanceOf(EngineRuntimeError);
+  const runtimeError = error as EngineRuntimeError;
+  expect(runtimeError.code).toBe(code);
+  return runtimeError;
 };
 
 describe('@plotpoint/engine runtime surface', () => {
