@@ -9,6 +9,7 @@ import { EngineRuntimeError } from './errors.js';
 import type { AvailableEdge, EnginePorts, RuntimeSnapshot, RuntimeState } from './types.js';
 
 type StoryNode = StoryPackage['graph']['nodes'][number];
+type StoryBlock = StoryNode['blocks'][number];
 
 type ResolveRuntimeSnapshotOptions = {
   blockId?: string | undefined;
@@ -16,6 +17,8 @@ type ResolveRuntimeSnapshotOptions = {
 
 type ResolvedRuntimeSnapshotContext = {
   currentNode: StoryNode;
+  story: StoryPackage;
+  targetBlock?: StoryBlock | undefined;
 };
 
 const runtimeError = {
@@ -82,7 +85,7 @@ const createAvailableEdge = (
   };
 };
 
-const formatIssuePath = (path: ReadonlyArray<number | string | symbol>): string => {
+export const formatIssuePath = (path: ReadonlyArray<number | string | symbol>): string => {
   if (path.length === 0) {
     return '<root>';
   }
@@ -201,16 +204,25 @@ export const assertRoleExistsOrThrow = (story: StoryPackage, roleId: string): vo
   }
 };
 
+export const getBlockInNodeOrThrow = (
+  story: StoryPackage,
+  node: StoryNode,
+  blockId: string,
+): StoryBlock => {
+  const block = node.blocks.find((candidate) => candidate.id === blockId);
+  if (!block) {
+    throw runtimeError.blockNotFound(story.metadata.storyId, node.id, blockId);
+  }
+
+  return block;
+};
+
 export const assertBlockInNodeOrThrow = (
   story: StoryPackage,
   node: StoryNode,
   blockId: string,
 ): void => {
-  const hasBlock = node.blocks.some((block) => block.id === blockId);
-
-  if (!hasBlock) {
-    throw runtimeError.blockNotFound(story.metadata.storyId, node.id, blockId);
-  }
+  getBlockInNodeOrThrow(story, node, blockId);
 };
 
 export const resolveRuntimeSnapshotContextOrThrow = async (
@@ -227,12 +239,15 @@ export const resolveRuntimeSnapshotContextOrThrow = async (
   assertRoleExistsOrThrow(story, state.roleId);
   const currentNode = getNodeOrThrow(story, state.currentNodeId);
 
-  if (options?.blockId !== undefined) {
-    assertBlockInNodeOrThrow(story, currentNode, options.blockId);
-  }
+  const targetBlock =
+    options?.blockId === undefined
+      ? undefined
+      : getBlockInNodeOrThrow(story, currentNode, options.blockId);
 
   return {
     currentNode,
+    story,
+    targetBlock,
   };
 };
 
@@ -279,7 +294,10 @@ export const normalizeRuntimeState = (state: RuntimeState): RuntimeState => ({
 export const createRuntimeSnapshot = (
   state: RuntimeState,
   availableEdges: AvailableEdge[],
+  options?: {
+    normalizeState?: boolean | undefined;
+  },
 ): RuntimeSnapshot => ({
-  ...normalizeRuntimeState(state),
+  ...(options?.normalizeState === false ? state : normalizeRuntimeState(state)),
   availableEdges,
 });

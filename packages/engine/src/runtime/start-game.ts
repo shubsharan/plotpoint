@@ -1,6 +1,11 @@
+import type { z } from 'zod';
+import { getBlockDefinition, hasBlockType } from '../blocks/index.js';
+import type { BlockRegistryEntry } from '../blocks/types.js';
+import { EngineRuntimeError } from './errors.js';
 import {
   assertRoleExistsOrThrow,
   createRuntimeSnapshot,
+  formatIssuePath,
   getNodeOrThrow,
   loadStoryOrThrow,
   mapAvailableEdges,
@@ -8,6 +13,104 @@ import {
 } from './snapshot.js';
 import { startGameInputSchema } from './schema.js';
 import type { EnginePorts, RuntimeSnapshot, RuntimeState, StartGameInput } from './types.js';
+
+type RuntimeStateScopeKey = 'playerState' | 'sharedState';
+
+const resolveStateScopeKey = (scope: 'game' | 'user'): RuntimeStateScopeKey =>
+  scope === 'game' ? 'sharedState' : 'playerState';
+
+const toValidationDetails = (issue: z.core.$ZodIssue): Record<string, unknown> => ({
+  validationCode: issue.code,
+  validationPath: formatIssuePath(issue.path),
+});
+
+const materializeNodeEntryStateOrThrow = (
+  state: RuntimeState,
+  node: ReturnType<typeof getNodeOrThrow>,
+): void => {
+  for (const block of node.blocks) {
+    if (!hasBlockType(block.type)) {
+      throw new EngineRuntimeError(
+        'runtime_block_type_unregistered',
+        `Runtime block type "${block.type}" is not registered in the block registry.`,
+        {
+          details: {
+            blockId: block.id,
+            blockType: block.type,
+            nodeId: node.id,
+          },
+        },
+      );
+    }
+
+    const definition = getBlockDefinition(block.type) as unknown as BlockRegistryEntry;
+    if (definition.interactive) {
+      continue;
+    }
+
+    const scopeKey = resolveStateScopeKey(definition.scope);
+    const scopedBucket = state[scopeKey].blockStates;
+
+    const parsedConfig = definition.configSchema.safeParse(block.config);
+    if (!parsedConfig.success) {
+      const firstIssue = parsedConfig.error.issues[0];
+      throw new EngineRuntimeError(
+        'runtime_block_config_invalid',
+        `Runtime block "${block.id}" has invalid config for type "${block.type}".`,
+        {
+          details: {
+            blockId: block.id,
+            blockType: block.type,
+            nodeId: node.id,
+            ...(firstIssue === undefined ? {} : toValidationDetails(firstIssue)),
+          },
+        },
+      );
+    }
+
+    const existingState = scopedBucket[block.id];
+    if (existingState !== undefined) {
+      const parsedState = definition.stateSchema.safeParse(existingState);
+      if (!parsedState.success) {
+        const firstIssue = parsedState.error.issues[0];
+        throw new EngineRuntimeError(
+          'runtime_block_state_invalid',
+          `Runtime block "${block.id}" has invalid persisted state.`,
+          {
+            details: {
+              blockId: block.id,
+              blockType: block.type,
+              nodeId: node.id,
+              ...(firstIssue === undefined ? {} : toValidationDetails(firstIssue)),
+            },
+          },
+        );
+      }
+
+      continue;
+    }
+
+    const initializedState = definition.initialState(parsedConfig.data);
+    const parsedInitializedState = definition.stateSchema.safeParse(initializedState);
+    if (!parsedInitializedState.success) {
+      const firstIssue = parsedInitializedState.error.issues[0];
+      throw new EngineRuntimeError(
+        'runtime_block_state_invalid',
+        `Runtime block "${block.id}" produced invalid initial state.`,
+        {
+          details: {
+            blockId: block.id,
+            blockType: block.type,
+            nodeId: node.id,
+            ...(firstIssue === undefined ? {} : toValidationDetails(firstIssue)),
+          },
+        },
+      );
+    }
+
+    scopedBucket[block.id] = parsedInitializedState.data;
+  }
+};
 
 export const startGame = async (
   ports: EnginePorts,
@@ -36,6 +139,7 @@ export const startGame = async (
     storyId: parsedInput.storyId,
     storyPackageVersionId,
   };
+  materializeNodeEntryStateOrThrow(state, entryNode);
 
   return createRuntimeSnapshot(state, mapAvailableEdges(entryNode));
 };

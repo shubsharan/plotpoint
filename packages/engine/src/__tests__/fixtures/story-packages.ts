@@ -107,7 +107,7 @@ const validStoryPackageSeed: StoryPackage = {
               condition: 'field-equals',
               params: {
                 blockId: 'vault-code',
-                field: 'solved',
+                field: 'unlocked',
                 value: true,
               },
             },

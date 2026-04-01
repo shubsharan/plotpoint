@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { defineBlockDefinition, type BlockRegistryEntry } from './types.js';
+import {
+  BlockUpdateError,
+  defineBlockDefinition,
+  type ExecutableBlockDefinition,
+} from './types.js';
 
 type SingleChoiceOption = {
   id: string;
@@ -11,6 +15,27 @@ type SingleChoiceBlockConfig = {
   options: SingleChoiceOption[];
   prompt: string;
   shuffle?: boolean | undefined;
+};
+
+type SingleChoiceBlockAction = {
+  optionId: string;
+  type: 'submit';
+};
+
+type SingleChoiceAttempt = {
+  isCorrect: boolean;
+  submitted: SingleChoiceBlockAction;
+  submittedAt?: string | undefined;
+};
+
+type SingleChoiceBlockState = {
+  attempts: SingleChoiceAttempt[];
+  correctOptionId: string;
+  lastSubmittedAt?: string | undefined;
+  optionIds: string[];
+  resolved: boolean;
+  selectedOptionId: string | null;
+  unlocked: boolean;
 };
 
 const optionSchema = z
@@ -53,7 +78,84 @@ const singleChoiceConfigSchema: z.ZodType<SingleChoiceBlockConfig> = z
     }
   });
 
-export const singleChoiceBlock: BlockRegistryEntry<SingleChoiceBlockConfig> = defineBlockDefinition({
+const singleChoiceActionSchema: z.ZodType<SingleChoiceBlockAction> = z
+  .object({
+    optionId: z.string().min(1),
+    type: z.literal('submit'),
+  })
+  .strict();
+
+const singleChoiceAttemptSchema: z.ZodType<SingleChoiceAttempt> = z
+  .object({
+    isCorrect: z.boolean(),
+    submitted: singleChoiceActionSchema,
+    submittedAt: z.string().min(1).optional(),
+  })
+  .strict();
+
+const singleChoiceStateSchema: z.ZodType<SingleChoiceBlockState> = z
+  .object({
+    attempts: z.array(singleChoiceAttemptSchema),
+    correctOptionId: z.string().min(1),
+    lastSubmittedAt: z.string().min(1).optional(),
+    optionIds: z.array(z.string().min(1)).min(1),
+    resolved: z.boolean(),
+    selectedOptionId: z.string().min(1).nullable(),
+    unlocked: z.boolean(),
+  })
+  .strict();
+
+export const singleChoiceBlock: ExecutableBlockDefinition<
+  SingleChoiceBlockConfig,
+  SingleChoiceBlockState,
+  SingleChoiceBlockAction
+> = defineBlockDefinition({
+  actionSchema: singleChoiceActionSchema,
   configSchema: singleChoiceConfigSchema,
+  initialState: (config) => ({
+    attempts: [],
+    correctOptionId: config.correctOptionId,
+    optionIds: config.options.map((option) => option.id),
+    resolved: false,
+    selectedOptionId: null,
+    unlocked: false,
+  }),
+  interactive: true,
+  isActionable: (state) => !state.resolved,
   scope: 'user',
+  stateSchema: singleChoiceStateSchema,
+  update: (state, action, context) => {
+    if (!state.optionIds.includes(action.optionId)) {
+      throw new BlockUpdateError(
+        'action_invalid_for_config',
+        `Option id "${action.optionId}" is not declared in this single-choice block.`,
+        {
+          optionId: action.optionId,
+        },
+      );
+    }
+
+    const isCorrect = action.optionId === state.correctOptionId;
+    const submittedAt = context.nowIso;
+    const attempt: SingleChoiceAttempt = submittedAt === undefined
+      ? {
+          isCorrect,
+          submitted: action,
+        }
+      : {
+          isCorrect,
+          submitted: action,
+          submittedAt,
+        };
+
+    return {
+      attempts: [...state.attempts, attempt],
+      correctOptionId: state.correctOptionId,
+      lastSubmittedAt: submittedAt,
+      optionIds: state.optionIds,
+      resolved: true,
+      selectedOptionId: action.optionId,
+      unlocked: state.unlocked || isCorrect,
+    };
+  },
 });

@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { defineBlockDefinition, type BlockRegistryEntry } from './types.js';
+import {
+  BlockUpdateError,
+  defineBlockDefinition,
+  type ExecutableBlockDefinition,
+} from './types.js';
 
 type MultiChoiceOption = {
   id: string;
@@ -13,6 +17,30 @@ type MultiChoiceBlockConfig = {
   options: MultiChoiceOption[];
   prompt: string;
   shuffle?: boolean | undefined;
+};
+
+type MultiChoiceBlockAction = {
+  optionIds: string[];
+  type: 'submit';
+};
+
+type MultiChoiceAttempt = {
+  isCorrect: boolean;
+  normalizedOptionIds: string[];
+  submitted: MultiChoiceBlockAction;
+  submittedAt?: string | undefined;
+};
+
+type MultiChoiceBlockState = {
+  attempts: MultiChoiceAttempt[];
+  correctOptionIds: string[];
+  lastSubmittedAt?: string | undefined;
+  maxSelections?: number | undefined;
+  minSelections?: number | undefined;
+  optionIds: string[];
+  resolved: boolean;
+  selectedOptionIds: string[];
+  unlocked: boolean;
 };
 
 const optionSchema = z
@@ -98,7 +126,126 @@ const multiChoiceConfigSchema: z.ZodType<MultiChoiceBlockConfig> = z
     }
   });
 
-export const multiChoiceBlock: BlockRegistryEntry<MultiChoiceBlockConfig> = defineBlockDefinition({
+const multiChoiceActionSchema: z.ZodType<MultiChoiceBlockAction> = z
+  .object({
+    optionIds: z.array(z.string().min(1)).min(1),
+    type: z.literal('submit'),
+  })
+  .strict();
+
+const multiChoiceAttemptSchema: z.ZodType<MultiChoiceAttempt> = z
+  .object({
+    isCorrect: z.boolean(),
+    normalizedOptionIds: z.array(z.string().min(1)),
+    submitted: multiChoiceActionSchema,
+    submittedAt: z.string().min(1).optional(),
+  })
+  .strict();
+
+const multiChoiceStateSchema: z.ZodType<MultiChoiceBlockState> = z
+  .object({
+    attempts: z.array(multiChoiceAttemptSchema),
+    correctOptionIds: z.array(z.string().min(1)).min(1),
+    lastSubmittedAt: z.string().min(1).optional(),
+    maxSelections: z.number().int().positive().optional(),
+    minSelections: z.number().int().nonnegative().optional(),
+    optionIds: z.array(z.string().min(1)).min(1),
+    resolved: z.boolean(),
+    selectedOptionIds: z.array(z.string().min(1)),
+    unlocked: z.boolean(),
+  })
+  .strict();
+
+const normalizeOptionIds = (optionIds: string[]): string[] =>
+  [...new Set(optionIds)].sort((left, right) => left.localeCompare(right));
+
+const hasSameOptions = (left: string[], right: string[]): boolean =>
+  left.length === right.length && left.every((optionId, index) => optionId === right[index]);
+
+export const multiChoiceBlock: ExecutableBlockDefinition<
+  MultiChoiceBlockConfig,
+  MultiChoiceBlockState,
+  MultiChoiceBlockAction
+> = defineBlockDefinition({
+  actionSchema: multiChoiceActionSchema,
   configSchema: multiChoiceConfigSchema,
+  initialState: (config) => ({
+    attempts: [],
+    correctOptionIds: normalizeOptionIds(config.correctOptionIds),
+    maxSelections: config.maxSelections,
+    minSelections: config.minSelections,
+    optionIds: config.options.map((option) => option.id),
+    resolved: false,
+    selectedOptionIds: [],
+    unlocked: false,
+  }),
+  interactive: true,
+  isActionable: (state) => !state.resolved,
   scope: 'user',
+  stateSchema: multiChoiceStateSchema,
+  update: (state, action, context) => {
+    const normalizedOptionIds = normalizeOptionIds(action.optionIds);
+    const unknownOptionIds = normalizedOptionIds.filter(
+      (optionId) => !state.optionIds.includes(optionId),
+    );
+
+    if (unknownOptionIds.length > 0) {
+      throw new BlockUpdateError(
+        'action_invalid_for_config',
+        'Submitted option ids include values not declared in this multi-choice block.',
+        {
+          optionIds: unknownOptionIds,
+        },
+      );
+    }
+
+    if (state.minSelections !== undefined && normalizedOptionIds.length < state.minSelections) {
+      throw new BlockUpdateError(
+        'action_invalid_for_config',
+        `Submitted selections must include at least ${state.minSelections} options.`,
+        {
+          minSelections: state.minSelections,
+          normalizedOptionCount: normalizedOptionIds.length,
+        },
+      );
+    }
+
+    if (state.maxSelections !== undefined && normalizedOptionIds.length > state.maxSelections) {
+      throw new BlockUpdateError(
+        'action_invalid_for_config',
+        `Submitted selections must include at most ${state.maxSelections} options.`,
+        {
+          maxSelections: state.maxSelections,
+          normalizedOptionCount: normalizedOptionIds.length,
+        },
+      );
+    }
+
+    const isCorrect = hasSameOptions(normalizedOptionIds, state.correctOptionIds);
+    const submittedAt = context.nowIso;
+    const attempt: MultiChoiceAttempt = submittedAt === undefined
+      ? {
+          isCorrect,
+          normalizedOptionIds,
+          submitted: action,
+        }
+      : {
+          isCorrect,
+          normalizedOptionIds,
+          submitted: action,
+          submittedAt,
+        };
+
+    return {
+      attempts: [...state.attempts, attempt],
+      correctOptionIds: state.correctOptionIds,
+      lastSubmittedAt: submittedAt,
+      maxSelections: state.maxSelections,
+      minSelections: state.minSelections,
+      optionIds: state.optionIds,
+      resolved: true,
+      selectedOptionIds: normalizedOptionIds,
+      unlocked: state.unlocked || isCorrect,
+    };
+  },
 });

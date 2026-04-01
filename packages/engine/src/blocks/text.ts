@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { defineBlockDefinition, type BlockRegistryEntry } from './types.js';
+import {
+  defineBlockDefinition,
+  type NonInteractiveBlockDefinition,
+} from './types.js';
 
 type TextLeaf = {
   text: string;
@@ -50,6 +53,10 @@ type TextBlockConfig = {
     children: Array<ParagraphNode | HeadingNode | ImageNode | AudioNode | VideoNode>;
     type: 'doc';
   };
+};
+
+type TextBlockState = {
+  unlocked: true;
 };
 
 const textLeafSchema = z
@@ -131,7 +138,18 @@ const textConfigSchema: z.ZodType<TextBlockConfig> = z
   })
   .strict();
 
-export const textBlock: BlockRegistryEntry<TextBlockConfig> = defineBlockDefinition({
+const textStateSchema: z.ZodType<TextBlockState> = z
+  .object({
+    unlocked: z.literal(true),
+  })
+  .strict();
+
+export const textBlock: NonInteractiveBlockDefinition<TextBlockConfig, TextBlockState> = defineBlockDefinition({
   configSchema: textConfigSchema,
+  initialState: () => ({
+    unlocked: true as const,
+  }),
+  interactive: false,
   scope: 'user',
+  stateSchema: textStateSchema,
 });

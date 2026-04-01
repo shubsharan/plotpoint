@@ -99,6 +99,11 @@ const toRuntimeState = (snapshot: RuntimeSnapshot): RuntimeState => {
   return state;
 };
 
+const toRuntimeStateAtNode = (snapshot: RuntimeSnapshot, nodeId: string): RuntimeState => ({
+  ...toRuntimeState(snapshot),
+  currentNodeId: nodeId,
+});
+
 const expectRuntimeSnapshotShape = (snapshot: RuntimeSnapshot): void => {
   expect(snapshot).toMatchObject({
     currentNodeId: expect.any(String),
@@ -142,10 +147,11 @@ describe('@plotpoint/engine runtime surface', () => {
     });
     const submitted = await engine.submitAction({
       action: {
-        type: 'noop',
+        type: 'submit',
+        value: '1847',
       },
-      blockId: 'briefing',
-      state: toRuntimeState(loaded),
+      blockId: 'vault-code',
+      state: toRuntimeStateAtNode(loaded, 'archive-door'),
     });
 
     for (const snapshot of [started, loaded, submitted]) {
@@ -242,14 +248,15 @@ describe('@plotpoint/engine runtime surface', () => {
 
     const submitted = await engine.submitAction({
       action: {
-        type: 'noop',
+        type: 'submit',
+        value: '1847',
       },
-      blockId: 'briefing',
-      state: toRuntimeState(loaded),
+      blockId: 'vault-code',
+      state: toRuntimeStateAtNode(loaded, 'archive-door'),
     });
 
     expect(submitted.storyPackageVersionId).toBe('snapshot-v1');
-    expect(submitted.currentNodeId).toBe('foyer');
+    expect(submitted.currentNodeId).toBe('archive-door');
   });
 
   it('rehydrates and submits from RuntimeState inputs without persisting derived fields', async () => {
@@ -260,10 +267,11 @@ describe('@plotpoint/engine runtime surface', () => {
     });
     const submitted = await engine.submitAction({
       action: {
-        type: 'noop',
+        type: 'submit',
+        value: '1847',
       },
-      blockId: 'briefing',
-      state: toRuntimeState(loaded),
+      blockId: 'vault-code',
+      state: toRuntimeStateAtNode(loaded, 'archive-door'),
     });
 
     expect(started.availableEdges).toEqual([
@@ -274,7 +282,13 @@ describe('@plotpoint/engine runtime surface', () => {
       },
     ]);
     expect(loaded.availableEdges).toEqual(started.availableEdges);
-    expect(submitted.availableEdges).toEqual(started.availableEdges);
+    expect(submitted.availableEdges).toEqual([
+      {
+        edgeId: 'archive-to-vault',
+        label: 'Open the archive vault',
+        targetNodeId: 'vault',
+      },
+    ]);
   });
 
   it('accepts snapshot-shaped state inputs and strips derived fields before rehydration', async () => {
@@ -359,7 +373,8 @@ describe('@plotpoint/engine runtime surface', () => {
 
         return engine.submitAction({
           action: {
-            type: 'noop',
+            type: 'submit',
+            value: '1847',
           },
           blockId: 'missing-block',
           state: toRuntimeState(started),
@@ -495,7 +510,8 @@ describe('@plotpoint/engine runtime surface', () => {
 
     const submitPromise = engine.submitAction({
       action: {
-        type: 'noop',
+        type: 'submit',
+        value: '1847',
       },
       blockId: '',
       state: toRuntimeState(started),
@@ -541,7 +557,8 @@ describe('@plotpoint/engine runtime surface', () => {
       expectRuntimeError(
         engine.submitAction({
           action: {
-            type: 'noop',
+            type: 'submit',
+            value: '1847',
           },
           blockId: '',
           state: toRuntimeState(started),
