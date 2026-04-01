@@ -303,7 +303,9 @@ export const parseRuntimeInputOrThrow = <TInput>(
 };
 
 export const mapTraversableEdges = (node: StoryNode): TraversableEdge[] =>
-  node.edges.map((edge) => createTraversableEdge(edge));
+  node.edges
+    .filter((edge) => edge.condition === undefined)
+    .map((edge) => createTraversableEdge(edge));
 
 export const normalizeRuntimeState = (state: RuntimeState): RuntimeState => ({
   ...state,

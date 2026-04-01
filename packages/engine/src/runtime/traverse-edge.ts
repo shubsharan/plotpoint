@@ -1,3 +1,4 @@
+import { EngineRuntimeError } from './errors.js';
 import { materializeNodeEntryStateOrThrow } from './node-entry.js';
 import {
   createRuntimeSnapshot,
@@ -14,13 +15,31 @@ export const traverseEdge = async (
   input: TraverseEdgeInput,
 ): Promise<RuntimeSnapshot> => {
   const { edgeId, state } = parseRuntimeInputOrThrow(traverseEdgeInputSchema, input);
-  const { story, targetEdge } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
+  const { currentNode, story, targetEdge } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
     edgeId,
   });
 
   const edge = targetEdge;
   if (!edge) {
     throw new Error('Expected resolveRuntimeSnapshotContextOrThrow to return targetEdge.');
+  }
+  const traversableEdges = mapTraversableEdges(currentNode);
+  const isTraversable = traversableEdges.some(
+    (traversableEdge) => traversableEdge.edgeId === edgeId,
+  );
+  if (!isTraversable) {
+    throw new EngineRuntimeError(
+      'runtime_edge_not_traversable',
+      `Runtime edge "${edgeId}" is not traversable in node "${currentNode.id}" for story "${state.storyId}".`,
+      {
+        details: {
+          edgeId,
+          nodeId: currentNode.id,
+          reason: 'conditioned_edge_deferred',
+          storyId: state.storyId,
+        },
+      },
+    );
   }
 
   const nextNode = getNodeOrThrow(story, edge.targetNodeId);

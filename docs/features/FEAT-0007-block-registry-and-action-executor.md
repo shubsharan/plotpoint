@@ -5,7 +5,7 @@
 | **Status**      | Completed   |
 | **Epic**        | EPIC-0003   |
 | **Domains**     | Engine      |
-| **Last synced** | 2026-03-31  |
+| **Last synced** | 2026-04-01  |
 
 # FEAT-0007 - Block Registry and Action Executor
 
@@ -62,6 +62,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Action context is value-only (`now`, `playerLocation`) resolved at executor boundary; block behaviors never receive ports.
 - `loadRuntime` remains non-mutating rehydration; node-entry effects occur only on entry events (`startGame` now, traversal later in FEAT-0008).
 - Shell owns navigation UX from `traversableEdges`; blocks do not own graph navigation controls.
+- FEAT-0007 intentionally exposes only unconditional edges in `traversableEdges`; conditioned authored edges remain non-executable metadata until FEAT-0008 defines traversal semantics.
 - Keep test fixtures internal to engine `__tests__`; no public test-only exports.
 
 ## Locked Contracts
@@ -134,6 +135,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Persist timestamps as ISO strings only when clock port is present; no `Date` objects and no fallback wall-clock source.
 - Normalize multi-choice selections (dedupe + deterministic sort) before compare/persist.
 - Wrong-but-valid answers are state outcomes; malformed action payloads are typed errors.
+- `traversableEdges` remains a fail-safe FEAT-0007 projection of authored unconditional edges only; conditioned authored edges are rejected by `traverseEdge` as deferred traversal semantics.
 
 ## Acceptance Criteria
 
@@ -182,6 +184,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Risk: hydration and execution boundaries blur. Mitigation: keep `loadRuntime` non-mutating and scope node-entry effects to entry events.
 - Risk: adapters parse messages instead of contracts. Mitigation: include structured error details in runtime errors.
 - Risk: FEAT-0008 receives unstable execution contracts. Mitigation: lock the generic `submit` action envelope and deterministic executor behavior in this feature.
+- Deferred follow-up [DF-0002]: conditioned-edge derivation and `traverseEdge` validation against persisted block unlock state remain deferred to FEAT-0008. FEAT-0007 intentionally exposes only unconditional edges in `traversableEdges` and rejects conditioned-edge traversal with a typed runtime error. | Owner: FEAT-0008 | Trigger: FEAT-0008 implementation begins for real traversal semantics. | Exit criteria: Engine derives `traversableEdges` from persisted runtime state and validates `traverseEdge` against that derived set.
 
 ## Implementation Order (Do In This Sequence)
 
