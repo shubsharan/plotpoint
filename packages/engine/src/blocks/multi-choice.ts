@@ -33,12 +33,7 @@ type MultiChoiceAttempt = {
 
 type MultiChoiceBlockState = {
   attempts: MultiChoiceAttempt[];
-  correctOptionIds: string[];
   lastSubmittedAt?: string | undefined;
-  maxSelections?: number | undefined;
-  minSelections?: number | undefined;
-  optionIds: string[];
-  resolved: boolean;
   selectedOptionIds: string[];
   unlocked: boolean;
 };
@@ -128,7 +123,7 @@ const multiChoiceConfigSchema: z.ZodType<MultiChoiceBlockConfig> = z
 
 const multiChoiceActionSchema: z.ZodType<MultiChoiceBlockAction> = z
   .object({
-    optionIds: z.array(z.string().min(1)).min(1),
+    optionIds: z.array(z.string().min(1)),
     type: z.literal('submit'),
   })
   .strict();
@@ -145,12 +140,7 @@ const multiChoiceAttemptSchema: z.ZodType<MultiChoiceAttempt> = z
 const multiChoiceStateSchema: z.ZodType<MultiChoiceBlockState> = z
   .object({
     attempts: z.array(multiChoiceAttemptSchema),
-    correctOptionIds: z.array(z.string().min(1)).min(1),
     lastSubmittedAt: z.string().min(1).optional(),
-    maxSelections: z.number().int().positive().optional(),
-    minSelections: z.number().int().nonnegative().optional(),
-    optionIds: z.array(z.string().min(1)).min(1),
-    resolved: z.boolean(),
     selectedOptionIds: z.array(z.string().min(1)),
     unlocked: z.boolean(),
   })
@@ -169,24 +159,21 @@ export const multiChoiceBlock: ExecutableBlockDefinition<
 > = defineBlockDefinition({
   actionSchema: multiChoiceActionSchema,
   configSchema: multiChoiceConfigSchema,
-  initialState: (config) => ({
+  initialState: (): MultiChoiceBlockState => ({
     attempts: [],
-    correctOptionIds: normalizeOptionIds(config.correctOptionIds),
-    maxSelections: config.maxSelections,
-    minSelections: config.minSelections,
-    optionIds: config.options.map((option) => option.id),
-    resolved: false,
     selectedOptionIds: [],
     unlocked: false,
   }),
   interactive: true,
-  isActionable: (state) => !state.resolved,
+  isActionable: (state) =>
+    !state.unlocked && state.selectedOptionIds.length === 0 && state.attempts.length === 0,
   scope: 'user',
   stateSchema: multiChoiceStateSchema,
-  update: (state, action, context) => {
+  update: (state, action, context, config) => {
     const normalizedOptionIds = normalizeOptionIds(action.optionIds);
+    const allowedOptionIds = config.options.map((option) => option.id);
     const unknownOptionIds = normalizedOptionIds.filter(
-      (optionId) => !state.optionIds.includes(optionId),
+      (optionId) => !allowedOptionIds.includes(optionId),
     );
 
     if (unknownOptionIds.length > 0) {
@@ -199,29 +186,33 @@ export const multiChoiceBlock: ExecutableBlockDefinition<
       );
     }
 
-    if (state.minSelections !== undefined && normalizedOptionIds.length < state.minSelections) {
+    if (config.minSelections !== undefined && normalizedOptionIds.length < config.minSelections) {
       throw new BlockUpdateError(
         'action_invalid_for_config',
-        `Submitted selections must include at least ${state.minSelections} options.`,
+        `Submitted selections must include at least ${config.minSelections} options.`,
         {
-          minSelections: state.minSelections,
+          minSelections: config.minSelections,
           normalizedOptionCount: normalizedOptionIds.length,
         },
       );
     }
 
-    if (state.maxSelections !== undefined && normalizedOptionIds.length > state.maxSelections) {
+    if (config.maxSelections !== undefined && normalizedOptionIds.length > config.maxSelections) {
       throw new BlockUpdateError(
         'action_invalid_for_config',
-        `Submitted selections must include at most ${state.maxSelections} options.`,
+        `Submitted selections must include at most ${config.maxSelections} options.`,
         {
-          maxSelections: state.maxSelections,
+          maxSelections: config.maxSelections,
           normalizedOptionCount: normalizedOptionIds.length,
         },
       );
     }
 
-    const isCorrect = hasSameOptions(normalizedOptionIds, state.correctOptionIds);
+    const isCorrect = hasSameOptions(
+      normalizedOptionIds,
+      normalizeOptionIds(config.correctOptionIds),
+    );
+    const previouslyUnlocked = state.unlocked || state.attempts.some((attempt) => attempt.isCorrect);
     const submittedAt = context.nowIso;
     const attempt: MultiChoiceAttempt = submittedAt === undefined
       ? {
@@ -238,14 +229,9 @@ export const multiChoiceBlock: ExecutableBlockDefinition<
 
     return {
       attempts: [...state.attempts, attempt],
-      correctOptionIds: state.correctOptionIds,
       lastSubmittedAt: submittedAt,
-      maxSelections: state.maxSelections,
-      minSelections: state.minSelections,
-      optionIds: state.optionIds,
-      resolved: true,
       selectedOptionIds: normalizedOptionIds,
-      unlocked: state.unlocked || isCorrect,
+      unlocked: previouslyUnlocked || isCorrect,
     };
   },
 });

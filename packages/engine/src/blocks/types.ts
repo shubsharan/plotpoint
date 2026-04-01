@@ -38,7 +38,7 @@ type BlockBaseDefinition<
 > = {
   configSchema: z.ZodType<TConfig>;
   initialState: (config: TConfig) => TState;
-  isActionable?: ((state: TState) => boolean) | undefined;
+  isActionable?: ((state: TState, config: TConfig) => boolean) | undefined;
   scope: BlockScope;
   stateSchema: z.ZodType<TState>;
 };
@@ -50,7 +50,7 @@ export type ExecutableBlockDefinition<
 > = BlockBaseDefinition<TConfig, TState> & {
   actionSchema: z.ZodType<TAction>;
   interactive: true;
-  update: (state: TState, action: TAction, context: BlockUpdateContext) => TState;
+  update: (state: TState, action: TAction, context: BlockUpdateContext, config: TConfig) => TState;
 };
 
 export type NonInteractiveBlockDefinition<

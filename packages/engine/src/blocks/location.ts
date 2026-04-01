@@ -44,17 +44,6 @@ type LocationBlockState = {
   checks: LocationCheck[];
   checksCount: number;
   lastSubmittedAt?: string | undefined;
-  radiusMeters: number;
-  target:
-    | {
-        kind: 'coordinates';
-        lat: number;
-        lng: number;
-      }
-    | {
-        kind: 'place';
-        placeId: string;
-      };
   unlocked: boolean;
 };
 
@@ -128,8 +117,6 @@ const locationStateSchema: z.ZodType<LocationBlockState> = z
     checks: z.array(locationCheckSchema),
     checksCount: z.number().int().nonnegative(),
     lastSubmittedAt: z.string().min(1).optional(),
-    radiusMeters: z.number().positive(),
-    target: locationTargetSchema,
     unlocked: z.boolean(),
   })
   .strict();
@@ -165,24 +152,23 @@ export const locationBlock: ExecutableBlockDefinition<
 > = defineBlockDefinition({
   actionSchema: locationActionSchema,
   configSchema: locationConfigSchema,
-  initialState: (config) => ({
+  initialState: (): LocationBlockState => ({
     checks: [],
     checksCount: 0,
-    radiusMeters: config.radiusMeters,
-    target: config.target,
     unlocked: false,
   }),
   interactive: true,
+  isActionable: (state) => !state.unlocked,
   scope: 'user',
   stateSchema: locationStateSchema,
-  update: (state, action, context) => {
-    if (state.target.kind === 'place') {
+  update: (state, action, context, config) => {
+    if (config.target.kind === 'place') {
       throw new BlockUpdateError(
         'unsupported_location_target',
         'Location blocks with target kind "place" are not supported in runtime execution.',
         {
-          targetKind: state.target.kind,
-          targetPlaceId: state.target.placeId,
+          targetKind: config.target.kind,
+          targetPlaceId: config.target.placeId,
         },
       );
     }
@@ -193,11 +179,11 @@ export const locationBlock: ExecutableBlockDefinition<
       playerLocation === null
         ? undefined
         : calculateDistanceMeters(playerLocation, {
-            lat: state.target.lat,
-            lng: state.target.lng,
+            lat: config.target.lat,
+            lng: config.target.lng,
           });
     const withinRadius =
-      distanceMeters !== undefined && distanceMeters <= state.radiusMeters;
+      distanceMeters !== undefined && distanceMeters <= config.radiusMeters;
 
     const check: LocationCheck = submittedAt === undefined
       ? {
@@ -218,8 +204,6 @@ export const locationBlock: ExecutableBlockDefinition<
       checks: [...state.checks, check],
       checksCount: state.checksCount + 1,
       lastSubmittedAt: submittedAt,
-      radiusMeters: state.radiusMeters,
-      target: state.target,
       unlocked: state.unlocked || withinRadius,
     };
   },

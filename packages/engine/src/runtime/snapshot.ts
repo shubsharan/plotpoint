@@ -17,7 +17,6 @@ type ResolveRuntimeSnapshotOptions = {
 
 type ResolvedRuntimeSnapshotContext = {
   currentNode: StoryNode;
-  story: StoryPackage;
   targetBlock?: StoryBlock | undefined;
 };
 
@@ -246,7 +245,6 @@ export const resolveRuntimeSnapshotContextOrThrow = async (
 
   return {
     currentNode,
-    story,
     targetBlock,
   };
 };

@@ -30,10 +30,7 @@ type SingleChoiceAttempt = {
 
 type SingleChoiceBlockState = {
   attempts: SingleChoiceAttempt[];
-  correctOptionId: string;
   lastSubmittedAt?: string | undefined;
-  optionIds: string[];
-  resolved: boolean;
   selectedOptionId: string | null;
   unlocked: boolean;
 };
@@ -96,10 +93,7 @@ const singleChoiceAttemptSchema: z.ZodType<SingleChoiceAttempt> = z
 const singleChoiceStateSchema: z.ZodType<SingleChoiceBlockState> = z
   .object({
     attempts: z.array(singleChoiceAttemptSchema),
-    correctOptionId: z.string().min(1),
     lastSubmittedAt: z.string().min(1).optional(),
-    optionIds: z.array(z.string().min(1)).min(1),
-    resolved: z.boolean(),
     selectedOptionId: z.string().min(1).nullable(),
     unlocked: z.boolean(),
   })
@@ -112,20 +106,19 @@ export const singleChoiceBlock: ExecutableBlockDefinition<
 > = defineBlockDefinition({
   actionSchema: singleChoiceActionSchema,
   configSchema: singleChoiceConfigSchema,
-  initialState: (config) => ({
+  initialState: (): SingleChoiceBlockState => ({
     attempts: [],
-    correctOptionId: config.correctOptionId,
-    optionIds: config.options.map((option) => option.id),
-    resolved: false,
     selectedOptionId: null,
     unlocked: false,
   }),
   interactive: true,
-  isActionable: (state) => !state.resolved,
+  isActionable: (state) =>
+    !state.unlocked && state.selectedOptionId === null && state.attempts.length === 0,
   scope: 'user',
   stateSchema: singleChoiceStateSchema,
-  update: (state, action, context) => {
-    if (!state.optionIds.includes(action.optionId)) {
+  update: (state, action, context, config) => {
+    const optionIds = config.options.map((option) => option.id);
+    if (!optionIds.includes(action.optionId)) {
       throw new BlockUpdateError(
         'action_invalid_for_config',
         `Option id "${action.optionId}" is not declared in this single-choice block.`,
@@ -135,7 +128,8 @@ export const singleChoiceBlock: ExecutableBlockDefinition<
       );
     }
 
-    const isCorrect = action.optionId === state.correctOptionId;
+    const isCorrect = action.optionId === config.correctOptionId;
+    const previouslyUnlocked = state.unlocked || state.attempts.some((attempt) => attempt.isCorrect);
     const submittedAt = context.nowIso;
     const attempt: SingleChoiceAttempt = submittedAt === undefined
       ? {
@@ -150,12 +144,9 @@ export const singleChoiceBlock: ExecutableBlockDefinition<
 
     return {
       attempts: [...state.attempts, attempt],
-      correctOptionId: state.correctOptionId,
       lastSubmittedAt: submittedAt,
-      optionIds: state.optionIds,
-      resolved: true,
       selectedOptionId: action.optionId,
-      unlocked: state.unlocked || isCorrect,
+      unlocked: previouslyUnlocked || isCorrect,
     };
   },
 });

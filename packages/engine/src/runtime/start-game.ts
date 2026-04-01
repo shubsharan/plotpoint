@@ -1,6 +1,6 @@
 import type { z } from 'zod';
-import { getBlockDefinition, hasBlockType } from '../blocks/index.js';
-import type { BlockRegistryEntry } from '../blocks/types.js';
+import { getBlockDefinition, hasBlockType, type KnownBlockType } from '../blocks/index.js';
+import { resolveRuntimeStateScopeKey } from './block-state-bucket.js';
 import { EngineRuntimeError } from './errors.js';
 import {
   assertRoleExistsOrThrow,
@@ -14,15 +14,13 @@ import {
 import { startGameInputSchema } from './schema.js';
 import type { EnginePorts, RuntimeSnapshot, RuntimeState, StartGameInput } from './types.js';
 
-type RuntimeStateScopeKey = 'playerState' | 'sharedState';
-
-const resolveStateScopeKey = (scope: 'game' | 'user'): RuntimeStateScopeKey =>
-  scope === 'game' ? 'sharedState' : 'playerState';
-
 const toValidationDetails = (issue: z.core.$ZodIssue): Record<string, unknown> => ({
   validationCode: issue.code,
   validationPath: formatIssuePath(issue.path),
 });
+
+const getDefinitionForType = <TBlockType extends KnownBlockType>(blockType: TBlockType) =>
+  getBlockDefinition(blockType);
 
 const materializeNodeEntryStateOrThrow = (
   state: RuntimeState,
@@ -43,12 +41,12 @@ const materializeNodeEntryStateOrThrow = (
       );
     }
 
-    const definition = getBlockDefinition(block.type) as unknown as BlockRegistryEntry;
+    const definition = getDefinitionForType(block.type);
     if (definition.interactive) {
       continue;
     }
 
-    const scopeKey = resolveStateScopeKey(definition.scope);
+    const scopeKey = resolveRuntimeStateScopeKey(definition.scope);
     const scopedBucket = state[scopeKey].blockStates;
 
     const parsedConfig = definition.configSchema.safeParse(block.config);

@@ -27,15 +27,7 @@ type CodeBlockAttempt = {
 
 type CodeBlockState = {
   attempts: CodeBlockAttempt[];
-  attemptsCount: number;
-  caseSensitive: boolean;
-  exhausted: boolean;
-  expected: string;
   lastSubmittedAt?: string | undefined;
-  maxAttempts?: number | undefined;
-  maxLength?: number | undefined;
-  minLength?: number | undefined;
-  mode: 'passcode' | 'password';
   unlocked: boolean;
 };
 
@@ -82,30 +74,23 @@ const codeAttemptSchema: z.ZodType<CodeBlockAttempt> = z
 const codeStateSchema: z.ZodType<CodeBlockState> = z
   .object({
     attempts: z.array(codeAttemptSchema),
-    attemptsCount: z.number().int().nonnegative(),
-    caseSensitive: z.boolean(),
-    exhausted: z.boolean(),
-    expected: z.string().min(1),
     lastSubmittedAt: z.string().min(1).optional(),
-    maxAttempts: z.number().int().positive().optional(),
-    maxLength: z.number().int().positive().optional(),
-    minLength: z.number().int().positive().optional(),
-    mode: z.enum(['passcode', 'password']),
     unlocked: z.boolean(),
   })
   .strict();
 
-const resolveIsCorrect = (state: CodeBlockState, submittedValue: string): boolean => {
-  const expectedValue = state.caseSensitive ? state.expected : state.expected.toLowerCase();
-  const normalizedSubmitted = state.caseSensitive
+const resolveIsCorrect = (config: CodeBlockConfig, submittedValue: string): boolean => {
+  const caseSensitive = config.caseSensitive ?? false;
+  const expectedValue = caseSensitive ? config.expected : config.expected.toLowerCase();
+  const normalizedSubmitted = caseSensitive
     ? submittedValue
     : submittedValue.toLowerCase();
 
-  if (state.minLength !== undefined && submittedValue.length < state.minLength) {
+  if (config.length?.min !== undefined && submittedValue.length < config.length.min) {
     return false;
   }
 
-  if (state.maxLength !== undefined && submittedValue.length > state.maxLength) {
+  if (config.length?.max !== undefined && submittedValue.length > config.length.max) {
     return false;
   }
 
@@ -115,29 +100,20 @@ const resolveIsCorrect = (state: CodeBlockState, submittedValue: string): boolea
 export const codeBlock: ExecutableBlockDefinition<CodeBlockConfig, CodeBlockState, CodeBlockAction> = defineBlockDefinition({
   actionSchema: codeActionSchema,
   configSchema: codeConfigSchema,
-  initialState: (config) => ({
+  initialState: (): CodeBlockState => ({
     attempts: [],
-    attemptsCount: 0,
-    caseSensitive: config.caseSensitive ?? false,
-    exhausted: false,
-    expected: config.expected,
-    maxAttempts: config.maxAttempts,
-    maxLength: config.length?.max,
-    minLength: config.length?.min,
-    mode: config.mode,
     unlocked: false,
   }),
   interactive: true,
-  isActionable: (state) => !state.exhausted,
+  isActionable: (state, config) =>
+    !state.unlocked &&
+    !state.attempts.some((attempt) => attempt.isCorrect) &&
+    (config.maxAttempts === undefined || state.attempts.length < config.maxAttempts),
   scope: 'user',
   stateSchema: codeStateSchema,
-  update: (state, action, context) => {
-    const isCorrect = resolveIsCorrect(state, action.value);
-    const attemptsCount = state.attemptsCount + 1;
-    const exhausted =
-      !isCorrect &&
-      state.maxAttempts !== undefined &&
-      attemptsCount >= state.maxAttempts;
+  update: (state, action, context, config) => {
+    const isCorrect = resolveIsCorrect(config, action.value);
+    const previouslyUnlocked = state.unlocked || state.attempts.some((attempt) => attempt.isCorrect);
 
     const submittedAt = context.nowIso;
     const attempt: CodeBlockAttempt = submittedAt === undefined
@@ -153,16 +129,8 @@ export const codeBlock: ExecutableBlockDefinition<CodeBlockConfig, CodeBlockStat
 
     return {
       attempts: [...state.attempts, attempt],
-      attemptsCount,
-      caseSensitive: state.caseSensitive,
-      exhausted,
-      expected: state.expected,
       lastSubmittedAt: submittedAt,
-      maxAttempts: state.maxAttempts,
-      maxLength: state.maxLength,
-      minLength: state.minLength,
-      mode: state.mode,
-      unlocked: state.unlocked || isCorrect,
+      unlocked: previouslyUnlocked || isCorrect,
     };
   },
 });

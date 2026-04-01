@@ -11,11 +11,11 @@ import type {
 } from '../index.js';
 import {
   EngineRuntimeError,
-  blockRegistry,
   createEngine,
   currentEngineMajor,
 } from '../index.js';
 import { createValidStoryPackageFixture } from './fixtures/story-packages.js';
+import { resolveRuntimeStateScopeKey } from '../runtime/block-state-bucket.js';
 
 type StoryPackageRepoReaders = {
   getCurrentPublishedPackage: (storyId: string) => Promise<{
@@ -168,8 +168,6 @@ describe('@plotpoint/engine submitAction execution contracts', () => {
     });
 
     expect(submitted.playerState.blockStates['vault-code']).toMatchObject({
-      attemptsCount: 1,
-      exhausted: false,
       unlocked: true,
       attempts: [
         {
@@ -326,7 +324,6 @@ describe('@plotpoint/engine submitAction execution contracts', () => {
     });
 
     expect(firstSubmit.playerState.blockStates['suspect-theory']).toMatchObject({
-      resolved: true,
       selectedOptionId: 'curator',
       unlocked: false,
     });
@@ -388,7 +385,6 @@ describe('@plotpoint/engine submitAction execution contracts', () => {
     });
 
     expect(submitted.playerState.blockStates['team-theory']).toMatchObject({
-      resolved: true,
       selectedOptionIds: ['archivist', 'curator'],
       unlocked: true,
       attempts: [
@@ -403,28 +399,9 @@ describe('@plotpoint/engine submitAction execution contracts', () => {
     });
   });
 
-  it('routes execution to shared state when the block scope resolves to game', async () => {
-    const codeBlockHarness = blockRegistry.code as unknown as { scope: 'game' | 'user' };
-    const previousScope = codeBlockHarness.scope;
-    codeBlockHarness.scope = 'game';
-
-    try {
-      const { engine, storyId } = createRuntimeContext();
-      const started = await startRuntime(engine, storyId);
-      const submitted = await engine.submitAction({
-        action: {
-          type: 'submit',
-          value: '1847',
-        },
-        blockId: 'vault-code',
-        state: toRuntimeStateAtNode(started, 'archive-door'),
-      });
-
-      expect(submitted.sharedState.blockStates['vault-code']).toBeDefined();
-      expect(submitted.playerState.blockStates['vault-code']).toBeUndefined();
-    } finally {
-      codeBlockHarness.scope = previousScope;
-    }
+  it('maps block scopes deterministically to runtime state buckets', () => {
+    expect(resolveRuntimeStateScopeKey('user')).toBe('playerState');
+    expect(resolveRuntimeStateScopeKey('game')).toBe('sharedState');
   });
 
   it('evaluates coordinate location checks for both miss and unlock outcomes', async () => {
