@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   BlockUpdateError,
   defineBlockBehavior,
+  type BlockTraversalFacts,
   type InteractiveBlockBehavior,
 } from './types.js';
 
@@ -234,3 +235,25 @@ export const multiChoiceBlockBehavior: InteractiveBlockBehavior<
   },
   actionSchema: multiChoiceActionSchema,
 });
+
+export const multiChoiceBlockTraversalFacts: BlockTraversalFacts<
+  MultiChoiceBlockConfig,
+  MultiChoiceBlockState
+> = {
+  answered: {
+    derive: ({ state }) => state.selectedOptionIds.length > 0,
+    kind: 'boolean',
+  },
+  correct: {
+    derive: ({ state }) => state.unlocked,
+    kind: 'boolean',
+  },
+  selectedCount: {
+    derive: ({ state }) => state.selectedOptionIds.length,
+    kind: 'number',
+  },
+  unlocked: {
+    derive: ({ state }) => state.unlocked,
+    kind: 'boolean',
+  },
+};

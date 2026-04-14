@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   defineBlockBehavior,
+  type BlockTraversalFacts,
   type NonInteractiveBlockBehavior,
 } from './types.js';
 
@@ -155,3 +156,5 @@ export const textBlockBehavior: NonInteractiveBlockBehavior<
   interactive: false,
   stateSchema: textStateSchema,
 });
+
+export const textBlockTraversalFacts: BlockTraversalFacts<TextBlockConfig, TextBlockState> = {};

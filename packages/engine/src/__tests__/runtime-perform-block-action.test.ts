@@ -13,8 +13,9 @@ import {
   EngineRuntimeError,
   createEngine,
   currentEngineMajor,
-  getBlockDefinition,
 } from '../index.js';
+import { getBlockDefinition } from '../blocks/index.js';
+import { writeBlockStateByType } from '../runtime/block-state-bucket.js';
 import { createValidStoryPackageFixture } from './fixtures/story-packages.js';
 
 type StoryPackageRepoReaders = {
@@ -233,62 +234,46 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     expect(submitted.playerState.blockStates['vault-code']).toBeDefined();
   });
 
-  it('routes block updates to sharedState when block policy requests the shared bucket', async () => {
+  it('routes block updates to sharedState through the internal bucket helper without mutating registry state', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
-    const codeDefinition = getBlockDefinition('code');
-    const originalStateType = codeDefinition.policy.stateType;
-    const untouchedPlayerTargetState = {
-      marker: 'player-target',
-    };
     const preservedPlayerState = {
       marker: 'player',
     };
     const preservedSharedState = {
       marker: 'shared',
     };
-
-    codeDefinition.policy.stateType = 'sharedState';
-
-    try {
-      const state: RuntimeState = {
-        ...toRuntimeStateAtNode(started, 'archive-door'),
-        playerState: {
-          blockStates: {
-            ...toRuntimeState(started).playerState.blockStates,
-            preservedPlayerState,
-            'vault-code': untouchedPlayerTargetState,
-          },
+    const playerBucketState = {
+      marker: 'player-target',
+    };
+    const state: RuntimeState = {
+      ...toRuntimeStateAtNode(started, 'archive-door'),
+      playerState: {
+        blockStates: {
+          ...toRuntimeState(started).playerState.blockStates,
+          preservedPlayerState,
+          'vault-code': playerBucketState,
         },
-        sharedState: {
-          blockStates: {
-            preservedSharedState,
-          },
+      },
+      sharedState: {
+        blockStates: {
+          preservedSharedState,
         },
-      };
+      },
+    };
 
-      const submitted = await engine.performBlockAction({
-        action: {
-          type: 'submit',
-          value: '1847',
-        },
-        blockId: 'vault-code',
-        state,
-      });
+    const nextState = writeBlockStateByType(state, 'sharedState', 'vault-code', {
+      unlocked: true,
+    });
 
-      expect(submitted.playerState.blockStates['vault-code']).toBe(untouchedPlayerTargetState);
-      expect(submitted.playerState.blockStates.preservedPlayerState).toBe(preservedPlayerState);
-
-      expect(submitted.sharedState).not.toBe(state.sharedState);
-      expect(submitted.sharedState.blockStates).not.toBe(state.sharedState.blockStates);
-      expect(submitted.sharedState.blockStates.preservedSharedState).toBe(preservedSharedState);
-      expect(submitted.sharedState.blockStates['vault-code']).toMatchObject({
-        unlocked: true,
-      });
-      expect(Array.isArray(submitted.traversableEdges)).toBe(true);
-    } finally {
-      codeDefinition.policy.stateType = originalStateType;
-    }
+    expect(nextState.playerState.blockStates['vault-code']).toBe(playerBucketState);
+    expect(nextState.playerState.blockStates.preservedPlayerState).toBe(preservedPlayerState);
+    expect(nextState.sharedState).not.toBe(state.sharedState);
+    expect(nextState.sharedState.blockStates).not.toBe(state.sharedState.blockStates);
+    expect(nextState.sharedState.blockStates.preservedSharedState).toBe(preservedSharedState);
+    expect(nextState.sharedState.blockStates['vault-code']).toMatchObject({
+      unlocked: true,
+    });
   });
 
   it('rejects invalid action payloads with typed runtime_block_action_invalid', async () => {
@@ -521,7 +506,7 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     });
   });
 
-  it('declares runtime stateType and requiredContext metadata per block type', () => {
+  it('declares immutable runtime stateType and requiredContext metadata per block type', () => {
     expect(getBlockDefinition('code').policy).toEqual({
       requiredContext: ['nowIso'],
       stateType: 'playerState',
@@ -534,6 +519,9 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
       requiredContext: [],
       stateType: 'playerState',
     });
+    expect(Object.isFrozen(getBlockDefinition('code'))).toBe(true);
+    expect(Object.isFrozen(getBlockDefinition('code').policy)).toBe(true);
+    expect(Object.isFrozen(getBlockDefinition('code').traversal.facts.unlocked)).toBe(true);
   });
 
   it('accepts performBlockAction for prototype-chain key ids by using own-key block-state lookups', async () => {

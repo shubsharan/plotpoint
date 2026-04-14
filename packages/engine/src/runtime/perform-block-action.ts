@@ -15,12 +15,12 @@ import {
   createRuntimeSnapshot,
   createCurrentNodeSnapshotOrThrow,
   formatIssuePath,
-  mapTraversableEdges,
   parseRuntimeInputOrThrow,
   resolveEffectiveBlockStateOrThrow,
   resolveRuntimeSnapshotContextOrThrow,
 } from './snapshot.js';
 import { performBlockActionInputSchema } from './schema.js';
+import { deriveTraversableEdgesOrThrow } from './traversal.js';
 import type { EnginePorts, RuntimeSnapshot, PerformBlockActionInput } from './types.js';
 
 type ActionExecutionResult = {
@@ -38,7 +38,7 @@ type ActionBehaviorParams = {
   parsedState: any;
   playerId: string;
   ports: EnginePorts;
-  requiredContext: BlockContextKey[];
+  requiredContext: ReadonlyArray<BlockContextKey>;
   stateType: RuntimeStateType;
   targetBlockType: string;
 };
@@ -72,7 +72,7 @@ const resolveExecutionContextOrThrow = async (
     nodeId: string;
     playerId: string;
     ports: EnginePorts;
-    requiredContext: BlockContextKey[];
+    requiredContext: ReadonlyArray<BlockContextKey>;
   },
 ): Promise<BlockActionContext> => {
   const context: BlockActionContext = {};
@@ -298,7 +298,7 @@ export const performBlockAction = async (
   input: PerformBlockActionInput,
 ): Promise<RuntimeSnapshot> => {
   const { action, state, blockId } = parseRuntimeInputOrThrow(performBlockActionInputSchema, input);
-  const { currentNode, targetBlock } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
+  const { currentNode, story, targetBlock } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
     blockId,
   });
   if (!targetBlock) {
@@ -372,7 +372,12 @@ export const performBlockAction = async (
   );
   const hydratedCurrentNode = createCurrentNodeSnapshotOrThrow(nextState, currentNode);
 
-  return createRuntimeSnapshot(nextState, hydratedCurrentNode, mapTraversableEdges(currentNode), {
-    normalizeState: false,
-  });
+  return createRuntimeSnapshot(
+    nextState,
+    hydratedCurrentNode,
+    deriveTraversableEdgesOrThrow(story, nextState, currentNode),
+    {
+      normalizeState: false,
+    },
+  );
 };

@@ -3,11 +3,11 @@ import {
   createCurrentNodeSnapshotOrThrow,
   createRuntimeSnapshot,
   getNodeOrThrow,
-  mapTraversableEdges,
   parseRuntimeInputOrThrow,
   resolveRuntimeSnapshotContextOrThrow,
 } from './snapshot.js';
 import { traverseEdgeInputSchema } from './schema.js';
+import { deriveTraversableEdgesOrThrow } from './traversal.js';
 import type { EnginePorts, RuntimeSnapshot, TraverseEdgeInput } from './types.js';
 
 export const traverseEdge = async (
@@ -23,7 +23,7 @@ export const traverseEdge = async (
   if (!edge) {
     throw new Error('Expected resolveRuntimeSnapshotContextOrThrow to return targetEdge.');
   }
-  const traversableEdges = mapTraversableEdges(currentNode);
+  const traversableEdges = deriveTraversableEdgesOrThrow(story, state, currentNode);
   const isTraversable = traversableEdges.some(
     (traversableEdge) => traversableEdge.edgeId === edgeId,
   );
@@ -35,7 +35,7 @@ export const traverseEdge = async (
         details: {
           edgeId,
           nodeId: currentNode.id,
-          reason: 'conditioned_edge_deferred',
+          reason: 'condition_false',
           storyId: state.storyId,
         },
       },
@@ -49,5 +49,9 @@ export const traverseEdge = async (
   };
   const hydratedCurrentNode = createCurrentNodeSnapshotOrThrow(nextState, nextNode);
 
-  return createRuntimeSnapshot(nextState, hydratedCurrentNode, mapTraversableEdges(nextNode));
+  return createRuntimeSnapshot(
+    nextState,
+    hydratedCurrentNode,
+    deriveTraversableEdgesOrThrow(story, nextState, nextNode),
+  );
 };

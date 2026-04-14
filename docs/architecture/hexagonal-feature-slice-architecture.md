@@ -390,69 +390,52 @@ When processing a block action, the engine reads the relevant bucket from the cu
 
 ## Condition System
 
-Edges in the story graph can have conditions that determine whether a player can traverse them. Conditions are stored as a tree of AND/OR combinators with leaf nodes that reference named condition functions from the engine's registry.
+Edges in the story graph can have conditions that determine whether a player can traverse them. Conditions are stored as a tree of AND/OR combinators with fact leaves that reference block-exported traversal facts.
 
 ### Condition Tree Structure
 
 ```typescript
 type Condition =
-  | {
-      type: 'check';
-      condition: string; // name from registry
-      params: Record<string, unknown>; // author-configured
-    }
+  | { type: 'always' };
   | { type: 'and'; children: Condition[] }
   | { type: 'or'; children: Condition[] }
-  | { type: 'always' };
+  | { type: 'fact'; blockId: string; fact: string }
+  | {
+      type: 'fact';
+      blockId: string;
+      fact: string;
+      operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte';
+      value: boolean | number | string;
+    };
 ```
 
-### Named Condition Functions
+### Traversal Fact View
 
-Condition functions are real TypeScript functions in a registry in `graph/conditions.ts`. The story package stores the function name and params as JSON. The engine looks up the real function at runtime. Adding a new condition type means adding one entry to the registry.
+Each block type exports a small set of stable traversal facts from its effective `state + config`. Traversal stays generic: it evaluates boolean composition and primitive comparisons only. Block-specific semantics remain inside block-owned fact projectors.
 
-Built-in conditions: `field-equals`, `field-compare`, `array-includes`, `array-length`, `time-elapsed`, `within-radius`.
+The runtime resolves facts through one command-scoped view that:
+- indexes blocks by authored `blockId`
+- routes reads through block policy (`playerState` vs `sharedState`)
+- hydrates effective state from persisted state or deterministic `initialState(config)`
+- memoizes hydrated block runtime and derived fact values per command
 
 ### Edge Evaluation
 
 ```typescript
-// engine/graph/traversal.ts
-import { checkCondition } from './conditions';
-
-export const evaluateEdges = (
-  graph: StoryGraph,
-  currentNodeId: string,
-  allBlockStates: Record<string, unknown>,
-  context: EvaluationContext,
+export const deriveTraversableEdgesOrThrow = (
+  story: StoryPackage,
+  state: RuntimeState,
+  node: StoryNode,
 ): TraversableEdge[] => {
-  const node = graph.nodes.find((node) => node.id === currentNodeId);
-  if (!node) throw new Error(`Unknown node: ${currentNodeId}`);
+  const resolver = createTraversalFactResolver(story, state);
 
   return node.edges
-    .filter(
-      (edge) => edge.condition === undefined || evaluate(edge.condition, allBlockStates, context),
-    )
+    .filter((edge) => !edge.condition || evaluateConditionOrThrow(edge.condition, resolver))
     .map((edge) => ({
       edgeId: edge.id,
       targetNodeId: edge.targetNodeId,
       label: edge.label,
     }));
-};
-
-const evaluate = (
-  condition: Condition,
-  blockStates: Record<string, unknown>,
-  context: EvaluationContext,
-): boolean => {
-  switch (condition.type) {
-    case 'always':
-      return true;
-    case 'check':
-      return checkCondition(condition.condition, blockStates, context, condition.params);
-    case 'and':
-      return condition.children.every((c) => evaluate(c, blockStates, context));
-    case 'or':
-      return condition.children.some((c) => evaluate(c, blockStates, context));
-  }
 };
 ```
 
@@ -465,27 +448,24 @@ const evaluate = (
   "type": "or",
   "children": [
     {
-      "type": "check",
-      "condition": "field-equals",
-      "params": { "blockId": "master-key", "field": "found", "value": true }
+      "type": "fact",
+      "blockId": "master-key",
+      "fact": "found"
     },
     {
       "type": "and",
       "children": [
         {
-          "type": "check",
-          "condition": "field-equals",
-          "params": { "blockId": "puzzle", "field": "unlocked", "value": true }
+          "type": "fact",
+          "blockId": "puzzle",
+          "fact": "unlocked"
         },
         {
-          "type": "check",
-          "condition": "array-length",
-          "params": {
-            "blockId": "clue-board",
-            "field": "clues",
-            "operator": "gte",
-            "value": 3
-          }
+          "type": "fact",
+          "blockId": "clue-board",
+          "fact": "clueCount",
+          "operator": "gte",
+          "value": 3
         }
       ]
     }
@@ -547,7 +527,11 @@ export const performBlockAction = async (ports: EnginePorts, input: PerformBlock
   });
   const hydratedCurrentNode = createCurrentNodeSnapshotOrThrow(nextState, currentNode);
 
-  return createRuntimeSnapshot(nextState, hydratedCurrentNode, mapTraversableEdges(currentNode));
+  return createRuntimeSnapshot(
+    nextState,
+    hydratedCurrentNode,
+    deriveTraversableEdgesOrThrow(story, nextState, currentNode),
+  );
 };
 
 // engine/runtime/traverse-edge.ts
@@ -560,7 +544,11 @@ export const traverseEdge = async (ports: EnginePorts, input: TraverseEdgeInput)
   const nextState = { ...state, currentNodeId: nextNode.id };
   const hydratedCurrentNode = createCurrentNodeSnapshotOrThrow(nextState, nextNode);
 
-  return createRuntimeSnapshot(nextState, hydratedCurrentNode, mapTraversableEdges(nextNode));
+  return createRuntimeSnapshot(
+    nextState,
+    hydratedCurrentNode,
+    deriveTraversableEdgesOrThrow(story, nextState, nextNode),
+  );
 };
 ```
 
@@ -570,7 +558,7 @@ The registry looks up `code` and calls its `onAction()` with parsed state, parse
 
 ### 5. Edge Evaluation (Pure)
 
-After `performBlockAction`, the engine recomputes the current node's `traversableEdges`. With the puzzle now solved, an edge condition like `field-equals(vault-code, unlocked, true)` passes, making "Enter the corridor" available. When the player selects that option, the shell calls `traverseEdge`, and the engine changes `currentNodeId` only through that command.
+After `performBlockAction`, the engine recomputes the current node's `traversableEdges`. With the puzzle now solved, a fact condition like `{ type: 'fact', blockId: 'vault-code', fact: 'unlocked' }` passes, making the authored edge available. When the player selects that option, the shell calls `traverseEdge`, and the engine changes `currentNodeId` only through that command.
 
 ### 6. Response
 
@@ -602,9 +590,9 @@ The engine uses semver. The major version is what gets stamped into published st
 
 ### Semver Mapping
 
-**Major:** Breaking changes to story package interpretation. Changing how conditions evaluate, restructuring graph traversal, altering block state machine behavior. Requires a migration function.
+**Major:** Breaking changes to story package interpretation. Changing authored condition leaves, restructuring graph traversal, altering block state machine behavior. Requires a migration function.
 
-**Minor:** Backwards-compatible additions. New block types, new condition functions, new optional fields that default gracefully. Old stories unaffected.
+**Minor:** Backwards-compatible additions. New block types, new block-exported facts, new optional fields that default gracefully. Old stories unaffected.
 
 **Patch:** Bug fixes. Corrected edge cases, performance improvements. No contract changes.
 

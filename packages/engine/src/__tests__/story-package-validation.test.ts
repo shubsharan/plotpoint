@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  currentEngineMajor,
   storyPackageSchema,
   validateStoryPackageCompatibility,
   validateStoryPackageStructure,
@@ -18,7 +19,7 @@ describe('@plotpoint/engine story package validation', () => {
     expect(validateStoryPackageStructure(storyPackage)).toEqual([]);
     expect(
       validateStoryPackageCompatibility(storyPackage, {
-        currentEngineMajor: 0,
+        currentEngineMajor,
         mode: 'draft',
       }),
     ).toEqual([]);
@@ -206,7 +207,7 @@ describe('@plotpoint/engine story package validation', () => {
 
     expect(
       validateStoryPackageCompatibility(parsed.data, {
-        currentEngineMajor: 0,
+        currentEngineMajor,
         mode: 'published',
       }),
     ).toEqual([
@@ -224,12 +225,12 @@ describe('@plotpoint/engine story package validation', () => {
       {
         code: 'incompatible-engine-major',
         details: {
-          currentEngineMajor: 0,
+          currentEngineMajor,
           engineMajor: 9,
           mode: 'published',
         },
         layer: 'compatibility',
-        message: 'Story package engine major 9 does not match current engine major 0.',
+        message: `Story package engine major 9 does not match current engine major ${currentEngineMajor}.`,
         path: ['version', 'engineMajor'],
       },
     ]);
@@ -240,7 +241,7 @@ describe('@plotpoint/engine story package validation', () => {
 
     expect(
       validateStoryPackageCompatibility(storyPackage, {
-        currentEngineMajor: 0,
+        currentEngineMajor,
         mode: 'draft',
       }),
     ).toEqual([
@@ -296,7 +297,7 @@ describe('@plotpoint/engine story package validation', () => {
 
     expect(
       validateStoryPackageCompatibility(storyPackage, {
-        currentEngineMajor: 0,
+        currentEngineMajor,
         mode: 'draft',
       }),
     ).toEqual([
@@ -358,7 +359,7 @@ describe('@plotpoint/engine story package validation', () => {
 
     expect(
       validateStoryPackageCompatibility(storyPackage, {
-        currentEngineMajor: 0,
+        currentEngineMajor,
         mode: 'draft',
       }),
     ).toEqual([
@@ -425,15 +426,15 @@ describe('@plotpoint/engine story package validation', () => {
     ]);
   });
 
-  it('rejects unknown condition names and missing published engine majors', () => {
+  it('rejects invalid fact references and missing published engine majors', () => {
     const storyPackage = createValidStoryPackageFixture();
     const conditionalEdge = storyPackage.graph.nodes[1]?.edges[0];
 
-    if (!conditionalEdge?.condition || conditionalEdge.condition.type !== 'check') {
-      throw new Error('Expected archive-door edge to include a check condition.');
+    if (!conditionalEdge?.condition || conditionalEdge.condition.type !== 'fact') {
+      throw new Error('Expected archive-door edge to include a fact condition.');
     }
 
-    conditionalEdge.condition.condition = 'mystery-check';
+    conditionalEdge.condition.blockId = 'missing-block';
     const parsed = storyPackageSchema.safeParse(storyPackage);
     expect(parsed.success).toBe(true);
     if (!parsed.success) {
@@ -442,30 +443,120 @@ describe('@plotpoint/engine story package validation', () => {
 
     expect(
       validateStoryPackageCompatibility(parsed.data, {
-        currentEngineMajor: 0,
+        currentEngineMajor,
         mode: 'runtime',
       }),
     ).toEqual([
       {
-        code: 'unknown-condition-name',
+        code: 'unknown-condition-block',
         details: {
-          conditionName: 'mystery-check',
+          blockId: 'missing-block',
           edgeId: 'archive-to-vault',
           nodeId: 'archive-door',
         },
         layer: 'compatibility',
-        message: 'Condition "mystery-check" is not registered in the engine.',
-        path: ['graph', 'nodes', 1, 'edges', 0, 'condition', 'condition'],
+        message: 'Condition references unknown block "missing-block".',
+        path: ['graph', 'nodes', 1, 'edges', 0, 'condition', 'blockId'],
       },
       {
         code: 'missing-engine-major',
         details: {
-          currentEngineMajor: 0,
+          currentEngineMajor,
           mode: 'runtime',
         },
         layer: 'compatibility',
         message: 'Story package engine major is required for runtime validation.',
         path: ['version', 'engineMajor'],
+      },
+    ]);
+  });
+
+  it('rejects unknown facts, missing operators, and mismatched condition values', () => {
+    const storyPackage = createValidStoryPackageFixture();
+    const archiveNode = storyPackage.graph.nodes[1];
+
+    if (!archiveNode) {
+      throw new Error('Expected archive-door node in valid story package fixture.');
+    }
+
+    archiveNode.edges = [
+      {
+        id: 'archive-to-vault',
+        targetNodeId: 'vault',
+        condition: {
+          type: 'fact',
+          blockId: 'vault-code',
+          fact: 'mystery-fact',
+        },
+      },
+      {
+        id: 'archive-to-foyer',
+        targetNodeId: 'foyer',
+        condition: {
+          type: 'fact',
+          blockId: 'vault-code',
+          fact: 'attemptsCount',
+        },
+      },
+      {
+        id: 'archive-to-side-room',
+        targetNodeId: 'vault',
+        condition: {
+          type: 'fact',
+          blockId: 'vault-code',
+          fact: 'unlocked',
+          operator: 'eq',
+          value: 'yes',
+        },
+      },
+    ];
+
+    expect(
+      validateStoryPackageCompatibility(storyPackage, {
+        currentEngineMajor,
+        mode: 'draft',
+      }),
+    ).toEqual([
+      {
+        code: 'unknown-condition-fact',
+        details: {
+          blockId: 'vault-code',
+          blockType: 'code',
+          edgeId: 'archive-to-vault',
+          fact: 'mystery-fact',
+          nodeId: 'archive-door',
+        },
+        layer: 'compatibility',
+        message: 'Condition references unknown fact "mystery-fact" on block "vault-code".',
+        path: ['graph', 'nodes', 1, 'edges', 0, 'condition', 'fact'],
+      },
+      {
+        code: 'invalid-condition-operator',
+        details: {
+          blockId: 'vault-code',
+          edgeId: 'archive-to-foyer',
+          fact: 'attemptsCount',
+          factKind: 'number',
+          nodeId: 'archive-door',
+        },
+        layer: 'compatibility',
+        message: 'Condition fact "attemptsCount" on block "vault-code" requires an operator.',
+        path: ['graph', 'nodes', 1, 'edges', 1, 'condition', 'operator'],
+      },
+      {
+        code: 'invalid-condition-value',
+        details: {
+          blockId: 'vault-code',
+          edgeId: 'archive-to-side-room',
+          fact: 'unlocked',
+          factKind: 'boolean',
+          nodeId: 'archive-door',
+          operator: 'eq',
+          valueType: 'string',
+        },
+        layer: 'compatibility',
+        message: 'Condition value for fact "unlocked" must be a boolean.',
+        path: ['graph', 'nodes', 1, 'edges', 2, 'condition', 'value'],
       },
     ]);
   });

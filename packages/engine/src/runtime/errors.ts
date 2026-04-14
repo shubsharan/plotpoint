@@ -1,4 +1,5 @@
 export type EngineRuntimeErrorCode =
+  | 'runtime_condition_evaluation_failed'
   | 'runtime_edge_not_traversable'
   | 'runtime_edge_not_found'
   | 'runtime_block_action_invalid'

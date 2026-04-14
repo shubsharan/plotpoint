@@ -17,8 +17,8 @@ describe('@plotpoint/engine story package schema', () => {
     expect(parsed.metadata.storyId).toBe('story-the-stolen-ledger');
     expect(parsed.graph.nodes).toHaveLength(3);
     expect(parsed.graph.nodes[1]?.edges[0]?.condition).toMatchObject({
-      type: 'check',
-      condition: 'field-equals',
+      type: 'fact',
+      fact: 'unlocked',
     });
   });
 
@@ -88,22 +88,22 @@ describe('@plotpoint/engine story package schema', () => {
     ).toBe(true);
   });
 
-  it('keeps unknown condition names as compatibility-layer concerns', () => {
+  it('keeps unknown fact references as compatibility-layer concerns', () => {
     const storyPackage = createValidStoryPackageFixture();
     const edge = storyPackage.graph.nodes[1]?.edges[0];
 
-    if (!edge?.condition || edge.condition.type !== 'check') {
-      throw new Error('Expected valid fixture to include a check condition.');
+    if (!edge?.condition || edge.condition.type !== 'fact') {
+      throw new Error('Expected valid fixture to include a fact condition.');
     }
 
-    edge.condition.condition = 'mystery-check';
+    edge.condition.fact = 'mystery-fact';
 
     expect(storyPackageSchema.safeParse(storyPackage).success).toBe(true);
     expect(
       storyPackageConditionSchema.safeParse({
-        type: 'check',
-        condition: 'mystery-check',
-        params: {},
+        type: 'fact',
+        blockId: 'vault-code',
+        fact: 'mystery-fact',
       }).success,
     ).toBe(true);
   });

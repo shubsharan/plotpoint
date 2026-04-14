@@ -1,12 +1,3 @@
-export { blockRegistry, getBlockDefinition, hasBlockType } from './blocks/index.js';
-export type {
-  BlockConfig,
-  BlockRegistryEntry,
-  BlockStateType,
-  KnownBlockType,
-} from './blocks/index.js';
-export { conditionRegistry, hasConditionName } from './graph/conditions.js';
-export type { KnownConditionName } from './graph/conditions.js';
 export type { Clock } from './ports/clock.js';
 export type { GeoCoord, LocationReader } from './ports/location-reader.js';
 export type {

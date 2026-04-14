@@ -4,10 +4,10 @@ import {
   createRuntimeSnapshot,
   getNodeOrThrow,
   loadStoryOrThrow,
-  mapTraversableEdges,
   parseRuntimeInputOrThrow,
 } from './snapshot.js';
 import { startGameInputSchema } from './schema.js';
+import { deriveTraversableEdgesOrThrow } from './traversal.js';
 import type { EnginePorts, RuntimeSnapshot, RuntimeState, StartGameInput } from './types.js';
 
 export const startGame = async (
@@ -39,5 +39,9 @@ export const startGame = async (
   };
   const currentNode = createCurrentNodeSnapshotOrThrow(initialState, entryNode);
 
-  return createRuntimeSnapshot(initialState, currentNode, mapTraversableEdges(entryNode));
+  return createRuntimeSnapshot(
+    initialState,
+    currentNode,
+    deriveTraversableEdgesOrThrow(storyPackage, initialState, entryNode),
+  );
 };

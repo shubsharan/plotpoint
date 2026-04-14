@@ -136,7 +136,7 @@ describe('@plotpoint/db story repo adapter', () => {
     packageStorage.set(draftPackageUriV2, createStoryPackage(storyId, 'Draft Package V2', null));
     packageStorage.set(
       publishedPackageUriV1,
-      createStoryPackage(storyId, 'Published Package V1', 0),
+      createStoryPackage(storyId, 'Published Package V1', 1),
     );
 
     await storyQueries.createStory({
@@ -161,7 +161,7 @@ describe('@plotpoint/db story repo adapter', () => {
     );
 
     await storyQueries.publishStory({
-      engineMajor: 0,
+      engineMajor: 1,
       publishedAt: new Date('2026-03-30T10:00:00.000Z'),
       publishedPackageUri: publishedPackageUriV1,
       publishedStoryPackageVersionId: 'snapshot-v1',
@@ -179,11 +179,11 @@ describe('@plotpoint/db story repo adapter', () => {
     const currentPublishedPackage = await storyRepo.getCurrentPublishedPackage(storyId);
     expect(currentPublishedPackage.storyPackageVersionId).toBe('snapshot-v1');
     expect(currentPublishedPackage.storyPackage.metadata.title).toBe('Published Package V1');
-    expect(currentPublishedPackage.storyPackage.version.engineMajor).toBe(0);
+    expect(currentPublishedPackage.storyPackage.version.engineMajor).toBe(1);
 
     const pinnedPackage = await storyRepo.getPublishedPackage(storyId, 'snapshot-v1');
     expect(pinnedPackage.metadata.title).toBe('Published Package V1');
-    expect(pinnedPackage.version.engineMajor).toBe(0);
+    expect(pinnedPackage.version.engineMajor).toBe(1);
   });
 
   it('rejects version-pinned lookups when the requested version does not exist', async () => {
@@ -194,7 +194,7 @@ describe('@plotpoint/db story repo adapter', () => {
     packageStorage.set(draftPackageUriV1, createStoryPackage(storyId, 'Draft Package V1', null));
     packageStorage.set(
       publishedPackageUriV1,
-      createStoryPackage(storyId, 'Published Package V1', 0),
+      createStoryPackage(storyId, 'Published Package V1', 1),
     );
 
     await storyQueries.createStory({
@@ -203,7 +203,7 @@ describe('@plotpoint/db story repo adapter', () => {
       title: 'The Stolen Ledger',
     });
     await storyQueries.publishStory({
-      engineMajor: 0,
+      engineMajor: 1,
       publishedAt: new Date('2026-03-30T11:00:00.000Z'),
       publishedPackageUri: publishedPackageUriV1,
       publishedStoryPackageVersionId: 'snapshot-v1',

@@ -1,5 +1,5 @@
 import type { ZodError, ZodType } from 'zod';
-import { getBlockDefinition, hasBlockType } from '../blocks/index.js';
+import { getBlockDefinition, hasBlockType, type BlockRegistryEntry } from '../blocks/index.js';
 import type { PublishedStoryPackage } from '../ports/story-package-repo.js';
 import type { StoryPackage } from '../story-packages/schema.js';
 import type { StoryPackageValidationIssue } from '../story-packages/types.js';
@@ -84,23 +84,6 @@ const runtimeError = {
       `Runtime snapshot input is invalid: ${details}.`,
     ),
 } as const;
-
-const createTraversableEdge = (
-  edge: StoryPackage['graph']['nodes'][number]['edges'][number],
-): TraversableEdge => {
-  if (edge.label === undefined) {
-    return {
-      edgeId: edge.id,
-      targetNodeId: edge.targetNodeId,
-    };
-  }
-
-  return {
-    edgeId: edge.id,
-    label: edge.label,
-    targetNodeId: edge.targetNodeId,
-  };
-};
 
 const toValidationDetails = (path: ReadonlyArray<number | string | symbol>, code: string) => ({
   validationCode: code,
@@ -262,11 +245,16 @@ export const getEdgeInNodeOrThrow = (
 
 type ResolvedEffectiveBlockState = {
   currentNodeBlock: CurrentNodeBlockSnapshot;
+  definition: BlockRegistryEntry<any, any, any>;
   parsedConfig: Record<string, unknown>;
   parsedState: Record<string, unknown>;
+  policy: BlockRegistryEntry<any, any, any>['policy'];
 };
 
-const resolveBlockDefinitionOrThrow = (nodeId: string, block: StoryBlock) => {
+const resolveBlockDefinitionOrThrow = (
+  nodeId: string,
+  block: StoryBlock,
+): BlockRegistryEntry<any, any, any> => {
   if (!hasBlockType(block.type)) {
     throw new EngineRuntimeError(
       'runtime_block_type_unregistered',
@@ -363,8 +351,10 @@ export const resolveEffectiveBlockStateOrThrow = (
       state: parsedState.data,
       type: block.type,
     },
+    definition,
     parsedConfig: parsedConfig.data,
     parsedState: parsedState.data,
+    policy,
   };
 };
 
@@ -432,11 +422,6 @@ export const parseRuntimeInputOrThrow = <TInput>(
 
   return parsed.data;
 };
-
-export const mapTraversableEdges = (node: StoryNode): TraversableEdge[] =>
-  node.edges
-    .filter((edge) => edge.condition === undefined)
-    .map((edge) => createTraversableEdge(edge));
 
 export const normalizeRuntimeState = (state: RuntimeState): RuntimeState => ({
   ...state,

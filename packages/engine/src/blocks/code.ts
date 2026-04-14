@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { defineBlockBehavior, type InteractiveBlockBehavior } from './types.js';
+import {
+  defineBlockBehavior,
+  type BlockTraversalFacts,
+  type InteractiveBlockBehavior,
+} from './types.js';
 
 type CodeBlockConfig = {
   caseSensitive?: boolean | undefined;
@@ -137,3 +141,14 @@ export const codeBlockBehavior: InteractiveBlockBehavior<
   },
   actionSchema: codeActionSchema,
 });
+
+export const codeBlockTraversalFacts: BlockTraversalFacts<CodeBlockConfig, CodeBlockState> = {
+  attemptsCount: {
+    derive: ({ state }) => state.attempts.length,
+    kind: 'number',
+  },
+  unlocked: {
+    derive: ({ state }) => state.unlocked,
+    kind: 'boolean',
+  },
+};

@@ -8,7 +8,11 @@ import type {
   StoryPackage,
   StoryPackageRepo,
 } from '../index.js';
-import { EngineRuntimeError, createEngine, currentEngineMajor } from '../index.js';
+import {
+  EngineRuntimeError,
+  createEngine,
+  currentEngineMajor,
+} from '../index.js';
 import {
   createCompatibilityInvalidStoryPackageFixture,
   createStructurallyInvalidStoryPackageFixture,
@@ -311,7 +315,13 @@ describe('@plotpoint/engine runtime surface', () => {
     ]);
     expect(loaded.traversableEdges).toEqual(started.traversableEdges);
     expect(traversed.traversableEdges).toEqual([]);
-    expect(submitted.traversableEdges).toEqual([]);
+    expect(submitted.traversableEdges).toEqual([
+      {
+        edgeId: 'archive-to-vault',
+        label: 'Open the archive vault',
+        targetNodeId: 'vault',
+      },
+    ]);
   });
 
   it('traverses to the selected edge target and updates current node state', async () => {
@@ -324,6 +334,38 @@ describe('@plotpoint/engine runtime surface', () => {
     });
 
     expect(traversed.currentNodeId).toBe('archive-door');
+    expect(traversed.traversableEdges).toEqual([]);
+  });
+
+  it('traverses conditioned edges after their facts resolve true', async () => {
+    const { engine, storyId } = createRuntimeContext();
+    const started = await startRuntime(engine, storyId);
+    const archiveDoor = await engine.traverseEdge({
+      edgeId: 'foyer-to-archive',
+      state: toRuntimeState(started),
+    });
+    const unlockedArchiveDoor = await engine.performBlockAction({
+      action: {
+        type: 'submit',
+        value: '1847',
+      },
+      blockId: 'vault-code',
+      state: toRuntimeState(archiveDoor),
+    });
+
+    const traversed = await engine.traverseEdge({
+      edgeId: 'archive-to-vault',
+      state: toRuntimeState(unlockedArchiveDoor),
+    });
+
+    expect(unlockedArchiveDoor.traversableEdges).toEqual([
+      {
+        edgeId: 'archive-to-vault',
+        label: 'Open the archive vault',
+        targetNodeId: 'vault',
+      },
+    ]);
+    expect(traversed.currentNodeId).toBe('vault');
     expect(traversed.traversableEdges).toEqual([]);
   });
 
@@ -387,7 +429,7 @@ describe('@plotpoint/engine runtime surface', () => {
     expect(loaded.playerState.blockStates).toEqual(traversed.playerState.blockStates);
   });
 
-  it('omits conditioned edges from traversableEdges until FEAT-0008 defines traversal semantics', async () => {
+  it('recomputes conditioned edges from effective runtime state after block updates', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
     const traversed = await engine.traverseEdge({
@@ -404,7 +446,13 @@ describe('@plotpoint/engine runtime surface', () => {
     });
 
     expect(traversed.traversableEdges).toEqual([]);
-    expect(submitted.traversableEdges).toEqual([]);
+    expect(submitted.traversableEdges).toEqual([
+      {
+        edgeId: 'archive-to-vault',
+        label: 'Open the archive vault',
+        targetNodeId: 'vault',
+      },
+    ]);
   });
 
   it('rejects conditioned authored edges as not traversable', async () => {
@@ -426,7 +474,7 @@ describe('@plotpoint/engine runtime surface', () => {
     expect(error.details).toMatchObject({
       edgeId: 'archive-to-vault',
       nodeId: 'archive-door',
-      reason: 'conditioned_edge_deferred',
+      reason: 'condition_false',
       storyId,
     });
   });

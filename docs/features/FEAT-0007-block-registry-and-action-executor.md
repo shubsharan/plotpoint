@@ -184,7 +184,6 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Risk: hydration and execution boundaries blur. Mitigation: keep persisted runtime state sparse and make current-node hydration a read-side projection rather than a persistence mutation.
 - Risk: adapters parse messages instead of contracts. Mitigation: include structured error details in runtime errors.
 - Risk: FEAT-0008 receives unstable execution contracts. Mitigation: lock the generic `submit` action envelope and deterministic executor behavior in this feature.
-- Deferred follow-up [DF-0002]: conditioned-edge derivation and `traverseEdge` validation against effective block state remain deferred to FEAT-0008. FEAT-0007 intentionally exposes only unconditional edges in `traversableEdges` and rejects conditioned-edge traversal with a typed runtime error. | Owner: FEAT-0008 | Trigger: FEAT-0008 implementation begins for real traversal semantics. | Exit criteria: Engine derives `traversableEdges` from effective runtime state and validates `traverseEdge` against that derived set.
 
 ## Implementation Order (Do In This Sequence)
 

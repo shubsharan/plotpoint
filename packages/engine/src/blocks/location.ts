@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   BlockUpdateError,
   defineBlockBehavior,
+  type BlockTraversalFacts,
   type InteractiveBlockBehavior,
 } from './types.js';
 
@@ -207,3 +208,17 @@ export const locationBlockBehavior: InteractiveBlockBehavior<
   },
   actionSchema: locationActionSchema,
 });
+
+export const locationBlockTraversalFacts: BlockTraversalFacts<
+  LocationBlockConfig,
+  LocationBlockState
+> = {
+  checksCount: {
+    derive: ({ state }) => state.checksCount,
+    kind: 'number',
+  },
+  unlocked: {
+    derive: ({ state }) => state.unlocked,
+    kind: 'boolean',
+  },
+};

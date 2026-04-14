@@ -14,6 +14,21 @@ export type BlockActionContext = {
 
 export type BlockContextKey = keyof BlockActionContext;
 export type BlockStateType = 'playerState' | 'sharedState';
+export type TraversalFactKind = 'boolean' | 'number' | 'string';
+export type TraversalFactValue = boolean | number | string;
+
+export type TraversalFactDefinition<
+  TConfig extends BlockConfig = BlockConfig,
+  TState extends BlockState = BlockState,
+> = {
+  kind: TraversalFactKind;
+  derive: (input: { config: TConfig; state: TState }) => TraversalFactValue;
+};
+
+export type BlockTraversalFacts<
+  TConfig extends BlockConfig = BlockConfig,
+  TState extends BlockState = BlockState,
+> = Record<string, TraversalFactDefinition<TConfig, TState>>;
 
 export type BlockUpdateErrorCode = 'action_invalid_for_config' | 'unsupported_location_target';
 
@@ -80,8 +95,11 @@ export type BlockRegistryEntry<
 > = {
   behavior: BlockBehavior<TConfig, TState, TAction>;
   policy: {
-    requiredContext: BlockContextKey[];
+    requiredContext: ReadonlyArray<BlockContextKey>;
     stateType: BlockStateType;
+  };
+  traversal: {
+    facts: BlockTraversalFacts<TConfig, TState>;
   };
 };
 

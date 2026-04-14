@@ -103,13 +103,9 @@ const validStoryPackageSeed: StoryPackage = {
             targetNodeId: 'vault',
             label: 'Open the archive vault',
             condition: {
-              type: 'check',
-              condition: 'field-equals',
-              params: {
-                blockId: 'vault-code',
-                field: 'unlocked',
-                value: true,
-              },
+              type: 'fact',
+              blockId: 'vault-code',
+              fact: 'unlocked',
             },
           },
         ],
