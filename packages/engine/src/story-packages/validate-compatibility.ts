@@ -1,6 +1,11 @@
 import type { z } from 'zod';
 import { getBlockDefinition, hasBlockType } from '../blocks/index.js';
-import type { TraversalFactKind } from '../blocks/types.js';
+import {
+  buildStoryPackageBlockIndex,
+  getTraversalFactKind,
+  isFactComparisonCondition,
+  visitStoryPackageCondition,
+} from './condition-helpers.js';
 import type {
   StoryPackage,
   StoryPackageCompatibilityOptions,
@@ -11,65 +16,7 @@ import {
   normalizeStoryPackageValidationPath,
 } from './validation-issues.js';
 
-type StoryPackageCondition = NonNullable<
-  StoryPackage['graph']['nodes'][number]['edges'][number]['condition']
->;
-type StoryPackageBlock = StoryPackage['graph']['nodes'][number]['blocks'][number];
-type StoryPackageFactCondition = Extract<StoryPackageCondition, { type: 'fact' }>;
-type StoryPackageFactComparisonCondition = Extract<StoryPackageFactCondition, { operator: string }>;
-
 const createIssue = createStoryPackageIssueFactory('compatibility');
-
-const getValueType = (value: boolean | number | string): TraversalFactKind =>
-  typeof value === 'boolean'
-    ? 'boolean'
-    : typeof value === 'number'
-      ? 'number'
-      : 'string';
-
-const buildBlockIndex = (
-  storyPackage: StoryPackage,
-): Map<string, { block: StoryPackageBlock; nodeId: string }> => {
-  const blockIndex = new Map<string, { block: StoryPackageBlock; nodeId: string }>();
-
-  storyPackage.graph.nodes.forEach((node) => {
-    node.blocks.forEach((block) => {
-      if (!blockIndex.has(block.id)) {
-        blockIndex.set(block.id, {
-          block,
-          nodeId: node.id,
-        });
-      }
-    });
-  });
-
-  return blockIndex;
-};
-
-const isFactComparisonCondition = (
-  condition: StoryPackageFactCondition,
-): condition is StoryPackageFactComparisonCondition => 'operator' in condition;
-
-const visitCondition = (
-  condition: StoryPackageCondition,
-  path: ReadonlyArray<number | string>,
-  visit: (condition: StoryPackageCondition, path: ReadonlyArray<number | string>) => void,
-): void => {
-  visit(condition, path);
-
-  switch (condition.type) {
-    case 'and':
-    case 'or': {
-      condition.children.forEach((child, childIndex) => {
-        visitCondition(child, [...path, 'children', childIndex], visit);
-      });
-      return;
-    }
-    case 'always':
-    case 'fact':
-      return;
-  }
-};
 
 export const validateStoryPackageCompatibility = (
   storyPackage: StoryPackage,
@@ -77,7 +24,7 @@ export const validateStoryPackageCompatibility = (
 ): StoryPackageValidationIssue[] => {
   const issues: StoryPackageValidationIssue[] = [];
   const mode = options.mode ?? 'draft';
-  const blockIndex = buildBlockIndex(storyPackage);
+  const blockIndex = buildStoryPackageBlockIndex(storyPackage);
 
   storyPackage.graph.nodes.forEach((node, nodeIndex) => {
     node.blocks.forEach((block, blockIndex) => {
@@ -134,7 +81,7 @@ export const validateStoryPackageCompatibility = (
         return;
       }
 
-      visitCondition(
+      visitStoryPackageCondition(
         edge.condition,
         ['graph', 'nodes', nodeIndex, 'edges', edgeIndex, 'condition'],
         (condition, path) => {
@@ -204,7 +151,7 @@ export const validateStoryPackageCompatibility = (
           }
 
           const { operator, value } = condition;
-          const valueType = getValueType(value);
+          const valueType = getTraversalFactKind(value);
           if (
             operator === 'gt' ||
             operator === 'gte' ||

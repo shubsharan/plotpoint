@@ -3,7 +3,9 @@ import { EngineRuntimeError } from '../runtime/errors.js';
 import {
   createTraversalFactCache,
   deriveTraversalFactOrThrow,
+  evaluateConditionOrThrow,
 } from '../runtime/traversal.js';
+import type { StoryPackageCondition } from '../story-packages/schema.js';
 
 describe('@plotpoint/engine traversal internals', () => {
   it('keeps traversal fact cache entries distinct when block ids and fact names contain colons', () => {
@@ -25,6 +27,7 @@ describe('@plotpoint/engine traversal internals', () => {
   });
 
   it('maps traversal fact projector failures to runtime_condition_evaluation_failed', () => {
+    const projectorError = new Error('boom');
     const blockRuntime: Parameters<typeof deriveTraversalFactOrThrow>[0] = {
       currentNodeBlock: {
         config: {},
@@ -50,7 +53,7 @@ describe('@plotpoint/engine traversal internals', () => {
           facts: {
             unlocked: {
               derive: () => {
-                throw new Error('boom');
+                throw projectorError;
               },
               kind: 'boolean',
             },
@@ -80,6 +83,90 @@ describe('@plotpoint/engine traversal internals', () => {
       blockId: 'vault-code',
       edgeId: 'archive-to-vault',
       fact: 'unlocked',
+      nodeId: 'archive-door',
+      storyId: 'story-123',
+    });
+    expect((thrownError as EngineRuntimeError).cause).toBe(projectorError);
+  });
+
+  it('maps unsupported fact operators to runtime_condition_evaluation_failed', () => {
+    const condition = {
+      type: 'fact',
+      blockId: 'vault-code',
+      fact: 'unlocked',
+      operator: 'contains',
+      value: true,
+    } as unknown as StoryPackageCondition;
+
+    let thrownError: unknown;
+
+    try {
+      evaluateConditionOrThrow(
+        condition,
+        {
+          resolveFactOrThrow: () => ({
+            kind: 'boolean',
+            value: true,
+          }),
+        },
+        {
+          edgeId: 'archive-to-vault',
+          nodeId: 'archive-door',
+          path: ['graph', 'nodes', 1, 'edges', 0, 'condition'],
+          storyId: 'story-123',
+        },
+      );
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(thrownError).toBeInstanceOf(EngineRuntimeError);
+    expect((thrownError as EngineRuntimeError).code).toBe('runtime_condition_evaluation_failed');
+    expect((thrownError as EngineRuntimeError).details).toMatchObject({
+      blockId: 'vault-code',
+      conditionPath: 'graph.nodes[1].edges[0].condition',
+      edgeId: 'archive-to-vault',
+      fact: 'unlocked',
+      operator: 'contains',
+      storyId: 'story-123',
+    });
+  });
+
+  it('maps malformed condition child holes to runtime_condition_evaluation_failed', () => {
+    const condition = {
+      children: new Array(1),
+      type: 'and',
+    } as unknown as StoryPackageCondition;
+
+    let thrownError: unknown;
+
+    try {
+      evaluateConditionOrThrow(
+        condition,
+        {
+          resolveFactOrThrow: () => ({
+            kind: 'boolean',
+            value: true,
+          }),
+        },
+        {
+          edgeId: 'archive-to-vault',
+          nodeId: 'archive-door',
+          path: ['graph', 'nodes', 1, 'edges', 0, 'condition'],
+          storyId: 'story-123',
+        },
+      );
+    } catch (error) {
+      thrownError = error;
+    }
+
+    expect(thrownError).toBeInstanceOf(EngineRuntimeError);
+    expect((thrownError as EngineRuntimeError).code).toBe('runtime_condition_evaluation_failed');
+    expect((thrownError as EngineRuntimeError).details).toMatchObject({
+      childIndex: 0,
+      conditionPath: 'graph.nodes[1].edges[0].condition.children[0]',
+      conditionType: 'and',
+      edgeId: 'archive-to-vault',
       nodeId: 'archive-door',
       storyId: 'story-123',
     });

@@ -1,16 +1,19 @@
 import type { TraversalFactKind, TraversalFactValue } from '../blocks/types.js';
+import {
+  appendConditionChildPath,
+  buildStoryPackageBlockIndex,
+  getTraversalFactKind,
+  isFactComparisonCondition,
+  type StoryPackageFactComparisonCondition,
+  type StoryPackageFactCondition,
+} from '../story-packages/condition-helpers.js';
 import type { StoryPackage, StoryPackageCondition } from '../story-packages/schema.js';
 import { EngineRuntimeError } from './errors.js';
 import { formatIssuePath, resolveEffectiveBlockStateOrThrow } from './snapshot.js';
 import type { RuntimeState, TraversableEdge } from './types.js';
 
 type StoryNode = StoryPackage['graph']['nodes'][number];
-type StoryBlock = StoryNode['blocks'][number];
 type StoryEdge = StoryNode['edges'][number];
-type StoryBlockRef = {
-  block: StoryBlock;
-  nodeId: string;
-};
 type ResolvedTraversalFact = {
   kind: TraversalFactKind;
   value: TraversalFactValue;
@@ -19,8 +22,6 @@ type ResolvedBlockRuntime = Pick<
   ReturnType<typeof resolveEffectiveBlockStateOrThrow>,
   'currentNodeBlock' | 'definition' | 'parsedConfig' | 'parsedState'
 >;
-type StoryPackageFactCondition = Extract<StoryPackageCondition, { type: 'fact' }>;
-type StoryPackageFactComparisonCondition = Extract<StoryPackageFactCondition, { operator: string }>;
 type ConditionEvaluationContext = {
   edgeId: string;
   nodeId: string;
@@ -40,10 +41,6 @@ type TraversalFactCache = {
   set: (blockId: string, fact: string, resolvedFact: ResolvedTraversalFact) => void;
 };
 
-const isFactComparisonCondition = (
-  condition: StoryPackageFactCondition,
-): condition is StoryPackageFactComparisonCondition => 'operator' in condition;
-
 const createTraversableEdge = (edge: StoryEdge): TraversableEdge => {
   if (edge.label === undefined) {
     return {
@@ -59,48 +56,28 @@ const createTraversableEdge = (edge: StoryEdge): TraversableEdge => {
   };
 };
 
-const getTraversalFactKind = (value: TraversalFactValue): TraversalFactKind =>
-  typeof value === 'boolean'
-    ? 'boolean'
-    : typeof value === 'number'
-      ? 'number'
-      : 'string';
-
 const createConditionEvaluationFailedError = (
   context: ConditionEvaluationContext,
   message: string,
-  details?: Record<string, unknown>,
+  options?: {
+    cause?: unknown;
+    details?: Record<string, unknown>;
+  },
 ): EngineRuntimeError =>
   new EngineRuntimeError(
     'runtime_condition_evaluation_failed',
     `Condition evaluation failed for edge "${context.edgeId}" in node "${context.nodeId}" at ${formatIssuePath(context.path)}: ${message}`,
     {
+      cause: options?.cause,
       details: {
         conditionPath: formatIssuePath(context.path),
         edgeId: context.edgeId,
         nodeId: context.nodeId,
         storyId: context.storyId,
-        ...details,
+        ...options?.details,
       },
     },
   );
-
-const buildStoryBlockIndex = (story: StoryPackage): Map<string, StoryBlockRef> => {
-  const blockIndex = new Map<string, StoryBlockRef>();
-
-  story.graph.nodes.forEach((node) => {
-    node.blocks.forEach((block) => {
-      if (!blockIndex.has(block.id)) {
-        blockIndex.set(block.id, {
-          block,
-          nodeId: node.id,
-        });
-      }
-    });
-  });
-
-  return blockIndex;
-};
 
 export const createTraversalFactCache = (): TraversalFactCache => {
   const factsByBlockId = new Map<string, Map<string, ResolvedTraversalFact>>();
@@ -130,9 +107,11 @@ export const deriveTraversalFactOrThrow = (
       context,
       `Block "${blockRuntime.currentNodeBlock.id}" does not export traversal fact "${fact}".`,
       {
-        blockId: blockRuntime.currentNodeBlock.id,
-        blockType: blockRuntime.currentNodeBlock.type,
-        fact,
+        details: {
+          blockId: blockRuntime.currentNodeBlock.id,
+          blockType: blockRuntime.currentNodeBlock.type,
+          fact,
+        },
       },
     );
   }
@@ -143,14 +122,17 @@ export const deriveTraversalFactOrThrow = (
       config: blockRuntime.parsedConfig,
       state: blockRuntime.parsedState,
     });
-  } catch {
+  } catch (error) {
     throw createConditionEvaluationFailedError(
       context,
       `Block "${blockRuntime.currentNodeBlock.id}" failed to derive traversal fact "${fact}".`,
       {
-        blockId: blockRuntime.currentNodeBlock.id,
-        blockType: blockRuntime.currentNodeBlock.type,
-        fact,
+        cause: error,
+        details: {
+          blockId: blockRuntime.currentNodeBlock.id,
+          blockType: blockRuntime.currentNodeBlock.type,
+          fact,
+        },
       },
     );
   }
@@ -161,11 +143,13 @@ export const deriveTraversalFactOrThrow = (
       context,
       `Traversal fact "${fact}" on block "${blockRuntime.currentNodeBlock.id}" returned ${actualKind} but declared ${factDefinition.kind}.`,
       {
-        actualKind,
-        blockId: blockRuntime.currentNodeBlock.id,
-        blockType: blockRuntime.currentNodeBlock.type,
-        fact,
-        factKind: factDefinition.kind,
+        details: {
+          actualKind,
+          blockId: blockRuntime.currentNodeBlock.id,
+          blockType: blockRuntime.currentNodeBlock.type,
+          fact,
+          factKind: factDefinition.kind,
+        },
       },
     );
   }
@@ -180,7 +164,7 @@ const createTraversalFactResolver = (
   story: StoryPackage,
   state: RuntimeState,
 ): TraversalFactResolver => {
-  const blockIndex = buildStoryBlockIndex(story);
+  const blockIndex = buildStoryPackageBlockIndex(story);
   const blockRuntimeCache = new Map<string, ReturnType<typeof resolveEffectiveBlockStateOrThrow>>();
   const factValueCache = createTraversalFactCache();
 
@@ -199,7 +183,9 @@ const createTraversalFactResolver = (
         context,
         `Referenced block "${blockId}" does not exist.`,
         {
-          blockId,
+          details: {
+            blockId,
+          },
         },
       );
     }
@@ -234,10 +220,12 @@ const getNumericFactValueOrThrow = (
       context,
       `Operator "${condition.operator}" requires number fact "${condition.fact}" on block "${condition.blockId}".`,
       {
-        blockId: condition.blockId,
-        fact: condition.fact,
-        factKind: resolvedFact.kind,
-        operator: condition.operator,
+        details: {
+          blockId: condition.blockId,
+          fact: condition.fact,
+          factKind: resolvedFact.kind,
+          operator: condition.operator,
+        },
       },
     );
   }
@@ -257,9 +245,11 @@ const evaluateFactConditionOrThrow = (
         context,
         `Traversal fact "${condition.fact}" on block "${condition.blockId}" requires an operator.`,
         {
-          blockId: condition.blockId,
-          fact: condition.fact,
-          factKind: resolvedFact.kind,
+          details: {
+            blockId: condition.blockId,
+            fact: condition.fact,
+            factKind: resolvedFact.kind,
+          },
         },
       );
     }
@@ -275,11 +265,13 @@ const evaluateFactConditionOrThrow = (
           context,
           `Traversal fact "${condition.fact}" on block "${condition.blockId}" cannot compare ${resolvedFact.kind} to ${conditionValueType}.`,
           {
-            blockId: condition.blockId,
-            fact: condition.fact,
-            factKind: resolvedFact.kind,
-            operator: condition.operator,
-            valueType: conditionValueType,
+            details: {
+              blockId: condition.blockId,
+              fact: condition.fact,
+              factKind: resolvedFact.kind,
+              operator: condition.operator,
+              valueType: conditionValueType,
+            },
           },
         );
       }
@@ -290,11 +282,13 @@ const evaluateFactConditionOrThrow = (
           context,
           `Traversal fact "${condition.fact}" on block "${condition.blockId}" cannot compare ${resolvedFact.kind} to ${conditionValueType}.`,
           {
-            blockId: condition.blockId,
-            fact: condition.fact,
-            factKind: resolvedFact.kind,
-            operator: condition.operator,
-            valueType: conditionValueType,
+            details: {
+              blockId: condition.blockId,
+              fact: condition.fact,
+              factKind: resolvedFact.kind,
+              operator: condition.operator,
+              valueType: conditionValueType,
+            },
           },
         );
       }
@@ -307,9 +301,25 @@ const evaluateFactConditionOrThrow = (
       return getNumericFactValueOrThrow(resolvedFact, condition, context) < condition.value;
     case 'lte':
       return getNumericFactValueOrThrow(resolvedFact, condition, context) <= condition.value;
+    default: {
+      const invalidCondition = condition as {
+        blockId?: unknown;
+        fact?: unknown;
+        operator?: unknown;
+      };
+      throw createConditionEvaluationFailedError(
+        context,
+        `Operator "${String(invalidCondition.operator)}" is not supported.`,
+        {
+          details: {
+            blockId: invalidCondition.blockId,
+            fact: invalidCondition.fact,
+            operator: invalidCondition.operator,
+          },
+        },
+      );
+    }
   }
-
-  throw new Error('Unsupported condition operator.');
 };
 
 export const evaluateConditionOrThrow = (
@@ -326,12 +336,24 @@ export const evaluateConditionOrThrow = (
       for (let childIndex = 0; childIndex < condition.children.length; childIndex += 1) {
         const child = condition.children[childIndex];
         if (!child) {
-          throw new Error('Expected condition child to exist.');
+          throw createConditionEvaluationFailedError(
+            {
+              ...context,
+              path: appendConditionChildPath(context.path, childIndex),
+            },
+            `Condition "${condition.type}" is missing child ${childIndex}.`,
+            {
+              details: {
+                childIndex,
+                conditionType: condition.type,
+              },
+            },
+          );
         }
         if (
           !evaluateConditionOrThrow(child, resolver, {
             ...context,
-            path: [...context.path, 'children', childIndex],
+            path: appendConditionChildPath(context.path, childIndex),
           })
         ) {
           return false;
@@ -342,12 +364,24 @@ export const evaluateConditionOrThrow = (
       for (let childIndex = 0; childIndex < condition.children.length; childIndex += 1) {
         const child = condition.children[childIndex];
         if (!child) {
-          throw new Error('Expected condition child to exist.');
+          throw createConditionEvaluationFailedError(
+            {
+              ...context,
+              path: appendConditionChildPath(context.path, childIndex),
+            },
+            `Condition "${condition.type}" is missing child ${childIndex}.`,
+            {
+              details: {
+                childIndex,
+                conditionType: condition.type,
+              },
+            },
+          );
         }
         if (
           evaluateConditionOrThrow(child, resolver, {
             ...context,
-            path: [...context.path, 'children', childIndex],
+            path: appendConditionChildPath(context.path, childIndex),
           })
         ) {
           return true;

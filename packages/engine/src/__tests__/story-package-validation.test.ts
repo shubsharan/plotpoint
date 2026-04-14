@@ -560,4 +560,56 @@ describe('@plotpoint/engine story package validation', () => {
       },
     ]);
   });
+
+  it('reports nested condition child paths for compatibility issues', () => {
+    const storyPackage = createValidStoryPackageFixture();
+    const archiveNode = storyPackage.graph.nodes[1];
+
+    if (!archiveNode) {
+      throw new Error('Expected archive-door node in valid story package fixture.');
+    }
+
+    archiveNode.edges = [
+      {
+        id: 'archive-to-vault',
+        targetNodeId: 'vault',
+        condition: {
+          type: 'and',
+          children: [
+            {
+              type: 'or',
+              children: [
+                {
+                  type: 'fact',
+                  blockId: 'vault-code',
+                  fact: 'mystery-fact',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+
+    expect(
+      validateStoryPackageCompatibility(storyPackage, {
+        currentEngineMajor,
+        mode: 'draft',
+      }),
+    ).toEqual([
+      {
+        code: 'unknown-condition-fact',
+        details: {
+          blockId: 'vault-code',
+          blockType: 'code',
+          edgeId: 'archive-to-vault',
+          fact: 'mystery-fact',
+          nodeId: 'archive-door',
+        },
+        layer: 'compatibility',
+        message: 'Condition references unknown fact "mystery-fact" on block "vault-code".',
+        path: ['graph', 'nodes', 1, 'edges', 0, 'condition', 'children', 0, 'children', 0, 'fact'],
+      },
+    ]);
+  });
 });
