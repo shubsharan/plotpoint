@@ -1,15 +1,15 @@
-import { getBlockDefinition, hasBlockType } from '../../blocks/registry.js';
-import type { BlockAction, BlockBehavior, BlockConfig, BlockState } from '../../blocks/contracts.js';
+import { getBlockSpec, hasBlockType } from '../../blocks/registry.js';
+import type { BlockAction, BlockConfig, BlockSpec, BlockState } from '../../blocks/contracts.js';
 import type { StoryPackage } from '../../story-packages/schema.js';
 import { EngineRuntimeError } from '../errors.js';
-import { readOwnBlockState } from '../state/block-state-bucket.js';
+import { readScopedBlockState } from '../state/scoped-block-state.js';
 import type { CurrentNodeBlockView, SessionState } from '../types.js';
 import { formatIssuePath } from './story-context.js';
 
 type StoryNode = StoryPackage['graph']['nodes'][number];
 type StoryBlock = StoryNode['blocks'][number];
-type RuntimeBlockDefinition = ReturnType<typeof getBlockDefinition>;
-type RuntimeBlockBehavior = BlockBehavior<BlockConfig, BlockState, BlockAction>;
+type RuntimeBlockSpec = ReturnType<typeof getBlockSpec>;
+type RuntimeTypedBlockSpec = BlockSpec<BlockConfig, BlockState, BlockAction>;
 
 type ValidationIssuePath = ReadonlyArray<number | string | symbol>;
 
@@ -18,10 +18,10 @@ const toValidationDetails = (path: ValidationIssuePath, code: string) => ({
   validationPath: formatIssuePath(path),
 });
 
-const resolveBlockDefinitionOrThrow = (
+const resolveBlockSpecOrThrow = (
   nodeId: string,
   block: StoryBlock,
-): RuntimeBlockDefinition => {
+): RuntimeBlockSpec => {
   if (!hasBlockType(block.type)) {
     throw new EngineRuntimeError(
       'runtime_block_type_unregistered',
@@ -36,15 +36,15 @@ const resolveBlockDefinitionOrThrow = (
     );
   }
 
-  return getBlockDefinition(block.type);
+  return getBlockSpec(block.type);
 };
 
 export type ResolvedEffectiveBlockState = {
+  blockSpec: RuntimeBlockSpec;
   currentNodeBlock: CurrentNodeBlockView;
-  definition: RuntimeBlockDefinition;
   parsedConfig: BlockConfig;
   parsedState: BlockState;
-  policy: RuntimeBlockDefinition['policy'];
+  stateScope: RuntimeBlockSpec['stateScope'];
 };
 
 export const resolveEffectiveBlockStateOrThrow = (
@@ -52,10 +52,9 @@ export const resolveEffectiveBlockStateOrThrow = (
   nodeId: string,
   block: StoryBlock,
 ): ResolvedEffectiveBlockState => {
-  const definition = resolveBlockDefinitionOrThrow(nodeId, block);
-  const behavior = definition.behavior as unknown as RuntimeBlockBehavior;
-  const { policy } = definition;
-  const parsedConfig = behavior.configSchema.safeParse(block.config);
+  const blockSpec = resolveBlockSpecOrThrow(nodeId, block);
+  const typedBlockSpec = blockSpec as unknown as RuntimeTypedBlockSpec;
+  const parsedConfig = typedBlockSpec.configSchema.safeParse(block.config);
   if (!parsedConfig.success) {
     const firstIssue = parsedConfig.error.issues[0];
     throw new EngineRuntimeError(
@@ -74,13 +73,13 @@ export const resolveEffectiveBlockStateOrThrow = (
     );
   }
 
-  const persistedState = readOwnBlockState(state[policy.stateType].blockStates, block.id);
+  const persistedState = readScopedBlockState(state, typedBlockSpec.stateScope, block.id);
   let candidateState: unknown;
   if (persistedState.found) {
     candidateState = persistedState.value;
   } else {
     try {
-      candidateState = behavior.initialState(parsedConfig.data);
+      candidateState = typedBlockSpec.initialState(parsedConfig.data);
     } catch (error) {
       throw new EngineRuntimeError(
         'runtime_block_execution_failed',
@@ -98,7 +97,7 @@ export const resolveEffectiveBlockStateOrThrow = (
     }
   }
 
-  const parsedState = behavior.stateSchema.safeParse(candidateState);
+  const parsedState = typedBlockSpec.stateSchema.safeParse(candidateState);
   if (!parsedState.success) {
     const firstIssue = parsedState.error.issues[0];
     throw new EngineRuntimeError(
@@ -120,16 +119,16 @@ export const resolveEffectiveBlockStateOrThrow = (
   }
 
   return {
+    blockSpec: typedBlockSpec,
     currentNodeBlock: {
       config: block.config,
       id: block.id,
-      interactive: behavior.interactive,
+      interactive: typedBlockSpec.interactive,
       state: parsedState.data,
       type: block.type,
     },
-    definition,
     parsedConfig: parsedConfig.data,
     parsedState: parsedState.data,
-    policy,
+    stateScope: typedBlockSpec.stateScope,
   };
 };

@@ -4,16 +4,18 @@ import type { CurrentNodeView, RuntimeView, SessionState, TraversableEdge } from
 
 type StoryNode = StoryPackage['graph']['nodes'][number];
 
-export const createCurrentNodeViewOrThrow = (
+export const projectCurrentNodeViewOrThrow = (
   state: SessionState,
   node: StoryNode,
 ): CurrentNodeView => ({
-  blocks: node.blocks.map((block) => resolveEffectiveBlockStateOrThrow(state, node.id, block).currentNodeBlock),
+  blocks: node.blocks.map(
+    (block) => resolveEffectiveBlockStateOrThrow(state, node.id, block).currentNodeBlock,
+  ),
   id: node.id,
   title: node.title,
 });
 
-export const createRuntimeView = (
+export const projectRuntimeView = (
   currentNode: CurrentNodeView,
   traversableEdges: TraversableEdge[],
 ): RuntimeView => ({

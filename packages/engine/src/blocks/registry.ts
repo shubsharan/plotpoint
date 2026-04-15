@@ -1,25 +1,19 @@
-import { codeBlockBehavior, codeBlockTraversalFacts } from './definitions/code.js';
-import { locationBlockBehavior, locationBlockTraversalFacts } from './definitions/location.js';
-import {
-  multiChoiceBlockBehavior,
-  multiChoiceBlockTraversalFacts,
-} from './definitions/multi-choice.js';
-import {
-  singleChoiceBlockBehavior,
-  singleChoiceBlockTraversalFacts,
-} from './definitions/single-choice.js';
-import { textBlockBehavior, textBlockTraversalFacts } from './definitions/text.js';
+import { codeBlockSpec } from './definitions/code.js';
+import { locationBlockSpec } from './definitions/location.js';
+import { multiChoiceBlockSpec } from './definitions/multi-choice.js';
+import { singleChoiceBlockSpec } from './definitions/single-choice.js';
+import { textBlockSpec } from './definitions/text.js';
 import type {
+  BlockSpec,
   BlockConfig,
-  BlockRegistryEntry,
   BlockState,
   BlockTraversalFacts,
 } from './contracts.js';
 
 export type {
+  BlockSpec,
   BlockConfig,
-  BlockRegistryEntry,
-  BlockStateType,
+  BlockStateScope,
   BlockTraversalFacts,
   TraversalFactDefinition,
   TraversalFactKind,
@@ -42,75 +36,25 @@ const freezeTraversalFacts = <
     ) as BlockTraversalFacts<TConfig, TState>,
   );
 
-const freezeBlockRegistryEntry = <
+const freezeBlockSpec = <
   TConfig extends BlockConfig,
   TState extends BlockState,
   TAction extends { type: 'submit' },
 >(
-  entry: BlockRegistryEntry<TConfig, TState, TAction>,
-): BlockRegistryEntry<TConfig, TState, TAction> =>
+  spec: BlockSpec<TConfig, TState, TAction>,
+): BlockSpec<TConfig, TState, TAction> =>
   Object.freeze({
-    behavior: Object.freeze(entry.behavior),
-    policy: Object.freeze({
-      requiredContext: Object.freeze([...entry.policy.requiredContext]),
-      stateType: entry.policy.stateType,
-    }),
-    traversal: Object.freeze({
-      facts: freezeTraversalFacts(entry.traversal.facts),
-    }),
+    ...spec,
+    requiredContext: Object.freeze([...spec.requiredContext]),
+    traversalFacts: freezeTraversalFacts(spec.traversalFacts),
   });
 
 const blockRegistry = Object.freeze({
-  code: freezeBlockRegistryEntry({
-    behavior: codeBlockBehavior,
-    policy: {
-      requiredContext: ['nowIso'],
-      stateType: 'playerState',
-    },
-    traversal: {
-      facts: codeBlockTraversalFacts,
-    },
-  }),
-  location: freezeBlockRegistryEntry({
-    behavior: locationBlockBehavior,
-    policy: {
-      requiredContext: ['nowIso', 'playerLocation'],
-      stateType: 'playerState',
-    },
-    traversal: {
-      facts: locationBlockTraversalFacts,
-    },
-  }),
-  'multi-choice': freezeBlockRegistryEntry({
-    behavior: multiChoiceBlockBehavior,
-    policy: {
-      requiredContext: ['nowIso'],
-      stateType: 'playerState',
-    },
-    traversal: {
-      facts: multiChoiceBlockTraversalFacts,
-    },
-  }),
-  'single-choice': freezeBlockRegistryEntry({
-    behavior: singleChoiceBlockBehavior,
-    policy: {
-      requiredContext: ['nowIso'],
-      stateType: 'playerState',
-    },
-    traversal: {
-      facts: singleChoiceBlockTraversalFacts,
-    },
-  }),
-  text: freezeBlockRegistryEntry({
-    behavior: textBlockBehavior,
-    policy: {
-      requiredContext: [],
-      stateType: 'playerState',
-    },
-    traversal: {
-      facts: textBlockTraversalFacts,
-    },
-  }),
+  code: freezeBlockSpec(codeBlockSpec),
+  location: freezeBlockSpec(locationBlockSpec),
+  'multi-choice': freezeBlockSpec(multiChoiceBlockSpec),
+  'single-choice': freezeBlockSpec(singleChoiceBlockSpec),
+  text: freezeBlockSpec(textBlockSpec),
 });
 
 export type KnownBlockType = 'code' | 'location' | 'multi-choice' | 'single-choice' | 'text';
@@ -118,7 +62,7 @@ export type KnownBlockType = 'code' | 'location' | 'multi-choice' | 'single-choi
 export const hasBlockType = (blockType: string): blockType is KnownBlockType =>
   Object.hasOwn(blockRegistry, blockType);
 
-export const getBlockDefinition = <TBlockType extends KnownBlockType>(
+export const getBlockSpec = <TBlockType extends KnownBlockType>(
   blockType: TBlockType,
-): BlockRegistryEntry =>
-  blockRegistry[blockType] as unknown as BlockRegistryEntry;
+): BlockSpec =>
+  blockRegistry[blockType] as unknown as BlockSpec;

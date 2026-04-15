@@ -12,16 +12,9 @@ type StoryNode = StoryPackage['graph']['nodes'][number];
 type StoryBlock = StoryNode['blocks'][number];
 type StoryEdge = StoryNode['edges'][number];
 
-export type ResolveSessionContextOptions = {
-  blockId?: string | undefined;
-  edgeId?: string | undefined;
-};
-
-export type ResolvedSessionContext = {
+export type LoadedSessionStoryContext = {
   currentNode: StoryNode;
   story: StoryPackage;
-  targetBlock?: StoryBlock | undefined;
-  targetEdge?: StoryEdge | undefined;
 };
 
 const runtimeError = {
@@ -69,10 +62,10 @@ const runtimeError = {
       'runtime_story_package_version_unavailable',
       `Published story package version "${storyPackageVersionId}" for story "${storyId}" could not be loaded: ${details}.`,
     ),
-  snapshotInvalid: (details: string): EngineRuntimeError =>
+  sessionInputInvalid: (details: string): EngineRuntimeError =>
     new EngineRuntimeError(
-      'runtime_snapshot_invalid',
-      `Runtime snapshot input is invalid: ${details}.`,
+      'runtime_session_input_invalid',
+      `Runtime session input is invalid: ${details}.`,
     ),
 } as const;
 
@@ -189,7 +182,7 @@ export const assertRoleExistsOrThrow = (story: StoryPackage, roleId: string): vo
   }
 };
 
-export const getBlockInNodeOrThrow = (
+export const getTargetBlockOrThrow = (
   story: StoryPackage,
   node: StoryNode,
   blockId: string,
@@ -202,15 +195,7 @@ export const getBlockInNodeOrThrow = (
   return block;
 };
 
-export const assertBlockInNodeOrThrow = (
-  story: StoryPackage,
-  node: StoryNode,
-  blockId: string,
-): void => {
-  getBlockInNodeOrThrow(story, node, blockId);
-};
-
-export const getEdgeInNodeOrThrow = (
+export const getTargetEdgeOrThrow = (
   story: StoryPackage,
   node: StoryNode,
   edgeId: string,
@@ -223,11 +208,10 @@ export const getEdgeInNodeOrThrow = (
   return edge;
 };
 
-export const resolveSessionContextOrThrow = async (
+export const loadSessionStoryContextOrThrow = async (
   ports: EnginePorts,
   state: SessionState,
-  options?: ResolveSessionContextOptions,
-): Promise<ResolvedSessionContext> => {
+): Promise<LoadedSessionStoryContext> => {
   const story = await loadStoryByVersionOrThrow(
     ports,
     state.storyId,
@@ -237,41 +221,32 @@ export const resolveSessionContextOrThrow = async (
   assertRoleExistsOrThrow(story, state.roleId);
   const currentNode = getNodeOrThrow(story, state.currentNodeId);
 
-  const targetBlock =
-    options?.blockId === undefined
-      ? undefined
-      : getBlockInNodeOrThrow(story, currentNode, options.blockId);
-  const targetEdge =
-    options?.edgeId === undefined
-      ? undefined
-      : getEdgeInNodeOrThrow(story, currentNode, options.edgeId);
-
   return {
     currentNode,
     story,
-    targetBlock,
-    targetEdge,
   };
 };
 
-export const createRuntimeInputInvalidError = (error: ZodError): EngineRuntimeError => {
+export const createSessionInputInvalidError = (error: ZodError): EngineRuntimeError => {
   const firstIssue = error.issues[0];
 
   if (!firstIssue) {
-    return runtimeError.snapshotInvalid('no validation details were provided');
+    return runtimeError.sessionInputInvalid('no validation details were provided');
   }
 
-  return runtimeError.snapshotInvalid(`${firstIssue.code} at ${formatIssuePath(firstIssue.path)}`);
+  return runtimeError.sessionInputInvalid(
+    `${firstIssue.code} at ${formatIssuePath(firstIssue.path)}`,
+  );
 };
 
-export const parseRuntimeInputOrThrow = <TInput>(
+export const parseSessionCommandInputOrThrow = <TInput>(
   schema: ZodType<TInput>,
   input: unknown,
 ): TInput => {
   const parsed = schema.safeParse(input);
 
   if (!parsed.success) {
-    throw createRuntimeInputInvalidError(parsed.error);
+    throw createSessionInputInvalidError(parsed.error);
   }
 
   return parsed.data;

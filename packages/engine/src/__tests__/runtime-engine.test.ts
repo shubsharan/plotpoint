@@ -497,7 +497,7 @@ describe('@plotpoint/engine runtime surface', () => {
       state: staleStateWithView as unknown as SessionState,
     });
 
-    await expectRuntimeError(loadPromise, 'runtime_snapshot_invalid');
+    await expectRuntimeError(loadPromise, 'runtime_session_input_invalid');
     await expect(loadPromise).rejects.toThrow('unrecognized_keys');
   });
 
@@ -681,17 +681,17 @@ describe('@plotpoint/engine runtime surface', () => {
     await expect(startPromise).rejects.toThrow(/unknown-block-type|incompatible-engine-major/);
   });
 
-  it('throws runtime_snapshot_invalid for malformed startSession payloads', async () => {
+  it('throws runtime_session_input_invalid for malformed startSession payloads', async () => {
     const { engine, storyId } = createRuntimeContext();
     const startPromise = startRuntime(engine, storyId, {
       gameId: '',
     });
 
-    await expectRuntimeError(startPromise, 'runtime_snapshot_invalid');
+    await expectRuntimeError(startPromise, 'runtime_session_input_invalid');
     await expect(startPromise).rejects.toThrow('too_small at gameId');
   });
 
-  it('throws runtime_snapshot_invalid for malformed loadSession state payloads', async () => {
+  it('throws runtime_session_input_invalid for malformed loadSession state payloads', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
@@ -702,11 +702,11 @@ describe('@plotpoint/engine runtime surface', () => {
       } as unknown as SessionState,
     });
 
-    await expectRuntimeError(loadPromise, 'runtime_snapshot_invalid');
+    await expectRuntimeError(loadPromise, 'runtime_session_input_invalid');
     await expect(loadPromise).rejects.toThrow('too_small at state.roleId');
   });
 
-  it('throws runtime_snapshot_invalid when pinned story package version is missing from loadSession state', async () => {
+  it('throws runtime_session_input_invalid when pinned story package version is missing from loadSession state', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
@@ -717,11 +717,11 @@ describe('@plotpoint/engine runtime surface', () => {
       state: runtimeState as unknown as SessionState,
     });
 
-    await expectRuntimeError(loadPromise, 'runtime_snapshot_invalid');
+    await expectRuntimeError(loadPromise, 'runtime_session_input_invalid');
     await expect(loadPromise).rejects.toThrow('at state.storyPackageVersionId');
   });
 
-  it('throws runtime_snapshot_invalid for malformed submitAction payloads', async () => {
+  it('throws runtime_session_input_invalid for malformed submitAction payloads', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
@@ -734,11 +734,11 @@ describe('@plotpoint/engine runtime surface', () => {
       state: toSessionState(started),
     });
 
-    await expectRuntimeError(submitPromise, 'runtime_snapshot_invalid');
+    await expectRuntimeError(submitPromise, 'runtime_session_input_invalid');
     await expect(submitPromise).rejects.toThrow('too_small at blockId');
   });
 
-  it('throws runtime_snapshot_invalid when submitAction action is missing', async () => {
+  it('throws runtime_session_input_invalid when submitAction action is missing', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
@@ -747,11 +747,11 @@ describe('@plotpoint/engine runtime surface', () => {
       state: toSessionState(started),
     } as unknown as Parameters<Engine['submitAction']>[0]);
 
-    await expectRuntimeError(submitPromise, 'runtime_snapshot_invalid');
+    await expectRuntimeError(submitPromise, 'runtime_session_input_invalid');
     await expect(submitPromise).rejects.toThrow(/at action/);
   });
 
-  it('throws runtime_snapshot_invalid for malformed traverse payloads', async () => {
+  it('throws runtime_session_input_invalid for malformed traverse payloads', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
@@ -760,11 +760,11 @@ describe('@plotpoint/engine runtime surface', () => {
       state: toSessionState(started),
     });
 
-    await expectRuntimeError(traversePromise, 'runtime_snapshot_invalid');
+    await expectRuntimeError(traversePromise, 'runtime_session_input_invalid');
     await expect(traversePromise).rejects.toThrow('too_small at edgeId');
   });
 
-  it('uses runtime_snapshot_invalid across all runtime entrypoints for malformed input', async () => {
+  it('uses runtime_session_input_invalid across all runtime entrypoints for malformed input', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
@@ -773,7 +773,7 @@ describe('@plotpoint/engine runtime surface', () => {
         startRuntime(engine, storyId, {
           playerId: '',
         }),
-        'runtime_snapshot_invalid',
+        'runtime_session_input_invalid',
       ),
       expectRuntimeError(
         engine.loadSession({
@@ -782,7 +782,7 @@ describe('@plotpoint/engine runtime surface', () => {
             roleId: '',
           } as unknown as SessionState,
         }),
-        'runtime_snapshot_invalid',
+        'runtime_session_input_invalid',
       ),
       expectRuntimeError(
         engine.submitAction({
@@ -793,14 +793,14 @@ describe('@plotpoint/engine runtime surface', () => {
           blockId: '',
           state: toSessionState(started),
         }),
-        'runtime_snapshot_invalid',
+        'runtime_session_input_invalid',
       ),
       expectRuntimeError(
         engine.traverse({
           edgeId: '',
           state: toSessionState(started),
         }),
-        'runtime_snapshot_invalid',
+        'runtime_session_input_invalid',
       ),
     ]);
   });

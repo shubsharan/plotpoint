@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import {
-  defineBlockBehavior,
+  defineBlockSpec,
   type BlockTraversalFacts,
-  type NonInteractiveBlockBehavior,
+  type NonInteractiveBlockSpec,
 } from '../contracts.js';
 
 type TextLeaf = {
@@ -145,16 +145,17 @@ const textStateSchema: z.ZodType<TextBlockState> = z
   })
   .strict();
 
-export const textBlockBehavior: NonInteractiveBlockBehavior<
-  TextBlockConfig,
-  TextBlockState
-> = defineBlockBehavior({
-  configSchema: textConfigSchema,
-  initialState: () => ({
-    unlocked: true as const,
-  }),
-  interactive: false,
-  stateSchema: textStateSchema,
-});
+const textBlockTraversalFacts: BlockTraversalFacts<TextBlockConfig, TextBlockState> = {};
 
-export const textBlockTraversalFacts: BlockTraversalFacts<TextBlockConfig, TextBlockState> = {};
+export const textBlockSpec: NonInteractiveBlockSpec<TextBlockConfig, TextBlockState> =
+  defineBlockSpec({
+    configSchema: textConfigSchema,
+    initialState: () => ({
+      unlocked: true as const,
+    }),
+    interactive: false,
+    requiredContext: [],
+    stateSchema: textStateSchema,
+    stateScope: 'player',
+    traversalFacts: textBlockTraversalFacts,
+  });

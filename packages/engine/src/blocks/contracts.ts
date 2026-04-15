@@ -16,7 +16,7 @@ export type BlockActionContext = {
 };
 
 export type BlockContextKey = keyof BlockActionContext;
-export type BlockStateType = 'playerState' | 'sharedState';
+export type BlockStateScope = 'player' | 'shared';
 export type TraversalFactKind = 'boolean' | 'number' | 'string';
 export type TraversalFactValue = boolean | number | string;
 
@@ -51,21 +51,24 @@ export class BlockUpdateError extends Error {
   }
 }
 
-type BlockBaseDefinition<
+type BlockBaseSpec<
   TConfig extends BlockConfig = BlockConfig,
   TState extends BlockState = BlockState,
 > = {
   configSchema: z.ZodType<TConfig>;
   initialState: (config: TConfig) => TState;
   isActionable?: ((state: TState, config: TConfig) => boolean) | undefined;
+  requiredContext: ReadonlyArray<BlockContextKey>;
+  stateScope: BlockStateScope;
   stateSchema: z.ZodType<TState>;
+  traversalFacts: BlockTraversalFacts<TConfig, TState>;
 };
 
-export type InteractiveBlockBehavior<
+export type InteractiveBlockSpec<
   TConfig extends BlockConfig = BlockConfig,
   TState extends BlockState = BlockState,
   TAction extends BlockAction = BlockAction,
-> = BlockBaseDefinition<TConfig, TState> & {
+> = BlockBaseSpec<TConfig, TState> & {
   interactive: true;
   onAction: (
     state: TState,
@@ -76,51 +79,36 @@ export type InteractiveBlockBehavior<
   actionSchema: z.ZodType<TAction>;
 };
 
-export type NonInteractiveBlockBehavior<
+export type NonInteractiveBlockSpec<
   TConfig extends BlockConfig = BlockConfig,
   TState extends BlockState = BlockState,
-> = BlockBaseDefinition<TConfig, TState> & {
+> = BlockBaseSpec<TConfig, TState> & {
   interactive: false;
 };
 
-export type BlockBehavior<
+export type BlockSpec<
   TConfig extends BlockConfig = BlockConfig,
   TState extends BlockState = BlockState,
   TAction extends BlockAction = BlockAction,
 > =
-  | InteractiveBlockBehavior<TConfig, TState, TAction>
-  | NonInteractiveBlockBehavior<TConfig, TState>;
+  | InteractiveBlockSpec<TConfig, TState, TAction>
+  | NonInteractiveBlockSpec<TConfig, TState>;
 
-export type BlockRegistryEntry<
-  TConfig extends BlockConfig = BlockConfig,
-  TState extends BlockState = BlockState,
-  TAction extends BlockAction = BlockAction,
-> = {
-  behavior: BlockBehavior<TConfig, TState, TAction>;
-  policy: {
-    requiredContext: ReadonlyArray<BlockContextKey>;
-    stateType: BlockStateType;
-  };
-  traversal: {
-    facts: BlockTraversalFacts<TConfig, TState>;
-  };
-};
-
-export function defineBlockBehavior<
+export function defineBlockSpec<
   TConfig extends BlockConfig,
   TState extends BlockState,
   TAction extends BlockAction,
 >(
-  behavior: InteractiveBlockBehavior<TConfig, TState, TAction>,
-): InteractiveBlockBehavior<TConfig, TState, TAction>;
-export function defineBlockBehavior<
+  spec: InteractiveBlockSpec<TConfig, TState, TAction>,
+): InteractiveBlockSpec<TConfig, TState, TAction>;
+export function defineBlockSpec<
   TConfig extends BlockConfig,
   TState extends BlockState,
 >(
-  behavior: NonInteractiveBlockBehavior<TConfig, TState>,
-): NonInteractiveBlockBehavior<TConfig, TState>;
-export function defineBlockBehavior(
-  behavior: BlockBehavior,
-): BlockBehavior {
-  return behavior;
+  spec: NonInteractiveBlockSpec<TConfig, TState>,
+): NonInteractiveBlockSpec<TConfig, TState>;
+export function defineBlockSpec(
+  spec: BlockSpec,
+): BlockSpec {
+  return spec;
 }

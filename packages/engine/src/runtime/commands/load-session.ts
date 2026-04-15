@@ -1,13 +1,13 @@
 import {
-  parseRuntimeInputOrThrow,
-  resolveSessionContextOrThrow,
+  loadSessionStoryContextOrThrow,
+  parseSessionCommandInputOrThrow,
 } from '../context/story-context.js';
 import { loadSessionInputSchema } from '../contracts/command-inputs.js';
-import { createRuntimeFrame } from '../projection/frame-builder.js';
+import { projectRuntimeFrame } from '../projection/runtime-frame.js';
 import {
-  createCurrentNodeViewOrThrow,
-  createRuntimeView,
-} from '../projection/view-projection.js';
+  projectCurrentNodeViewOrThrow,
+  projectRuntimeView,
+} from '../projection/runtime-view.js';
 import { deriveTraversableEdgesOrThrow } from '../traversal/condition-evaluator.js';
 import type { EnginePorts, LoadSessionInput, RuntimeFrame } from '../types.js';
 
@@ -15,14 +15,14 @@ export const loadSession = async (
   ports: EnginePorts,
   input: LoadSessionInput,
 ): Promise<RuntimeFrame> => {
-  const { state } = parseRuntimeInputOrThrow(loadSessionInputSchema, input);
-  const { currentNode, story } = await resolveSessionContextOrThrow(ports, state);
-  const hydratedCurrentNode = createCurrentNodeViewOrThrow(state, currentNode);
+  const { state } = parseSessionCommandInputOrThrow(loadSessionInputSchema, input);
+  const { currentNode, story } = await loadSessionStoryContextOrThrow(ports, state);
+  const currentNodeView = projectCurrentNodeViewOrThrow(state, currentNode);
 
-  return createRuntimeFrame(
+  return projectRuntimeFrame(
     state,
-    createRuntimeView(
-      hydratedCurrentNode,
+    projectRuntimeView(
+      currentNodeView,
       deriveTraversableEdgesOrThrow(story, state, currentNode),
     ),
   );

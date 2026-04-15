@@ -38,27 +38,21 @@ describe('@plotpoint/engine traversal internals', () => {
         },
         type: 'code',
       },
-      definition: {
-        behavior: {
-          configSchema: {} as never,
-          initialState: () => ({ unlocked: true as const }),
-          interactive: true,
-          onAction: () => ({ unlocked: true as const }),
-          actionSchema: {} as never,
-          stateSchema: {} as never,
-        },
-        policy: {
-          requiredContext: [],
-          stateType: 'playerState',
-        },
-        traversal: {
-          facts: {
-            unlocked: {
-              derive: () => {
-                throw projectorError;
-              },
-              kind: 'boolean',
+      blockSpec: {
+        actionSchema: {} as never,
+        configSchema: {} as never,
+        initialState: () => ({ unlocked: true as const }),
+        interactive: true,
+        onAction: () => ({ unlocked: true as const }),
+        requiredContext: [],
+        stateSchema: {} as never,
+        stateScope: 'player',
+        traversalFacts: {
+          unlocked: {
+            derive: () => {
+              throw projectorError;
             },
+            kind: 'boolean',
           },
         },
       },

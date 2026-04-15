@@ -93,7 +93,7 @@ describe('@plotpoint/engine', () => {
 
   it('does not export mutable block registry internals from the root entrypoint', () => {
     expect('blockRegistry' in engine).toBe(false);
-    expect('getBlockDefinition' in engine).toBe(false);
+    expect('getBlockSpec' in engine).toBe(false);
     expect('hasBlockType' in engine).toBe(false);
   });
 });

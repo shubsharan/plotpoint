@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import {
   BlockUpdateError,
-  defineBlockBehavior,
+  defineBlockSpec,
   type BlockTraversalFacts,
-  type InteractiveBlockBehavior,
+  type InteractiveBlockSpec,
 } from '../contracts.js';
 
 type MultiChoiceOption = {
@@ -153,11 +153,34 @@ const normalizeOptionIds = (optionIds: string[]): string[] =>
 const hasSameOptions = (left: string[], right: string[]): boolean =>
   left.length === right.length && left.every((optionId, index) => optionId === right[index]);
 
-export const multiChoiceBlockBehavior: InteractiveBlockBehavior<
+const multiChoiceBlockTraversalFacts: BlockTraversalFacts<
+  MultiChoiceBlockConfig,
+  MultiChoiceBlockState
+> = {
+  answered: {
+    derive: ({ state }) => state.selectedOptionIds.length > 0,
+    kind: 'boolean',
+  },
+  correct: {
+    derive: ({ state }) => state.unlocked,
+    kind: 'boolean',
+  },
+  selectedCount: {
+    derive: ({ state }) => state.selectedOptionIds.length,
+    kind: 'number',
+  },
+  unlocked: {
+    derive: ({ state }) => state.unlocked,
+    kind: 'boolean',
+  },
+};
+
+export const multiChoiceBlockSpec: InteractiveBlockSpec<
   MultiChoiceBlockConfig,
   MultiChoiceBlockState,
   MultiChoiceBlockAction
-> = defineBlockBehavior({
+> = defineBlockSpec({
+  actionSchema: multiChoiceActionSchema,
   configSchema: multiChoiceConfigSchema,
   initialState: (): MultiChoiceBlockState => ({
     attempts: [],
@@ -167,7 +190,6 @@ export const multiChoiceBlockBehavior: InteractiveBlockBehavior<
   interactive: true,
   isActionable: (state) =>
     !state.unlocked && state.selectedOptionIds.length === 0 && state.attempts.length === 0,
-  stateSchema: multiChoiceStateSchema,
   onAction: (state, action, context, config) => {
     const normalizedOptionIds = normalizeOptionIds(action.optionIds);
     const allowedOptionIds = config.options.map((option) => option.id);
@@ -211,20 +233,22 @@ export const multiChoiceBlockBehavior: InteractiveBlockBehavior<
       normalizedOptionIds,
       normalizeOptionIds(config.correctOptionIds),
     );
-    const previouslyUnlocked = state.unlocked || state.attempts.some((attempt) => attempt.isCorrect);
+    const previouslyUnlocked =
+      state.unlocked || state.attempts.some((attempt) => attempt.isCorrect);
     const submittedAt = context.nowIso;
-    const attempt: MultiChoiceAttempt = submittedAt === undefined
-      ? {
-          isCorrect,
-          normalizedOptionIds,
-          submitted: action,
-        }
-      : {
-          isCorrect,
-          normalizedOptionIds,
-          submitted: action,
-          submittedAt,
-        };
+    const attempt: MultiChoiceAttempt =
+      submittedAt === undefined
+        ? {
+            isCorrect,
+            normalizedOptionIds,
+            submitted: action,
+          }
+        : {
+            isCorrect,
+            normalizedOptionIds,
+            submitted: action,
+            submittedAt,
+          };
 
     return {
       attempts: [...state.attempts, attempt],
@@ -233,27 +257,8 @@ export const multiChoiceBlockBehavior: InteractiveBlockBehavior<
       unlocked: previouslyUnlocked || isCorrect,
     };
   },
-  actionSchema: multiChoiceActionSchema,
+  requiredContext: ['nowIso'],
+  stateSchema: multiChoiceStateSchema,
+  stateScope: 'player',
+  traversalFacts: multiChoiceBlockTraversalFacts,
 });
-
-export const multiChoiceBlockTraversalFacts: BlockTraversalFacts<
-  MultiChoiceBlockConfig,
-  MultiChoiceBlockState
-> = {
-  answered: {
-    derive: ({ state }) => state.selectedOptionIds.length > 0,
-    kind: 'boolean',
-  },
-  correct: {
-    derive: ({ state }) => state.unlocked,
-    kind: 'boolean',
-  },
-  selectedCount: {
-    derive: ({ state }) => state.selectedOptionIds.length,
-    kind: 'number',
-  },
-  unlocked: {
-    derive: ({ state }) => state.unlocked,
-    kind: 'boolean',
-  },
-};

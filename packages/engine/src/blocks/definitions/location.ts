@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import {
   BlockUpdateError,
-  defineBlockBehavior,
+  defineBlockSpec,
   type BlockTraversalFacts,
-  type InteractiveBlockBehavior,
+  type InteractiveBlockSpec,
 } from '../contracts.js';
 
 type LocationBlockConfig = {
@@ -81,22 +81,6 @@ const locationActionSchema: z.ZodType<LocationBlockAction> = z
   })
   .strict();
 
-const locationTargetSchema = z.union([
-  z
-    .object({
-      kind: z.literal('coordinates'),
-      lat: z.number(),
-      lng: z.number(),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('place'),
-      placeId: z.string().min(1),
-    })
-    .strict(),
-]);
-
 const locationCheckSchema: z.ZodType<LocationCheck> = z
   .object({
     distanceMeters: z.number().nonnegative().optional(),
@@ -146,11 +130,26 @@ const calculateDistanceMeters = (
   return earthRadiusMeters * c;
 };
 
-export const locationBlockBehavior: InteractiveBlockBehavior<
+const locationBlockTraversalFacts: BlockTraversalFacts<
+  LocationBlockConfig,
+  LocationBlockState
+> = {
+  checksCount: {
+    derive: ({ state }) => state.checksCount,
+    kind: 'number',
+  },
+  unlocked: {
+    derive: ({ state }) => state.unlocked,
+    kind: 'boolean',
+  },
+};
+
+export const locationBlockSpec: InteractiveBlockSpec<
   LocationBlockConfig,
   LocationBlockState,
   LocationBlockAction
-> = defineBlockBehavior({
+> = defineBlockSpec({
+  actionSchema: locationActionSchema,
   configSchema: locationConfigSchema,
   initialState: (): LocationBlockState => ({
     checks: [],
@@ -159,7 +158,6 @@ export const locationBlockBehavior: InteractiveBlockBehavior<
   }),
   interactive: true,
   isActionable: (state) => !state.unlocked,
-  stateSchema: locationStateSchema,
   onAction: (state, action, context, config) => {
     if (config.target.kind === 'place') {
       throw new BlockUpdateError(
@@ -184,20 +182,21 @@ export const locationBlockBehavior: InteractiveBlockBehavior<
     const withinRadius =
       distanceMeters !== undefined && distanceMeters <= config.radiusMeters;
 
-    const check: LocationCheck = submittedAt === undefined
-      ? {
-          distanceMeters,
-          playerLocation,
-          submitted: action,
-          withinRadius,
-        }
-      : {
-          distanceMeters,
-          playerLocation,
-          submitted: action,
-          submittedAt,
-          withinRadius,
-        };
+    const check: LocationCheck =
+      submittedAt === undefined
+        ? {
+            distanceMeters,
+            playerLocation,
+            submitted: action,
+            withinRadius,
+          }
+        : {
+            distanceMeters,
+            playerLocation,
+            submitted: action,
+            submittedAt,
+            withinRadius,
+          };
 
     return {
       checks: [...state.checks, check],
@@ -206,19 +205,8 @@ export const locationBlockBehavior: InteractiveBlockBehavior<
       unlocked: state.unlocked || withinRadius,
     };
   },
-  actionSchema: locationActionSchema,
+  requiredContext: ['nowIso', 'playerLocation'],
+  stateSchema: locationStateSchema,
+  stateScope: 'player',
+  traversalFacts: locationBlockTraversalFacts,
 });
-
-export const locationBlockTraversalFacts: BlockTraversalFacts<
-  LocationBlockConfig,
-  LocationBlockState
-> = {
-  checksCount: {
-    derive: ({ state }) => state.checksCount,
-    kind: 'number',
-  },
-  unlocked: {
-    derive: ({ state }) => state.unlocked,
-    kind: 'boolean',
-  },
-};

@@ -1,15 +1,16 @@
 import { EngineRuntimeError } from '../errors.js';
 import {
   getNodeOrThrow,
-  parseRuntimeInputOrThrow,
-  resolveSessionContextOrThrow,
+  getTargetEdgeOrThrow,
+  loadSessionStoryContextOrThrow,
+  parseSessionCommandInputOrThrow,
 } from '../context/story-context.js';
 import { traverseInputSchema } from '../contracts/command-inputs.js';
-import { createRuntimeFrame } from '../projection/frame-builder.js';
+import { projectRuntimeFrame } from '../projection/runtime-frame.js';
 import {
-  createCurrentNodeViewOrThrow,
-  createRuntimeView,
-} from '../projection/view-projection.js';
+  projectCurrentNodeViewOrThrow,
+  projectRuntimeView,
+} from '../projection/runtime-view.js';
 import { deriveTraversableEdgesOrThrow } from '../traversal/condition-evaluator.js';
 import type { EnginePorts, RuntimeFrame, TraverseInput } from '../types.js';
 
@@ -17,15 +18,10 @@ export const traverse = async (
   ports: EnginePorts,
   input: TraverseInput,
 ): Promise<RuntimeFrame> => {
-  const { edgeId, state } = parseRuntimeInputOrThrow(traverseInputSchema, input);
-  const { currentNode, story, targetEdge } = await resolveSessionContextOrThrow(ports, state, {
-    edgeId,
-  });
+  const { edgeId, state } = parseSessionCommandInputOrThrow(traverseInputSchema, input);
+  const { currentNode, story } = await loadSessionStoryContextOrThrow(ports, state);
+  const edge = getTargetEdgeOrThrow(story, currentNode, edgeId);
 
-  const edge = targetEdge;
-  if (!edge) {
-    throw new Error('Expected resolveSessionContextOrThrow to return targetEdge.');
-  }
   const traversableEdges = deriveTraversableEdgesOrThrow(story, state, currentNode);
   const isTraversable = traversableEdges.some(
     (traversableEdge) => traversableEdge.edgeId === edgeId,
@@ -50,12 +46,12 @@ export const traverse = async (
     ...state,
     currentNodeId: nextNode.id,
   };
-  const hydratedCurrentNode = createCurrentNodeViewOrThrow(nextState, nextNode);
+  const currentNodeView = projectCurrentNodeViewOrThrow(nextState, nextNode);
 
-  return createRuntimeFrame(
+  return projectRuntimeFrame(
     nextState,
-    createRuntimeView(
-      hydratedCurrentNode,
+    projectRuntimeView(
+      currentNodeView,
       deriveTraversableEdgesOrThrow(story, nextState, nextNode),
     ),
   );

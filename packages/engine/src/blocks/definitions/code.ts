@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import {
-  defineBlockBehavior,
+  defineBlockSpec,
   type BlockTraversalFacts,
-  type InteractiveBlockBehavior,
+  type InteractiveBlockSpec,
 } from '../contracts.js';
 
 type CodeBlockConfig = {
@@ -50,7 +50,11 @@ const codeConfigSchema: z.ZodType<CodeBlockConfig> = z
     mode: z.enum(['passcode', 'password']),
   })
   .superRefine((config, context) => {
-    if (config.length?.min !== undefined && config.length?.max !== undefined && config.length.min > config.length.max) {
+    if (
+      config.length?.min !== undefined &&
+      config.length?.max !== undefined &&
+      config.length.min > config.length.max
+    ) {
       context.addIssue({
         code: 'custom',
         message: 'length.min cannot be greater than length.max.',
@@ -101,11 +105,23 @@ const resolveIsCorrect = (config: CodeBlockConfig, submittedValue: string): bool
   return normalizedSubmitted === expectedValue;
 };
 
-export const codeBlockBehavior: InteractiveBlockBehavior<
+const codeBlockTraversalFacts: BlockTraversalFacts<CodeBlockConfig, CodeBlockState> = {
+  attemptsCount: {
+    derive: ({ state }) => state.attempts.length,
+    kind: 'number',
+  },
+  unlocked: {
+    derive: ({ state }) => state.unlocked,
+    kind: 'boolean',
+  },
+};
+
+export const codeBlockSpec: InteractiveBlockSpec<
   CodeBlockConfig,
   CodeBlockState,
   CodeBlockAction
-> = defineBlockBehavior({
+> = defineBlockSpec({
+  actionSchema: codeActionSchema,
   configSchema: codeConfigSchema,
   initialState: (): CodeBlockState => ({
     attempts: [],
@@ -116,22 +132,23 @@ export const codeBlockBehavior: InteractiveBlockBehavior<
     !state.unlocked &&
     !state.attempts.some((attempt) => attempt.isCorrect) &&
     (config.maxAttempts === undefined || state.attempts.length < config.maxAttempts),
-  stateSchema: codeStateSchema,
   onAction: (state, action, context, config) => {
     const isCorrect = resolveIsCorrect(config, action.value);
-    const previouslyUnlocked = state.unlocked || state.attempts.some((attempt) => attempt.isCorrect);
+    const previouslyUnlocked =
+      state.unlocked || state.attempts.some((attempt) => attempt.isCorrect);
 
     const submittedAt = context.nowIso;
-    const attempt: CodeBlockAttempt = submittedAt === undefined
-      ? {
-          isCorrect,
-          submitted: action,
-        }
-      : {
-          isCorrect,
-          submitted: action,
-          submittedAt,
-        };
+    const attempt: CodeBlockAttempt =
+      submittedAt === undefined
+        ? {
+            isCorrect,
+            submitted: action,
+          }
+        : {
+            isCorrect,
+            submitted: action,
+            submittedAt,
+          };
 
     return {
       attempts: [...state.attempts, attempt],
@@ -139,16 +156,8 @@ export const codeBlockBehavior: InteractiveBlockBehavior<
       unlocked: previouslyUnlocked || isCorrect,
     };
   },
-  actionSchema: codeActionSchema,
+  requiredContext: ['nowIso'],
+  stateSchema: codeStateSchema,
+  stateScope: 'player',
+  traversalFacts: codeBlockTraversalFacts,
 });
-
-export const codeBlockTraversalFacts: BlockTraversalFacts<CodeBlockConfig, CodeBlockState> = {
-  attemptsCount: {
-    derive: ({ state }) => state.attempts.length,
-    kind: 'number',
-  },
-  unlocked: {
-    derive: ({ state }) => state.unlocked,
-    kind: 'boolean',
-  },
-};

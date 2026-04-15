@@ -14,7 +14,7 @@ export type EngineRuntimeErrorCode =
   | 'runtime_block_unsupported_location_target'
   | 'runtime_node_not_found'
   | 'runtime_role_not_found'
-  | 'runtime_snapshot_invalid'
+  | 'runtime_session_input_invalid'
   | 'runtime_story_package_invalid'
   | 'runtime_story_package_unavailable'
   | 'runtime_story_package_version_unavailable'

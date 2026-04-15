@@ -1,6 +1,6 @@
 import type { RuntimeFrame, RuntimeView, SessionState } from '../types.js';
 
-export const normalizeSessionState = (state: SessionState): SessionState => ({
+export const cloneSessionState = (state: SessionState): SessionState => ({
   ...state,
   playerState: {
     ...state.playerState,
@@ -12,13 +12,10 @@ export const normalizeSessionState = (state: SessionState): SessionState => ({
   },
 });
 
-export const createRuntimeFrame = (
+export const projectRuntimeFrame = (
   state: SessionState,
   view: RuntimeView,
-  options?: {
-    normalizeState?: boolean | undefined;
-  },
 ): RuntimeFrame => ({
-  state: options?.normalizeState === false ? state : normalizeSessionState(state),
+  state: cloneSessionState(state),
   view,
 });

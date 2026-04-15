@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { getBlockDefinition, hasBlockType } from '../blocks/registry.js';
+import { getBlockSpec, hasBlockType } from '../blocks/registry.js';
 import {
   buildStoryPackageBlockIndex,
   getTraversalFactKind,
@@ -44,8 +44,8 @@ export const validateStoryPackageCompatibility = (
         return;
       }
 
-      const definition = getBlockDefinition(block.type);
-      const configResult = definition.behavior.configSchema.safeParse(block.config);
+      const blockSpec = getBlockSpec(block.type);
+      const configResult = blockSpec.configSchema.safeParse(block.config);
 
       if (configResult.success) {
         return;
@@ -111,7 +111,7 @@ export const validateStoryPackageCompatibility = (
           }
 
           const factDefinition =
-            getBlockDefinition(referencedBlock.block.type).traversal.facts[condition.fact];
+            getBlockSpec(referencedBlock.block.type).traversalFacts[condition.fact];
           if (!factDefinition) {
             issues.push(
               createIssue(

@@ -14,8 +14,8 @@ import {
   createEngine,
   currentEngineMajor,
 } from '../index.js';
-import { getBlockDefinition } from '../blocks/registry.js';
-import { writeBlockStateByType } from '../runtime/state/block-state-bucket.js';
+import { getBlockSpec } from '../blocks/registry.js';
+import { writeScopedBlockState } from '../runtime/state/scoped-block-state.js';
 import { createValidStoryPackageFixture } from './fixtures/story-packages.js';
 
 type StoryPackageRepoReaders = {
@@ -255,7 +255,7 @@ describe('@plotpoint/engine submitAction execution contracts', () => {
       },
     };
 
-    const nextState = writeBlockStateByType(state, 'sharedState', 'vault-code', {
+    const nextState = writeScopedBlockState(state, 'shared', 'vault-code', {
       unlocked: true,
     });
 
@@ -499,22 +499,31 @@ describe('@plotpoint/engine submitAction execution contracts', () => {
     });
   });
 
-  it('declares immutable runtime stateType and requiredContext metadata per block type', () => {
-    expect(getBlockDefinition('code').policy).toEqual({
+  it('declares immutable runtime stateScope and requiredContext metadata per block type', () => {
+    expect({
+      requiredContext: getBlockSpec('code').requiredContext,
+      stateScope: getBlockSpec('code').stateScope,
+    }).toEqual({
       requiredContext: ['nowIso'],
-      stateType: 'playerState',
+      stateScope: 'player',
     });
-    expect(getBlockDefinition('location').policy).toEqual({
+    expect({
+      requiredContext: getBlockSpec('location').requiredContext,
+      stateScope: getBlockSpec('location').stateScope,
+    }).toEqual({
       requiredContext: ['nowIso', 'playerLocation'],
-      stateType: 'playerState',
+      stateScope: 'player',
     });
-    expect(getBlockDefinition('text').policy).toEqual({
+    expect({
+      requiredContext: getBlockSpec('text').requiredContext,
+      stateScope: getBlockSpec('text').stateScope,
+    }).toEqual({
       requiredContext: [],
-      stateType: 'playerState',
+      stateScope: 'player',
     });
-    expect(Object.isFrozen(getBlockDefinition('code'))).toBe(true);
-    expect(Object.isFrozen(getBlockDefinition('code').policy)).toBe(true);
-    expect(Object.isFrozen(getBlockDefinition('code').traversal.facts.unlocked)).toBe(true);
+    expect(Object.isFrozen(getBlockSpec('code'))).toBe(true);
+    expect(Object.isFrozen(getBlockSpec('code').requiredContext)).toBe(true);
+    expect(Object.isFrozen(getBlockSpec('code').traversalFacts.unlocked)).toBe(true);
   });
 
   it('accepts submitAction for prototype-chain key ids by using own-key block-state lookups', async () => {

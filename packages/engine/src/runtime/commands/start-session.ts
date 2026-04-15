@@ -2,14 +2,14 @@ import {
   assertRoleExistsOrThrow,
   getNodeOrThrow,
   loadStoryOrThrow,
-  parseRuntimeInputOrThrow,
+  parseSessionCommandInputOrThrow,
 } from '../context/story-context.js';
-import { createRuntimeFrame } from '../projection/frame-builder.js';
-import {
-  createCurrentNodeViewOrThrow,
-  createRuntimeView,
-} from '../projection/view-projection.js';
 import { startSessionInputSchema } from '../contracts/command-inputs.js';
+import { projectRuntimeFrame } from '../projection/runtime-frame.js';
+import {
+  projectCurrentNodeViewOrThrow,
+  projectRuntimeView,
+} from '../projection/runtime-view.js';
 import { deriveTraversableEdgesOrThrow } from '../traversal/condition-evaluator.js';
 import type { EnginePorts, RuntimeFrame, SessionState, StartSessionInput } from '../types.js';
 
@@ -17,7 +17,7 @@ export const startSession = async (
   ports: EnginePorts,
   input: StartSessionInput,
 ): Promise<RuntimeFrame> => {
-  const parsedInput = parseRuntimeInputOrThrow(startSessionInputSchema, input);
+  const parsedInput = parseSessionCommandInputOrThrow(startSessionInputSchema, input);
   const { storyPackage, storyPackageVersionId } = await loadStoryOrThrow(
     ports,
     parsedInput.storyId,
@@ -40,12 +40,12 @@ export const startSession = async (
     storyId: parsedInput.storyId,
     storyPackageVersionId,
   };
-  const currentNode = createCurrentNodeViewOrThrow(initialState, entryNode);
+  const currentNodeView = projectCurrentNodeViewOrThrow(initialState, entryNode);
 
-  return createRuntimeFrame(
+  return projectRuntimeFrame(
     initialState,
-    createRuntimeView(
-      currentNode,
+    projectRuntimeView(
+      currentNodeView,
       deriveTraversableEdgesOrThrow(storyPackage, initialState, entryNode),
     ),
   );

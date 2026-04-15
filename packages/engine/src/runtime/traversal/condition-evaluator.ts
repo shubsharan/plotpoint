@@ -27,7 +27,7 @@ type ResolvedTraversalFact = {
 };
 type ResolvedBlockRuntime = Pick<
   ReturnType<typeof resolveEffectiveBlockStateOrThrow>,
-  'currentNodeBlock' | 'definition' | 'parsedConfig' | 'parsedState'
+  'blockSpec' | 'currentNodeBlock' | 'parsedConfig' | 'parsedState'
 >;
 type ConditionEvaluationContext = {
   edgeId: string;
@@ -108,7 +108,7 @@ export const deriveTraversalFactOrThrow = (
   fact: string,
   context: ConditionEvaluationContext,
 ): ResolvedTraversalFact => {
-  const factDefinition = blockRuntime.definition.traversal.facts[fact] as
+  const factDefinition = blockRuntime.blockSpec.traversalFacts[fact] as
     | TraversalFactDefinition<BlockConfig, BlockState>
     | undefined;
   if (!factDefinition) {

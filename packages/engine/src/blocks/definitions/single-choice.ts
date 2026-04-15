@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import {
   BlockUpdateError,
-  defineBlockBehavior,
+  defineBlockSpec,
   type BlockTraversalFacts,
-  type InteractiveBlockBehavior,
+  type InteractiveBlockSpec,
 } from '../contracts.js';
 
 type SingleChoiceOption = {
@@ -100,58 +100,7 @@ const singleChoiceStateSchema: z.ZodType<SingleChoiceBlockState> = z
   })
   .strict();
 
-export const singleChoiceBlockBehavior: InteractiveBlockBehavior<
-  SingleChoiceBlockConfig,
-  SingleChoiceBlockState,
-  SingleChoiceBlockAction
-> = defineBlockBehavior({
-  configSchema: singleChoiceConfigSchema,
-  initialState: (): SingleChoiceBlockState => ({
-    attempts: [],
-    selectedOptionId: null,
-    unlocked: false,
-  }),
-  interactive: true,
-  isActionable: (state) =>
-    !state.unlocked && state.selectedOptionId === null && state.attempts.length === 0,
-  stateSchema: singleChoiceStateSchema,
-  onAction: (state, action, context, config) => {
-    const optionIds = config.options.map((option) => option.id);
-    if (!optionIds.includes(action.optionId)) {
-      throw new BlockUpdateError(
-        'action_invalid_for_config',
-        `Option id "${action.optionId}" is not declared in this single-choice block.`,
-        {
-          optionId: action.optionId,
-        },
-      );
-    }
-
-    const isCorrect = action.optionId === config.correctOptionId;
-    const previouslyUnlocked = state.unlocked || state.attempts.some((attempt) => attempt.isCorrect);
-    const submittedAt = context.nowIso;
-    const attempt: SingleChoiceAttempt = submittedAt === undefined
-      ? {
-          isCorrect,
-          submitted: action,
-        }
-      : {
-          isCorrect,
-          submitted: action,
-          submittedAt,
-        };
-
-    return {
-      attempts: [...state.attempts, attempt],
-      lastSubmittedAt: submittedAt,
-      selectedOptionId: action.optionId,
-      unlocked: previouslyUnlocked || isCorrect,
-    };
-  },
-  actionSchema: singleChoiceActionSchema,
-});
-
-export const singleChoiceBlockTraversalFacts: BlockTraversalFacts<
+const singleChoiceBlockTraversalFacts: BlockTraversalFacts<
   SingleChoiceBlockConfig,
   SingleChoiceBlockState
 > = {
@@ -168,3 +117,59 @@ export const singleChoiceBlockTraversalFacts: BlockTraversalFacts<
     kind: 'boolean',
   },
 };
+
+export const singleChoiceBlockSpec: InteractiveBlockSpec<
+  SingleChoiceBlockConfig,
+  SingleChoiceBlockState,
+  SingleChoiceBlockAction
+> = defineBlockSpec({
+  actionSchema: singleChoiceActionSchema,
+  configSchema: singleChoiceConfigSchema,
+  initialState: (): SingleChoiceBlockState => ({
+    attempts: [],
+    selectedOptionId: null,
+    unlocked: false,
+  }),
+  interactive: true,
+  isActionable: (state) =>
+    !state.unlocked && state.selectedOptionId === null && state.attempts.length === 0,
+  onAction: (state, action, context, config) => {
+    const optionIds = config.options.map((option) => option.id);
+    if (!optionIds.includes(action.optionId)) {
+      throw new BlockUpdateError(
+        'action_invalid_for_config',
+        `Option id "${action.optionId}" is not declared in this single-choice block.`,
+        {
+          optionId: action.optionId,
+        },
+      );
+    }
+
+    const isCorrect = action.optionId === config.correctOptionId;
+    const previouslyUnlocked =
+      state.unlocked || state.attempts.some((attempt) => attempt.isCorrect);
+    const submittedAt = context.nowIso;
+    const attempt: SingleChoiceAttempt =
+      submittedAt === undefined
+        ? {
+            isCorrect,
+            submitted: action,
+          }
+        : {
+            isCorrect,
+            submitted: action,
+            submittedAt,
+          };
+
+    return {
+      attempts: [...state.attempts, attempt],
+      lastSubmittedAt: submittedAt,
+      selectedOptionId: action.optionId,
+      unlocked: previouslyUnlocked || isCorrect,
+    };
+  },
+  requiredContext: ['nowIso'],
+  stateSchema: singleChoiceStateSchema,
+  stateScope: 'player',
+  traversalFacts: singleChoiceBlockTraversalFacts,
+});
