@@ -5,7 +5,7 @@
 | **Status**      | Completed   |
 | **Epic**        | EPIC-0003   |
 | **Domains**     | Engine      |
-| **Last synced** | 2026-04-02  |
+| **Last synced** | 2026-04-15  |
 
 # FEAT-0008 - Traversal Fact View and Graph Traversal Semantics
 
@@ -131,7 +131,7 @@ This feature owns condition evaluation, traversable-edge derivation, and `traver
 
 - Internal engine rollout only; later API/mobile surfaces consume available-edge results rather than re-evaluating conditions themselves.
 - Surface typed traversal and condition-evaluation errors with structured details for adapter logging/serialization.
-- Close deferred follow-up `DF-0002` now that implementation/tests/docs have removed the FEAT-0007 placeholder behavior.
+- Close deferred follow-up [DF-0002](../runbooks/deferred-followups.md) now that implementation/tests/docs have removed the FEAT-0007 placeholder behavior.
 
 ## Risks and Mitigations
 

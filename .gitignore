@@ -33,6 +33,9 @@ docs/superpowers/
 # Testing
 coverage/
 
+# Cursor (editor-local settings, hooks state, etc.)
+.cursor/
+
 # Misc
 .DS_Store
 *.pem

@@ -3,7 +3,7 @@
 | **Type**        | Roadmap    |
 | **Status**      | Active     |
 | **Horizon**     | MVP        |
-| **Last synced** | 2026-03-24 |
+| **Last synced** | 2026-04-15 |
 
 # Plotpoint - MVP Product Roadmap
 
@@ -52,8 +52,8 @@ Deliver the first playable Plotpoint MVP: a single mobile app where small groups
 | Epic        | Objective                                                      | MVP                                                  | Status      |
 | ----------- | -------------------------------------------------------------- | ---------------------------------------------------- | ----------- |
 | `EPIC-0001` | Establish planning/docs baseline and foundation cleanup.       | Creates a clean starting point for product delivery. | Complete    |
-| `EPIC-0002` | Define story package contract and internal publishing pipeline. | Enables repeatable, non-code content releases.       | In Progress |
-| `EPIC-0003` | Build the headless runtime engine and condition system.        | Provides core story execution semantics.             | Not Started |
+| `EPIC-0002` | Define story package contract and internal publishing pipeline. | Enables repeatable, non-code content releases.       | Complete    |
+| `EPIC-0003` | Build the headless runtime engine and condition system.        | Provides core story execution semantics.             | Complete    |
 | `EPIC-0004` | Add session lifecycle, persistence, and multiplayer state.     | Supports reliable co-op play across sessions.        | Not Started |
 | `EPIC-0005` | Deliver mobile shell, renderer registry, and gameplay UX.      | Makes the runtime playable in the MVP app.           | Not Started |
 | `EPIC-0006` | Build content production and structured playtest operations.   | Validates the experience with real story runs.       | Not Started |

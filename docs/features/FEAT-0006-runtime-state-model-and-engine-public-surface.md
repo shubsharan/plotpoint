@@ -6,7 +6,7 @@
 | **Status**      | Completed  |
 | **Epic**        | EPIC-0003  |
 | **Domains**     | Engine     |
-| **Last synced** | 2026-03-31 |
+| **Last synced** | 2026-04-15 |
 
 
 # FEAT-0006 - Runtime State Model and Engine Public Surface
@@ -34,7 +34,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 ### Out of scope
 
 - Block-specific reducer behavior and registry composition beyond the interfaces this feature must expose.
-- Condition evaluation and graph traversal semantics beyond reserving the progression fields that FEAT-0008 will populate.
+- Condition evaluation and graph traversal semantics beyond reserving the progression field shapes that FEAT-0008 owns for population.
 - Durable runtime persistence repos, db schema, save ids, checkpoint policy, or retry orchestration.
 - API request/response DTOs, mobile renderer behavior, or transport serialization details.
 - Multiplayer sync policy, realtime checkpoint handling, or shared-state authority rules.
@@ -49,7 +49,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 6. `roleId` must be required at runtime startup and preserved in the player-scoped runtime identity contract.
 7. Engine-owned runtime result shapes must be deterministic and rich enough for later API/mobile surfaces to render updated current-node block state and available next-step information without reimplementing gameplay logic.
 8. Runtime state and public engine APIs must be documented as engine contracts, not API DTOs, and remain framework-free.
-9. FEAT-0006 must define the outer runtime result envelope, while FEAT-0008 later defines the traversal semantics that populate progression fields such as `traversableEdges`.
+9. FEAT-0006 must define the outer runtime result envelope, while FEAT-0008 defines the traversal semantics that populate progression fields such as `traversableEdges`.
 10. This feature must define which lifecycle responsibilities remain inside the engine and which are explicitly deferred to later session persistence and multiplayer features.
 
 ## Architecture and Technical Notes
@@ -162,7 +162,7 @@ type Engine = {
 - Add contract-oriented tests that prove `startSession`, `loadSession`, `submitAction`, and `traverse` all return the same `RuntimeFrame` shape while runtime commands accept minimal `SessionState` input.
 - Add focused engine tests for start/load/action entrypoint behavior using published story package fixtures and in-memory adapters suitable for mobile-local execution.
 - Add tests that prove `roleId` is required at startup and preserved across runtime transitions.
-- Add tests that prove progression output fields are engine-owned contract fields even before FEAT-0008 finalizes traversal behavior.
+- Add tests that prove progression output fields are engine-owned contract fields consistent with FEAT-0008 traversal behavior.
 - Manually verify the documented public API remains consistent with the architecture examples for `createEngine`, `startSession`, `loadSession`, `submitAction`, and `traverse`.
 
 ## Rollout and Observability
@@ -176,12 +176,12 @@ type Engine = {
 - Risk: the engine API grows into an adapter-shaped surface. Mitigation: keep entrypoints and result types engine-centric and leave HTTP/mobile concerns to later layers.
 - Risk: runtime state contracts blur with storage schemas. Mitigation: keep `SessionState` as sparse progression facts and let `RuntimeFrame.view.currentNode` carry the hydrated read model adapters need.
 - Risk: lifecycle responsibilities remain ambiguous between engine and session features. Mitigation: document exact ownership boundaries in this feature and defer orchestration policy to EPIC-0004.
-- Risk: FEAT-0008 widens the engine surface opportunistically. Mitigation: reserve the progression fields and minimal context ports now so later traversal work fills the contract rather than replacing it.
+- Risk: follow-on traversal work widens the engine surface opportunistically. Mitigation: reserve the progression fields and minimal context ports so traversal fills the contract rather than replacing it (delivered for authored edges in FEAT-0008).
 
 ## Open Questions
 
 - Resolved: the engine is host-agnostic and may run directly in mobile for offline play or inside the API for hosted execution.
 - Resolved: `roleId` is part of runtime startup and runtime identity in this feature rather than a later adapter-only field.
-- Resolved: FEAT-0006 owns both the resumable `SessionState` boundary and the outer `RuntimeFrame` result contract, while FEAT-0008 later defines how traversal populates progression fields such as `traversableEdges`.
+- Resolved: FEAT-0006 owns both the resumable `SessionState` boundary and the outer `RuntimeFrame` result contract, while FEAT-0008 defines how traversal populates progression fields such as `traversableEdges`.
 - Resolved: runtime state is pinned to a published package version via `storyPackageVersionId`; explicit mid-game upgrades remain a separate session orchestration action.
 - Deferred follow-up [DF-0001]: define session upgrade policy for pinned published package versions. Default policy is pin at game start, allow explicit session/API-triggered upgrades, and reject upgrades when runtime compatibility checks fail so the session remains on its prior version. | Owner: EPIC-0003 | Trigger: Session orchestration scope is activated for runtime persistence/resume work. | Exit criteria: A merged feature implementation and docs update define explicit upgrade flow, compatibility failure behavior, and persistence semantics.

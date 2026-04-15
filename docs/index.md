@@ -12,7 +12,7 @@ Use it as the one-page status rollup across epics and features.
 | --------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | EPIC-0001 | Completed   | [epics/EPIC-0001-platform-and-planning-foundation.md](epics/EPIC-0001-platform-and-planning-foundation.md)                                               |
 | EPIC-0002 | Completed   | [epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md) |
-| EPIC-0003 | In Progress | [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)                       |
+| EPIC-0003 | Completed   | [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)                       |
 
 
 ### Feature Status Rollup

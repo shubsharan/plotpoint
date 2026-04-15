@@ -5,7 +5,7 @@
 | **Status**      | Completed   |
 | **Epic**        | EPIC-0003   |
 | **Domains**     | Engine      |
-| **Last synced** | 2026-04-01  |
+| **Last synced** | 2026-04-15  |
 
 # FEAT-0007 - Block Registry and Action Executor
 
@@ -62,7 +62,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Action context is value-only (`now`, `playerLocation`) resolved at executor boundary; block behaviors never receive ports.
 - `loadSession` remains non-mutating rehydration and resolves effective current-node block state from sparse persisted runtime data.
 - Shell owns navigation UX from `traversableEdges`; blocks do not own graph navigation controls.
-- FEAT-0007 intentionally exposes only unconditional edges in `traversableEdges`; conditioned authored edges remain non-executable metadata until FEAT-0008 defines traversal semantics.
+- FEAT-0007 originally shipped unconditional edges only in `traversableEdges`; FEAT-0008 defines full condition-aware traversable-edge derivation and `traverse` eligibility (see FEAT-0008).
 - Keep test fixtures internal to engine `__tests__`; no public test-only exports.
 
 ## Locked Contracts
@@ -135,7 +135,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Persist timestamps as ISO strings only when clock port is present; no `Date` objects and no fallback wall-clock source.
 - Normalize multi-choice selections (dedupe + deterministic sort) before compare/persist.
 - Wrong-but-valid answers are state outcomes; malformed action payloads are typed errors.
-- `traversableEdges` remains a fail-safe FEAT-0007 projection of authored unconditional edges only; conditioned authored edges are rejected by `traverse` as deferred traversal semantics.
+- At FEAT-0007 ship, `traversableEdges` was a fail-safe projection of authored unconditional edges only and `traverse` rejected conditioned edges; FEAT-0008 removes that placeholder behavior.
 
 ## Acceptance Criteria
 
@@ -146,7 +146,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Canonical terminal field across executable blocks is `unlocked`.
 - `text` behavior is non-interactive and resolves its state from deterministic defaults in the current-node snapshot.
 - Error surface is explicit and typed for all execution failure classes in this PRD.
-- Traversal/navigation semantics remain deferred to FEAT-0008.
+- Traversal/navigation semantics beyond the FEAT-0007 placeholder are defined in FEAT-0008.
 
 ## Test Plan
 
@@ -183,7 +183,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Risk: terminal state semantics drift (`solved` vs `unlocked`). Mitigation: hard-standardize on `unlocked` and update fixtures/conditions accordingly.
 - Risk: hydration and execution boundaries blur. Mitigation: keep persisted runtime state sparse and make current-node hydration a read-side projection rather than a persistence mutation.
 - Risk: adapters parse messages instead of contracts. Mitigation: include structured error details in runtime errors.
-- Risk: FEAT-0008 receives unstable execution contracts. Mitigation: lock the generic `submit` action envelope and deterministic executor behavior in this feature.
+- Risk: traversal follow-on could depend on unstable execution contracts. Mitigation: lock the generic `submit` action envelope and deterministic executor behavior in this feature (FEAT-0008 built on that contract).
 
 ## Implementation Order (Do In This Sequence)
 
@@ -218,7 +218,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 
 7. Complete test matrix
 - Registry, block, executor, deterministic replay, error details, and shared-bucket harness tests.
-- Keep traversal semantics out of FEAT-0007 assertions.
+- Keep traversal condition semantics out of FEAT-0007 assertions (covered in FEAT-0008).
 
 ## Open Questions
 
