@@ -36,7 +36,7 @@ Use it as the one-page status rollup across epics and features.
 - Story package contract and schema validation are implemented and enforced for internal story package authoring.
 - Draft story storage and internal CRUD API flows are implemented for draft lifecycle work.
 - Story publish pipeline and published catalog availability are implemented under FEAT-0005.
-- Runtime implementation under EPIC-0003 now includes FEAT-0006 runtime contracts, FEAT-0007 block action execution, and FEAT-0008 fact-view traversal inside `packages/engine`. Persisted runtime state remains intentionally sparse (`playerState`/`sharedState` store only mutated block state), while `RuntimeSnapshot.currentNode` exposes hydrated current-node block state for hosts and `traversableEdges` is derived from block-exported traversal facts.
+- Runtime implementation under EPIC-0003 now includes FEAT-0006 runtime contracts, FEAT-0007 block action execution, and FEAT-0008 fact-view traversal inside `packages/engine`. Persisted runtime state remains intentionally sparse (`playerState`/`sharedState` store only mutated block state), while `RuntimeFrame.view.currentNode` exposes hydrated current-node block state for hosts and `RuntimeFrame.view.traversableEdges` is derived from block-exported traversal facts.
 
 ## Update Rules
 

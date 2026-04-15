@@ -4,7 +4,7 @@ import {
   defineBlockBehavior,
   type BlockTraversalFacts,
   type InteractiveBlockBehavior,
-} from './types.js';
+} from '../contracts.js';
 
 type SingleChoiceOption = {
   id: string;

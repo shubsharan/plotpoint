@@ -2,28 +2,34 @@ import type { Clock } from '../ports/clock.js';
 import type { LocationReader } from '../ports/location-reader.js';
 import type { StoryPackageRepo } from '../ports/story-package-repo.js';
 import type {
-  CurrentNodeBlockSnapshot,
-  CurrentNodeSnapshot,
-  PerformBlockActionInput,
-  LoadRuntimeInput,
-  RuntimeState,
-  RuntimeSnapshot,
-  StartGameInput,
+  LoadSessionInput,
+  StartSessionInput,
+  SubmitActionInput,
+  TraverseInput,
+} from './contracts/command-inputs.js';
+import type { RuntimeFrame } from './contracts/runtime-frame.js';
+import type {
+  CurrentNodeBlockView,
+  CurrentNodeView,
+  RuntimeView,
   TraversableEdge,
-  TraverseEdgeInput,
-} from './schema.js';
+} from './contracts/runtime-view.js';
+import type { SessionState } from './contracts/session-state.js';
 
 export type {
-  CurrentNodeBlockSnapshot,
-  CurrentNodeSnapshot,
-  PerformBlockActionInput,
-  LoadRuntimeInput,
-  RuntimeState,
-  RuntimeSnapshot,
-  StartGameInput,
+  LoadSessionInput,
+  StartSessionInput,
+  SubmitActionInput,
+  TraverseInput,
+} from './contracts/command-inputs.js';
+export type { RuntimeFrame } from './contracts/runtime-frame.js';
+export type {
+  CurrentNodeBlockView,
+  CurrentNodeView,
+  RuntimeView,
   TraversableEdge,
-  TraverseEdgeInput,
-};
+} from './contracts/runtime-view.js';
+export type { SessionState } from './contracts/session-state.js';
 
 export type EnginePorts = {
   storyPackageRepo: StoryPackageRepo;
@@ -32,8 +38,8 @@ export type EnginePorts = {
 };
 
 export type Engine = {
-  startGame: (input: StartGameInput) => Promise<RuntimeSnapshot>;
-  loadRuntime: (input: LoadRuntimeInput) => Promise<RuntimeSnapshot>;
-  performBlockAction: (input: PerformBlockActionInput) => Promise<RuntimeSnapshot>;
-  traverseEdge: (input: TraverseEdgeInput) => Promise<RuntimeSnapshot>;
+  startSession: (input: StartSessionInput) => Promise<RuntimeFrame>;
+  loadSession: (input: LoadSessionInput) => Promise<RuntimeFrame>;
+  submitAction: (input: SubmitActionInput) => Promise<RuntimeFrame>;
+  traverse: (input: TraverseInput) => Promise<RuntimeFrame>;
 };

@@ -17,15 +17,15 @@ Ship the engine-owned traversal fact view and conditioned-edge traversal semanti
 
 FEAT-0006 locked runtime contracts and FEAT-0007 locked block execution. FEAT-0008 completes EPIC-0003 progression semantics by making conditioned authored edges executable and deterministic.
 
-This feature owns condition evaluation, traversable-edge derivation, and `traverseEdge` eligibility. Session orchestration, persistence timing, and UX remain out of scope.
+This feature owns condition evaluation, traversable-edge derivation, and `traverse` eligibility. Session orchestration, persistence timing, and UX remain out of scope.
 
 ## Scope
 
 ### In scope
 
 - Fact-based condition contract used by both compatibility validation and runtime traversal.
-- Condition-aware traversable-edge derivation for `startGame`, `loadRuntime`, `performBlockAction`, and `traverseEdge`.
-- Deterministic `traverseEdge` validation against the derived traversable set at command time.
+- Condition-aware traversable-edge derivation for `startSession`, `loadSession`, `submitAction`, and `traverse`.
+- Deterministic `traverse` validation against the derived traversable set at command time.
 - Typed failure contracts for blocked traversal vs condition-evaluation failures.
 - Block-exported traversal fact contracts and bucket-hidden fact resolution.
 
@@ -67,16 +67,16 @@ This feature owns condition evaluation, traversable-edge derivation, and `traver
 ### Traversal Evaluation Semantics
 
 - A single fact-aware evaluator is used by all runtime entrypoints:
-  - `startGame`
-  - `loadRuntime`
-  - `performBlockAction`
-  - `traverseEdge` (including next-node snapshot derivation)
+  - `startSession`
+  - `loadSession`
+  - `submitAction`
+  - `traverse` (including next-node snapshot derivation)
 - Unconditional edges (`condition` omitted) remain always traversable fast-path.
 - Authored `condition: { type: 'always' }` is semantically equivalent to omitted condition.
 - `and` and `or` use short-circuit evaluation.
 - Condition trees are evaluated in authored order; first failure is deterministic by authored edge/condition order.
-- `traverseEdge` re-validates edge traversability at call time against current state, even if caller used an older snapshot.
-- `RuntimeSnapshot` shape stays unchanged; `traversableEdges` remains an available-edges list only.
+- `traverse` re-validates edge traversability at call time against current state, even if caller used an older frame.
+- `RuntimeFrame` envelope stays unchanged (`{ state, view }`); `traversableEdges` remains an available-edges list under `view`.
 
 ### Error Contract
 
@@ -106,17 +106,17 @@ This feature owns condition evaluation, traversable-edge derivation, and `traver
 
 ## Acceptance Criteria
 
-- Conditioned and unconditional authored edges are derived correctly into `RuntimeSnapshot.traversableEdges` across all runtime entrypoints using one evaluator.
-- `traverseEdge` enforces current eligibility deterministically and updates `currentNodeId` only on valid traversals.
+- Conditioned and unconditional authored edges are derived correctly into `RuntimeFrame.view.traversableEdges` across all runtime entrypoints using one evaluator.
+- `traverse` enforces current eligibility deterministically and updates `currentNodeId` only on valid traversals.
 - Runtime distinguishes blocked-edge outcomes from condition-evaluation failures via typed error codes.
 - Compatibility validation catches unknown blocks, unknown facts, missing operators, and invalid values with precise paths.
 - Runtime state sparsity semantics remain intact via effective-state resolution.
-- `RuntimeSnapshot` contract shape remains unchanged.
+- `RuntimeFrame` contract envelope remains `{ state, view }`.
 - FEAT-0007 deferred traversal placeholder behavior is fully removed from runtime semantics.
 
 ## Test Plan
 
-- Add cross-entrypoint parity tests proving identical `traversableEdges` for equivalent effective state across `startGame`, `loadRuntime`, `performBlockAction`, and `traverseEdge`.
+- Add cross-entrypoint parity tests proving identical `view.traversableEdges` for equivalent effective state across `startSession`, `loadSession`, `submitAction`, and `traverse`.
 - Add traversal tests for:
   - successful conditioned-edge traversal,
   - blocked edges (`runtime_edge_not_traversable`),

@@ -1,9 +1,20 @@
-import { codeBlockBehavior, codeBlockTraversalFacts } from './code.js';
-import { locationBlockBehavior, locationBlockTraversalFacts } from './location.js';
-import { multiChoiceBlockBehavior, multiChoiceBlockTraversalFacts } from './multi-choice.js';
-import { singleChoiceBlockBehavior, singleChoiceBlockTraversalFacts } from './single-choice.js';
-import { textBlockBehavior, textBlockTraversalFacts } from './text.js';
-import type { BlockRegistryEntry, BlockTraversalFacts } from './types.js';
+import { codeBlockBehavior, codeBlockTraversalFacts } from './definitions/code.js';
+import { locationBlockBehavior, locationBlockTraversalFacts } from './definitions/location.js';
+import {
+  multiChoiceBlockBehavior,
+  multiChoiceBlockTraversalFacts,
+} from './definitions/multi-choice.js';
+import {
+  singleChoiceBlockBehavior,
+  singleChoiceBlockTraversalFacts,
+} from './definitions/single-choice.js';
+import { textBlockBehavior, textBlockTraversalFacts } from './definitions/text.js';
+import type {
+  BlockConfig,
+  BlockRegistryEntry,
+  BlockState,
+  BlockTraversalFacts,
+} from './contracts.js';
 
 export type {
   BlockConfig,
@@ -13,19 +24,12 @@ export type {
   TraversalFactDefinition,
   TraversalFactKind,
   TraversalFactValue,
-} from './types.js';
-
-type BlockRegistry = {
-  readonly code: BlockRegistryEntry<any, any, any>;
-  readonly location: BlockRegistryEntry<any, any, any>;
-  readonly 'multi-choice': BlockRegistryEntry<any, any, any>;
-  readonly 'single-choice': BlockRegistryEntry<any, any, any>;
-  readonly text: BlockRegistryEntry<any, any, any>;
-};
+  UnlockableBlockState,
+} from './contracts.js';
 
 const freezeTraversalFacts = <
-  TConfig extends Record<string, unknown>,
-  TState extends Record<string, unknown>,
+  TConfig extends BlockConfig,
+  TState extends BlockState,
 >(
   facts: BlockTraversalFacts<TConfig, TState>,
 ): BlockTraversalFacts<TConfig, TState> =>
@@ -39,8 +43,8 @@ const freezeTraversalFacts = <
   );
 
 const freezeBlockRegistryEntry = <
-  TConfig extends Record<string, unknown>,
-  TState extends Record<string, unknown>,
+  TConfig extends BlockConfig,
+  TState extends BlockState,
   TAction extends { type: 'submit' },
 >(
   entry: BlockRegistryEntry<TConfig, TState, TAction>,
@@ -56,7 +60,7 @@ const freezeBlockRegistryEntry = <
     }),
   });
 
-const blockRegistry: BlockRegistry = Object.freeze({
+const blockRegistry = Object.freeze({
   code: freezeBlockRegistryEntry({
     behavior: codeBlockBehavior,
     policy: {
@@ -109,12 +113,12 @@ const blockRegistry: BlockRegistry = Object.freeze({
   }),
 });
 
-export type KnownBlockType = keyof BlockRegistry;
+export type KnownBlockType = 'code' | 'location' | 'multi-choice' | 'single-choice' | 'text';
 
 export const hasBlockType = (blockType: string): blockType is KnownBlockType =>
   Object.hasOwn(blockRegistry, blockType);
 
 export const getBlockDefinition = <TBlockType extends KnownBlockType>(
   blockType: TBlockType,
-): (typeof blockRegistry)[TBlockType] =>
-  blockRegistry[blockType];
+): BlockRegistryEntry =>
+  blockRegistry[blockType] as unknown as BlockRegistryEntry;

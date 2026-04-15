@@ -3,7 +3,7 @@ import {
   defineBlockBehavior,
   type BlockTraversalFacts,
   type NonInteractiveBlockBehavior,
-} from './types.js';
+} from '../contracts.js';
 
 type TextLeaf = {
   text: string;

@@ -8,17 +8,18 @@ export { createEngine } from './runtime/create-engine.js';
 export { EngineRuntimeError } from './runtime/errors.js';
 export type { EngineRuntimeErrorCode } from './runtime/errors.js';
 export type {
-  CurrentNodeBlockSnapshot,
-  CurrentNodeSnapshot,
+  CurrentNodeBlockView,
+  CurrentNodeView,
   Engine,
   EnginePorts,
-  LoadRuntimeInput,
-  PerformBlockActionInput,
-  RuntimeState,
-  RuntimeSnapshot,
-  StartGameInput,
+  LoadSessionInput,
+  SubmitActionInput,
+  SessionState,
+  RuntimeFrame,
+  RuntimeView,
+  StartSessionInput,
   TraversableEdge,
-  TraverseEdgeInput,
+  TraverseInput,
 } from './runtime/types.js';
 export {
   storyPackageBlockSchema,

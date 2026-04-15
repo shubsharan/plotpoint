@@ -2,7 +2,10 @@ import type { z } from 'zod';
 import type { GeoCoord } from '../ports/location-reader.js';
 
 export type BlockConfig = Record<string, unknown>;
-export type BlockState = Record<string, unknown>;
+export type UnlockableBlockState = {
+  unlocked: boolean;
+};
+export type BlockState = UnlockableBlockState & Record<string, unknown>;
 export type BlockAction = {
   type: 'submit';
 };

@@ -1,12 +1,12 @@
-import { loadRuntime } from './load-runtime.js';
-import { performBlockAction } from './perform-block-action.js';
-import { startGame } from './start-game.js';
-import { traverseEdge } from './traverse-edge.js';
+import { loadSession } from './commands/load-session.js';
+import { startSession } from './commands/start-session.js';
+import { submitAction } from './commands/submit-action.js';
+import { traverse } from './commands/traverse.js';
 import type { Engine, EnginePorts } from './types.js';
 
 export const createEngine = (ports: EnginePorts): Engine => ({
-  startGame: (input) => startGame(ports, input),
-  loadRuntime: (input) => loadRuntime(ports, input),
-  performBlockAction: (input) => performBlockAction(ports, input),
-  traverseEdge: (input) => traverseEdge(ports, input),
+  startSession: (input) => startSession(ports, input),
+  loadSession: (input) => loadSession(ports, input),
+  submitAction: (input) => submitAction(ports, input),
+  traverse: (input) => traverse(ports, input),
 });

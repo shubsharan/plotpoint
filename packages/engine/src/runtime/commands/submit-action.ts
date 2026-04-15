@@ -1,45 +1,50 @@
 import type { z } from 'zod';
-import { getBlockDefinition, hasBlockType } from '../blocks/index.js';
+import { getBlockDefinition, hasBlockType } from '../../blocks/registry.js';
 import {
+  type BlockAction,
+  type BlockConfig,
+  type BlockState,
   BlockUpdateError,
-  type BlockContextKey,
   type BlockActionContext,
+  type BlockContextKey,
   type InteractiveBlockBehavior,
-} from '../blocks/types.js';
+} from '../../blocks/contracts.js';
 import {
-  type RuntimeStateType,
+  type SessionStateType,
   writeBlockStateByType,
-} from './block-state-bucket.js';
-import { EngineRuntimeError } from './errors.js';
+} from '../state/block-state-bucket.js';
+import { EngineRuntimeError } from '../errors.js';
 import {
-  createRuntimeSnapshot,
-  createCurrentNodeSnapshotOrThrow,
   formatIssuePath,
   parseRuntimeInputOrThrow,
-  resolveEffectiveBlockStateOrThrow,
-  resolveRuntimeSnapshotContextOrThrow,
-} from './snapshot.js';
-import { performBlockActionInputSchema } from './schema.js';
-import { deriveTraversableEdgesOrThrow } from './traversal.js';
-import type { EnginePorts, RuntimeSnapshot, PerformBlockActionInput } from './types.js';
+  resolveSessionContextOrThrow,
+} from '../context/story-context.js';
+import { resolveEffectiveBlockStateOrThrow } from '../context/block-resolution.js';
+import { submitActionInputSchema } from '../contracts/command-inputs.js';
+import { createRuntimeFrame } from '../projection/frame-builder.js';
+import { createCurrentNodeViewOrThrow, createRuntimeView } from '../projection/view-projection.js';
+import { deriveTraversableEdgesOrThrow } from '../traversal/condition-evaluator.js';
+import type { EnginePorts, RuntimeFrame, SubmitActionInput } from '../types.js';
 
 type ActionExecutionResult = {
-  stateType: RuntimeStateType;
+  stateType: SessionStateType;
   updatedBlockState: unknown;
 };
+
+type RuntimeInteractiveBehavior = InteractiveBlockBehavior<BlockConfig, BlockState, BlockAction>;
 
 type ActionBehaviorParams = {
   action: unknown;
   actionType?: string | undefined;
-  behavior: InteractiveBlockBehavior<any, any, any>;
+  behavior: RuntimeInteractiveBehavior;
   blockId: string;
   nodeId: string;
-  parsedConfig: any;
-  parsedState: any;
+  parsedConfig: BlockConfig;
+  parsedState: BlockState;
   playerId: string;
   ports: EnginePorts;
   requiredContext: ReadonlyArray<BlockContextKey>;
-  stateType: RuntimeStateType;
+  stateType: SessionStateType;
   targetBlockType: string;
 };
 
@@ -60,9 +65,6 @@ const toValidationDetails = (issue: z.core.$ZodIssue): Record<string, unknown> =
   validationCode: issue.code,
   validationPath: formatIssuePath(issue.path),
 });
-
-const toBlockStateRecord = (value: unknown): Record<string, unknown> =>
-  (value ?? {}) as Record<string, unknown>;
 
 const resolveExecutionContextOrThrow = async (
   params: {
@@ -149,7 +151,7 @@ const executeActionForBehavior = async (
     targetBlockType,
   } = params;
 
-  if (toBlockStateRecord(parsedState).unlocked === true) {
+  if (parsedState.unlocked) {
     throw new EngineRuntimeError(
       'runtime_block_already_unlocked',
       `Runtime block "${blockId}" is already unlocked and cannot accept further actions.`,
@@ -293,12 +295,12 @@ const executeActionForBehavior = async (
   };
 };
 
-export const performBlockAction = async (
+export const submitAction = async (
   ports: EnginePorts,
-  input: PerformBlockActionInput,
-): Promise<RuntimeSnapshot> => {
-  const { action, state, blockId } = parseRuntimeInputOrThrow(performBlockActionInputSchema, input);
-  const { currentNode, story, targetBlock } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
+  input: SubmitActionInput,
+): Promise<RuntimeFrame> => {
+  const { action, state, blockId } = parseRuntimeInputOrThrow(submitActionInputSchema, input);
+  const { currentNode, story, targetBlock } = await resolveSessionContextOrThrow(ports, state, {
     blockId,
   });
   if (!targetBlock) {
@@ -349,10 +351,11 @@ export const performBlockAction = async (
     );
   }
 
+  const interactiveBehavior = behavior as unknown as RuntimeInteractiveBehavior;
   const actionResult = await executeActionForBehavior({
     action,
     actionType,
-    behavior,
+    behavior: interactiveBehavior,
     blockId,
     nodeId: currentNode.id,
     parsedConfig,
@@ -370,12 +373,14 @@ export const performBlockAction = async (
     blockId,
     actionResult.updatedBlockState,
   );
-  const hydratedCurrentNode = createCurrentNodeSnapshotOrThrow(nextState, currentNode);
+  const hydratedCurrentNode = createCurrentNodeViewOrThrow(nextState, currentNode);
 
-  return createRuntimeSnapshot(
+  return createRuntimeFrame(
     nextState,
-    hydratedCurrentNode,
-    deriveTraversableEdgesOrThrow(story, nextState, currentNode),
+    createRuntimeView(
+      hydratedCurrentNode,
+      deriveTraversableEdgesOrThrow(story, nextState, currentNode),
+    ),
     {
       normalizeState: false,
     },

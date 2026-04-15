@@ -67,18 +67,36 @@ packages/
 │   │   │   ├── traversal.ts           Edge evaluation against block states
 │   │   │   └── validation.ts          Story graph integrity checks
 │   │   ├── blocks/
-│   │   │   ├── text.ts              Config schema + runtime definition metadata
-│   │   │   ├── location.ts          Config schema + runtime definition metadata
-│   │   │   ├── code.ts              Config schema + runtime definition metadata
-│   │   │   ├── single-choice.ts     Config schema + runtime definition metadata
-│   │   │   ├── multi-choice.ts      Config schema + runtime definition metadata
-│   │   │   └── index.ts             Block registry lookup
+│   │   │   ├── contracts.ts           Block behavior and traversal fact contracts
+│   │   │   ├── definitions/
+│   │   │   │   ├── text.ts            Text block definition
+│   │   │   │   ├── location.ts        Location block definition
+│   │   │   │   ├── code.ts            Code block definition
+│   │   │   │   ├── single-choice.ts   Single-choice block definition
+│   │   │   │   └── multi-choice.ts    Multi-choice block definition
+│   │   │   └── registry.ts            Block registry lookup
 │   │   ├── runtime/
-│   │   │   ├── start-game.ts         Creates a RuntimeSnapshot from published story + runtime state
-│   │   │   ├── load-runtime.ts       Rehydrates adapter-supplied RuntimeState
-│   │   │   ├── perform-block-action.ts Applies block execution to RuntimeState
-│   │   │   ├── traverse-edge.ts        Advances RuntimeState across graph edges
-│   │   │   └── types.ts              RuntimeState, RuntimeSnapshot, and progression types
+│   │   │   ├── commands/
+│   │   │   │   ├── start-session.ts   Creates a RuntimeFrame from published story + runtime state
+│   │   │   │   ├── load-session.ts    Rehydrates adapter-supplied SessionState
+│   │   │   │   ├── submit-action.ts   Applies block execution to SessionState
+│   │   │   │   └── traverse.ts        Advances SessionState across graph edges
+│   │   │   ├── context/
+│   │   │   │   ├── story-context.ts   Story loading, role/node lookup, input parsing
+│   │   │   │   └── block-resolution.ts Effective block config/state resolution
+│   │   │   ├── contracts/
+│   │   │   │   ├── session-state.ts   Persisted SessionState contract
+│   │   │   │   ├── runtime-view.ts    Derived RuntimeView contract
+│   │   │   │   ├── runtime-frame.ts   RuntimeFrame envelope contract
+│   │   │   │   └── command-inputs.ts  Runtime command input contracts
+│   │   │   ├── projection/
+│   │   │   │   ├── view-projection.ts RuntimeView derivation
+│   │   │   │   └── frame-builder.ts   RuntimeFrame assembly
+│   │   │   ├── state/
+│   │   │   │   └── block-state-bucket.ts State bucket read/write helpers
+│   │   │   ├── traversal/
+│   │   │   │   └── condition-evaluator.ts Edge evaluation against traversal facts
+│   │   │   └── types.ts               SessionState, RuntimeFrame, and progression types
 │   │   ├── ports.ts                   Abstract dependency types
 │   │   └── index.ts                   Public API: createEngine()
 │   └── package.json
@@ -97,8 +115,6 @@ packages/
 │   │   ├── game-saves.ts              Queries + mutations for game saves
 │   │   ├── repos/
 │   │   │   ├── story-package-repo.ts          Implements engine StoryPackageRepo port
-│   │   │   ├── user-save-repo.ts      Implements engine UserSaveRepo port
-│   │   │   ├── game-save-repo.ts      Implements engine GameSaveRepo port
 │   │   │   └── index.ts               Barrel export
 │   │   ├── client.ts                  Supabase + Drizzle connection setup
 │   │   └── index.ts                   Barrel export
@@ -178,8 +194,8 @@ The engine is created wherever a host needs gameplay execution. Mobile can const
 import { Hono } from 'hono';
 import { createEngine } from '@plotpoint/engine';
 import { storyPackageRepo } from '@plotpoint/db/repos';
-import performBlockAction from './routes/perform-block-action';
-import traverseEdge from './routes/traverse-edge';
+import submitAction from './routes/perform-block-action';
+import traverse from './routes/traverse-edge';
 import { storiesRoutes } from './routes/stories/router';
 
 export const engine = createEngine({
@@ -188,8 +204,8 @@ export const engine = createEngine({
 });
 
 const app = new Hono();
-app.route('/api', performBlockAction);
-app.route('/api', traverseEdge);
+app.route('/api', submitAction);
+app.route('/api', traverse);
 app.route('/stories', storiesRoutes);
 
 export default app;
@@ -198,10 +214,10 @@ export default app;
 ```typescript
 // engine/index.ts
 import type { Clock, LocationReader, StoryPackageRepo } from './ports';
-import { loadRuntime } from './runtime/load-runtime';
-import { startGame } from './runtime/start-game';
-import { performBlockAction } from './runtime/perform-block-action';
-import { traverseEdge } from './runtime/traverse-edge';
+import { loadSession } from './runtime/commands/load-session';
+import { startSession } from './runtime/commands/start-session';
+import { submitAction } from './runtime/commands/submit-action';
+import { traverse } from './runtime/commands/traverse';
 
 type EnginePorts = {
   storyPackageRepo: StoryPackageRepo;
@@ -210,27 +226,27 @@ type EnginePorts = {
 };
 
 export const createEngine = (ports: EnginePorts) => ({
-  startGame: (input: {
+  startSession: (input: {
     storyId: string;
     gameId: string;
     playerId: string;
     roleId: string;
-  }) => startGame(ports, input),
+  }) => startSession(ports, input),
 
-  loadRuntime: (input: {
-    state: RuntimeState;
-  }) => loadRuntime(ports, input),
+  loadSession: (input: {
+    state: SessionState;
+  }) => loadSession(ports, input),
 
-  performBlockAction: (input: {
-    state: RuntimeState;
+  submitAction: (input: {
+    state: SessionState;
     blockId: string;
     action: BlockAction;
-  }) => performBlockAction(ports, input),
+  }) => submitAction(ports, input),
 
-  traverseEdge: (input: {
-    state: RuntimeState;
+  traverse: (input: {
+    state: SessionState;
     edgeId: string;
-  }) => traverseEdge(ports, input),
+  }) => traverse(ports, input),
 });
 ```
 
@@ -255,7 +271,7 @@ Canonical authored JSON stores nodes, blocks, and edges as ordered arrays. Runti
 ### Player-State Block Example
 
 ```typescript
-// engine/blocks/code.ts
+// engine/blocks/definitions/code.ts
 
 import { z } from 'zod';
 import { defineBlockBehavior, type InteractiveBlockBehavior } from './types';
@@ -317,13 +333,13 @@ export const codeBlockBehavior: InteractiveBlockBehavior<
 
 ### Block Registry
 
-The registry in `blocks/index.ts` maps block type names to engine-owned definitions. Each entry combines pure block behavior with runtime policy that says which state bucket the block owns and which host-backed context values it may read. Adding a new block type still means creating one file and adding one import to the registry.
+The registry in `blocks/registry.ts` maps block type names to engine-owned definitions. Each entry combines pure block behavior with runtime policy that says which state bucket the block owns and which host-backed context values it may read. Adding a new block type still means creating one definition file and adding one import to the registry.
 
 ```typescript
-// engine/blocks/index.ts
-import { codeBlockBehavior } from './code';
-import { locationBlockBehavior } from './location';
-import type { BlockRegistryEntry } from './types';
+// engine/blocks/registry.ts
+import { codeBlockBehavior } from './definitions/code';
+import { locationBlockBehavior } from './definitions/location';
+import type { BlockRegistryEntry } from './contracts';
 
 const registry: Record<string, BlockRegistryEntry> = {
   code: {
@@ -346,14 +362,14 @@ export const getBlockDefinition = (blockType: string): BlockRegistryEntry | unde
   registry[blockType];
 ```
 
-## Runtime Snapshot Model
+## Runtime Session Model
 
 Plotpoint has two kinds of engine-owned runtime state. Player-scoped state tracks an individual player's progress through a story. Shared state tracks world state that every player in the same game instance can read and affect. FEAT-0006 keeps these as engine contracts, while durable persistence and sync policy are deferred to later adapters.
 
-### RuntimeState
+### SessionState
 
 ```typescript
-type RuntimeState = {
+type SessionState = {
   playerId: string;
   roleId: string;
   storyId: string;
@@ -368,7 +384,7 @@ type RuntimeState = {
   };
 };
 
-type RuntimeSnapshot = RuntimeState & {
+type RuntimeView = {
   currentNode: {
     id: string;
     title: string;
@@ -382,11 +398,16 @@ type RuntimeSnapshot = RuntimeState & {
   };
   traversableEdges: TraversableEdge[];
 };
+
+type RuntimeFrame = {
+  state: SessionState;
+  view: RuntimeView;
+};
 ```
 
-`RuntimeState` is the authoritative, resumable engine state and stores only sparse progression facts. `RuntimeSnapshot` is the engine-computed result view returned after startup, rehydration, block action execution, or edge traversal.
+`SessionState` is the authoritative, resumable engine state and stores only sparse progression facts. `RuntimeView` is a derived hydration projection used for rendering and navigation. `RuntimeFrame` is the command return envelope that combines both as `{ state, view }`.
 
-When processing a block action, the engine reads the relevant bucket from the current `RuntimeState`, determines the target block's runtime policy, updates the correct bucket, then produces a new `RuntimeSnapshot` with refreshed `currentNode` hydration and `traversableEdges`. When processing traversal, the engine validates the selected edge, updates `currentNodeId`, and returns a fresh snapshot whose `currentNode.blocks[*].state` values resolve from persisted state or deterministic block defaults.
+When processing a block action, the engine reads the relevant bucket from the current `SessionState`, determines the target block's runtime policy, updates the correct bucket, then produces a new `RuntimeFrame` with refreshed `view.currentNode` hydration and `view.traversableEdges`. When processing traversal, the engine validates the selected edge, updates `currentNodeId`, and returns a fresh frame whose `view.currentNode.blocks[*].state` values resolve from persisted state or deterministic block defaults.
 
 ## Condition System
 
@@ -424,7 +445,7 @@ The runtime resolves facts through one command-scoped view that:
 ```typescript
 export const deriveTraversableEdgesOrThrow = (
   story: StoryPackage,
-  state: RuntimeState,
+  state: SessionState,
   node: StoryNode,
 ): TraversableEdge[] => {
   const resolver = createTraversalFactResolver(story, state);
@@ -479,11 +500,11 @@ A complete trace of a player submitting an unlock code to a locked door and then
 
 ### 1. Mobile App
 
-Player taps "Enter Code", types "1847", hits submit. The mobile app calls `engine.performBlockAction()` against the current runtime state it is carrying for offline play. If the host is API-backed, the app POSTs the current runtime state payload, `blockId`, and action payload to `/actions`, where a route-local DTO schema validates transport details before delegating to the same engine surface. After the response comes back with refreshed `traversableEdges`, the shell decides whether to present a navigation choice and, when the player selects one, calls `engine.traverseEdge()`.
+Player taps "Enter Code", types "1847", hits submit. The mobile app calls `engine.submitAction()` against the current runtime state it is carrying for offline play. If the host is API-backed, the app POSTs the current runtime state payload, `blockId`, and action payload to `/actions`, where a route-local DTO schema validates transport details before delegating to the same engine surface. After the response comes back with refreshed `view.traversableEdges`, the shell decides whether to present a navigation choice and, when the player selects one, calls `engine.traverse()`.
 
 ### 2. API Route
 
-The route in `routes/perform-block-action.ts` parses the request, validates with Zod, and calls `engine.performBlockAction({ state, blockId, action })`. A sibling traversal route does the same for `engine.traverseEdge({ state, edgeId })`. The routes don't know about blocks, graphs, or game logic.
+The route in `routes/perform-block-action.ts` parses the request, validates with Zod, and calls `engine.submitAction({ state, blockId, action })`. A sibling traversal route does the same for `engine.traverse({ state, edgeId })`. The routes don't know about blocks, graphs, or game logic.
 
 ```typescript
 // api/routes/perform-block-action.ts
@@ -499,7 +520,7 @@ app.post('/actions', async (c) => {
   if (!parsed.success) return c.json(parsed.error, 400);
 
   const { state, blockId, action } = parsed.data;
-  const result = await engine.performBlockAction({ state, blockId, action });
+  const result = await engine.submitAction({ state, blockId, action });
 
   return c.json(result);
 });
@@ -512,10 +533,10 @@ export default app;
 The engine keeps block interaction and graph movement as separate commands:
 
 ```typescript
-// engine/runtime/perform-block-action.ts
-export const performBlockAction = async (ports: EnginePorts, input: PerformBlockActionInput) => {
-  const { state, blockId, action } = parseRuntimeInputOrThrow(performBlockActionInputSchema, input);
-  const { currentNode, targetBlock } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
+// engine/runtime/commands/submit-action.ts
+export const submitAction = async (ports: EnginePorts, input: SubmitActionInput) => {
+  const { state, blockId, action } = parseRuntimeInputOrThrow(submitActionInputSchema, input);
+  const { currentNode, story, targetBlock } = await resolveSessionContextOrThrow(ports, state, {
     blockId,
   });
   const nextState = await applyBlockActionOrThrow({
@@ -525,29 +546,33 @@ export const performBlockAction = async (ports: EnginePorts, input: PerformBlock
     targetBlock,
     currentNode,
   });
-  const hydratedCurrentNode = createCurrentNodeSnapshotOrThrow(nextState, currentNode);
+  const hydratedCurrentNode = createCurrentNodeViewOrThrow(nextState, currentNode);
 
-  return createRuntimeSnapshot(
+  return createRuntimeFrame(
     nextState,
-    hydratedCurrentNode,
-    deriveTraversableEdgesOrThrow(story, nextState, currentNode),
+    createRuntimeView(
+      hydratedCurrentNode,
+      deriveTraversableEdgesOrThrow(story, nextState, currentNode),
+    ),
   );
 };
 
-// engine/runtime/traverse-edge.ts
-export const traverseEdge = async (ports: EnginePorts, input: TraverseEdgeInput) => {
-  const { edgeId, state } = parseRuntimeInputOrThrow(traverseEdgeInputSchema, input);
-  const { story, targetEdge } = await resolveRuntimeSnapshotContextOrThrow(ports, state, {
+// engine/runtime/commands/traverse.ts
+export const traverse = async (ports: EnginePorts, input: TraverseInput) => {
+  const { edgeId, state } = parseRuntimeInputOrThrow(traverseInputSchema, input);
+  const { story, targetEdge } = await resolveSessionContextOrThrow(ports, state, {
     edgeId,
   });
   const nextNode = getNodeOrThrow(story, targetEdge.targetNodeId);
   const nextState = { ...state, currentNodeId: nextNode.id };
-  const hydratedCurrentNode = createCurrentNodeSnapshotOrThrow(nextState, nextNode);
+  const hydratedCurrentNode = createCurrentNodeViewOrThrow(nextState, nextNode);
 
-  return createRuntimeSnapshot(
+  return createRuntimeFrame(
     nextState,
-    hydratedCurrentNode,
-    deriveTraversableEdgesOrThrow(story, nextState, nextNode),
+    createRuntimeView(
+      hydratedCurrentNode,
+      deriveTraversableEdgesOrThrow(story, nextState, nextNode),
+    ),
   );
 };
 ```
@@ -558,30 +583,31 @@ The registry looks up `code` and calls its `onAction()` with parsed state, parse
 
 ### 5. Edge Evaluation (Pure)
 
-After `performBlockAction`, the engine recomputes the current node's `traversableEdges`. With the puzzle now solved, a fact condition like `{ type: 'fact', blockId: 'vault-code', fact: 'unlocked' }` passes, making the authored edge available. When the player selects that option, the shell calls `traverseEdge`, and the engine changes `currentNodeId` only through that command.
+After `submitAction`, the engine recomputes `view.traversableEdges` for the current node. With the puzzle now solved, a fact condition like `{ type: 'fact', blockId: 'vault-code', fact: 'unlocked' }` passes, making the authored edge available. When the player selects that option, the shell calls `traverse`, and the engine changes `currentNodeId` only through that command.
 
 ### 6. Response
 
-Each command returns the next `RuntimeSnapshot`, which an API route can serialize or a mobile host can use directly. The mobile app receives the updated snapshot, the block renderer registry maps `code` to its renderer, and it re-renders from the hydrated `currentNode` view while persisting only the sparse `RuntimeState` subset if it wants a durable save.
+Each command returns the next `RuntimeFrame`, which an API route can serialize or a mobile host can use directly. The mobile app receives the updated frame, the block renderer registry maps `code` to its renderer, and it re-renders from the hydrated `view.currentNode` projection while persisting only the sparse `SessionState` subset if it wants a durable save.
 
 ### Full Call Chain
 
 ```
 Phone
-  → engine.performBlockAction()           (public API, mobile-local host)
-    → runtime/perform-block-action.ts     (orchestrates block interaction)
-      → blocks/code.ts                    (pure onAction transition)
-      → runtime/snapshot.ts               (hydrate currentNode + derive traversableEdges)
+  → engine.submitAction()           (public API, mobile-local host)
+    → runtime/commands/submit-action.ts   (orchestrates block interaction)
+      → blocks/definitions/code.ts        (pure onAction transition)
+      → runtime/context/block-resolution.ts (resolves effective block state)
+      → runtime/projection/view-projection.ts (hydrates currentNode + traversableEdges)
 
-  → engine.traverseEdge()                 (public API, mobile-local host)
-    → runtime/traverse-edge.ts            (changes current node)
-      → runtime/snapshot.ts               (hydrate next currentNode + derive traversableEdges)
+  → engine.traverse()                 (public API, mobile-local host)
+    → runtime/commands/traverse.ts        (changes current node)
+      → runtime/projection/view-projection.ts (hydrates next currentNode + traversableEdges)
 
 API host
   → routes/perform-block-action.ts         (validates, delegates)
-    → engine.performBlockAction()          (same public API)
+    → engine.submitAction()          (same public API)
   → routes/traverse-edge.ts                (validates, delegates)
-    → engine.traverseEdge()                (same public API)
+    → engine.traverse()                (same public API)
 ```
 
 ## Versioning
@@ -806,7 +832,7 @@ const engine = createEngine({
 });
 
 test('submitting correct code unlocks door', async () => {
-  const result = await engine.performBlockAction({
+  const result = await engine.submitAction({
     state: {
       playerId: 'player-1',
       roleId: 'detective',

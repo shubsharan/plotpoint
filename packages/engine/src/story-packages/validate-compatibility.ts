@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { getBlockDefinition, hasBlockType } from '../blocks/index.js';
+import { getBlockDefinition, hasBlockType } from '../blocks/registry.js';
 import {
   buildStoryPackageBlockIndex,
   getTraversalFactKind,

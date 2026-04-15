@@ -15,7 +15,7 @@ Define and implement the engine-owned block registry plus deterministic block ex
 
 ## Background and Context
 
-FEAT-0006 established runtime state shape and engine entrypoints (`startGame`, `loadRuntime`, `performBlockAction`, `traverseEdge`) but intentionally did not define concrete block execution semantics. FEAT-0007 now owns the block-interaction half of that runtime surface.
+FEAT-0006 established runtime state shape and engine entrypoints (`startSession`, `loadSession`, `submitAction`, `traverse`) but intentionally did not define concrete block execution semantics. FEAT-0007 now owns the block-interaction half of that runtime surface.
 
 The architecture baseline remains: block definitions own pure per-block logic, while the executor owns orchestration (block resolution, validation sequence, state bucket selection, and runtime error mapping). Execution remains engine-only and host-agnostic.
 
@@ -25,7 +25,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 
 - Define and enforce one block definition contract used by the registry, including `configSchema`, `stateSchema`, `actionSchema`, `initialState(config)`, and pure `onAction(state, action, context, config)`.
 - Define the block registry ownership model for the MVP block set in `packages/engine`.
-- Define deterministic `performBlockAction` orchestration and validation/error order.
+- Define deterministic `submitAction` orchestration and validation/error order.
 - Define state-bucket routing behavior for `playerState.blockStates` vs `sharedState.blockStates`.
 - Define interactive vs non-interactive block execution policy (`text` is non-interactive and resolves its unlocked state through the hydrated current-node snapshot).
 - Define typed runtime error surface for all block execution failures.
@@ -44,9 +44,9 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 
 1. The engine must define one block-definition contract that every executable MVP block conforms to, including runtime state-bucket policy, `stateSchema`, `actionSchema`, `initialState(config)`, and pure `onAction`.
 2. The registry must remain engine-owned and resolve authored block `type` values to definitions.
-3. `performBlockAction` must target exactly one block in the current node and reject non-current-node targets.
-4. `performBlockAction` must apply a fixed validation/execution order and return the first failure deterministically.
-5. `performBlockAction` must select exactly one runtime state bucket by block policy and only mutate the targeted block key.
+3. `submitAction` must target exactly one block in the current node and reject non-current-node targets.
+4. `submitAction` must apply a fixed validation/execution order and return the first failure deterministically.
+5. `submitAction` must select exactly one runtime state bucket by block policy and only mutate the targeted block key.
 6. Execution must stay pure at reducer level: reducers receive plain values and return next state only for the target block; no I/O and no cross-block writes.
 7. Unknown block types, unregistered runtime block types, invalid configs, invalid persisted block state, invalid action payloads, non-actionable targets, already-unlocked targets, unsupported location targets, and reducer crashes must fail with explicit typed runtime errors.
 8. Canonical condition-facing terminal state field is `unlocked: boolean` (not `solved`), monotonic (`false -> true`).
@@ -60,7 +60,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Registry lives in `packages/engine` and maps authored `type` to engine-owned definition objects.
 - Config/state/action validation is schema-owned at block-definition level, orchestrated by executor.
 - Action context is value-only (`now`, `playerLocation`) resolved at executor boundary; block behaviors never receive ports.
-- `loadRuntime` remains non-mutating rehydration and resolves effective current-node block state from sparse persisted runtime data.
+- `loadSession` remains non-mutating rehydration and resolves effective current-node block state from sparse persisted runtime data.
 - Shell owns navigation UX from `traversableEdges`; blocks do not own graph navigation controls.
 - FEAT-0007 intentionally exposes only unconditional edges in `traversableEdges`; conditioned authored edges remain non-executable metadata until FEAT-0008 defines traversal semantics.
 - Keep test fixtures internal to engine `__tests__`; no public test-only exports.
@@ -76,13 +76,13 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - `initialState(config)`
 - `onAction(state, action, context, config)`
 - Runtime state-bucket policy remains engine-owned registry metadata rather than authored content.
-- Non-interactive blocks may still define config metadata but are rejected by `performBlockAction`.
+- Non-interactive blocks may still define config metadata but are rejected by `submitAction`.
 
 ### Interactive policy
 
 - `text` is non-interactive for FEAT-0007.
 - `text` block state resolves deterministically as unlocked in the hydrated current-node snapshot and does not require persisted state.
-- `performBlockAction` on `text` fails explicitly as non-actionable.
+- `submitAction` on `text` fails explicitly as non-actionable.
 
 ### Canonical state semantics
 
@@ -100,7 +100,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - `single-choice`: `{ type: 'submit', optionId: string }`
 - `multi-choice`: `{ type: 'submit', optionIds: string[] }`
 - `location`: `{ type: 'submit' }`
-- `text`: no `performBlockAction` path
+- `text`: no `submitAction` path
 
 ### Deterministic execution order
 
@@ -113,7 +113,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 7. Parse incoming action with block `actionSchema`.
 8. Execute block action behavior with value-only context.
 9. Parse reducer output with block `stateSchema`.
-10. Persist to exactly one scoped bucket key and return updated `RuntimeSnapshot`.
+10. Persist to exactly one scoped bucket key and return updated `RuntimeFrame`.
 
 ### Error contract expectations
 
@@ -130,19 +130,19 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 ### State integrity and compatibility rules
 
 - Preserve orphan block-state entries for now (ignore, do not prune).
-- `performBlockAction` mutates only the targeted key in one bucket.
+- `submitAction` mutates only the targeted key in one bucket.
 - Use copy-on-write semantics and keep untouched paths reference-stable.
 - Persist timestamps as ISO strings only when clock port is present; no `Date` objects and no fallback wall-clock source.
 - Normalize multi-choice selections (dedupe + deterministic sort) before compare/persist.
 - Wrong-but-valid answers are state outcomes; malformed action payloads are typed errors.
-- `traversableEdges` remains a fail-safe FEAT-0007 projection of authored unconditional edges only; conditioned authored edges are rejected by `traverseEdge` as deferred traversal semantics.
+- `traversableEdges` remains a fail-safe FEAT-0007 projection of authored unconditional edges only; conditioned authored edges are rejected by `traverse` as deferred traversal semantics.
 
 ## Acceptance Criteria
 
 - A single engine-owned executable block-definition contract exists and is applied consistently.
 - Registry resolves authored block types to engine definitions with no API/db coupling.
-- `performBlockAction` enforces current-node-only, single-target, strict action contracts, and deterministic validation/error order.
-- Executor updates exactly one scoped bucket key and returns FEAT-0006 `RuntimeSnapshot`.
+- `submitAction` enforces current-node-only, single-target, strict action contracts, and deterministic validation/error order.
+- Executor updates exactly one scoped bucket key and returns FEAT-0006 `RuntimeFrame`.
 - Canonical terminal field across executable blocks is `unlocked`.
 - `text` behavior is non-interactive and resolves its state from deterministic defaults in the current-node snapshot.
 - Error surface is explicit and typed for all execution failure classes in this PRD.

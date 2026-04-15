@@ -1,4 +1,4 @@
-import type { TraversalFactKind } from '../blocks/types.js';
+import type { TraversalFactKind } from '../blocks/contracts.js';
 import type { StoryPackage, StoryPackageCondition } from './schema.js';
 
 type StoryPackageBlock = StoryPackage['graph']['nodes'][number]['blocks'][number];

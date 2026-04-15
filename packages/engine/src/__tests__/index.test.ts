@@ -26,17 +26,63 @@ describe('@plotpoint/engine', () => {
       },
     });
 
-    const runtime = await runtimeEngine.startGame({
+    const runtime = await runtimeEngine.startSession({
       gameId: 'game-1',
       playerId: 'player-1',
       roleId: 'detective',
       storyId: runtimeStoryPackage.metadata.storyId,
     });
 
-    expect(runtime.currentNodeId).toBe('foyer');
-    expect(runtime.currentNode.id).toBe('foyer');
-    expect(runtime.storyId).toBe(runtimeStoryPackage.metadata.storyId);
-    expect(runtime.storyPackageVersionId).toBe('snapshot-v1');
+    expect(runtime.state.currentNodeId).toBe('foyer');
+    expect(runtime.view.currentNode.id).toBe('foyer');
+    expect(runtime.state.storyId).toBe(runtimeStoryPackage.metadata.storyId);
+    expect(runtime.state.storyPackageVersionId).toBe('snapshot-v1');
+  });
+
+  it('keeps exported session lifecycle commands mapped after runtime module moves', async () => {
+    const runtimeStoryPackage = JSON.parse(JSON.stringify(validStoryPackageFixture));
+    runtimeStoryPackage.version.engineMajor = engine.currentEngineMajor;
+
+    const runtimeEngine = engine.createEngine({
+      storyPackageRepo: {
+        getCurrentPublishedPackage: async () => ({
+          storyPackage: runtimeStoryPackage,
+          storyPackageVersionId: 'snapshot-v1',
+        }),
+        getPublishedPackage: async () => runtimeStoryPackage,
+      },
+    });
+
+    const started = await runtimeEngine.startSession({
+      gameId: 'game-1',
+      playerId: 'player-1',
+      roleId: 'detective',
+      storyId: runtimeStoryPackage.metadata.storyId,
+    });
+    const loaded = await runtimeEngine.loadSession({
+      state: started.state,
+    });
+    const traversed = await runtimeEngine.traverse({
+      edgeId: 'foyer-to-archive',
+      state: loaded.state,
+    });
+    const submitted = await runtimeEngine.submitAction({
+      action: {
+        type: 'submit',
+        value: '1847',
+      },
+      blockId: 'vault-code',
+      state: traversed.state,
+    });
+
+    expect(started.view.currentNode.id).toBe('foyer');
+    expect(loaded.view.currentNode.id).toBe('foyer');
+    expect(traversed.view.currentNode.id).toBe('archive-door');
+    expect(
+      submitted.view.currentNode.blocks.find((candidate) => candidate.id === 'vault-code')?.state,
+    ).toMatchObject({
+      unlocked: true,
+    });
   });
 
   it('does not export testing fixtures from the root entrypoint', () => {

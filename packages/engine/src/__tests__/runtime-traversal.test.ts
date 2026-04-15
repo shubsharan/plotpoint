@@ -4,7 +4,7 @@ import {
   createTraversalFactCache,
   deriveTraversalFactOrThrow,
   evaluateConditionOrThrow,
-} from '../runtime/traversal.js';
+} from '../runtime/traversal/condition-evaluator.js';
 import type { StoryPackageCondition } from '../story-packages/schema.js';
 
 describe('@plotpoint/engine traversal internals', () => {
@@ -33,15 +33,17 @@ describe('@plotpoint/engine traversal internals', () => {
         config: {},
         id: 'vault-code',
         interactive: true,
-        state: {},
+        state: {
+          unlocked: false,
+        },
         type: 'code',
       },
       definition: {
         behavior: {
           configSchema: {} as never,
-          initialState: () => ({}),
+          initialState: () => ({ unlocked: true as const }),
           interactive: true,
-          onAction: () => ({}),
+          onAction: () => ({ unlocked: true as const }),
           actionSchema: {} as never,
           stateSchema: {} as never,
         },
@@ -61,7 +63,9 @@ describe('@plotpoint/engine traversal internals', () => {
         },
       },
       parsedConfig: {},
-      parsedState: {},
+      parsedState: {
+        unlocked: false,
+      },
     };
 
     let thrownError: unknown;

@@ -1,7 +1,7 @@
-import type { BlockStateType } from '../blocks/types.js';
-import type { RuntimeState } from './types.js';
+import type { BlockStateType } from '../../blocks/contracts.js';
+import type { SessionState } from '../types.js';
 
-export type RuntimeStateType = BlockStateType;
+export type SessionStateType = BlockStateType;
 
 export type BlockStateReadResult = {
   found: boolean;
@@ -23,11 +23,11 @@ export const readOwnBlockState = (
       };
 
 export const writeBlockStateByType = (
-  state: RuntimeState,
-  stateType: RuntimeStateType,
+  state: SessionState,
+  stateType: SessionStateType,
   blockId: string,
   blockState: unknown,
-): RuntimeState => {
+): SessionState => {
   const nextStateMap = {
     ...state[stateType].blockStates,
     [blockId]: blockState,
