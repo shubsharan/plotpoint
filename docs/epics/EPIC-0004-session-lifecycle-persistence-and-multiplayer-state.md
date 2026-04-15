@@ -65,9 +65,19 @@ EPIC-0003 completed the engine-owned execution contracts for `StoryPackage` load
 - Risk: multiplayer coordination overfits to one hosting or sync model. Mitigation: define adapter responsibilities in a host-agnostic way so mobile-local and API-hosted flows can share the same engine contract.
 - Risk: resume behavior becomes ambiguous across published package upgrades. Mitigation: pin sessions to `storyPackageVersionId` and make compatibility checks explicit at resume and upgrade boundaries.
 
+## Decision Lock
+
+- A co-op `session` is an adapter-owned multiplayer aggregate, distinct from engine `SessionState`.
+- Engine `SessionState` represents one player's resumable runtime inside a shared session and remains the only gameplay execution contract.
+- API, db, and realtime adapters own session membership, durable persistence, shared-state coordination, resume assembly, and update propagation around the engine.
+- Shared session state is adapter-owned durable truth. The engine computes state transitions, but adapters decide when shared mutations are accepted, persisted, and broadcast.
+- Sessions pin `storyPackageVersionId` at start and always resume against that pinned version unless a later explicit upgrade action is defined and succeeds compatibility checks.
+- Co-op remains local-first and selective-sync: players may progress independently offline, while shared-state touches and multiplayer checkpoints trigger session-layer coordination.
+
 ## Feature Breakdown
 
-- None.
+- [FEAT-0009-session-records-membership-and-pinned-resume-contract](../features/FEAT-0009-session-records-membership-and-pinned-resume-contract.md)
+- Planned follow-up feature: checkpoint and shared-state sync orchestration on top of the FEAT-0009 session boundary.
 
 ## Milestones and Sequencing
 

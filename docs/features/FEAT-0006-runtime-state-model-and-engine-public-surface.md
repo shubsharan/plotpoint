@@ -65,7 +65,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 2. `createEngine` must accept only the dependencies needed in this feature: published story package loading plus narrow runtime-context ports such as a clock and optional location reader.
 3. The public engine API must define narrow runtime-first entrypoints: `startSession`, `loadSession`, `submitAction`, and `traverse`.
 4. Every public runtime entrypoint must return the same engine-owned `RuntimeFrame` family rather than a persistence-shaped save record.
-5. `SessionState` must distinguish player-scoped progress from shared game-scoped progress without pushing storage or transport details into engine-owned types, while `RuntimeView` is the hydrated read projection and `RuntimeFrame` wraps both as `{ state, view }`.
+5. `SessionState` must distinguish player-scoped progress from shared session-scoped progress without pushing storage or transport details into engine-owned types, while `RuntimeView` is the hydrated read projection and `RuntimeFrame` wraps both as `{ state, view }`.
 6. `roleId` must be required at runtime startup and preserved in the player-scoped runtime identity contract.
 7. Engine-owned runtime result shapes must be deterministic and rich enough for later API/mobile surfaces to render updated current-node block state and available next-step information without reimplementing gameplay logic.
 8. Runtime state and public engine APIs must be documented as engine contracts, not API DTOs, and remain framework-free.
@@ -78,9 +78,10 @@ The architecture already sketches the target shape: `createEngine` owns public r
 - Durable decision record: [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)
 - The runtime surface should stay centered in `packages/engine`, with `createEngine` exporting engine-owned entrypoints and ports living in the engine package.
 - `StoryPackageRepo.getCurrentPublishedPackage(storyId)` and `getPublishedPackage(storyId, storyPackageVersionId)` are the published story package ingress from EPIC-0002; FEAT-0006 defines how the runtime surface consumes that data, not how publishing works.
-- User-scoped and game-scoped state are engine concepts in this feature. Their durable persistence, hydration, and synchronization behavior remain later adapter concerns in EPIC-0004.
+- Player-scoped and shared session-scoped state are engine concepts in this feature. Their durable persistence, hydration, and synchronization behavior remain later adapter concerns in EPIC-0004.
 - The engine is host-agnostic in this feature. Mobile-local play and API-hosted execution both depend on the same `createEngine` surface rather than separate gameplay contracts.
 - Success payloads from engine entrypoints should describe runtime outcomes such as updated state views and reserved next-step data, while route-local request/response DTOs remain adapter-owned in later work.
+- Later session persistence work reconstructs one player's `SessionState` from adapter-owned session records rather than storing hydrated `RuntimeFrame` payloads or transport DTOs as the primary durable shape.
 - The public surface for this feature is intentionally runtime-shaped rather than save-shaped, with a deliberate split between sparse resumable state and engine-derived result fields:
 
 ```typescript
@@ -204,5 +205,5 @@ type Engine = {
 - Resolved: the engine is host-agnostic and may run directly in mobile for offline play or inside the API for hosted execution.
 - Resolved: `roleId` is part of runtime startup and runtime identity in this feature rather than a later adapter-only field.
 - Resolved: FEAT-0006 owns both the resumable `SessionState` boundary and the outer `RuntimeFrame` result contract, while FEAT-0008 defines how traversal populates progression fields such as `traversableEdges`.
-- Resolved: runtime state is pinned to a published package version via `storyPackageVersionId`; explicit mid-game upgrades remain a separate session orchestration action.
-- Deferred follow-up [DF-0001]: define session upgrade policy for pinned published package versions. Default policy is pin at game start, allow explicit session/API-triggered upgrades, and reject upgrades when runtime compatibility checks fail so the session remains on its prior version. | Owner: EPIC-0003 | Trigger: Session orchestration scope is activated for runtime persistence/resume work. | Exit criteria: A merged feature implementation and docs update define explicit upgrade flow, compatibility failure behavior, and persistence semantics.
+- Resolved: runtime state is pinned to a published package version via `storyPackageVersionId`; explicit mid-session upgrades remain a separate session orchestration action.
+- Deferred follow-up [DF-0001]: define session upgrade policy for pinned published package versions. Default policy is pin at session start, allow explicit session/API-triggered upgrades, and reject upgrades when runtime compatibility checks fail so the session remains on its prior version. | Owner: EPIC-0003 | Trigger: Session orchestration scope is activated for runtime persistence/resume work. | Exit criteria: A merged feature implementation and docs update define explicit upgrade flow, compatibility failure behavior, and persistence semantics.

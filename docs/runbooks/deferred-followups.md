@@ -18,7 +18,7 @@ Track deferred feature/epic TODOs in one place so they remain visible across rev
 
 ## Current Deferred Follow-ups
 
-- [DF-0001] Session upgrade policy for pinned published package versions. | Owner: EPIC-0003 | Trigger: Session orchestration implementation begins for persisted runtime resume and upgrade controls. | Exit criteria: Runtime/session docs and implementation ship an explicit upgrade action with reject-on-incompatibility behavior and pinned-version preservation. | Sources: [features/FEAT-0006-runtime-state-model-and-engine-public-surface.md](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md), [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)
+- [DF-0001] Session upgrade policy for pinned published package versions. | Owner: EPIC-0003 | Trigger: Session orchestration implementation begins for persisted runtime resume and upgrade controls. | Exit criteria: Runtime/session docs and implementation ship an explicit upgrade action with reject-on-incompatibility behavior and pinned-version preservation. | Sources: [features/FEAT-0006-runtime-state-model-and-engine-public-surface.md](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md), [features/FEAT-0009-session-records-membership-and-pinned-resume-contract.md](../features/FEAT-0009-session-records-membership-and-pinned-resume-contract.md), [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)
 
 ## Closed Follow-ups
 

@@ -54,7 +54,7 @@ The core decision was not only where runtime code lives, but also what belongs i
 
 Adopt the headless engine-owned runtime boundary from FEAT-0006 and FEAT-0007.
 
-The engine is the single gameplay authority. Hosts construct it through `createEngine` and invoke `startSession`, `loadSession`, `submitAction`, and `traverse` rather than owning parallel gameplay contracts. Persisted `SessionState` remains sparse and resumable, while `RuntimeFrame` wraps that state with a derived `view` for host consumption.
+The engine is the single gameplay authority. Hosts construct it through `createEngine` and invoke `startSession`, `loadSession`, `submitAction`, and `traverse` rather than owning parallel gameplay contracts. Persisted `SessionState` remains sparse and resumable for one player inside a co-op session, while `RuntimeFrame` wraps that state with a derived `view` for host consumption.
 
 Within that boundary, block definitions stay pure and block-local. The executor owns registry lookup, state-bucket routing, runtime context resolution, deterministic validation and execution order, structured runtime error mapping, and the generic `type: 'submit'` action envelope. Blocks receive plain values plus value-only context and return next state only for their own key.
 
@@ -76,6 +76,7 @@ Within that boundary, block definitions stay pure and block-local. The executor 
 ### Follow-up
 
 - Keep future session persistence and multiplayer work in EPIC-0004 aligned to this runtime boundary.
+- Keep adapter-owned session aggregates distinct from engine `SessionState`; later session persistence should reconstruct engine state rather than store transport-shaped runtime blobs as the primary source of truth.
 - Treat changes to public runtime entrypoints, `SessionState`, `RuntimeFrame`, executor ownership, or action-envelope semantics as ADR-level changes.
 - Keep FEAT-0008 traversal semantics within this runtime boundary rather than creating a second gameplay authority.
 
