@@ -2,80 +2,143 @@
 | --------------- | ----------- |
 | **Type**        | PRD         |
 | **Feature ID**  | FEAT-0008   |
-| **Status**      | Not Started |
+| **Status**      | Completed   |
 | **Epic**        | EPIC-0003   |
 | **Domains**     | Engine      |
-| **Last synced** | 2026-04-01  |
+| **Last synced** | 2026-04-02  |
 
-# FEAT-0008 - Condition Registry and Graph Traversal Semantics
+# FEAT-0008 - Traversal Fact View and Graph Traversal Semantics
 
 ## Goal
 
-Define the engine-owned graph traversal semantics that determine which story paths become available after runtime state changes, replacing FEAT-0007's fail-safe unconditional-edge-only behavior.
+Ship the engine-owned traversal fact view and conditioned-edge traversal semantics that determine available edges after runtime state changes, replacing FEAT-0007's unconditional-edge-only placeholder behavior.
 
 ## Background and Context
 
-With FEAT-0006 defining the runtime surface and FEAT-0007 defining action execution, the remaining core runtime behavior is story progression. FEAT-0007 intentionally exposes only unconditional edges in `traversableEdges` and rejects conditioned authored edges as not yet traversable so the branch stays fail-safe. FEAT-0008 owns replacing that placeholder behavior with real traversal semantics for conditioned authored edges.
+FEAT-0006 locked runtime contracts and FEAT-0007 locked block execution. FEAT-0008 completes EPIC-0003 progression semantics by making conditioned authored edges executable and deterministic.
 
-This is the feature that makes branching narrative semantics concrete without taking on broader session orchestration. It owns condition evaluation, traversal results, and progression rules after runtime state changes, while leaving persistence, sync, and UI consequences to later layers. The shell renders traversal choices, but the engine remains the authority for traversal state changes through `traverseEdge`.
+This feature owns condition evaluation, traversable-edge derivation, and `traverse` eligibility. Session orchestration, persistence timing, and UX remain out of scope.
 
 ## Scope
 
 ### In scope
 
-- Define graph traversal semantics for determining available edges from the current node after state changes.
-- Define the `traverseEdge` runtime command that validates a selected traversable edge and advances the runtime to the target node.
-- Define the traversal payload that populates FEAT-0006 progression fields such as `RuntimeSnapshot.traversableEdges`.
-- Define failure behavior for invalid traversal targets and blocked authored edges once real traversal semantics exist.
+- Fact-based condition contract used by both compatibility validation and runtime traversal.
+- Condition-aware traversable-edge derivation for `startSession`, `loadSession`, `submitAction`, and `traverse`.
+- Deterministic `traverse` validation against the derived traversable set at command time.
+- Typed failure contracts for blocked traversal vs condition-evaluation failures.
+- Block-exported traversal fact contracts and bucket-hidden fact resolution.
 
 ### Out of scope
 
-- Block reducer behavior or registry ownership beyond the execution outputs this feature consumes.
-- Session completion, checkpoint orchestration, resume policy, or multiplayer coordination logic.
-- Mobile presentation of available choices or API request/response serialization.
-- New story package-schema authoring rules beyond the FEAT-0003 condition tree contract.
+- Session completion/checkpoint orchestration/resume orchestration policy.
+- Mobile/API transport or presentation concerns.
+- Role-aware traversal semantics (no implicit `roleId` conditions in this feature).
+- Global/system fact providers outside authored blocks.
+- Array/object/timestamp/geocoordinate fact values.
 
-## Requirements
+## Decision Lock
 
-1. Traversal evaluation must operate against the current runtime state view after block execution, including both player-scoped and shared state where relevant.
-2. The traversal layer must return deterministic available-edge results for the current node without redefining the outer runtime result envelope owned by FEAT-0006.
-3. FEAT-0008 must replace FEAT-0007's unconditional-edge-only placeholder semantics with real conditioned-edge derivation.
-4. Invalid current-node references, blocked authored edges, and malformed traversal inputs must fail explicitly.
-5. This feature must define progression semantics only; it must not decide session persistence timing, realtime broadcast behavior, or mobile UX flow.
+### Authored Condition Contract
+
+- Authored leaves use `{ type: 'fact', blockId, fact }` or `{ type: 'fact', blockId, fact, operator, value }`.
+- `always`, `and`, and `or` remain unchanged.
+- Omitted `operator` means the referenced fact must be boolean and must equal `true`.
+- `eq` and `neq` support `boolean`, `number`, and `string` facts.
+- `gt`, `gte`, `lt`, and `lte` support `number` facts only.
+- Legacy `check.condition + params` leaves are removed with no translation layer.
+
+### Block Traversal Fact Contract
+
+- Each block registry entry exports `traversal.facts`, a map of stable semantic fact names.
+- Each fact declares a primitive `kind` (`boolean`, `number`, `string`) plus a pure `derive({ state, config })` projector.
+- Traversal facts are derived from effective block `state + config` only.
+- Fact projectors never access ports, clocks, locations, or other blocks directly.
+- Buckets (`playerState`, `sharedState`) remain persistence concerns; authored conditions never reference them.
+
+### Runtime State Resolution
+
+- Conditions may reference any block id in the story package (not only current-node blocks).
+- Referenced block state bucket is derived from block registry policy (`playerState` vs `sharedState`), not authored condition data.
+- Condition evaluation runs against effective block state (persisted value when present, otherwise deterministic `initialState(config)`).
+- Resolver work is command-scoped and memoized by block runtime and `(blockId, fact)` pairs.
+- Runtime state remains pinned to `storyPackageVersionId`; mid-game upgrades remain explicit session orchestration work (DF-0001).
+
+### Traversal Evaluation Semantics
+
+- A single fact-aware evaluator is used by all runtime entrypoints:
+  - `startSession`
+  - `loadSession`
+  - `submitAction`
+  - `traverse` (including next-node snapshot derivation)
+- Unconditional edges (`condition` omitted) remain always traversable fast-path.
+- Authored `condition: { type: 'always' }` is semantically equivalent to omitted condition.
+- `and` and `or` use short-circuit evaluation.
+- Condition trees are evaluated in authored order; first failure is deterministic by authored edge/condition order.
+- `traverse` re-validates edge traversability at call time against current state, even if caller used an older frame.
+- `RuntimeFrame` envelope stays unchanged (`{ state, view }`); `traversableEdges` remains an available-edges list under `view`.
+
+### Error Contract
+
+- Keep `runtime_edge_not_found` for unknown edge ids.
+- Keep `runtime_edge_not_traversable` for known edges that are currently blocked (for example `reason: 'condition_false'`).
+- Add dedicated `runtime_condition_evaluation_failed` for:
+  - missing/invalid referenced blocks or facts,
+  - invalid operator or value usage that reaches runtime defensively,
+  - fact projectors that throw,
+  - fact projectors that return values incompatible with their declared kind.
+- If any edge evaluation in the current node fails with condition-evaluation error, the whole runtime command fails; no partial `traversableEdges` snapshot is returned.
+
+### Compatibility Validation Contract
+
+- Compatibility validation checks referenced block existence, exported fact existence, operator legality, and authored value type in a single pass.
+- Validation issues are reported with precise paths under `graph.nodes[*].edges[*].condition...`, including nested combinator child indexes.
+- Runtime keeps defensive validation and can still fail with `runtime_condition_evaluation_failed` if invalid data reaches execution.
 
 ## Architecture and Technical Notes
 
 - Primary reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
-- FEAT-0003 already fixes the serialized edge condition contract; this feature owns the runtime interpretation of those authored conditions.
-- Traversal operates on the merged runtime state view produced after block action execution, but must not own block update logic itself.
-- `traverseEdge` is the only runtime command that changes `currentNodeId`; shell/UI layers choose when to invoke it.
-- FEAT-0006 owns the outer `RuntimeSnapshot` contract. This feature defines only the traversal semantics and payload data that populate progression fields such as `traversableEdges`.
-- No new ADR is required unless condition evaluation needs a new cross-package boundary beyond the current engine-port model.
+- FEAT-0003 remains the authored condition-tree schema boundary, with FEAT-0008 intentionally breaking the leaf shape.
+- FEAT-0006 remains the outer runtime contract boundary; FEAT-0008 changes traversal semantics only.
+- Traversal logic stays pure and engine-owned; block reducers remain independent and block-specific semantics stay inside block-owned fact projectors.
+- No new cross-package boundary is introduced; no ADR required.
+- `currentEngineMajor` is bumped to `1` so published packages authored against the old `check` leaf shape fail explicitly instead of drifting under the old compatibility number.
 
 ## Acceptance Criteria
 
-- Traversal produces explicit edge results from the current node using the current runtime state view, populates `RuntimeSnapshot.traversableEdges`, and validates `traverseEdge` selections without replacing the outer runtime contract.
-- FEAT-0008 replaces FEAT-0007's unconditional-edge-only placeholder behavior with correct conditioned-edge derivation.
-- Invalid traversal targets, blocked authored edges, and malformed runtime inputs fail explicitly.
-- The feature leaves session/save orchestration and mobile presentation to later work.
+- Conditioned and unconditional authored edges are derived correctly into `RuntimeFrame.view.traversableEdges` across all runtime entrypoints using one evaluator.
+- `traverse` enforces current eligibility deterministically and updates `currentNodeId` only on valid traversals.
+- Runtime distinguishes blocked-edge outcomes from condition-evaluation failures via typed error codes.
+- Compatibility validation catches unknown blocks, unknown facts, missing operators, and invalid values with precise paths.
+- Runtime state sparsity semantics remain intact via effective-state resolution.
+- `RuntimeFrame` contract envelope remains `{ state, view }`.
+- FEAT-0007 deferred traversal placeholder behavior is fully removed from runtime semantics.
 
 ## Test Plan
 
-- Add traversal tests that verify traversable-edge resolution, successful `traverseEdge` transitions, blocked edges, and invalid node or edge references.
-- Add tests that prove player-scoped and shared-state values are both available to traversal after execution updates.
+- Add cross-entrypoint parity tests proving identical `view.traversableEdges` for equivalent effective state across `startSession`, `loadSession`, `submitAction`, and `traverse`.
+- Add traversal tests for:
+  - successful conditioned-edge traversal,
+  - blocked edges (`runtime_edge_not_traversable`),
+  - unknown edge ids (`runtime_edge_not_found`),
+  - evaluation failures (`runtime_condition_evaluation_failed`).
+- Add mixed-bucket tests proving the same authored fact condition resolves through either persistence bucket based on block policy.
+- Add condition-operator and value-shape tests for boolean/number/string facts.
+- Add deterministic ordering tests for authored edge order and first-failure behavior.
+- Add regression tests proving unconditional-only stories behave identically after FEAT-0008.
 
 ## Rollout and Observability
 
 - Internal engine rollout only; later API/mobile surfaces consume available-edge results rather than re-evaluating conditions themselves.
-- Surface traversal failures explicitly so adapters can log or serialize them later without guessing root cause.
-- Success is measured by story progression decisions becoming deterministic, testable, and engine-owned after replacing FEAT-0007's temporary fail-safe traversal behavior.
+- Surface typed traversal and condition-evaluation errors with structured details for adapter logging/serialization.
+- Close deferred follow-up `DF-0002` now that implementation/tests/docs have removed the FEAT-0007 placeholder behavior.
 
 ## Risks and Mitigations
 
-- Risk: traversal starts owning block execution or session orchestration concerns. Mitigation: keep this feature focused on post-update evaluation and edge availability only.
-- Risk: runtime interpretation diverges from the FEAT-0003 serialized contract. Mitigation: treat the existing authored edge condition schema as fixed input and only define execution semantics here.
-- Deferred follow-up [DF-0002]: conditioned-edge derivation and `traverseEdge` validation against effective block state remain deferred to FEAT-0008. FEAT-0007 intentionally exposes only unconditional edges in `traversableEdges` and rejects conditioned-edge traversal with a typed runtime error. | Owner: FEAT-0008 | Trigger: FEAT-0008 implementation begins for real traversal semantics. | Exit criteria: Engine derives `traversableEdges` from effective runtime state and validates `traverseEdge` against that derived set.
+- Risk: evaluator drift between runtime entrypoints. Mitigation: single shared evaluator and parity tests.
+- Risk: hidden traversal faults from partial edge filtering. Mitigation: fail whole command on evaluation errors.
+- Risk: condition contracts drift between compatibility/runtime. Mitigation: block-exported fact metadata is shared by both layers.
 
 ## Open Questions
 
-- None. This feature defines runtime condition and traversal semantics only.
+- None. Design decisions are locked and implementation-ready.

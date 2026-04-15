@@ -1,32 +1,23 @@
 import type { ZodError, ZodType } from 'zod';
-import { getBlockDefinition, hasBlockType } from '../blocks/index.js';
-import type { PublishedStoryPackage } from '../ports/story-package-repo.js';
-import type { StoryPackage } from '../story-packages/schema.js';
-import type { StoryPackageValidationIssue } from '../story-packages/types.js';
-import { validateStoryPackageCompatibility } from '../story-packages/validate-compatibility.js';
-import { validateStoryPackageStructure } from '../story-packages/validate-structure.js';
-import { currentEngineMajor } from '../version.js';
-import { readOwnBlockState } from './block-state-bucket.js';
-import { EngineRuntimeError } from './errors.js';
-import type {
-  CurrentNodeBlockSnapshot,
-  CurrentNodeSnapshot,
-  EnginePorts,
-  RuntimeSnapshot,
-  RuntimeState,
-  TraversableEdge,
-} from './types.js';
+import type { PublishedStoryPackage } from '../../ports/story-package-repo.js';
+import type { StoryPackage } from '../../story-packages/schema.js';
+import type { StoryPackageValidationIssue } from '../../story-packages/types.js';
+import { validateStoryPackageCompatibility } from '../../story-packages/validate-compatibility.js';
+import { validateStoryPackageStructure } from '../../story-packages/validate-structure.js';
+import { currentEngineMajor } from '../../version.js';
+import { EngineRuntimeError } from '../errors.js';
+import type { EnginePorts, SessionState } from '../types.js';
 
 type StoryNode = StoryPackage['graph']['nodes'][number];
 type StoryBlock = StoryNode['blocks'][number];
 type StoryEdge = StoryNode['edges'][number];
 
-type ResolveRuntimeSnapshotOptions = {
+export type ResolveSessionContextOptions = {
   blockId?: string | undefined;
   edgeId?: string | undefined;
 };
 
-type ResolvedRuntimeSnapshotContext = {
+export type ResolvedSessionContext = {
   currentNode: StoryNode;
   story: StoryPackage;
   targetBlock?: StoryBlock | undefined;
@@ -85,28 +76,6 @@ const runtimeError = {
     ),
 } as const;
 
-const createTraversableEdge = (
-  edge: StoryPackage['graph']['nodes'][number]['edges'][number],
-): TraversableEdge => {
-  if (edge.label === undefined) {
-    return {
-      edgeId: edge.id,
-      targetNodeId: edge.targetNodeId,
-    };
-  }
-
-  return {
-    edgeId: edge.id,
-    label: edge.label,
-    targetNodeId: edge.targetNodeId,
-  };
-};
-
-const toValidationDetails = (path: ReadonlyArray<number | string | symbol>, code: string) => ({
-  validationCode: code,
-  validationPath: formatIssuePath(path),
-});
-
 export const formatIssuePath = (path: ReadonlyArray<number | string | symbol>): string => {
   if (path.length === 0) {
     return '<root>';
@@ -141,6 +110,20 @@ const getErrorDetails = (error: unknown): string => {
   }
 
   return 'unknown error';
+};
+
+const validateStoryOrThrow = (story: StoryPackage, storyId: string): StoryPackage => {
+  if (story.metadata.storyId !== storyId) {
+    throw runtimeError.storyIdMismatch(storyId, story.metadata.storyId);
+  }
+
+  const issues = getValidationIssues(story);
+  const firstIssue = issues[0];
+  if (firstIssue) {
+    throw runtimeError.storyPackageInvalid(storyId, firstIssue);
+  }
+
+  return story;
 };
 
 export const loadStoryOrThrow = async (
@@ -188,27 +171,7 @@ export const loadStoryByVersionOrThrow = async (
   return validateStoryOrThrow(story, storyId);
 };
 
-const validateStoryOrThrow = (
-  story: StoryPackage,
-  storyId: string,
-): StoryPackage => {
-  if (story.metadata.storyId !== storyId) {
-    throw runtimeError.storyIdMismatch(storyId, story.metadata.storyId);
-  }
-
-  const issues = getValidationIssues(story);
-  const firstIssue = issues[0];
-  if (firstIssue) {
-    throw runtimeError.storyPackageInvalid(storyId, firstIssue);
-  }
-
-  return story;
-};
-
-export const getNodeOrThrow = (
-  story: StoryPackage,
-  nodeId: string,
-): StoryNode => {
+export const getNodeOrThrow = (story: StoryPackage, nodeId: string): StoryNode => {
   const node = story.graph.nodes.find((candidate) => candidate.id === nodeId);
 
   if (!node) {
@@ -260,128 +223,11 @@ export const getEdgeInNodeOrThrow = (
   return edge;
 };
 
-type ResolvedEffectiveBlockState = {
-  currentNodeBlock: CurrentNodeBlockSnapshot;
-  parsedConfig: Record<string, unknown>;
-  parsedState: Record<string, unknown>;
-};
-
-const resolveBlockDefinitionOrThrow = (nodeId: string, block: StoryBlock) => {
-  if (!hasBlockType(block.type)) {
-    throw new EngineRuntimeError(
-      'runtime_block_type_unregistered',
-      `Runtime block type "${block.type}" is not registered in the block registry.`,
-      {
-        details: {
-          blockId: block.id,
-          blockType: block.type,
-          nodeId,
-        },
-      },
-    );
-  }
-
-  return getBlockDefinition(block.type);
-};
-
-export const resolveEffectiveBlockStateOrThrow = (
-  state: RuntimeState,
-  nodeId: string,
-  block: StoryBlock,
-): ResolvedEffectiveBlockState => {
-  const definition = resolveBlockDefinitionOrThrow(nodeId, block);
-  const { behavior, policy } = definition;
-  const parsedConfig = behavior.configSchema.safeParse(block.config);
-  if (!parsedConfig.success) {
-    const firstIssue = parsedConfig.error.issues[0];
-    throw new EngineRuntimeError(
-      'runtime_block_config_invalid',
-      `Runtime block "${block.id}" has invalid config for type "${block.type}".`,
-      {
-        details: {
-          blockId: block.id,
-          blockType: block.type,
-          nodeId,
-          ...(firstIssue === undefined
-            ? {}
-            : toValidationDetails(firstIssue.path, firstIssue.code)),
-        },
-      },
-    );
-  }
-
-  const persistedState = readOwnBlockState(state[policy.stateType].blockStates, block.id);
-  let candidateState: unknown;
-  if (persistedState.found) {
-    candidateState = persistedState.value;
-  } else {
-    try {
-      candidateState = behavior.initialState(parsedConfig.data);
-    } catch (error) {
-      throw new EngineRuntimeError(
-        'runtime_block_execution_failed',
-        `Runtime block "${block.id}" initial state resolution failed for type "${block.type}".`,
-        {
-          cause: error,
-          details: {
-            blockId: block.id,
-            blockType: block.type,
-            nodeId,
-            phase: 'initial_state',
-          },
-        },
-      );
-    }
-  }
-
-  const parsedState = behavior.stateSchema.safeParse(candidateState);
-  if (!parsedState.success) {
-    const firstIssue = parsedState.error.issues[0];
-    throw new EngineRuntimeError(
-      'runtime_block_state_invalid',
-      persistedState.found
-        ? `Runtime block "${block.id}" has invalid persisted state for type "${block.type}".`
-        : `Runtime block "${block.id}" produced invalid initial state for type "${block.type}".`,
-      {
-        details: {
-          blockId: block.id,
-          blockType: block.type,
-          nodeId,
-          ...(firstIssue === undefined
-            ? {}
-            : toValidationDetails(firstIssue.path, firstIssue.code)),
-        },
-      },
-    );
-  }
-
-  return {
-    currentNodeBlock: {
-      config: block.config,
-      id: block.id,
-      interactive: behavior.interactive,
-      state: parsedState.data,
-      type: block.type,
-    },
-    parsedConfig: parsedConfig.data,
-    parsedState: parsedState.data,
-  };
-};
-
-export const createCurrentNodeSnapshotOrThrow = (
-  state: RuntimeState,
-  node: StoryNode,
-): CurrentNodeSnapshot => ({
-  blocks: node.blocks.map((block) => resolveEffectiveBlockStateOrThrow(state, node.id, block).currentNodeBlock),
-  id: node.id,
-  title: node.title,
-});
-
-export const resolveRuntimeSnapshotContextOrThrow = async (
+export const resolveSessionContextOrThrow = async (
   ports: EnginePorts,
-  state: RuntimeState,
-  options?: ResolveRuntimeSnapshotOptions,
-): Promise<ResolvedRuntimeSnapshotContext> => {
+  state: SessionState,
+  options?: ResolveSessionContextOptions,
+): Promise<ResolvedSessionContext> => {
   const story = await loadStoryByVersionOrThrow(
     ports,
     state.storyId,
@@ -408,16 +254,14 @@ export const resolveRuntimeSnapshotContextOrThrow = async (
   };
 };
 
-export const createRuntimeSnapshotInvalidError = (error: ZodError): EngineRuntimeError => {
+export const createRuntimeInputInvalidError = (error: ZodError): EngineRuntimeError => {
   const firstIssue = error.issues[0];
 
   if (!firstIssue) {
     return runtimeError.snapshotInvalid('no validation details were provided');
   }
 
-  return runtimeError.snapshotInvalid(
-    `${firstIssue.code} at ${formatIssuePath(firstIssue.path)}`
-  );
+  return runtimeError.snapshotInvalid(`${firstIssue.code} at ${formatIssuePath(firstIssue.path)}`);
 };
 
 export const parseRuntimeInputOrThrow = <TInput>(
@@ -427,38 +271,8 @@ export const parseRuntimeInputOrThrow = <TInput>(
   const parsed = schema.safeParse(input);
 
   if (!parsed.success) {
-    throw createRuntimeSnapshotInvalidError(parsed.error);
+    throw createRuntimeInputInvalidError(parsed.error);
   }
 
   return parsed.data;
 };
-
-export const mapTraversableEdges = (node: StoryNode): TraversableEdge[] =>
-  node.edges
-    .filter((edge) => edge.condition === undefined)
-    .map((edge) => createTraversableEdge(edge));
-
-export const normalizeRuntimeState = (state: RuntimeState): RuntimeState => ({
-  ...state,
-  playerState: {
-    ...state.playerState,
-    blockStates: { ...state.playerState.blockStates },
-  },
-  sharedState: {
-    ...state.sharedState,
-    blockStates: { ...state.sharedState.blockStates },
-  },
-});
-
-export const createRuntimeSnapshot = (
-  state: RuntimeState,
-  currentNode: CurrentNodeSnapshot,
-  traversableEdges: TraversableEdge[],
-  options?: {
-    normalizeState?: boolean | undefined;
-  },
-): RuntimeSnapshot => ({
-  ...(options?.normalizeState === false ? state : normalizeRuntimeState(state)),
-  currentNode,
-  traversableEdges,
-});

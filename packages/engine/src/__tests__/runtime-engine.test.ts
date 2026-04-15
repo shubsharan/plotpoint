@@ -2,13 +2,17 @@ import { describe, expect, it } from 'vitest';
 import type {
   Engine,
   EngineRuntimeErrorCode,
-  RuntimeState,
-  RuntimeSnapshot,
-  StartGameInput,
+  SessionState,
+  RuntimeFrame,
+  StartSessionInput,
   StoryPackage,
   StoryPackageRepo,
 } from '../index.js';
-import { EngineRuntimeError, createEngine, currentEngineMajor } from '../index.js';
+import {
+  EngineRuntimeError,
+  createEngine,
+  currentEngineMajor,
+} from '../index.js';
 import {
   createCompatibilityInvalidStoryPackageFixture,
   createStructurallyInvalidStoryPackageFixture,
@@ -78,8 +82,8 @@ const createRuntimeContext = (): RuntimeTestContext => {
 
 const createStartInput = (
   storyId: string,
-  overrides?: Partial<StartGameInput>,
-): StartGameInput => ({
+  overrides?: Partial<StartSessionInput>,
+): StartSessionInput => ({
   gameId: 'game-1',
   playerId: 'player-1',
   roleId: 'detective',
@@ -90,49 +94,45 @@ const createStartInput = (
 const startRuntime = async (
   engine: Engine,
   storyId: string,
-  overrides?: Partial<StartGameInput>,
-): Promise<RuntimeSnapshot> => engine.startGame(createStartInput(storyId, overrides));
+  overrides?: Partial<StartSessionInput>,
+): Promise<RuntimeFrame> => engine.startSession(createStartInput(storyId, overrides));
 
-const toRuntimeState = (snapshot: RuntimeSnapshot): RuntimeState => {
-  const {
-    currentNode: _currentNode,
-    traversableEdges: _traversableEdges,
-    ...state
-  } = snapshot;
+const toSessionState = (frame: RuntimeFrame): SessionState => frame.state;
 
-  return state;
-};
-
-const toRuntimeStateAtNode = (snapshot: RuntimeSnapshot, nodeId: string): RuntimeState => ({
-  ...toRuntimeState(snapshot),
+const toSessionStateAtNode = (snapshot: RuntimeFrame, nodeId: string): SessionState => ({
+  ...toSessionState(snapshot),
   currentNodeId: nodeId,
 });
 
-const expectRuntimeSnapshotShape = (snapshot: RuntimeSnapshot): void => {
-  expect(snapshot).toMatchObject({
-    currentNodeId: expect.any(String),
-    currentNode: {
-      blocks: expect.any(Array),
-      id: expect.any(String),
-      title: expect.any(String),
+const expectRuntimeFrameShape = (frame: RuntimeFrame): void => {
+  expect(frame).toMatchObject({
+    state: {
+      currentNodeId: expect.any(String),
+      gameId: expect.any(String),
+      playerId: expect.any(String),
+      playerState: {
+        blockStates: expect.any(Object),
+      },
+      roleId: expect.any(String),
+      sharedState: {
+        blockStates: expect.any(Object),
+      },
+      storyId: expect.any(String),
+      storyPackageVersionId: expect.any(String),
     },
-    gameId: expect.any(String),
-    playerId: expect.any(String),
-    playerState: {
-      blockStates: expect.any(Object),
+    view: {
+      currentNode: {
+        blocks: expect.any(Array),
+        id: expect.any(String),
+        title: expect.any(String),
+      },
+      traversableEdges: expect.any(Array),
     },
-    roleId: expect.any(String),
-    sharedState: {
-      blockStates: expect.any(Object),
-    },
-    storyId: expect.any(String),
-    storyPackageVersionId: expect.any(String),
   });
-  expect(Array.isArray(snapshot.traversableEdges)).toBe(true);
 };
 
-const getCurrentNodeBlock = (snapshot: RuntimeSnapshot, blockId: string) => {
-  const block = snapshot.currentNode.blocks.find((candidate) => candidate.id === blockId);
+const getCurrentNodeBlock = (frame: RuntimeFrame, blockId: string) => {
+  const block = frame.view.currentNode.blocks.find((candidate) => candidate.id === blockId);
   expect(block).toBeDefined();
   return block!;
 };
@@ -153,34 +153,34 @@ describe('@plotpoint/engine runtime surface', () => {
   it('constructs createEngine with runtime entrypoints', () => {
     const { engine } = createRuntimeContext();
 
-    expect(typeof engine.startGame).toBe('function');
-    expect(typeof engine.loadRuntime).toBe('function');
-    expect(typeof engine.performBlockAction).toBe('function');
-    expect(typeof engine.traverseEdge).toBe('function');
+    expect(typeof engine.startSession).toBe('function');
+    expect(typeof engine.loadSession).toBe('function');
+    expect(typeof engine.submitAction).toBe('function');
+    expect(typeof engine.traverse).toBe('function');
   });
 
-  it('returns the RuntimeSnapshot contract and preserves roleId across runtime transitions', async () => {
+  it('returns the RuntimeFrame contract and preserves roleId across runtime transitions', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
-    const loaded = await engine.loadRuntime({
-      state: toRuntimeState(started),
+    const loaded = await engine.loadSession({
+      state: toSessionState(started),
     });
-    const traversed = await engine.traverseEdge({
+    const traversed = await engine.traverse({
       edgeId: 'foyer-to-archive',
-      state: toRuntimeState(loaded),
+      state: toSessionState(loaded),
     });
-    const submitted = await engine.performBlockAction({
+    const submitted = await engine.submitAction({
       action: {
         type: 'submit',
         value: '1847',
       },
       blockId: 'vault-code',
-      state: toRuntimeState(traversed),
+      state: toSessionState(traversed),
     });
 
     for (const snapshot of [started, loaded, traversed, submitted]) {
-      expectRuntimeSnapshotShape(snapshot);
-      expect(snapshot.roleId).toBe('detective');
+      expectRuntimeFrameShape(snapshot);
+      expect(snapshot.state.roleId).toBe('detective');
     }
   });
 
@@ -263,68 +263,106 @@ describe('@plotpoint/engine runtime surface', () => {
     const started = await startRuntime(engine, storyPackageV1.metadata.storyId);
     currentStoryPackageVersionId = 'snapshot-v2';
 
-    const loaded = await engine.loadRuntime({
-      state: toRuntimeState(started),
+    const loaded = await engine.loadSession({
+      state: toSessionState(started),
     });
 
-    expect(loaded.storyPackageVersionId).toBe('snapshot-v1');
-    expect(loaded.currentNodeId).toBe('foyer');
+    expect(loaded.state.storyPackageVersionId).toBe('snapshot-v1');
+    expect(loaded.state.currentNodeId).toBe('foyer');
 
-    const submitted = await engine.performBlockAction({
+    const submitted = await engine.submitAction({
       action: {
         type: 'submit',
         value: '1847',
       },
       blockId: 'vault-code',
-      state: toRuntimeStateAtNode(loaded, 'archive-door'),
+      state: toSessionStateAtNode(loaded, 'archive-door'),
     });
 
-    expect(submitted.storyPackageVersionId).toBe('snapshot-v1');
-    expect(submitted.currentNodeId).toBe('archive-door');
+    expect(submitted.state.storyPackageVersionId).toBe('snapshot-v1');
+    expect(submitted.state.currentNodeId).toBe('archive-door');
   });
 
-  it('rehydrates and submits from RuntimeState inputs without persisting derived fields', async () => {
+  it('rehydrates and submits from SessionState inputs without persisting derived fields', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
-    const loaded = await engine.loadRuntime({
-      state: toRuntimeState(started),
+    const loaded = await engine.loadSession({
+      state: toSessionState(started),
     });
-    const traversed = await engine.traverseEdge({
+    const traversed = await engine.traverse({
       edgeId: 'foyer-to-archive',
-      state: toRuntimeState(loaded),
+      state: toSessionState(loaded),
     });
-    const submitted = await engine.performBlockAction({
+    const submitted = await engine.submitAction({
       action: {
         type: 'submit',
         value: '1847',
       },
       blockId: 'vault-code',
-      state: toRuntimeState(traversed),
+      state: toSessionState(traversed),
     });
 
-    expect(started.traversableEdges).toEqual([
+    expect(started.view.traversableEdges).toEqual([
       {
         edgeId: 'foyer-to-archive',
         label: 'Head to the archive',
         targetNodeId: 'archive-door',
       },
     ]);
-    expect(loaded.traversableEdges).toEqual(started.traversableEdges);
-    expect(traversed.traversableEdges).toEqual([]);
-    expect(submitted.traversableEdges).toEqual([]);
+    expect(loaded.view.traversableEdges).toEqual(started.view.traversableEdges);
+    expect(traversed.view.traversableEdges).toEqual([]);
+    expect(submitted.view.traversableEdges).toEqual([
+      {
+        edgeId: 'archive-to-vault',
+        label: 'Open the archive vault',
+        targetNodeId: 'vault',
+      },
+    ]);
   });
 
   it('traverses to the selected edge target and updates current node state', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    const traversed = await engine.traverseEdge({
+    const traversed = await engine.traverse({
       edgeId: 'foyer-to-archive',
-      state: toRuntimeState(started),
+      state: toSessionState(started),
     });
 
-    expect(traversed.currentNodeId).toBe('archive-door');
-    expect(traversed.traversableEdges).toEqual([]);
+    expect(traversed.state.currentNodeId).toBe('archive-door');
+    expect(traversed.view.traversableEdges).toEqual([]);
+  });
+
+  it('traverses conditioned edges after their facts resolve true', async () => {
+    const { engine, storyId } = createRuntimeContext();
+    const started = await startRuntime(engine, storyId);
+    const archiveDoor = await engine.traverse({
+      edgeId: 'foyer-to-archive',
+      state: toSessionState(started),
+    });
+    const unlockedArchiveDoor = await engine.submitAction({
+      action: {
+        type: 'submit',
+        value: '1847',
+      },
+      blockId: 'vault-code',
+      state: toSessionState(archiveDoor),
+    });
+
+    const traversed = await engine.traverse({
+      edgeId: 'archive-to-vault',
+      state: toSessionState(unlockedArchiveDoor),
+    });
+
+    expect(unlockedArchiveDoor.view.traversableEdges).toEqual([
+      {
+        edgeId: 'archive-to-vault',
+        label: 'Open the archive vault',
+        targetNodeId: 'vault',
+      },
+    ]);
+    expect(traversed.state.currentNodeId).toBe('vault');
+    expect(traversed.view.traversableEdges).toEqual([]);
   });
 
   it('hydrates non-interactive current-node block state when traversing into a node', async () => {
@@ -359,66 +397,72 @@ describe('@plotpoint/engine runtime surface', () => {
     const engine = createRuntimeEngine(storyPackage);
     const started = await startRuntime(engine, storyPackage.metadata.storyId);
 
-    const traversed = await engine.traverseEdge({
+    const traversed = await engine.traverse({
       edgeId: 'foyer-to-archive',
-      state: toRuntimeState(started),
+      state: toSessionState(started),
     });
 
     expect(getCurrentNodeBlock(traversed, 'archive-briefing').state).toEqual({
       unlocked: true,
     });
-    expect(Object.hasOwn(traversed.playerState.blockStates, 'archive-briefing')).toBe(false);
+    expect(Object.hasOwn(traversed.state.playerState.blockStates, 'archive-briefing')).toBe(false);
   });
 
   it('rehydrates the same hydrated current-node view from sparse runtime state', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
-    const traversed = await engine.traverseEdge({
+    const traversed = await engine.traverse({
       edgeId: 'foyer-to-archive',
-      state: toRuntimeState(started),
+      state: toSessionState(started),
     });
 
-    const loaded = await engine.loadRuntime({
-      state: toRuntimeStateAtNode(started, 'archive-door'),
+    const loaded = await engine.loadSession({
+      state: toSessionStateAtNode(started, 'archive-door'),
     });
 
-    expect(loaded.currentNode).toEqual(traversed.currentNode);
-    expect(loaded.traversableEdges).toEqual(traversed.traversableEdges);
-    expect(loaded.playerState.blockStates).toEqual(traversed.playerState.blockStates);
+    expect(loaded.view.currentNode).toEqual(traversed.view.currentNode);
+    expect(loaded.view.traversableEdges).toEqual(traversed.view.traversableEdges);
+    expect(loaded.state.playerState.blockStates).toEqual(traversed.state.playerState.blockStates);
   });
 
-  it('omits conditioned edges from traversableEdges until FEAT-0008 defines traversal semantics', async () => {
+  it('recomputes conditioned edges from effective runtime state after block updates', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
-    const traversed = await engine.traverseEdge({
+    const traversed = await engine.traverse({
       edgeId: 'foyer-to-archive',
-      state: toRuntimeState(started),
+      state: toSessionState(started),
     });
-    const submitted = await engine.performBlockAction({
+    const submitted = await engine.submitAction({
       action: {
         type: 'submit',
         value: '1847',
       },
       blockId: 'vault-code',
-      state: toRuntimeState(traversed),
+      state: toSessionState(traversed),
     });
 
-    expect(traversed.traversableEdges).toEqual([]);
-    expect(submitted.traversableEdges).toEqual([]);
+    expect(traversed.view.traversableEdges).toEqual([]);
+    expect(submitted.view.traversableEdges).toEqual([
+      {
+        edgeId: 'archive-to-vault',
+        label: 'Open the archive vault',
+        targetNodeId: 'vault',
+      },
+    ]);
   });
 
   it('rejects conditioned authored edges as not traversable', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
-    const traversed = await engine.traverseEdge({
+    const traversed = await engine.traverse({
       edgeId: 'foyer-to-archive',
-      state: toRuntimeState(started),
+      state: toSessionState(started),
     });
 
     const error = await expectRuntimeError(
-      engine.traverseEdge({
+      engine.traverse({
         edgeId: 'archive-to-vault',
-        state: toRuntimeState(traversed),
+        state: toSessionState(traversed),
       }),
       'runtime_edge_not_traversable',
     );
@@ -426,18 +470,18 @@ describe('@plotpoint/engine runtime surface', () => {
     expect(error.details).toMatchObject({
       edgeId: 'archive-to-vault',
       nodeId: 'archive-door',
-      reason: 'conditioned_edge_deferred',
+      reason: 'condition_false',
       storyId,
     });
   });
 
-  it('accepts snapshot-shaped state inputs and strips derived fields before rehydration', async () => {
+  it('rejects state payloads that include derived view fields', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
-    const staleSnapshot: RuntimeSnapshot = {
-      ...started,
+    const staleStateWithView = {
+      ...toSessionState(started),
       currentNode: {
-        ...started.currentNode,
+        ...started.view.currentNode,
         title: 'Stale Node',
       },
       traversableEdges: [
@@ -449,20 +493,20 @@ describe('@plotpoint/engine runtime surface', () => {
       ],
     };
 
-    const loaded = await engine.loadRuntime({
-      state: staleSnapshot,
+    const loadPromise = engine.loadSession({
+      state: staleStateWithView as unknown as SessionState,
     });
 
-    expect(loaded.traversableEdges).toEqual(started.traversableEdges);
-    expect(loaded.currentNode).toEqual(started.currentNode);
+    await expectRuntimeError(loadPromise, 'runtime_snapshot_invalid');
+    await expect(loadPromise).rejects.toThrow('unrecognized_keys');
   });
 
-  it('clones block-state maps when normalizing runtime state into a snapshot', async () => {
+  it('clones block-state maps when normalizing session state into a frame', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    const stateWithBlockState: RuntimeState = {
-      ...toRuntimeState(started),
+    const stateWithBlockState: SessionState = {
+      ...toSessionState(started),
       playerState: {
         blockStates: {
           briefing: {
@@ -479,11 +523,11 @@ describe('@plotpoint/engine runtime surface', () => {
       },
     };
 
-    const loaded = await engine.loadRuntime({ state: stateWithBlockState });
+    const loaded = await engine.loadSession({ state: stateWithBlockState });
 
     expect(loaded).not.toBe(stateWithBlockState);
-    expect(loaded.playerState.blockStates).not.toBe(stateWithBlockState.playerState.blockStates);
-    expect(loaded.sharedState.blockStates).not.toBe(stateWithBlockState.sharedState.blockStates);
+    expect(loaded.state.playerState.blockStates).not.toBe(stateWithBlockState.playerState.blockStates);
+    expect(loaded.state.sharedState.blockStates).not.toBe(stateWithBlockState.sharedState.blockStates);
   });
 
   const runtimeErrorCases: Array<{
@@ -502,9 +546,9 @@ describe('@plotpoint/engine runtime surface', () => {
       run: async ({ engine, storyId }) => {
         const started = await startRuntime(engine, storyId);
 
-        return engine.loadRuntime({
+        return engine.loadSession({
           state: {
-            ...toRuntimeState(started),
+            ...toSessionState(started),
             currentNodeId: 'missing-node',
           },
         });
@@ -516,13 +560,13 @@ describe('@plotpoint/engine runtime surface', () => {
       run: async ({ engine, storyId }) => {
         const started = await startRuntime(engine, storyId);
 
-        return engine.performBlockAction({
+        return engine.submitAction({
           action: {
             type: 'submit',
             value: '1847',
           },
           blockId: 'missing-block',
-          state: toRuntimeState(started),
+          state: toSessionState(started),
         });
       },
     },
@@ -532,9 +576,9 @@ describe('@plotpoint/engine runtime surface', () => {
       run: async ({ engine, storyId }) => {
         const started = await startRuntime(engine, storyId);
 
-        return engine.traverseEdge({
+        return engine.traverse({
           edgeId: 'missing-edge',
-          state: toRuntimeState(started),
+          state: toSessionState(started),
         });
       },
     },
@@ -543,14 +587,14 @@ describe('@plotpoint/engine runtime surface', () => {
       name: 'edge target is conditioned during traversal',
       run: async ({ engine, storyId }) => {
         const started = await startRuntime(engine, storyId);
-        const traversed = await engine.traverseEdge({
+        const traversed = await engine.traverse({
           edgeId: 'foyer-to-archive',
-          state: toRuntimeState(started),
+          state: toSessionState(started),
         });
 
-        return engine.traverseEdge({
+        return engine.traverse({
           edgeId: 'archive-to-vault',
-          state: toRuntimeState(traversed),
+          state: toSessionState(traversed),
         });
       },
     },
@@ -579,7 +623,7 @@ describe('@plotpoint/engine runtime surface', () => {
     });
 
     await expectRuntimeError(
-      engine.startGame(createStartInput('story-requested-by-runtime')),
+      engine.startSession(createStartInput('story-requested-by-runtime')),
       'runtime_story_id_mismatch',
     );
   });
@@ -596,7 +640,7 @@ describe('@plotpoint/engine runtime surface', () => {
       }),
     });
 
-    const startPromise = engine.startGame(createStartInput('story-the-stolen-ledger'));
+    const startPromise = engine.startSession(createStartInput('story-the-stolen-ledger'));
 
     await expectRuntimeError(startPromise, 'runtime_story_package_unavailable');
     await expect(startPromise).rejects.toThrow('storage offline');
@@ -606,9 +650,9 @@ describe('@plotpoint/engine runtime surface', () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    const loadPromise = engine.loadRuntime({
+    const loadPromise = engine.loadSession({
       state: {
-        ...toRuntimeState(started),
+        ...toSessionState(started),
         storyPackageVersionId: 'snapshot-missing',
       },
     });
@@ -637,7 +681,7 @@ describe('@plotpoint/engine runtime surface', () => {
     await expect(startPromise).rejects.toThrow(/unknown-block-type|incompatible-engine-major/);
   });
 
-  it('throws runtime_snapshot_invalid for malformed startGame payloads', async () => {
+  it('throws runtime_snapshot_invalid for malformed startSession payloads', async () => {
     const { engine, storyId } = createRuntimeContext();
     const startPromise = startRuntime(engine, storyId, {
       gameId: '',
@@ -647,73 +691,73 @@ describe('@plotpoint/engine runtime surface', () => {
     await expect(startPromise).rejects.toThrow('too_small at gameId');
   });
 
-  it('throws runtime_snapshot_invalid for malformed loadRuntime state payloads', async () => {
+  it('throws runtime_snapshot_invalid for malformed loadSession state payloads', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    const loadPromise = engine.loadRuntime({
+    const loadPromise = engine.loadSession({
       state: {
-        ...toRuntimeState(started),
+        ...toSessionState(started),
         roleId: '',
-      } as unknown as RuntimeState,
+      } as unknown as SessionState,
     });
 
     await expectRuntimeError(loadPromise, 'runtime_snapshot_invalid');
     await expect(loadPromise).rejects.toThrow('too_small at state.roleId');
   });
 
-  it('throws runtime_snapshot_invalid when pinned story package version is missing from loadRuntime state', async () => {
+  it('throws runtime_snapshot_invalid when pinned story package version is missing from loadSession state', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    const runtimeState = toRuntimeState(started) as Record<string, unknown>;
+    const runtimeState = toSessionState(started) as Record<string, unknown>;
     delete runtimeState.storyPackageVersionId;
 
-    const loadPromise = engine.loadRuntime({
-      state: runtimeState as unknown as RuntimeState,
+    const loadPromise = engine.loadSession({
+      state: runtimeState as unknown as SessionState,
     });
 
     await expectRuntimeError(loadPromise, 'runtime_snapshot_invalid');
     await expect(loadPromise).rejects.toThrow('at state.storyPackageVersionId');
   });
 
-  it('throws runtime_snapshot_invalid for malformed performBlockAction payloads', async () => {
+  it('throws runtime_snapshot_invalid for malformed submitAction payloads', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    const submitPromise = engine.performBlockAction({
+    const submitPromise = engine.submitAction({
       action: {
         type: 'submit',
         value: '1847',
       },
       blockId: '',
-      state: toRuntimeState(started),
+      state: toSessionState(started),
     });
 
     await expectRuntimeError(submitPromise, 'runtime_snapshot_invalid');
     await expect(submitPromise).rejects.toThrow('too_small at blockId');
   });
 
-  it('throws runtime_snapshot_invalid when performBlockAction action is missing', async () => {
+  it('throws runtime_snapshot_invalid when submitAction action is missing', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    const submitPromise = engine.performBlockAction({
+    const submitPromise = engine.submitAction({
       blockId: 'briefing',
-      state: toRuntimeState(started),
-    } as unknown as Parameters<Engine['performBlockAction']>[0]);
+      state: toSessionState(started),
+    } as unknown as Parameters<Engine['submitAction']>[0]);
 
     await expectRuntimeError(submitPromise, 'runtime_snapshot_invalid');
     await expect(submitPromise).rejects.toThrow(/at action/);
   });
 
-  it('throws runtime_snapshot_invalid for malformed traverseEdge payloads', async () => {
+  it('throws runtime_snapshot_invalid for malformed traverse payloads', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    const traversePromise = engine.traverseEdge({
+    const traversePromise = engine.traverse({
       edgeId: '',
-      state: toRuntimeState(started),
+      state: toSessionState(started),
     });
 
     await expectRuntimeError(traversePromise, 'runtime_snapshot_invalid');
@@ -732,29 +776,29 @@ describe('@plotpoint/engine runtime surface', () => {
         'runtime_snapshot_invalid',
       ),
       expectRuntimeError(
-        engine.loadRuntime({
+        engine.loadSession({
           state: {
-            ...toRuntimeState(started),
+            ...toSessionState(started),
             roleId: '',
-          } as unknown as RuntimeState,
+          } as unknown as SessionState,
         }),
         'runtime_snapshot_invalid',
       ),
       expectRuntimeError(
-        engine.performBlockAction({
+        engine.submitAction({
           action: {
             type: 'submit',
             value: '1847',
           },
           blockId: '',
-          state: toRuntimeState(started),
+          state: toSessionState(started),
         }),
         'runtime_snapshot_invalid',
       ),
       expectRuntimeError(
-        engine.traverseEdge({
+        engine.traverse({
           edgeId: '',
-          state: toRuntimeState(started),
+          state: toSessionState(started),
         }),
         'runtime_snapshot_invalid',
       ),

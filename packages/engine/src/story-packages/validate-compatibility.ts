@@ -1,6 +1,11 @@
 import type { z } from 'zod';
-import { getBlockDefinition, hasBlockType } from '../blocks/index.js';
-import { hasConditionName } from '../graph/conditions.js';
+import { getBlockDefinition, hasBlockType } from '../blocks/registry.js';
+import {
+  buildStoryPackageBlockIndex,
+  getTraversalFactKind,
+  isFactComparisonCondition,
+  visitStoryPackageCondition,
+} from './condition-helpers.js';
 import type {
   StoryPackage,
   StoryPackageCompatibilityOptions,
@@ -11,32 +16,7 @@ import {
   normalizeStoryPackageValidationPath,
 } from './validation-issues.js';
 
-type StoryPackageCondition = NonNullable<
-  StoryPackage['graph']['nodes'][number]['edges'][number]['condition']
->;
-
 const createIssue = createStoryPackageIssueFactory('compatibility');
-
-const visitCondition = (
-  condition: StoryPackageCondition,
-  path: ReadonlyArray<number | string>,
-  visit: (condition: StoryPackageCondition, path: ReadonlyArray<number | string>) => void,
-): void => {
-  visit(condition, path);
-
-  switch (condition.type) {
-    case 'and':
-    case 'or': {
-      condition.children.forEach((child, childIndex) => {
-        visitCondition(child, [...path, 'children', childIndex], visit);
-      });
-      return;
-    }
-    case 'always':
-    case 'check':
-      return;
-  }
-};
 
 export const validateStoryPackageCompatibility = (
   storyPackage: StoryPackage,
@@ -44,6 +24,7 @@ export const validateStoryPackageCompatibility = (
 ): StoryPackageValidationIssue[] => {
   const issues: StoryPackageValidationIssue[] = [];
   const mode = options.mode ?? 'draft';
+  const blockIndex = buildStoryPackageBlockIndex(storyPackage);
 
   storyPackage.graph.nodes.forEach((node, nodeIndex) => {
     node.blocks.forEach((block, blockIndex) => {
@@ -100,26 +81,140 @@ export const validateStoryPackageCompatibility = (
         return;
       }
 
-      visitCondition(
+      visitStoryPackageCondition(
         edge.condition,
         ['graph', 'nodes', nodeIndex, 'edges', edgeIndex, 'condition'],
         (condition, path) => {
-          if (condition.type !== 'check' || hasConditionName(condition.condition)) {
+          if (condition.type !== 'fact') {
             return;
           }
 
-          issues.push(
-            createIssue(
-              'unknown-condition-name',
-              [...path, 'condition'],
-              `Condition "${condition.condition}" is not registered in the engine.`,
-              {
-                conditionName: condition.condition,
-                edgeId: edge.id,
-                nodeId: node.id,
-              },
-            ),
-          );
+          const referencedBlock = blockIndex.get(condition.blockId);
+          if (!referencedBlock) {
+            issues.push(
+              createIssue(
+                'unknown-condition-block',
+                [...path, 'blockId'],
+                `Condition references unknown block "${condition.blockId}".`,
+                {
+                  blockId: condition.blockId,
+                  edgeId: edge.id,
+                  nodeId: node.id,
+                },
+              ),
+            );
+            return;
+          }
+
+          if (!hasBlockType(referencedBlock.block.type)) {
+            return;
+          }
+
+          const factDefinition =
+            getBlockDefinition(referencedBlock.block.type).traversal.facts[condition.fact];
+          if (!factDefinition) {
+            issues.push(
+              createIssue(
+                'unknown-condition-fact',
+                [...path, 'fact'],
+                `Condition references unknown fact "${condition.fact}" on block "${condition.blockId}".`,
+                {
+                  blockId: condition.blockId,
+                  blockType: referencedBlock.block.type,
+                  edgeId: edge.id,
+                  fact: condition.fact,
+                  nodeId: node.id,
+                },
+              ),
+            );
+            return;
+          }
+
+          if (!isFactComparisonCondition(condition)) {
+            if (factDefinition.kind !== 'boolean') {
+              issues.push(
+                createIssue(
+                  'invalid-condition-operator',
+                  [...path, 'operator'],
+                  `Condition fact "${condition.fact}" on block "${condition.blockId}" requires an operator.`,
+                  {
+                    blockId: condition.blockId,
+                    edgeId: edge.id,
+                    fact: condition.fact,
+                    factKind: factDefinition.kind,
+                    nodeId: node.id,
+                  },
+                ),
+              );
+            }
+            return;
+          }
+
+          const { operator, value } = condition;
+          const valueType = getTraversalFactKind(value);
+          if (
+            operator === 'gt' ||
+            operator === 'gte' ||
+            operator === 'lt' ||
+            operator === 'lte'
+          ) {
+            if (factDefinition.kind !== 'number') {
+              issues.push(
+                createIssue(
+                  'invalid-condition-operator',
+                  [...path, 'operator'],
+                  `Operator "${operator}" is only valid for number facts.`,
+                  {
+                    blockId: condition.blockId,
+                    edgeId: edge.id,
+                    fact: condition.fact,
+                    factKind: factDefinition.kind,
+                    nodeId: node.id,
+                    operator,
+                  },
+                ),
+              );
+            }
+
+            if (valueType !== 'number') {
+              issues.push(
+                createIssue(
+                  'invalid-condition-value',
+                  [...path, 'value'],
+                  `Condition value for fact "${condition.fact}" must be a number.`,
+                  {
+                    blockId: condition.blockId,
+                    edgeId: edge.id,
+                    fact: condition.fact,
+                    factKind: factDefinition.kind,
+                    nodeId: node.id,
+                    operator,
+                    valueType,
+                  },
+                ),
+              );
+            }
+            return;
+          }
+
+          if (valueType !== factDefinition.kind) {
+            issues.push(
+              createIssue(
+                'invalid-condition-value',
+                [...path, 'value'],
+                `Condition value for fact "${condition.fact}" must be a ${factDefinition.kind}.`,
+                {
+                  blockId: condition.blockId,
+                  edgeId: edge.id,
+                  fact: condition.fact,
+                  factKind: factDefinition.kind,
+                  nodeId: node.id,
+                  operator,
+                  valueType,
+                },
+              ),
+            );
+          }
         },
       );
     });

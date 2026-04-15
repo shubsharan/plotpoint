@@ -1,12 +1,3 @@
-export { blockRegistry, getBlockDefinition, hasBlockType } from './blocks/index.js';
-export type {
-  BlockConfig,
-  BlockRegistryEntry,
-  BlockStateType,
-  KnownBlockType,
-} from './blocks/index.js';
-export { conditionRegistry, hasConditionName } from './graph/conditions.js';
-export type { KnownConditionName } from './graph/conditions.js';
 export type { Clock } from './ports/clock.js';
 export type { GeoCoord, LocationReader } from './ports/location-reader.js';
 export type {
@@ -17,17 +8,18 @@ export { createEngine } from './runtime/create-engine.js';
 export { EngineRuntimeError } from './runtime/errors.js';
 export type { EngineRuntimeErrorCode } from './runtime/errors.js';
 export type {
-  CurrentNodeBlockSnapshot,
-  CurrentNodeSnapshot,
+  CurrentNodeBlockView,
+  CurrentNodeView,
   Engine,
   EnginePorts,
-  LoadRuntimeInput,
-  PerformBlockActionInput,
-  RuntimeState,
-  RuntimeSnapshot,
-  StartGameInput,
+  LoadSessionInput,
+  SubmitActionInput,
+  SessionState,
+  RuntimeFrame,
+  RuntimeView,
+  StartSessionInput,
   TraversableEdge,
-  TraverseEdgeInput,
+  TraverseInput,
 } from './runtime/types.js';
 export {
   storyPackageBlockSchema,

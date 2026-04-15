@@ -7,6 +7,16 @@ export type StoryPackageJsonValue =
   | { [key: string]: StoryPackageJsonValue };
 
 const nonEmptyStringSchema = z.string().min(1);
+export const storyPackageFactEqualityOperators = ['eq', 'neq'] as const;
+export const storyPackageFactNumericOperators = ['gt', 'gte', 'lt', 'lte'] as const;
+export type StoryPackageFactEqualityOperator =
+  (typeof storyPackageFactEqualityOperators)[number];
+export type StoryPackageFactNumericOperator =
+  (typeof storyPackageFactNumericOperators)[number];
+export type StoryPackageFactOperator =
+  | StoryPackageFactEqualityOperator
+  | StoryPackageFactNumericOperator;
+export type StoryPackageFactValue = boolean | number | string;
 
 export const storyPackageJsonValueSchema: z.ZodType<StoryPackageJsonValue> = z.lazy(() =>
   z.union([
@@ -41,23 +51,58 @@ export const storyPackageRoleSchema: z.ZodType<StoryPackageRoleShape> = z
   .strict();
 
 const storyPackageAlwaysConditionSchema = z.object({ type: z.literal('always') }).strict();
-const storyPackageCheckConditionSchema = z
+const storyPackageFactConditionSchema = z
   .object({
-    type: z.literal('check'),
-    condition: nonEmptyStringSchema,
-    params: storyPackageJsonObjectSchema,
+    blockId: nonEmptyStringSchema,
+    fact: nonEmptyStringSchema,
+    type: z.literal('fact'),
   })
   .strict();
+const storyPackageFactEqualityConditionSchema = z
+  .object({
+    blockId: nonEmptyStringSchema,
+    fact: nonEmptyStringSchema,
+    operator: z.enum(storyPackageFactEqualityOperators),
+    type: z.literal('fact'),
+    value: z.union([z.boolean(), z.number(), z.string()]),
+  })
+  .strict();
+const storyPackageFactNumericConditionSchema = z
+  .object({
+    blockId: nonEmptyStringSchema,
+    fact: nonEmptyStringSchema,
+    operator: z.enum(storyPackageFactNumericOperators),
+    type: z.literal('fact'),
+    value: z.number(),
+  })
+  .strict();
+
+type StoryPackageFactConditionShape =
+  | {
+      blockId: string;
+      fact: string;
+      type: 'fact';
+    }
+  | {
+      blockId: string;
+      fact: string;
+      operator: StoryPackageFactEqualityOperator;
+      type: 'fact';
+      value: StoryPackageFactValue;
+    }
+  | {
+      blockId: string;
+      fact: string;
+      operator: StoryPackageFactNumericOperator;
+      type: 'fact';
+      value: number;
+    };
 
 type StoryPackageConditionShape =
   | {
       type: 'always';
     }
-  | {
-      type: 'check';
-      condition: string;
-      params: Record<string, StoryPackageJsonValue>;
-    }
+  | StoryPackageFactConditionShape
   | {
       type: 'and';
       children: StoryPackageConditionShape[];
@@ -113,7 +158,9 @@ type StoryPackageVersionShape = StoryPackageShape['version'];
 export const storyPackageConditionSchema: z.ZodType<StoryPackageConditionShape> = z.lazy(() =>
   z.union([
     storyPackageAlwaysConditionSchema,
-    storyPackageCheckConditionSchema,
+    storyPackageFactConditionSchema,
+    storyPackageFactEqualityConditionSchema,
+    storyPackageFactNumericConditionSchema,
     z
       .object({
         type: z.literal('and'),

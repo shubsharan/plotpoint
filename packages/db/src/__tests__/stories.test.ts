@@ -299,7 +299,7 @@ describe('@plotpoint/db stories', () => {
     await storyQueries.createStory(createStoryInput());
 
     const firstPublish = await storyQueries.publishStory({
-      engineMajor: 0,
+      engineMajor: 1,
       publishedAt: new Date('2026-03-23T16:00:00.000Z'),
       publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
       publishedStoryPackageVersionId: 'snapshot-v1',
@@ -312,12 +312,12 @@ describe('@plotpoint/db stories', () => {
       storyId: 'story-the-stolen-ledger',
       status: 'published',
       publishedStoryPackageVersionId: 'snapshot-v1',
-      engineMajor: 0,
+      engineMajor: 1,
       publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
     });
 
     const secondPublish = await storyQueries.publishStory({
-      engineMajor: 0,
+      engineMajor: 1,
       publishedAt: new Date('2026-03-23T17:00:00.000Z'),
       publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v2.json',
       publishedStoryPackageVersionId: 'snapshot-v2',
@@ -366,7 +366,7 @@ describe('@plotpoint/db stories', () => {
     });
 
     await storyQueries.publishStory({
-      engineMajor: 0,
+      engineMajor: 1,
       publishedAt: new Date('2026-03-23T18:00:00.000Z'),
       publishedPackageUri: 's3://plotpoint-stories/published/story-published/v1.json',
       publishedStoryPackageVersionId: 'snapshot-published',
@@ -392,7 +392,7 @@ describe('@plotpoint/db stories', () => {
   it('keeps published status on draft edits after publish', async () => {
     await storyQueries.createStory(createStoryInput());
     await storyQueries.publishStory({
-      engineMajor: 0,
+      engineMajor: 1,
       publishedAt: new Date('2026-03-23T19:00:00.000Z'),
       publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
       publishedStoryPackageVersionId: 'snapshot-v1',
@@ -441,7 +441,7 @@ describe('@plotpoint/db stories', () => {
     ).resolves.toBeNull();
 
     await storyQueries.publishStory({
-      engineMajor: 0,
+      engineMajor: 1,
       publishedAt: new Date('2026-03-23T20:00:00.000Z'),
       publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
       publishedStoryPackageVersionId: 'snapshot-runtime',
@@ -455,7 +455,7 @@ describe('@plotpoint/db stories', () => {
     ).resolves.toMatchObject({
       storyId: 'story-the-stolen-ledger',
       publishedStoryPackageVersionId: 'snapshot-runtime',
-      engineMajor: 0,
+      engineMajor: 1,
       publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
       publishedAt: new Date('2026-03-23T20:00:00.000Z'),
     });
@@ -465,7 +465,7 @@ describe('@plotpoint/db stories', () => {
     ).resolves.toMatchObject({
       storyId: 'story-the-stolen-ledger',
       publishedStoryPackageVersionId: 'snapshot-runtime',
-      engineMajor: 0,
+      engineMajor: 1,
       publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
       publishedAt: new Date('2026-03-23T20:00:00.000Z'),
     });
@@ -474,7 +474,7 @@ describe('@plotpoint/db stories', () => {
   it('reads non-current published package versions for pinned runtime resume', async () => {
     await storyQueries.createStory(createStoryInput());
     await storyQueries.publishStory({
-      engineMajor: 0,
+      engineMajor: 1,
       publishedAt: new Date('2026-03-23T20:30:00.000Z'),
       publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
       publishedStoryPackageVersionId: 'snapshot-v1',
@@ -483,7 +483,7 @@ describe('@plotpoint/db stories', () => {
       title: 'Title v1',
     });
     await storyQueries.publishStory({
-      engineMajor: 0,
+      engineMajor: 1,
       publishedAt: new Date('2026-03-23T20:45:00.000Z'),
       publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v2.json',
       publishedStoryPackageVersionId: 'snapshot-v2',
@@ -514,7 +514,7 @@ describe('@plotpoint/db stories', () => {
   it('blocks deleting stories with published package versions', async () => {
     await storyQueries.createStory(createStoryInput());
     await storyQueries.publishStory({
-      engineMajor: 0,
+      engineMajor: 1,
       publishedAt: new Date('2026-03-23T21:00:00.000Z'),
       publishedPackageUri: 's3://plotpoint-stories/published/story-the-stolen-ledger/v1.json',
       publishedStoryPackageVersionId: 'snapshot-delete-guard',

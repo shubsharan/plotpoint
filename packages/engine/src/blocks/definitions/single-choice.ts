@@ -2,8 +2,9 @@ import { z } from 'zod';
 import {
   BlockUpdateError,
   defineBlockBehavior,
+  type BlockTraversalFacts,
   type InteractiveBlockBehavior,
-} from './types.js';
+} from '../contracts.js';
 
 type SingleChoiceOption = {
   id: string;
@@ -149,3 +150,21 @@ export const singleChoiceBlockBehavior: InteractiveBlockBehavior<
   },
   actionSchema: singleChoiceActionSchema,
 });
+
+export const singleChoiceBlockTraversalFacts: BlockTraversalFacts<
+  SingleChoiceBlockConfig,
+  SingleChoiceBlockState
+> = {
+  answered: {
+    derive: ({ state }) => state.selectedOptionId !== null,
+    kind: 'boolean',
+  },
+  correct: {
+    derive: ({ state }) => state.unlocked,
+    kind: 'boolean',
+  },
+  unlocked: {
+    derive: ({ state }) => state.unlocked,
+    kind: 'boolean',
+  },
+};

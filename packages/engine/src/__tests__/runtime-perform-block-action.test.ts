@@ -4,8 +4,8 @@ import type {
   Engine,
   EngineRuntimeErrorCode,
   LocationReader,
-  RuntimeSnapshot,
-  RuntimeState,
+  RuntimeFrame,
+  SessionState,
   StoryPackage,
   StoryPackageRepo,
 } from '../index.js';
@@ -13,8 +13,9 @@ import {
   EngineRuntimeError,
   createEngine,
   currentEngineMajor,
-  getBlockDefinition,
 } from '../index.js';
+import { getBlockDefinition } from '../blocks/registry.js';
+import { writeBlockStateByType } from '../runtime/state/block-state-bucket.js';
 import { createValidStoryPackageFixture } from './fixtures/story-packages.js';
 
 type StoryPackageRepoReaders = {
@@ -87,25 +88,18 @@ const createRuntimeContext = (options?: RuntimeTestContextOptions): {
 const startRuntime = async (
   engine: Engine,
   storyId: string,
-): Promise<RuntimeSnapshot> =>
-  engine.startGame({
+): Promise<RuntimeFrame> =>
+  engine.startSession({
     gameId: 'game-1',
     playerId: 'player-1',
     roleId: 'detective',
     storyId,
   });
 
-const toRuntimeState = (snapshot: RuntimeSnapshot): RuntimeState => {
-  const {
-    currentNode: _currentNode,
-    traversableEdges: _traversableEdges,
-    ...state
-  } = snapshot;
-  return state;
-};
+const toSessionState = (frame: RuntimeFrame): SessionState => frame.state;
 
-const toRuntimeStateAtNode = (snapshot: RuntimeSnapshot, nodeId: string): RuntimeState => ({
-  ...toRuntimeState(snapshot),
+const toSessionStateAtNode = (snapshot: RuntimeFrame, nodeId: string): SessionState => ({
+  ...toSessionState(snapshot),
   currentNodeId: nodeId,
 });
 
@@ -121,13 +115,13 @@ const expectRuntimeError = async (
   return runtimeError;
 };
 
-const getCurrentNodeBlock = (snapshot: RuntimeSnapshot, blockId: string) => {
-  const block = snapshot.currentNode.blocks.find((candidate) => candidate.id === blockId);
+const getCurrentNodeBlock = (snapshot: RuntimeFrame, blockId: string) => {
+  const block = snapshot.view.currentNode.blocks.find((candidate) => candidate.id === blockId);
   expect(block).toBeDefined();
   return block!;
 };
 
-describe('@plotpoint/engine performBlockAction execution contracts', () => {
+describe('@plotpoint/engine submitAction execution contracts', () => {
   it('hydrates text blocks as unlocked on node entry without persisting defaults', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
@@ -135,20 +129,20 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     expect(getCurrentNodeBlock(started, 'briefing').state).toEqual({
       unlocked: true,
     });
-    expect(Object.hasOwn(started.playerState.blockStates, 'briefing')).toBe(false);
+    expect(Object.hasOwn(started.state.playerState.blockStates, 'briefing')).toBe(false);
   });
 
-  it('rejects performBlockAction for text blocks as non-actionable', async () => {
+  it('rejects submitAction for text blocks as non-actionable', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
     const error = await expectRuntimeError(
-      engine.performBlockAction({
+      engine.submitAction({
         action: {
           type: 'submit',
         },
         blockId: 'briefing',
-        state: toRuntimeState(started),
+        state: toSessionState(started),
       }),
       'runtime_block_not_actionable',
     );
@@ -169,16 +163,16 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     });
     const started = await startRuntime(engine, storyId);
 
-    const submitted = await engine.performBlockAction({
+    const submitted = await engine.submitAction({
       action: {
         type: 'submit',
         value: '1847',
       },
       blockId: 'vault-code',
-      state: toRuntimeStateAtNode(started, 'archive-door'),
+      state: toSessionStateAtNode(started, 'archive-door'),
     });
 
-    expect(submitted.playerState.blockStates['vault-code']).toMatchObject({
+    expect(submitted.state.playerState.blockStates['vault-code']).toMatchObject({
       unlocked: true,
       attempts: [
         {
@@ -202,11 +196,11 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     const preservedSharedState = { marker: 'shared' };
     const preservedPlayerState = { marker: 'player' };
 
-    const state: RuntimeState = {
-      ...toRuntimeStateAtNode(started, 'archive-door'),
+    const state: SessionState = {
+      ...toSessionStateAtNode(started, 'archive-door'),
       playerState: {
         blockStates: {
-          ...toRuntimeState(started).playerState.blockStates,
+          ...toSessionState(started).playerState.blockStates,
           preservedPlayerState,
         },
       },
@@ -217,7 +211,7 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
       },
     };
 
-    const submitted = await engine.performBlockAction({
+    const submitted = await engine.submitAction({
       action: {
         type: 'submit',
         value: '1847',
@@ -226,69 +220,53 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
       state,
     });
 
-    expect(submitted.playerState.blockStates).not.toBe(state.playerState.blockStates);
-    expect(submitted.sharedState.blockStates).toEqual(state.sharedState.blockStates);
-    expect(submitted.playerState.blockStates.preservedPlayerState).toBe(preservedPlayerState);
-    expect(submitted.sharedState.blockStates.preservedSharedState).toBe(preservedSharedState);
-    expect(submitted.playerState.blockStates['vault-code']).toBeDefined();
+    expect(submitted.state.playerState.blockStates).not.toBe(state.playerState.blockStates);
+    expect(submitted.state.sharedState.blockStates).toEqual(state.sharedState.blockStates);
+    expect(submitted.state.playerState.blockStates.preservedPlayerState).toBe(preservedPlayerState);
+    expect(submitted.state.sharedState.blockStates.preservedSharedState).toBe(preservedSharedState);
+    expect(submitted.state.playerState.blockStates['vault-code']).toBeDefined();
   });
 
-  it('routes block updates to sharedState when block policy requests the shared bucket', async () => {
+  it('routes block updates to sharedState through the internal bucket helper without mutating registry state', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
-    const codeDefinition = getBlockDefinition('code');
-    const originalStateType = codeDefinition.policy.stateType;
-    const untouchedPlayerTargetState = {
-      marker: 'player-target',
-    };
     const preservedPlayerState = {
       marker: 'player',
     };
     const preservedSharedState = {
       marker: 'shared',
     };
-
-    codeDefinition.policy.stateType = 'sharedState';
-
-    try {
-      const state: RuntimeState = {
-        ...toRuntimeStateAtNode(started, 'archive-door'),
-        playerState: {
-          blockStates: {
-            ...toRuntimeState(started).playerState.blockStates,
-            preservedPlayerState,
-            'vault-code': untouchedPlayerTargetState,
-          },
+    const playerBucketState = {
+      marker: 'player-target',
+    };
+    const state: SessionState = {
+      ...toSessionStateAtNode(started, 'archive-door'),
+      playerState: {
+        blockStates: {
+          ...toSessionState(started).playerState.blockStates,
+          preservedPlayerState,
+          'vault-code': playerBucketState,
         },
-        sharedState: {
-          blockStates: {
-            preservedSharedState,
-          },
+      },
+      sharedState: {
+        blockStates: {
+          preservedSharedState,
         },
-      };
+      },
+    };
 
-      const submitted = await engine.performBlockAction({
-        action: {
-          type: 'submit',
-          value: '1847',
-        },
-        blockId: 'vault-code',
-        state,
-      });
+    const nextState = writeBlockStateByType(state, 'sharedState', 'vault-code', {
+      unlocked: true,
+    });
 
-      expect(submitted.playerState.blockStates['vault-code']).toBe(untouchedPlayerTargetState);
-      expect(submitted.playerState.blockStates.preservedPlayerState).toBe(preservedPlayerState);
-
-      expect(submitted.sharedState).not.toBe(state.sharedState);
-      expect(submitted.sharedState.blockStates).not.toBe(state.sharedState.blockStates);
-      expect(submitted.sharedState.blockStates.preservedSharedState).toBe(preservedSharedState);
-      expect(submitted.sharedState.blockStates['vault-code']).toMatchObject({
-        unlocked: true,
-      });
-      expect(Array.isArray(submitted.traversableEdges)).toBe(true);
-    } finally {
-      codeDefinition.policy.stateType = originalStateType;
-    }
+    expect(nextState.playerState.blockStates['vault-code']).toBe(playerBucketState);
+    expect(nextState.playerState.blockStates.preservedPlayerState).toBe(preservedPlayerState);
+    expect(nextState.sharedState).not.toBe(state.sharedState);
+    expect(nextState.sharedState.blockStates).not.toBe(state.sharedState.blockStates);
+    expect(nextState.sharedState.blockStates.preservedSharedState).toBe(preservedSharedState);
+    expect(nextState.sharedState.blockStates['vault-code']).toMatchObject({
+      unlocked: true,
+    });
   });
 
   it('rejects invalid action payloads with typed runtime_block_action_invalid', async () => {
@@ -296,12 +274,12 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     const started = await startRuntime(engine, storyId);
 
     const error = await expectRuntimeError(
-      engine.performBlockAction({
+      engine.submitAction({
         action: {
           type: 'submit',
         },
         blockId: 'vault-code',
-        state: toRuntimeStateAtNode(started, 'archive-door'),
+        state: toSessionStateAtNode(started, 'archive-door'),
       }),
       'runtime_block_action_invalid',
     );
@@ -316,22 +294,22 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
   it('rejects already-unlocked blocks before action payload validation', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
-    const unlocked = await engine.performBlockAction({
+    const unlocked = await engine.submitAction({
       action: {
         type: 'submit',
         value: '1847',
       },
       blockId: 'vault-code',
-      state: toRuntimeStateAtNode(started, 'archive-door'),
+      state: toSessionStateAtNode(started, 'archive-door'),
     });
 
     await expectRuntimeError(
-      engine.performBlockAction({
+      engine.submitAction({
         action: {
           type: 'submit',
         },
         blockId: 'vault-code',
-        state: toRuntimeState(unlocked),
+        state: toSessionState(unlocked),
       }),
       'runtime_block_already_unlocked',
     );
@@ -341,11 +319,11 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
 
-    const invalidState: RuntimeState = {
-      ...toRuntimeStateAtNode(started, 'archive-door'),
+    const invalidState: SessionState = {
+      ...toSessionStateAtNode(started, 'archive-door'),
       playerState: {
         blockStates: {
-          ...toRuntimeState(started).playerState.blockStates,
+          ...toSessionState(started).playerState.blockStates,
           'vault-code': {
             unlocked: 'yes',
           },
@@ -354,7 +332,7 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     };
 
     await expectRuntimeError(
-      engine.performBlockAction({
+      engine.submitAction({
         action: {
           type: 'submit',
           value: '1847',
@@ -371,13 +349,13 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     const started = await startRuntime(engine, storyId);
 
     await expectRuntimeError(
-      engine.performBlockAction({
+      engine.submitAction({
         action: {
           type: 'submit',
           value: '1847',
         },
         blockId: 'vault-code',
-        state: toRuntimeState(started),
+        state: toSessionState(started),
       }),
       'runtime_block_not_found',
     );
@@ -386,28 +364,28 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
   it('locks single-choice blocks after the first valid submission', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);
-    const firstSubmit = await engine.performBlockAction({
+    const firstSubmit = await engine.submitAction({
       action: {
         optionId: 'curator',
         type: 'submit',
       },
       blockId: 'suspect-theory',
-      state: toRuntimeStateAtNode(started, 'archive-door'),
+      state: toSessionStateAtNode(started, 'archive-door'),
     });
 
-    expect(firstSubmit.playerState.blockStates['suspect-theory']).toMatchObject({
+    expect(firstSubmit.state.playerState.blockStates['suspect-theory']).toMatchObject({
       selectedOptionId: 'curator',
       unlocked: false,
     });
 
     await expectRuntimeError(
-      engine.performBlockAction({
+      engine.submitAction({
         action: {
           optionId: 'archivist',
           type: 'submit',
         },
         blockId: 'suspect-theory',
-        state: toRuntimeState(firstSubmit),
+        state: toSessionState(firstSubmit),
       }),
       'runtime_block_not_actionable',
     );
@@ -447,16 +425,16 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
       storyPackage,
     });
     const started = await startRuntime(engine, storyId);
-    const submitted = await engine.performBlockAction({
+    const submitted = await engine.submitAction({
       action: {
         optionIds: ['curator', 'archivist', 'curator'],
         type: 'submit',
       },
       blockId: 'team-theory',
-      state: toRuntimeStateAtNode(started, 'archive-door'),
+      state: toSessionStateAtNode(started, 'archive-door'),
     });
 
-    expect(submitted.playerState.blockStates['team-theory']).toMatchObject({
+    expect(submitted.state.playerState.blockStates['team-theory']).toMatchObject({
       selectedOptionIds: ['archivist', 'curator'],
       unlocked: true,
       attempts: [
@@ -503,13 +481,13 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     const started = await startRuntime(engine, storyId);
 
     const error = await expectRuntimeError(
-      engine.performBlockAction({
+      engine.submitAction({
         action: {
           optionIds: [],
           type: 'submit',
         },
         blockId: 'team-theory-empty',
-        state: toRuntimeStateAtNode(started, 'archive-door'),
+        state: toSessionStateAtNode(started, 'archive-door'),
       }),
       'runtime_block_action_invalid',
     );
@@ -521,7 +499,7 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     });
   });
 
-  it('declares runtime stateType and requiredContext metadata per block type', () => {
+  it('declares immutable runtime stateType and requiredContext metadata per block type', () => {
     expect(getBlockDefinition('code').policy).toEqual({
       requiredContext: ['nowIso'],
       stateType: 'playerState',
@@ -534,9 +512,12 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
       requiredContext: [],
       stateType: 'playerState',
     });
+    expect(Object.isFrozen(getBlockDefinition('code'))).toBe(true);
+    expect(Object.isFrozen(getBlockDefinition('code').policy)).toBe(true);
+    expect(Object.isFrozen(getBlockDefinition('code').traversal.facts.unlocked)).toBe(true);
   });
 
-  it('accepts performBlockAction for prototype-chain key ids by using own-key block-state lookups', async () => {
+  it('accepts submitAction for prototype-chain key ids by using own-key block-state lookups', async () => {
     const storyPackage = createRuntimePackage();
     const archiveNode = storyPackage.graph.nodes.find((node) => node.id === 'archive-door');
     if (!archiveNode) {
@@ -556,17 +537,17 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
       storyPackage,
     });
     const started = await startRuntime(engine, storyId);
-    const submitted = await engine.performBlockAction({
+    const submitted = await engine.submitAction({
       action: {
         type: 'submit',
         value: '1847',
       },
       blockId: 'toString',
-      state: toRuntimeStateAtNode(started, 'archive-door'),
+      state: toSessionStateAtNode(started, 'archive-door'),
     });
 
-    expect(Object.hasOwn(submitted.playerState.blockStates, 'toString')).toBe(true);
-    expect(submitted.playerState.blockStates.toString).toMatchObject({
+    expect(Object.hasOwn(submitted.state.playerState.blockStates, 'toString')).toBe(true);
+    expect(submitted.state.playerState.blockStates.toString).toMatchObject({
       unlocked: true,
     });
   });
@@ -597,7 +578,7 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     expect(getCurrentNodeBlock(started, '__proto__').state).toEqual({
       unlocked: true,
     });
-    expect(Object.hasOwn(started.playerState.blockStates, '__proto__')).toBe(false);
+    expect(Object.hasOwn(started.state.playerState.blockStates, '__proto__')).toBe(false);
   });
 
   it('maps clock.now failures to typed runtime_block_execution_failed errors', async () => {
@@ -611,13 +592,13 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     const started = await startRuntime(engine, storyId);
 
     const error = await expectRuntimeError(
-      engine.performBlockAction({
+      engine.submitAction({
         action: {
           type: 'submit',
           value: '1847',
         },
         blockId: 'vault-code',
-        state: toRuntimeStateAtNode(started, 'archive-door'),
+        state: toSessionStateAtNode(started, 'archive-door'),
       }),
       'runtime_block_execution_failed',
     );
@@ -640,13 +621,13 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     const started = await startRuntime(engine, storyId);
 
     const error = await expectRuntimeError(
-      engine.performBlockAction({
+      engine.submitAction({
         action: {
           type: 'submit',
           value: '1847',
         },
         blockId: 'vault-code',
-        state: toRuntimeStateAtNode(started, 'archive-door'),
+        state: toSessionStateAtNode(started, 'archive-door'),
       }),
       'runtime_block_execution_failed',
     );
@@ -670,15 +651,15 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
       },
     });
     const missStarted = await startRuntime(missContext.engine, missContext.storyId);
-    const missResult = await missContext.engine.performBlockAction({
+    const missResult = await missContext.engine.submitAction({
       action: {
         type: 'submit',
       },
       blockId: 'find-ledger',
-      state: toRuntimeStateAtNode(missStarted, 'vault'),
+      state: toSessionStateAtNode(missStarted, 'vault'),
     });
 
-    expect(missResult.playerState.blockStates['find-ledger']).toMatchObject({
+    expect(missResult.state.playerState.blockStates['find-ledger']).toMatchObject({
       checksCount: 1,
       unlocked: false,
       checks: [
@@ -697,15 +678,15 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
       },
     });
     const unlockStarted = await startRuntime(unlockContext.engine, unlockContext.storyId);
-    const unlockResult = await unlockContext.engine.performBlockAction({
+    const unlockResult = await unlockContext.engine.submitAction({
       action: {
         type: 'submit',
       },
       blockId: 'find-ledger',
-      state: toRuntimeStateAtNode(unlockStarted, 'vault'),
+      state: toSessionStateAtNode(unlockStarted, 'vault'),
     });
 
-    expect(unlockResult.playerState.blockStates['find-ledger']).toMatchObject({
+    expect(unlockResult.state.playerState.blockStates['find-ledger']).toMatchObject({
       checksCount: 1,
       unlocked: true,
       checks: [
@@ -733,15 +714,15 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
       nullLocationContext.engine,
       nullLocationContext.storyId,
     );
-    const nullLocationSubmit = await nullLocationContext.engine.performBlockAction({
+    const nullLocationSubmit = await nullLocationContext.engine.submitAction({
       action: {
         type: 'submit',
       },
       blockId: 'find-ledger',
-      state: toRuntimeStateAtNode(startedWithNullLocation, 'vault'),
+      state: toSessionStateAtNode(startedWithNullLocation, 'vault'),
     });
 
-    expect(nullLocationSubmit.playerState.blockStates['find-ledger']).toMatchObject({
+    expect(nullLocationSubmit.state.playerState.blockStates['find-ledger']).toMatchObject({
       checksCount: 1,
       unlocked: false,
       checks: [
@@ -760,12 +741,12 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
       throwLocationContext.storyId,
     );
     await expectRuntimeError(
-      throwLocationContext.engine.performBlockAction({
+      throwLocationContext.engine.submitAction({
         action: {
           type: 'submit',
         },
         blockId: 'find-ledger',
-        state: toRuntimeStateAtNode(startedWithThrowingLocation, 'vault'),
+        state: toSessionStateAtNode(startedWithThrowingLocation, 'vault'),
       }),
       'runtime_block_location_read_failed',
     );
@@ -793,12 +774,12 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     const started = await startRuntime(engine, storyId);
 
     await expectRuntimeError(
-      engine.performBlockAction({
+      engine.submitAction({
         action: {
           type: 'submit',
         },
         blockId: 'find-ledger',
-        state: toRuntimeStateAtNode(started, 'vault'),
+        state: toSessionStateAtNode(started, 'vault'),
       }),
       'runtime_block_unsupported_location_target',
     );
@@ -813,23 +794,23 @@ describe('@plotpoint/engine performBlockAction execution contracts', () => {
     });
     const started = await startRuntime(engine, storyId);
 
-    const runSequence = async (): Promise<RuntimeSnapshot> => {
-      const first = await engine.performBlockAction({
+    const runSequence = async (): Promise<RuntimeFrame> => {
+      const first = await engine.submitAction({
         action: {
           type: 'submit',
           value: '0000',
         },
         blockId: 'vault-code',
-        state: toRuntimeStateAtNode(started, 'archive-door'),
+        state: toSessionStateAtNode(started, 'archive-door'),
       });
 
-      return engine.performBlockAction({
+      return engine.submitAction({
         action: {
           type: 'submit',
           value: '1847',
         },
         blockId: 'vault-code',
-        state: toRuntimeState(first),
+        state: toSessionState(first),
       });
     };
 
