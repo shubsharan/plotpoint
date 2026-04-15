@@ -40,10 +40,19 @@ EPIC-0001 delivered the foundation docs and monorepo cleanup needed to start rea
 
 ## Dependencies
 
-- `docs/product/product-roadmap.md`
-- `docs/runbooks/spec-driven-delivery-workflow.md`
-- `docs/runbooks/doc-authoring-quickstart.md`
-- Existing foundation work in `docs/features/FEAT-0001-monorepo-and-shared-config-finalization.md`
+### Product and Architecture Docs
+
+- [product-roadmap](../product/product-roadmap.md)
+- [spec-driven-delivery-workflow](../runbooks/spec-driven-delivery-workflow.md)
+- [doc-authoring-quickstart](../runbooks/doc-authoring-quickstart.md)
+
+### Related Epics and Cross-PRD Dependencies
+
+- None.
+
+### Related ADRs
+
+- None.
 
 ## Risks and Mitigations
 
@@ -53,8 +62,8 @@ EPIC-0001 delivered the foundation docs and monorepo cleanup needed to start rea
 
 ## Feature Breakdown
 
-- `docs/features/FEAT-0001-monorepo-and-shared-config-finalization.md`
-- `docs/features/FEAT-0002-spec-driven-delivery-automation.md` (Cancelled on 2026-03-19)
+- [FEAT-0001-monorepo-and-shared-config-finalization](../features/FEAT-0001-monorepo-and-shared-config-finalization.md)
+- [FEAT-0002-spec-driven-delivery-automation](../features/FEAT-0002-spec-driven-delivery-automation.md) (Cancelled on 2026-03-19)
 
 ## Milestones and Sequencing
 

@@ -5,11 +5,11 @@
 | **Deciders**    | Name, Name |
 | **Last synced** | YYYY-MM-DD |
 
-# ADR - <short-title>
+# ADR-XXXX - <short-title>
 
 ## Status
 
-Proposed | Accepted | Deprecated | Superseded by ADR-<slug>
+Proposed | Accepted | Deprecated | Superseded by ADR-XXXX-<slug>
 
 ## Context
 

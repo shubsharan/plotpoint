@@ -17,6 +17,49 @@ const epicStatuses = new Set(['Planned', 'In Progress', 'Completed', 'Cancelled'
 
 const errors = [];
 
+const featureRelatedDocGroups = [
+  {
+    title: 'Parent Epic',
+    prefixes: ['epics/'],
+    allowNone: false,
+    minLinks: 1,
+    maxLinks: 1,
+  },
+  {
+    title: 'Related Feature PRDs',
+    prefixes: ['features/'],
+    allowNone: true,
+    minLinks: 1,
+  },
+  {
+    title: 'Related ADRs',
+    prefixes: ['adrs/'],
+    allowNone: true,
+    minLinks: 1,
+  },
+  {
+    title: 'Related Architecture Docs',
+    prefixes: ['architecture/'],
+    allowNone: true,
+    minLinks: 1,
+  },
+];
+
+const epicDependencyGroups = [
+  {
+    title: 'Related Epics and Cross-PRD Dependencies',
+    prefixes: ['epics/', 'features/'],
+    allowNone: true,
+    minLinks: 1,
+  },
+  {
+    title: 'Related ADRs',
+    prefixes: ['adrs/'],
+    allowNone: true,
+    minLinks: 1,
+  },
+];
+
 function toPosix(value) {
   return value.split(path.sep).join('/');
 }
@@ -57,6 +100,172 @@ function getTableField(markdown, fieldName, filePath) {
     return null;
   }
   return match[1].trim();
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getSection(markdown, heading, filePath) {
+  const matcher = new RegExp(
+    `^## ${escapeRegex(heading)}\\s*$([\\s\\S]*?)(?=^## |(?![\\s\\S]))`,
+    'm',
+  );
+  const match = markdown.match(matcher);
+  if (!match) {
+    errors.push(`${filePath}: missing "## ${heading}" section`);
+    return null;
+  }
+  return match[1];
+}
+
+function getSubsection(markdown, heading, filePath, parentHeading) {
+  const matcher = new RegExp(
+    `^### ${escapeRegex(heading)}\\s*$([\\s\\S]*?)(?=^### |^## |(?![\\s\\S]))`,
+    'm',
+  );
+  const match = markdown.match(matcher);
+  if (!match) {
+    errors.push(`${filePath}: missing "### ${heading}" subsection under "${parentHeading}"`);
+    return null;
+  }
+  return match[1];
+}
+
+function normalizeDocLink(docPath, rawTarget) {
+  const posixTarget = rawTarget.replace(/\\/g, '/');
+  return path.posix.normalize(path.posix.join(path.posix.dirname(docPath), posixTarget));
+}
+
+function getDocLinks(docPath, markdown) {
+  return Array.from(markdown.matchAll(/\[[^\]]+\]\(([^)]+\.md)\)/g), (match) =>
+    normalizeDocLink(docPath, match[1].trim()),
+  );
+}
+
+function hasExactNoneDeclaration(markdown) {
+  return /^\s*-\s+None\.\s*$/m.test(markdown);
+}
+
+function validateLinkTargets(filePath, links, allowedPrefixes, docsSet, groupTitle) {
+  for (const link of links) {
+    if (!allowedPrefixes.some((prefix) => link.startsWith(prefix))) {
+      errors.push(
+        `${filePath}: "${groupTitle}" contains invalid link '${link}' (expected ${allowedPrefixes.join(' or ')})`,
+      );
+      continue;
+    }
+
+    if (!docsSet.has(link)) {
+      errors.push(`${filePath}: "${groupTitle}" links missing doc '${link}'`);
+    }
+  }
+}
+
+function validateRequiredLinkGroup(filePath, markdown, group, docsSet) {
+  const content = getSubsection(markdown, group.title, filePath, 'Related Docs');
+  if (content === null) {
+    return [];
+  }
+
+  const links = getDocLinks(filePath, content);
+  const hasNone = hasExactNoneDeclaration(content);
+
+  if (hasNone && links.length > 0) {
+    errors.push(`${filePath}: "${group.title}" cannot mix doc links with '- None.'`);
+    return [];
+  }
+
+  if (hasNone) {
+    if (!group.allowNone) {
+      errors.push(`${filePath}: "${group.title}" requires linked docs and cannot be '- None.'`);
+    }
+    return [];
+  }
+
+  if (links.length < (group.minLinks ?? 1)) {
+    errors.push(`${filePath}: "${group.title}" must contain linked docs or '- None.'`);
+    return [];
+  }
+
+  if (group.maxLinks !== undefined && links.length > group.maxLinks) {
+    errors.push(`${filePath}: "${group.title}" must contain exactly ${group.maxLinks} linked doc(s)`);
+    return [];
+  }
+
+  validateLinkTargets(filePath, links, group.prefixes, docsSet, group.title);
+  return links;
+}
+
+function validateFeatureRelatedDocs(docsSet) {
+  const files = getScopedDocFiles('features');
+
+  for (const relativePath of files) {
+    const absolutePath = path.join(docsDir, relativePath);
+    const markdown = readFileSync(absolutePath, 'utf8');
+    const relatedDocs = getSection(markdown, 'Related Docs', relativePath);
+    if (relatedDocs === null) {
+      continue;
+    }
+
+    const parentEpic = validateRequiredLinkGroup(
+      relativePath,
+      relatedDocs,
+      featureRelatedDocGroups[0],
+      docsSet,
+    );
+    validateRequiredLinkGroup(relativePath, relatedDocs, featureRelatedDocGroups[1], docsSet);
+    validateRequiredLinkGroup(relativePath, relatedDocs, featureRelatedDocGroups[2], docsSet);
+    validateRequiredLinkGroup(relativePath, relatedDocs, featureRelatedDocGroups[3], docsSet);
+
+    if (parentEpic.length === 1) {
+      const expectedEpicId = getTableField(markdown, 'Epic', relativePath);
+      if (expectedEpicId !== null && !parentEpic[0].includes(`${expectedEpicId}-`)) {
+        errors.push(
+          `${relativePath}: "Parent Epic" link '${parentEpic[0]}' does not match metadata epic '${expectedEpicId}'`,
+        );
+      }
+    }
+  }
+}
+
+function validateEpicRelatedDocs(docsSet) {
+  const files = getScopedDocFiles('epics');
+
+  for (const relativePath of files) {
+    const absolutePath = path.join(docsDir, relativePath);
+    const markdown = readFileSync(absolutePath, 'utf8');
+    const dependencies = getSection(markdown, 'Dependencies', relativePath);
+    if (dependencies !== null) {
+      for (const group of epicDependencyGroups) {
+        validateRequiredLinkGroup(relativePath, dependencies, group, docsSet);
+      }
+    }
+
+    const featureBreakdown = getSection(markdown, 'Feature Breakdown', relativePath);
+    if (featureBreakdown === null) {
+      continue;
+    }
+
+    const featureLinks = getDocLinks(relativePath, featureBreakdown);
+    const hasNone = hasExactNoneDeclaration(featureBreakdown);
+
+    if (hasNone && featureLinks.length > 0) {
+      errors.push(`${relativePath}: "Feature Breakdown" cannot mix doc links with '- None.'`);
+      continue;
+    }
+
+    if (!hasNone && featureLinks.length === 0) {
+      errors.push(`${relativePath}: "Feature Breakdown" must contain linked feature PRDs or '- None.'`);
+      continue;
+    }
+
+    if (hasNone) {
+      continue;
+    }
+
+    validateLinkTargets(relativePath, featureLinks, ['features/'], docsSet, 'Feature Breakdown');
+  }
 }
 
 function collectScopedDocStatuses(kind) {
@@ -357,16 +566,27 @@ function validateRollups(indexMarkdown, features, epics) {
   }
 }
 
+function buildDocsSet() {
+  return new Set(
+    walkMarkdownFiles(docsDir)
+      .map((absolutePath) => toPosix(path.relative(docsDir, absolutePath)))
+      .filter((relativePath) => relativePath !== 'index.md'),
+  );
+}
+
 const indexMarkdown = readFileSync(indexPath, 'utf8');
 const features = collectScopedDocStatuses('features');
 const epics = collectScopedDocStatuses('epics');
 const deferredFromDocs = collectDeferredFollowupsFromScopedDocs();
 const deferredBacklog = collectDeferredFollowupsBacklog();
+const docsSet = buildDocsSet();
 
 validateStatusContracts(features, epics);
 validateInventory(indexMarkdown);
 validateRollups(indexMarkdown, features, epics);
 validateDeferredFollowupTracking(deferredFromDocs, deferredBacklog);
+validateFeatureRelatedDocs(docsSet);
+validateEpicRelatedDocs(docsSet);
 
 if (errors.length > 0) {
   process.stderr.write('docs:check failed\n');

@@ -5,7 +5,7 @@
 | **Owner**       | product-engineering |
 | **Last synced** | 2026-03-24          |
 
-# ADR - Story Package Object Storage Links
+# ADR-0001 - Story Package Object Storage Links
 
 ## Context
 

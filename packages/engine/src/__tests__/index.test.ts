@@ -27,7 +27,7 @@ describe('@plotpoint/engine', () => {
     });
 
     const runtime = await runtimeEngine.startSession({
-      gameId: 'game-1',
+      sessionId: 'session-1',
       playerId: 'player-1',
       roleId: 'detective',
       storyId: runtimeStoryPackage.metadata.storyId,
@@ -54,7 +54,7 @@ describe('@plotpoint/engine', () => {
     });
 
     const started = await runtimeEngine.startSession({
-      gameId: 'game-1',
+      sessionId: 'session-1',
       playerId: 'player-1',
       roleId: 'detective',
       storyId: runtimeStoryPackage.metadata.storyId,

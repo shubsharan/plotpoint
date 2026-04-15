@@ -3,7 +3,7 @@
 | **Type**        | Runbook             |
 | **Status**      | Active              |
 | **Owner**       | product-engineering |
-| **Last synced** | 2026-03-24          |
+| **Last synced** | 2026-04-15          |
 
 # Runbook - Doc Authoring Quickstart
 
@@ -56,9 +56,11 @@ This runbook covers authoring and maintaining roadmap, epic, architecture, featu
 
 ## Linking Rules
 
-- Each feature PRD links to exactly one epic.
-- Feature PRDs link required architecture docs and ADRs.
-- The current epic links all in-scope feature PRDs.
+- Each feature PRD declares a `## Related Docs` section.
+- Feature PRD `## Related Docs` includes exactly one linked parent epic.
+- Feature PRD `## Related Docs` includes related feature PRDs, related ADRs, and related architecture docs as markdown links or `- None.`.
+- Each epic `## Dependencies` section declares related epic/cross-PRD dependencies and related ADRs as markdown links or `- None.`.
+- Each epic `## Feature Breakdown` lists linked feature PRDs or `- None.` if no feature PRDs exist yet.
 - ADRs reference related epics/features and architecture docs.
 - Roadmap reflects current epic status at all times.
 - `docs/index.md` lists every markdown file under `docs/` except `docs/index.md` itself.
@@ -69,7 +71,7 @@ Before coding starts:
 
 - Feature PRD status is `In Progress`.
 - Feature PRD has acceptance criteria and test plan.
-- Required architecture docs and ADRs are linked.
+- Feature PRD related-doc declarations are complete and use markdown links or `- None.`.
 - Branch and draft PR are created from the feature PRD context.
 
 ## Status Hygiene
@@ -85,6 +87,7 @@ Before coding starts:
 - [ ] New doc uses the correct template.
 - [ ] Metadata table is complete and current.
 - [ ] Links to related docs are present and valid.
+- [ ] PRD related-doc groups use markdown links or `- None.` exactly.
 - [ ] Status fields reflect real project state.
 - [ ] Feature PRD includes acceptance criteria and test plan.
 - [ ] `docs/index.md` rollup statuses match epic/feature doc statuses.

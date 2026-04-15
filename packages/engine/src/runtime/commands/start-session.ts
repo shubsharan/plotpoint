@@ -28,7 +28,7 @@ export const startSession = async (
   const entryNode = getNodeOrThrow(storyPackage, storyPackage.graph.entryNodeId);
   const initialState: SessionState = {
     currentNodeId: entryNode.id,
-    gameId: parsedInput.gameId,
+    sessionId: parsedInput.sessionId,
     playerId: parsedInput.playerId,
     playerState: {
       blockStates: {},

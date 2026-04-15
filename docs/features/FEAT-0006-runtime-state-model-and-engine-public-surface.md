@@ -21,6 +21,26 @@ EPIC-0003 starts by locking the engine surface that every later runtime consumer
 
 The architecture already sketches the target shape: `createEngine` owns public runtime methods, runtime execution stays inside `packages/engine`, and the engine must remain host-agnostic so both mobile and API adapters can depend on the same gameplay authority. This feature turns those implied examples into an explicit engine contract and deliberately stops short of durable save orchestration, sync timing, or multiplayer authority policy.
 
+## Related Docs
+
+### Parent Epic
+
+- [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)
+
+### Related Feature PRDs
+
+- [FEAT-0005-story-publish-pipeline-and-published-catalog-availability](../features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md)
+- [FEAT-0007-block-registry-and-action-executor](../features/FEAT-0007-block-registry-and-action-executor.md)
+- [FEAT-0008-condition-registry-and-graph-traversal-semantics](../features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)
+
+### Related ADRs
+
+- [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)
+
+### Related Architecture Docs
+
+- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
+
 ## Scope
 
 ### In scope
@@ -55,6 +75,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 ## Architecture and Technical Notes
 
 - Primary reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
+- Durable decision record: [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)
 - The runtime surface should stay centered in `packages/engine`, with `createEngine` exporting engine-owned entrypoints and ports living in the engine package.
 - `StoryPackageRepo.getCurrentPublishedPackage(storyId)` and `getPublishedPackage(storyId, storyPackageVersionId)` are the published story package ingress from EPIC-0002; FEAT-0006 defines how the runtime surface consumes that data, not how publishing works.
 - User-scoped and game-scoped state are engine concepts in this feature. Their durable persistence, hydration, and synchronization behavior remain later adapter concerns in EPIC-0004.
@@ -66,7 +87,7 @@ The architecture already sketches the target shape: `createEngine` owns public r
 type SessionState = {
   storyId: string;
   storyPackageVersionId: string;
-  gameId: string;
+  sessionId: string;
   playerId: string;
   roleId: string;
   currentNodeId: string;
@@ -124,7 +145,7 @@ type EnginePorts = {
 type Engine = {
   startSession: (input: {
     storyId: string;
-    gameId: string;
+    sessionId: string;
     playerId: string;
     roleId: string;
   }) => Promise<RuntimeFrame>;
@@ -145,7 +166,7 @@ type Engine = {
 
 - Persisted `SessionState` stays sparse: missing block-state entries mean "use the block definition's deterministic `initialState(config)`" rather than "this state must be materialized before use."
 - `loadSession` rehydrates adapter-supplied sparse `SessionState` into the engine surface for continued execution and returns a fresh `RuntimeFrame` with a hydrated `view.currentNode`; it does not imply engine-owned durable storage in this feature.
-- No new ADR is required unless the current engine-port boundary proves insufficient for headless runtime orchestration.
+- The headless runtime boundary, public engine surface, and sparse-state-versus-derived-view split are captured durably in [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md).
 
 ## Acceptance Criteria
 

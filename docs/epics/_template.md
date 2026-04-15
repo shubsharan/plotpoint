@@ -31,9 +31,22 @@ Background from roadmap and product strategy.
 
 ## Dependencies
 
-- Linked architecture docs
-- Linked ADRs
-- Cross-epic dependencies
+### Product and Architecture Docs
+
+- [product-roadmap](../product/product-roadmap.md)
+- [product-strategy](../product/product-strategy.md)
+- [<architecture-doc>](../architecture/<architecture-doc>.md)
+
+### Related Epics and Cross-PRD Dependencies
+
+- [EPIC-XXXX-<epic-slug>](../epics/EPIC-XXXX-<epic-slug>.md)
+- [FEAT-XXXX-<feature-slug>](../features/FEAT-XXXX-<feature-slug>.md)
+- None.
+
+### Related ADRs
+
+- [ADR-XXXX-<decision-slug>](../adrs/ADR-XXXX-<decision-slug>.md)
+- None.
 
 ## Risks and Mitigations
 
@@ -43,6 +56,7 @@ Background from roadmap and product strategy.
 
 - Link to `docs/features/FEAT-XXXX-<feature-slug>.md`
 - Link to `docs/features/FEAT-XXXX-<feature-slug>.md`
+- None.
 
 ## Milestones and Sequencing
 

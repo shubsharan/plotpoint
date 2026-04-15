@@ -7,7 +7,7 @@ export type LoadSessionInput = {
 };
 
 export type StartSessionInput = {
-  gameId: string;
+  sessionId: string;
   playerId: string;
   roleId: string;
   storyId: string;
@@ -36,7 +36,7 @@ export const loadSessionInputSchema: z.ZodType<LoadSessionInput> = z
 
 export const startSessionInputSchema: z.ZodType<StartSessionInput> = z
   .object({
-    gameId: nonEmptyStringSchema,
+    sessionId: nonEmptyStringSchema,
     playerId: nonEmptyStringSchema,
     roleId: nonEmptyStringSchema,
     storyId: nonEmptyStringSchema,

@@ -17,6 +17,27 @@ What this feature delivers and why.
 
 Relevant product and user context.
 
+## Related Docs
+
+### Parent Epic
+
+- [EPIC-XXXX-<epic-slug>](../epics/EPIC-XXXX-<epic-slug>.md)
+
+### Related Feature PRDs
+
+- [FEAT-XXXX-<feature-slug>](../features/FEAT-XXXX-<feature-slug>.md)
+- None.
+
+### Related ADRs
+
+- [ADR-XXXX-<decision-slug>](../adrs/ADR-XXXX-<decision-slug>.md)
+- None.
+
+### Related Architecture Docs
+
+- [<architecture-doc>](../architecture/<architecture-doc>.md)
+- None.
+
 ## Scope
 
 ### In scope
@@ -34,8 +55,7 @@ Relevant product and user context.
 
 ## Architecture and Technical Notes
 
-- Link required architecture docs
-- Link required ADRs
+- Use the links declared in `## Related Docs` as the planning contract
 - Key implementation notes
 
 ## Acceptance Criteria

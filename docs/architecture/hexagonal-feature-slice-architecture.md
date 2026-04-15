@@ -3,7 +3,7 @@
 | **Source**      | [Hexagonal + Feature-Slice Architecture](https://www.notion.so/321997b3842e815c9c79ecdfc2f0e06d) |
 | **Type**        | Architecture                                                                                     |
 | **Domains**     | Engine, API, Data Model, Mobile                                                                  |
-| **Last synced** | 2026-03-30                                                                                       |
+| **Last synced** | 2026-04-15                                                                                       |
 
 ## Repository Structure
 
@@ -63,7 +63,7 @@ packages/
 │   │   ├── graph/
 │   │   │   ├── types.ts               StoryGraph, StoryNode, Edge,
 │   │   │   │                           BlockInstance, Condition types
-│   │   │   ├── conditions.ts          Named condition function registry
+│   │   │   ├── conditions.ts          Authored condition tree helpers and validation primitives
 │   │   │   ├── traversal.ts           Edge evaluation against block states
 │   │   │   └── validation.ts          Story graph integrity checks
 │   │   ├── blocks/
@@ -228,7 +228,7 @@ type EnginePorts = {
 export const createEngine = (ports: EnginePorts) => ({
   startSession: (input: {
     storyId: string;
-    gameId: string;
+    sessionId: string;
     playerId: string;
     roleId: string;
   }) => startSession(ports, input),
@@ -374,7 +374,7 @@ type SessionState = {
   roleId: string;
   storyId: string;
   storyPackageVersionId: string;
-  gameId: string;
+  sessionId: string;
   currentNodeId: string;
   playerState: {
     blockStates: Record<string, unknown>;
@@ -838,7 +838,7 @@ test('submitting correct code unlocks door', async () => {
       roleId: 'detective',
       storyId: 'story-1',
       storyPackageVersionId: 'pkg-1',
-      gameId: 'game-1',
+      sessionId: 'session-1',
       currentNodeId: 'node-1',
       playerState: {
         blockStates: { 'door-1': { unlocked: false, attempts: [] } },

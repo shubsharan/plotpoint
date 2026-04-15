@@ -20,6 +20,24 @@ Plotpoint already has a scaffold-stage monorepo, but EPIC-0001 still needs one f
 
 The scope stays intentionally narrow: this feature finalizes the platform foundation. It does not pre-build future story-runtime behavior that belongs to later epics.
 
+## Related Docs
+
+### Parent Epic
+
+- [EPIC-0001-platform-and-planning-foundation](../epics/EPIC-0001-platform-and-planning-foundation.md)
+
+### Related Feature PRDs
+
+- [FEAT-0002-spec-driven-delivery-automation](../features/FEAT-0002-spec-driven-delivery-automation.md)
+
+### Related ADRs
+
+- None.
+
+### Related Architecture Docs
+
+- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
+
 ## Scope
 
 ### In scope

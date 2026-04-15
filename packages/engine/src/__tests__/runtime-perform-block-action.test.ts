@@ -90,7 +90,7 @@ const startRuntime = async (
   storyId: string,
 ): Promise<RuntimeFrame> =>
   engine.startSession({
-    gameId: 'game-1',
+    sessionId: 'session-1',
     playerId: 'player-1',
     roleId: 'detective',
     storyId,

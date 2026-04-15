@@ -24,7 +24,7 @@ The architecture makes the boundary explicit. The engine owns runtime contracts 
 - Define the engine runtime state model needed to execute a published story package deterministically.
 - Define the engine public surface for loading story packages, starting runtime state, submitting actions, and reading resulting progression data.
 - Define the block registry and execution contract for the MVP block set, including per-block scope and config interpretation inside the engine.
-- Define the condition registry and evaluation behavior used to determine which graph edges are currently traversable.
+- Define the fact-based traversal evaluation behavior used to determine which graph edges are currently traversable.
 - Define graph traversal and progression semantics for scene entry, action handling, state updates, and next-step resolution.
 - Keep runtime execution headless and testable so later API routes and mobile gameplay surfaces can consume the engine without reimplementing story logic.
 
@@ -45,10 +45,21 @@ The architecture makes the boundary explicit. The engine owns runtime contracts 
 
 ## Dependencies
 
-- `docs/product/product-roadmap.md`
-- `docs/product/product-strategy.md`
-- `docs/architecture/hexagonal-feature-slice-architecture.md`
-- `docs/epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md`
+### Product and Architecture Docs
+
+- [product-roadmap](../product/product-roadmap.md)
+- [product-strategy](../product/product-strategy.md)
+- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
+
+### Related Epics and Cross-PRD Dependencies
+
+- [EPIC-0002-story-package-contract-and-internal-publishing-pipeline](../epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md)
+- [FEAT-0005-story-publish-pipeline-and-published-catalog-availability](../features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md)
+
+### Related ADRs
+
+- [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)
+- [ADR-0003-traversal-facts-replace-named-condition-registry](../adrs/ADR-0003-traversal-facts-replace-named-condition-registry.md)
 
 ## Risks and Mitigations
 

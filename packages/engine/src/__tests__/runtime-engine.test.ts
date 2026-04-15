@@ -84,7 +84,7 @@ const createStartInput = (
   storyId: string,
   overrides?: Partial<StartSessionInput>,
 ): StartSessionInput => ({
-  gameId: 'game-1',
+  sessionId: 'session-1',
   playerId: 'player-1',
   roleId: 'detective',
   storyId,
@@ -108,7 +108,7 @@ const expectRuntimeFrameShape = (frame: RuntimeFrame): void => {
   expect(frame).toMatchObject({
     state: {
       currentNodeId: expect.any(String),
-      gameId: expect.any(String),
+      sessionId: expect.any(String),
       playerId: expect.any(String),
       playerState: {
         blockStates: expect.any(Object),
@@ -684,11 +684,11 @@ describe('@plotpoint/engine runtime surface', () => {
   it('throws runtime_session_input_invalid for malformed startSession payloads', async () => {
     const { engine, storyId } = createRuntimeContext();
     const startPromise = startRuntime(engine, storyId, {
-      gameId: '',
+      sessionId: '',
     });
 
     await expectRuntimeError(startPromise, 'runtime_session_input_invalid');
-    await expect(startPromise).rejects.toThrow('too_small at gameId');
+    await expect(startPromise).rejects.toThrow('too_small at sessionId');
   });
 
   it('throws runtime_session_input_invalid for malformed loadSession state payloads', async () => {

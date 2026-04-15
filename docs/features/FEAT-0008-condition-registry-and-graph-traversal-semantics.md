@@ -19,6 +19,26 @@ FEAT-0006 locked runtime contracts and FEAT-0007 locked block execution. FEAT-00
 
 This feature owns condition evaluation, traversable-edge derivation, and `traverse` eligibility. Session orchestration, persistence timing, and UX remain out of scope.
 
+## Related Docs
+
+### Parent Epic
+
+- [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)
+
+### Related Feature PRDs
+
+- [FEAT-0006-runtime-state-model-and-engine-public-surface](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)
+- [FEAT-0007-block-registry-and-action-executor](../features/FEAT-0007-block-registry-and-action-executor.md)
+
+### Related ADRs
+
+- [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)
+- [ADR-0003-traversal-facts-replace-named-condition-registry](../adrs/ADR-0003-traversal-facts-replace-named-condition-registry.md)
+
+### Related Architecture Docs
+
+- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
+
 ## Scope
 
 ### In scope
@@ -98,10 +118,11 @@ This feature owns condition evaluation, traversable-edge derivation, and `traver
 ## Architecture and Technical Notes
 
 - Primary reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
+- Durable decision record: [ADR-0003-traversal-facts-replace-named-condition-registry](../adrs/ADR-0003-traversal-facts-replace-named-condition-registry.md)
 - FEAT-0003 remains the authored condition-tree schema boundary, with FEAT-0008 intentionally breaking the leaf shape.
 - FEAT-0006 remains the outer runtime contract boundary; FEAT-0008 changes traversal semantics only.
 - Traversal logic stays pure and engine-owned; block reducers remain independent and block-specific semantics stay inside block-owned fact projectors.
-- No new cross-package boundary is introduced; no ADR required.
+- The fact-view traversal model, exported traversal-fact contract, and no-translation compatibility stance are captured durably in [ADR-0003-traversal-facts-replace-named-condition-registry](../adrs/ADR-0003-traversal-facts-replace-named-condition-registry.md).
 - `currentEngineMajor` is bumped to `1` so published packages authored against the old `check` leaf shape fail explicitly instead of drifting under the old compatibility number.
 
 ## Acceptance Criteria

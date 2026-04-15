@@ -19,6 +19,25 @@ FEAT-0006 established runtime state shape and engine entrypoints (`startSession`
 
 The architecture baseline remains: block definitions own pure per-block logic, while the executor owns orchestration (block resolution, validation sequence, state bucket selection, and runtime error mapping). Execution remains engine-only and host-agnostic.
 
+## Related Docs
+
+### Parent Epic
+
+- [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)
+
+### Related Feature PRDs
+
+- [FEAT-0006-runtime-state-model-and-engine-public-surface](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)
+- [FEAT-0008-condition-registry-and-graph-traversal-semantics](../features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)
+
+### Related ADRs
+
+- [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)
+
+### Related Architecture Docs
+
+- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
+
 ## Scope
 
 ### In scope
@@ -56,6 +75,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 ## Architecture and Technical Notes
 
 - Primary reference: `docs/architecture/hexagonal-feature-slice-architecture.md`
+- Durable decision record: [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)
 - Keep engine boundaries strict (`mobile -> api -> engine <- db`): no adapter logic in block definitions or executor.
 - Registry lives in `packages/engine` and maps authored `type` to engine-owned definition objects.
 - Config/state/action validation is schema-owned at block-definition level, orchestrated by executor.
@@ -64,6 +84,7 @@ The architecture baseline remains: block definitions own pure per-block logic, w
 - Shell owns navigation UX from `traversableEdges`; blocks do not own graph navigation controls.
 - FEAT-0007 originally shipped unconditional edges only in `traversableEdges`; FEAT-0008 defines full condition-aware traversable-edge derivation and `traverse` eligibility (see FEAT-0008).
 - Keep test fixtures internal to engine `__tests__`; no public test-only exports.
+- The durable runtime-boundary record for executor ownership, block purity, bucket routing, and generic submit-envelope semantics lives in [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md).
 
 ## Locked Contracts
 

@@ -6,7 +6,7 @@ export type SessionStateBucket = {
 
 export type SessionState = {
   currentNodeId: string;
-  gameId: string;
+  sessionId: string;
   playerId: string;
   playerState: SessionStateBucket;
   roleId: string;
@@ -26,7 +26,7 @@ export const sessionStateBucketSchema: z.ZodType<SessionStateBucket> = z
 export const sessionStateSchema: z.ZodType<SessionState> = z
   .object({
     currentNodeId: nonEmptyStringSchema,
-    gameId: nonEmptyStringSchema,
+    sessionId: nonEmptyStringSchema,
     playerId: nonEmptyStringSchema,
     playerState: sessionStateBucketSchema,
     roleId: nonEmptyStringSchema,

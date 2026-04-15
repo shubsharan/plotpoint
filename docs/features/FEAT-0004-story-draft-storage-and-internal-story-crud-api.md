@@ -19,6 +19,25 @@ Once FEAT-0003 defines the engine-owned story package contract, Plotpoint needs 
 
 This feature stays on the draft side of the workflow. It gives internal creators and operators a stable content-management surface without taking on publish, runtime, or player-facing catalog behavior yet.
 
+## Related Docs
+
+### Parent Epic
+
+- [EPIC-0002-story-package-contract-and-internal-publishing-pipeline](../epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md)
+
+### Related Feature PRDs
+
+- [FEAT-0003-story-package-schema-and-validation-contract](../features/FEAT-0003-story-package-schema-and-validation-contract.md)
+- [FEAT-0005-story-publish-pipeline-and-published-catalog-availability](../features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md)
+
+### Related ADRs
+
+- [ADR-0001-story-package-object-storage-links](../adrs/ADR-0001-story-package-object-storage-links.md)
+
+### Related Architecture Docs
+
+- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
+
 ## Scope
 
 ### In scope
@@ -52,7 +71,7 @@ This feature stays on the draft side of the workflow. It gives internal creators
 - Expected ownership sits in `packages/db/src/schema/stories.ts`, `packages/db/src/queries/stories.ts`, and `apps/api/src/routes/stories/route.ts` plus `contracts.ts`. Route contracts stay HTTP-focused (requests and error responses), while success payload shape comes from db CRUD read models serialized by the API.
 - This feature must store object-storage pointers in DB rows; API and publish layers own story package upload/download and FEAT-0003 validation against the retrieved payload.
 - Keep the dependency flow intact: `api` and `db` may depend inward, but the engine should not gain CRUD concerns.
-- Storage decision: [ADR-story-package-object-storage-links](../adrs/ADR-story-package-object-storage-links.md).
+- Storage decision: [ADR-0001-story-package-object-storage-links](../adrs/ADR-0001-story-package-object-storage-links.md).
 
 ## Acceptance Criteria
 

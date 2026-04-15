@@ -21,6 +21,25 @@ The product strategy defines publishing as the step that validates structure, op
 
 This feature closes EPIC-0002 by making publish a real transition instead of an implied future step. Draft content stays mutable for internal authors, while published content becomes a stable artifact that later runtime and mobile features can browse and load.
 
+## Related Docs
+
+### Parent Epic
+
+- [EPIC-0002-story-package-contract-and-internal-publishing-pipeline](../epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md)
+
+### Related Feature PRDs
+
+- [FEAT-0003-story-package-schema-and-validation-contract](../features/FEAT-0003-story-package-schema-and-validation-contract.md)
+- [FEAT-0004-story-draft-storage-and-internal-story-crud-api](../features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)
+
+### Related ADRs
+
+- [ADR-0001-story-package-object-storage-links](../adrs/ADR-0001-story-package-object-storage-links.md)
+
+### Related Architecture Docs
+
+- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
+
 ## Scope
 
 ### In scope
@@ -55,7 +74,7 @@ This feature closes EPIC-0002 by making publish a real transition instead of an 
 - Publish behavior must respect the engine semver rules described in the architecture doc: engine major versions stamp published story packages, and later migrations operate on published story package data.
 - Expected implementation surfaces include `apps/api/src/routes/publish-story.ts` with route-local DTO schemas, published-story storage in `packages/db`, and `packages/db/src/repos/story-package-repo.ts` returning the current published story package.
 - Distinct published package versions are the default for this repo because publish is defined as validation plus optimization plus making a stable story package available for runtime consumption.
-- Storage decision: [ADR-story-package-object-storage-links](../adrs/ADR-story-package-object-storage-links.md).
+- Storage decision: [ADR-0001-story-package-object-storage-links](../adrs/ADR-0001-story-package-object-storage-links.md).
 
 ## Acceptance Criteria
 

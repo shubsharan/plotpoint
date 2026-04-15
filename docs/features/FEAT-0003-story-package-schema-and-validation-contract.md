@@ -19,6 +19,25 @@ EPIC-0002 starts with the story package contract because everything downstream d
 
 The product strategy defines stories as directed graphs of scenes, blocks, and conditional edges. The architecture places story package boundary ownership in `packages/engine`, with adapters mapping to route-local DTOs as needed. This feature turns that target shape into one canonical serialized contract that authoring, publishing, persistence, and later runtime loading all share without duplicating runtime authority inside authored JSON.
 
+## Related Docs
+
+### Parent Epic
+
+- [EPIC-0002-story-package-contract-and-internal-publishing-pipeline](../epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md)
+
+### Related Feature PRDs
+
+- [FEAT-0004-story-draft-storage-and-internal-story-crud-api](../features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)
+- [FEAT-0005-story-publish-pipeline-and-published-catalog-availability](../features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md)
+
+### Related ADRs
+
+- None.
+
+### Related Architecture Docs
+
+- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
+
 ## Scope
 
 ### In scope

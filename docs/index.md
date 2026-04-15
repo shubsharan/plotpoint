@@ -13,6 +13,7 @@ Use it as the one-page status rollup across epics and features.
 | EPIC-0001 | Completed   | [epics/EPIC-0001-platform-and-planning-foundation.md](epics/EPIC-0001-platform-and-planning-foundation.md)                                               |
 | EPIC-0002 | Completed   | [epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md) |
 | EPIC-0003 | Completed   | [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)                       |
+| EPIC-0004 | Planned     | [epics/EPIC-0004-session-lifecycle-persistence-and-multiplayer-state.md](epics/EPIC-0004-session-lifecycle-persistence-and-multiplayer-state.md)         |
 
 
 ### Feature Status Rollup
@@ -65,6 +66,7 @@ Use it as the one-page status rollup across epics and features.
 - [epics/EPIC-0001-platform-and-planning-foundation.md](epics/EPIC-0001-platform-and-planning-foundation.md)
 - [epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md](epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md)
 - [epics/EPIC-0003-headless-runtime-engine-and-condition-system.md](epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)
+- [epics/EPIC-0004-session-lifecycle-persistence-and-multiplayer-state.md](epics/EPIC-0004-session-lifecycle-persistence-and-multiplayer-state.md)
 - [epics/_template.md](epics/_template.md)
 
 ### `features/`
@@ -85,5 +87,7 @@ Use it as the one-page status rollup across epics and features.
 
 ### `adrs/`
 
-- [adrs/ADR-story-package-object-storage-links.md](adrs/ADR-story-package-object-storage-links.md)
+- [adrs/ADR-0001-story-package-object-storage-links.md](adrs/ADR-0001-story-package-object-storage-links.md)
+- [adrs/ADR-0002-headless-engine-runtime-boundary.md](adrs/ADR-0002-headless-engine-runtime-boundary.md)
+- [adrs/ADR-0003-traversal-facts-replace-named-condition-registry.md](adrs/ADR-0003-traversal-facts-replace-named-condition-registry.md)
 - [adrs/_template.md](adrs/_template.md)
