@@ -30,6 +30,9 @@ Use it as the one-page status rollup across epics and features.
 | FEAT-0007 | EPIC-0003 | Completed | [features/FEAT-0007-block-registry-and-action-executor.md](features/FEAT-0007-block-registry-and-action-executor.md)                                             |
 | FEAT-0008 | EPIC-0003 | Completed | [features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md](features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)                 |
 | FEAT-0009 | EPIC-0004 | Not Started | [features/FEAT-0009-session-records-membership-and-pinned-resume-contract.md](features/FEAT-0009-session-records-membership-and-pinned-resume-contract.md)       |
+| FEAT-0010 | EPIC-0004 | Not Started | [features/FEAT-0010-session-lifecycle-rejoin-and-completion-contract.md](features/FEAT-0010-session-lifecycle-rejoin-and-completion-contract.md)                 |
+| FEAT-0011 | EPIC-0004 | Not Started | [features/FEAT-0011-checkpoint-shared-state-sync-and-notification-contract.md](features/FEAT-0011-checkpoint-shared-state-sync-and-notification-contract.md)     |
+| FEAT-0012 | EPIC-0004 | Not Started | [features/FEAT-0012-session-package-upgrade-and-compatibility-contract.md](features/FEAT-0012-session-package-upgrade-and-compatibility-contract.md)             |
 
 
 ### Current Implementation Snapshot
@@ -39,7 +42,7 @@ Use it as the one-page status rollup across epics and features.
 - Draft story storage and internal CRUD API flows are implemented for draft lifecycle work.
 - Story publish pipeline and published catalog availability are implemented under FEAT-0005.
 - Runtime implementation under EPIC-0003 now includes FEAT-0006 runtime contracts, FEAT-0007 block action execution, and FEAT-0008 fact-view traversal inside `packages/engine`. Persisted runtime state remains intentionally sparse (`playerState`/`sharedState` store only mutated block state), `RuntimeFrame.view.currentNode` exposes hydrated current-node block state for hosts, `RuntimeFrame.view.traversableEdges` is derived from block-exported traversal facts, and the engine contract now uses `sessionId` for runtime identity.
-- EPIC-0004 planning now starts with FEAT-0009, which locks the adapter-owned session aggregate, membership boundary, and pinned resume contract around the completed engine surface.
+- EPIC-0004 planning now spans four feature slices: `FEAT-0009` locks the adapter-owned session aggregate and pinned resume contract, `FEAT-0010` owns lifecycle/rejoin/completion semantics, `FEAT-0011` owns explicit checkpoint sync plus notification requirements, and `FEAT-0012` owns explicit package upgrades with fail-closed compatibility rules.
 
 ## Update Rules
 
@@ -82,6 +85,9 @@ Use it as the one-page status rollup across epics and features.
 - [features/FEAT-0007-block-registry-and-action-executor.md](features/FEAT-0007-block-registry-and-action-executor.md)
 - [features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md](features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)
 - [features/FEAT-0009-session-records-membership-and-pinned-resume-contract.md](features/FEAT-0009-session-records-membership-and-pinned-resume-contract.md)
+- [features/FEAT-0010-session-lifecycle-rejoin-and-completion-contract.md](features/FEAT-0010-session-lifecycle-rejoin-and-completion-contract.md)
+- [features/FEAT-0011-checkpoint-shared-state-sync-and-notification-contract.md](features/FEAT-0011-checkpoint-shared-state-sync-and-notification-contract.md)
+- [features/FEAT-0012-session-package-upgrade-and-compatibility-contract.md](features/FEAT-0012-session-package-upgrade-and-compatibility-contract.md)
 - [features/_template.md](features/_template.md)
 
 ### `architecture/`

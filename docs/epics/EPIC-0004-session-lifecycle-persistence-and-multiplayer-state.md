@@ -4,7 +4,7 @@
 | **Product and Architecture Docs**            | [product-roadmap](../product/product-roadmap.md)<br>[product-strategy](../product/product-strategy.md)<br>[hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
 | **Related Epics and Cross-PRD Dependencies** | [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md) |
 | **Related ADRs**                             | None. |
-| **Feature Breakdown**                        | [FEAT-0009-session-records-membership-and-pinned-resume-contract](../features/FEAT-0009-session-records-membership-and-pinned-resume-contract.md) |
+| **Feature Breakdown**                        | [FEAT-0009-session-records-membership-and-pinned-resume-contract](../features/FEAT-0009-session-records-membership-and-pinned-resume-contract.md)<br>[FEAT-0010-session-lifecycle-rejoin-and-completion-contract](../features/FEAT-0010-session-lifecycle-rejoin-and-completion-contract.md)<br>[FEAT-0011-checkpoint-shared-state-sync-and-notification-contract](../features/FEAT-0011-checkpoint-shared-state-sync-and-notification-contract.md)<br>[FEAT-0012-session-package-upgrade-and-compatibility-contract](../features/FEAT-0012-session-package-upgrade-and-compatibility-contract.md) |
 
 # EPIC-0004 - Session Lifecycle, Persistence, and Multiplayer State
 
@@ -16,7 +16,9 @@ Make co-op play reliable across join, play, sync, resume, and finish by adding s
 
 The roadmap places this epic immediately after the headless runtime engine work because Plotpoint needs more than deterministic execution semantics to support real co-op play. The product strategy calls for local-first storytelling where players can join a shared narrative session, receive roles, progress independently when offline, and sync only at critical multiplayer checkpoints.
 
-EPIC-0003 completed the engine-owned execution contracts for `StoryPackage` loading, runtime state transitions, block execution, and traversal. EPIC-0004 now owns the adapter-side lifecycle, persistence, and multiplayer coordination needed to host those engine contracts across real sessions without moving gameplay authority out of `packages/engine`. The engine remains the single source of truth for story execution, while API, db, and realtime adapters take responsibility for durable storage, session membership, resume flows, and shared-state coordination.
+EPIC-0003 completed the engine-owned execution contracts for `StoryPackage` loading, runtime state transitions, block execution, and traversal. EPIC-0004 now owns the adapter-side lifecycle, persistence, and multiplayer coordination needed to host those engine contracts across real sessions without moving gameplay authority out of `packages/engine`. The engine remains the single source of truth for story execution, while API, db, and notification adapters take responsibility for durable storage, session membership, resume flows, shared-state coordination, and update propagation.
+
+This epic is intentionally split into four feature PRDs so implementation can lock the durable boundary first, then lifecycle behavior, then checkpoint coordination, and finally the explicit package-upgrade policy that resolves the inherited runtime follow-up.
 
 ## Scope
 
@@ -42,6 +44,7 @@ EPIC-0003 completed the engine-owned execution contracts for `StoryPackage` load
 - The engine remains the single gameplay authority, with no session-layer duplication of execution logic.
 - Ownership of player-scoped versus shared session state is explicit enough for later feature PRDs to implement without reopening core boundaries.
 - Session resume works against pinned published package versions and fails explicitly when compatibility requirements are not met.
+- The EPIC-0004 feature sequence is explicit enough that lifecycle, sync, and upgrade work can be implemented without reopening the epic boundary.
 
 ## Risks and Mitigations
 
@@ -53,6 +56,7 @@ EPIC-0003 completed the engine-owned execution contracts for `StoryPackage` load
 ## Decision Lock
 
 - A co-op `session` is an adapter-owned multiplayer aggregate, distinct from engine `SessionState`.
+- Single-player stories remain valid under the same session model by treating a solo run as a session with exactly one membership and no required cross-member coordination.
 - Engine `SessionState` represents one player's resumable runtime inside a shared session and remains the only gameplay execution contract.
 - API, db, and realtime adapters own session membership, durable persistence, shared-state coordination, resume assembly, and update propagation around the engine.
 - Shared session state is adapter-owned durable truth. The engine computes state transitions, but adapters decide when shared mutations are accepted, persisted, and broadcast.
@@ -61,13 +65,12 @@ EPIC-0003 completed the engine-owned execution contracts for `StoryPackage` load
 
 ## Milestones and Sequencing
 
-1. Lock the session/persistence boundary and ownership of player-scoped versus shared state around the existing engine surface.
-2. Define the session lifecycle and persistence slices needed for start, join, load, resume, and completion behavior.
-3. Define multiplayer sync and resume orchestration on top of the completed engine contracts.
-4. Hand off player-facing rendering and gameplay UX integration to `EPIC-0005`.
-
-The next planned follow-up feature after `FEAT-0009` is checkpoint and shared-state sync orchestration on top of that session boundary.
+1. `FEAT-0009` locks the adapter-owned session aggregate, record families, membership boundary, and pinned resume contract around the existing engine surface.
+2. `FEAT-0010` defines lifecycle assembly, rejoin behavior, and completion semantics on top of those records, including the single-player case of one membership.
+3. `FEAT-0011` defines explicit checkpoint coordination, shared-state acceptance, and notification requirements without committing to a specific transport, while allowing one-member sessions to short-circuit multiplayer readiness.
+4. `FEAT-0012` resolves the inherited package-upgrade follow-up with host-triggered, fail-closed compatibility rules for pinned sessions.
+5. Hand off player-facing rendering and gameplay UX integration to `EPIC-0005`.
 
 ## Open Questions
 
-- Inherited concern: `EPIC-0003` deferred follow-up `DF-0001` still needs a session-layer policy for explicit mid-session upgrades of pinned published package versions. EPIC-0004 should resolve how upgrade actions, compatibility failures, and pinned-version preservation behave during resume and live session orchestration.
+- No new epic-level open questions. `FEAT-0012` is the planned EPIC-0004 resolution path for the inherited `DF-0001` package-upgrade policy.
