@@ -1,11 +1,10 @@
-| Field           | Value       |
-| --------------- | ----------- |
-| **Type**        | PRD         |
-| **Feature ID**  | FEAT-0008   |
-| **Status**      | Completed   |
-| **Epic**        | EPIC-0003   |
-| **Domains**     | Engine      |
-| **Last synced** | 2026-04-15  |
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Completed |
+| **Parent Epic**               | [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md) |
+| **Related Feature PRDs**      | [FEAT-0006-runtime-state-model-and-engine-public-surface](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)<br>[FEAT-0007-block-registry-and-action-executor](../features/FEAT-0007-block-registry-and-action-executor.md) |
+| **Related ADRs**              | [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)<br>[ADR-0003-traversal-facts-replace-named-condition-registry](../adrs/ADR-0003-traversal-facts-replace-named-condition-registry.md) |
+| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
 
 # FEAT-0008 - Traversal Fact View and Graph Traversal Semantics
 
@@ -18,26 +17,6 @@ Ship the engine-owned traversal fact view and conditioned-edge traversal semanti
 FEAT-0006 locked runtime contracts and FEAT-0007 locked block execution. FEAT-0008 completes EPIC-0003 progression semantics by making conditioned authored edges executable and deterministic.
 
 This feature owns condition evaluation, traversable-edge derivation, and `traverse` eligibility. Session orchestration, persistence timing, and UX remain out of scope.
-
-## Related Docs
-
-### Parent Epic
-
-- [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)
-
-### Related Feature PRDs
-
-- [FEAT-0006-runtime-state-model-and-engine-public-surface](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)
-- [FEAT-0007-block-registry-and-action-executor](../features/FEAT-0007-block-registry-and-action-executor.md)
-
-### Related ADRs
-
-- [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)
-- [ADR-0003-traversal-facts-replace-named-condition-registry](../adrs/ADR-0003-traversal-facts-replace-named-condition-registry.md)
-
-### Related Architecture Docs
-
-- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
 
 ## Scope
 

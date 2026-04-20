@@ -1,35 +1,16 @@
-| Field           | Value                       |
-| --------------- | --------------------------- |
-| **Type**        | PRD                         |
-| **Feature ID**  | FEAT-0002                   |
-| **Status**      | Cancelled                   |
-| **Epic**        | EPIC-0001                   |
-| **Domains**     | Docs, Tooling, Git Workflow |
-| **Last synced** | 2026-03-19                  |
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Cancelled |
+| **Parent Epic**               | [EPIC-0001-platform-and-planning-foundation](../epics/EPIC-0001-platform-and-planning-foundation.md) |
+| **Related Feature PRDs**      | [FEAT-0001-monorepo-and-shared-config-finalization](../features/FEAT-0001-monorepo-and-shared-config-finalization.md) |
+| **Related ADRs**              | None. |
+| **Related Architecture Docs** | None. |
 
 # FEAT-0002 - Spec-Driven Delivery Automation (Cancelled)
 
 ## Decision
 
 On 2026-03-19, this feature was explicitly cancelled. The team decided not to continue spec-driven delivery automation and to move directly into product implementation work.
-
-## Related Docs
-
-### Parent Epic
-
-- [EPIC-0001-platform-and-planning-foundation](../epics/EPIC-0001-platform-and-planning-foundation.md)
-
-### Related Feature PRDs
-
-- [FEAT-0001-monorepo-and-shared-config-finalization](../features/FEAT-0001-monorepo-and-shared-config-finalization.md)
-
-### Related ADRs
-
-- None.
-
-### Related Architecture Docs
-
-- None.
 
 ## Outcome
 

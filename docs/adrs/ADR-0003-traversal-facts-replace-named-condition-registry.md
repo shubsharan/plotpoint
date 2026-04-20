@@ -1,15 +1,13 @@
-| Field           | Value               |
-| --------------- | ------------------- |
-| **Type**        | ADR                 |
-| **Date**        | 2026-04-15          |
-| **Deciders**    | product-engineering |
-| **Last synced** | 2026-04-15          |
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Accepted |
+| **Date**                      | 2026-04-15 |
+| **Deciders**                  | product-engineering |
+| **Related Epics**             | [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md) |
+| **Related Feature PRDs**      | [FEAT-0008-condition-registry-and-graph-traversal-semantics](../features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md) |
+| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
 
 # ADR-0003 - Traversal Facts Replace Named Condition Registry
-
-## Status
-
-Accepted
 
 ## Context
 
@@ -78,9 +76,3 @@ No translation layer is provided for legacy `check.condition + params` leaves. I
 - Keep the architecture doc and future traversal docs aligned to the fact-view model rather than the older named condition registry wording.
 - Treat changes to authored condition leaf shape, exported traversal-fact contracts, evaluator reuse across runtime entrypoints, or translation policy as ADR-level decisions.
 - Keep compatibility validation and runtime evaluation sharing the same fact metadata and operator rules.
-
-## References
-
-- Related epic(s): `docs/epics/EPIC-0003-headless-runtime-engine-and-condition-system.md`
-- Related feature PRD(s): `docs/features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md`
-- Related architecture docs: `docs/architecture/hexagonal-feature-slice-architecture.md`

@@ -1,9 +1,10 @@
-| Field                | Value               |
-| -------------------- | ------------------- |
-| **Type**             | Epic                |
-| **Epic ID**          | EPIC-0003           |
-| **Status**           | Completed           |
-| **Last synced**      | 2026-04-15          |
+| Field                                        | Value |
+| -------------------------------------------- | ----- |
+| **Status**                                   | Completed |
+| **Product and Architecture Docs**            | [product-roadmap](../product/product-roadmap.md)<br>[product-strategy](../product/product-strategy.md)<br>[hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
+| **Related Epics and Cross-PRD Dependencies** | [EPIC-0002-story-package-contract-and-internal-publishing-pipeline](../epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md)<br>[FEAT-0005-story-publish-pipeline-and-published-catalog-availability](../features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
+| **Related ADRs**                             | [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)<br>[ADR-0003-traversal-facts-replace-named-condition-registry](../adrs/ADR-0003-traversal-facts-replace-named-condition-registry.md) |
+| **Feature Breakdown**                        | [FEAT-0006-runtime-state-model-and-engine-public-surface](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)<br>[FEAT-0007-block-registry-and-action-executor](../features/FEAT-0007-block-registry-and-action-executor.md)<br>[FEAT-0008-condition-registry-and-graph-traversal-semantics](../features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md) |
 
 # EPIC-0003 - Headless Runtime Engine and Condition System
 
@@ -43,36 +44,12 @@ The architecture makes the boundary explicit. The engine owns runtime contracts 
 - Condition evaluation and graph traversal semantics are explicit enough to support branching story progression and role-based paths.
 - The engine public API is narrow and stable enough that later route handlers and mobile clients can depend on it as the single source of truth for gameplay execution.
 
-## Dependencies
-
-### Product and Architecture Docs
-
-- [product-roadmap](../product/product-roadmap.md)
-- [product-strategy](../product/product-strategy.md)
-- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
-
-### Related Epics and Cross-PRD Dependencies
-
-- [EPIC-0002-story-package-contract-and-internal-publishing-pipeline](../epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md)
-- [FEAT-0005-story-publish-pipeline-and-published-catalog-availability](../features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md)
-
-### Related ADRs
-
-- [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)
-- [ADR-0003-traversal-facts-replace-named-condition-registry](../adrs/ADR-0003-traversal-facts-replace-named-condition-registry.md)
-
 ## Risks and Mitigations
 
 - Risk: runtime semantics blur with session persistence or multiplayer coordination concerns. Mitigation: keep this epic focused on headless execution contracts and defer save/sync orchestration to `EPIC-0004`.
 - Risk: API or mobile layers reintroduce gameplay logic outside the engine. Mitigation: define the engine public surface and runtime semantics as the only execution authority for story progression.
 - Risk: story package contract assumptions from `EPIC-0002` get reopened during runtime implementation. Mitigation: treat published `StoryPackage` artifacts as the fixed input boundary and evolve runtime behavior around that contract.
 - Risk: runtime APIs overfit to one host or storage strategy. Mitigation: keep ports and runtime inputs infrastructure-neutral so the same engine surface can run in mobile or API hosts while durable persistence remains deferred to `EPIC-0004`.
-
-## Feature Breakdown
-
-- [FEAT-0006-runtime-state-model-and-engine-public-surface](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)
-- [FEAT-0007-block-registry-and-action-executor](../features/FEAT-0007-block-registry-and-action-executor.md)
-- [FEAT-0008-condition-registry-and-graph-traversal-semantics](../features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)
 
 ## Milestones and Sequencing
 

@@ -1,15 +1,13 @@
-| Field           | Value               |
-| --------------- | ------------------- |
-| **Type**        | ADR                 |
-| **Date**        | 2026-04-15          |
-| **Deciders**    | product-engineering |
-| **Last synced** | 2026-04-15          |
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Accepted |
+| **Date**                      | 2026-04-15 |
+| **Deciders**                  | product-engineering |
+| **Related Epics**             | [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md) |
+| **Related Feature PRDs**      | [FEAT-0006-runtime-state-model-and-engine-public-surface](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)<br>[FEAT-0007-block-registry-and-action-executor](../features/FEAT-0007-block-registry-and-action-executor.md) |
+| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
 
 # ADR-0002 - Headless Engine Runtime Boundary
-
-## Status
-
-Accepted
 
 ## Context
 
@@ -79,9 +77,3 @@ Within that boundary, block definitions stay pure and block-local. The executor 
 - Keep adapter-owned session aggregates distinct from engine `SessionState`; later session persistence should reconstruct engine state rather than store transport-shaped runtime blobs as the primary source of truth.
 - Treat changes to public runtime entrypoints, `SessionState`, `RuntimeFrame`, executor ownership, or action-envelope semantics as ADR-level changes.
 - Keep FEAT-0008 traversal semantics within this runtime boundary rather than creating a second gameplay authority.
-
-## References
-
-- Related epic(s): `docs/epics/EPIC-0003-headless-runtime-engine-and-condition-system.md`
-- Related feature PRD(s): `docs/features/FEAT-0006-runtime-state-model-and-engine-public-surface.md`, `docs/features/FEAT-0007-block-registry-and-action-executor.md`
-- Related architecture docs: `docs/architecture/hexagonal-feature-slice-architecture.md`

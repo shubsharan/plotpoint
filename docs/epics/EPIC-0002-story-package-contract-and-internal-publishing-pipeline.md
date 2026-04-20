@@ -1,11 +1,10 @@
-
-| Field                | Value               |
-| -------------------- | ------------------- |
-| **Type**             | Epic                |
-| **Epic ID**          | EPIC-0002           |
-| **Status**           | Completed           |
-| **Last synced**      | 2026-03-30          |
-
+| Field                                        | Value |
+| -------------------------------------------- | ----- |
+| **Status**                                   | Completed |
+| **Product and Architecture Docs**            | [product-roadmap](../product/product-roadmap.md)<br>[product-strategy](../product/product-strategy.md)<br>[hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
+| **Related Epics and Cross-PRD Dependencies** | [FEAT-0001-monorepo-and-shared-config-finalization](../features/FEAT-0001-monorepo-and-shared-config-finalization.md) |
+| **Related ADRs**                             | [ADR-0001-story-package-object-storage-links](../adrs/ADR-0001-story-package-object-storage-links.md) |
+| **Feature Breakdown**                        | [FEAT-0003-story-package-schema-and-validation-contract](../features/FEAT-0003-story-package-schema-and-validation-contract.md)<br>[FEAT-0004-story-draft-storage-and-internal-story-crud-api](../features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)<br>[FEAT-0005-story-publish-pipeline-and-published-catalog-availability](../features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
 
 # EPIC-0002 - Story Package Contract and Internal Publishing Pipeline
 
@@ -46,34 +45,12 @@ Story package payload persistence uses object storage pointers in relational tab
 - The story CRUD and publish surfaces are clear enough to support downstream feature PRDs and implementation without reopening core contract questions.
 - One curated story can move through the intended internal publish flow and become available to later MVP browse and play surfaces.
 
-## Dependencies
-
-### Product and Architecture Docs
-
-- [product-roadmap](../product/product-roadmap.md)
-- [product-strategy](../product/product-strategy.md)
-- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
-
-### Related Epics and Cross-PRD Dependencies
-
-- [FEAT-0001-monorepo-and-shared-config-finalization](../features/FEAT-0001-monorepo-and-shared-config-finalization.md)
-
-### Related ADRs
-
-- [ADR-0001-story-package-object-storage-links](../adrs/ADR-0001-story-package-object-storage-links.md)
-
 ## Risks and Mitigations
 
 - Risk: the story package contract over-optimizes for a future open creator ecosystem instead of the current internal workflow. Mitigation: scope this epic to internal JSON authoring and curated releases only.
 - Risk: publishing concerns leak into engine or mobile ownership boundaries. Mitigation: keep publishing orchestration in API/db adapters and preserve the architecture boundary where mobile and API depend on engine while API owns db wiring.
 - Risk: published story package compatibility drifts from engine versioning. Mitigation: treat engine major version stamping and migration compatibility as part of the publish contract, not an afterthought.
 - Risk: docs claim implementation details that are not yet present in the scaffold repo. Mitigation: describe this epic as the target contract and pipeline to implement next, grounded only in routes and boundaries already established by the architecture doc.
-
-## Feature Breakdown
-
-- [FEAT-0003-story-package-schema-and-validation-contract](../features/FEAT-0003-story-package-schema-and-validation-contract.md)
-- [FEAT-0004-story-draft-storage-and-internal-story-crud-api](../features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)
-- [FEAT-0005-story-publish-pipeline-and-published-catalog-availability](../features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md)
 
 ## Milestones and Sequencing
 

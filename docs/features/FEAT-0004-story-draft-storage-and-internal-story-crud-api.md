@@ -1,11 +1,10 @@
-| Field           | Value               |
-| --------------- | ------------------- |
-| **Type**        | PRD                 |
-| **Feature ID**  | FEAT-0004           |
-| **Status**      | Completed           |
-| **Epic**        | EPIC-0002           |
-| **Domains**     | API, Data Model     |
-| **Last synced** | 2026-03-25          |
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Completed |
+| **Parent Epic**               | [EPIC-0002-story-package-contract-and-internal-publishing-pipeline](../epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md) |
+| **Related Feature PRDs**      | [FEAT-0003-story-package-schema-and-validation-contract](../features/FEAT-0003-story-package-schema-and-validation-contract.md)<br>[FEAT-0005-story-publish-pipeline-and-published-catalog-availability](../features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
+| **Related ADRs**              | [ADR-0001-story-package-object-storage-links](../adrs/ADR-0001-story-package-object-storage-links.md) |
+| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
 
 # FEAT-0004 - Story Draft Storage and Internal Story CRUD API
 
@@ -18,25 +17,6 @@ Provide the internal storage model and CRUD API surfaces needed to create, updat
 Once FEAT-0003 defines the engine-owned story package contract, Plotpoint needs a thin vertical slice that stores draft story content and makes it manageable through the API. The architecture already reserves story route slices for `list-stories`, `get-story`, `create-story`, `replace-story`, `patch-story`, and `delete-story`, with the `db` package owning story persistence plus intentional CRUD read/write shapes, while API routes stay focused on HTTP request validation and error contracts.
 
 This feature stays on the draft side of the workflow. It gives internal creators and operators a stable content-management surface without taking on publish, runtime, or player-facing catalog behavior yet.
-
-## Related Docs
-
-### Parent Epic
-
-- [EPIC-0002-story-package-contract-and-internal-publishing-pipeline](../epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md)
-
-### Related Feature PRDs
-
-- [FEAT-0003-story-package-schema-and-validation-contract](../features/FEAT-0003-story-package-schema-and-validation-contract.md)
-- [FEAT-0005-story-publish-pipeline-and-published-catalog-availability](../features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md)
-
-### Related ADRs
-
-- [ADR-0001-story-package-object-storage-links](../adrs/ADR-0001-story-package-object-storage-links.md)
-
-### Related Architecture Docs
-
-- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
 
 ## Scope
 

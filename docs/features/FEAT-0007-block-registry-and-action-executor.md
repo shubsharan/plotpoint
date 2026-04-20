@@ -1,11 +1,10 @@
-| Field           | Value       |
-| --------------- | ----------- |
-| **Type**        | PRD         |
-| **Feature ID**  | FEAT-0007   |
-| **Status**      | Completed   |
-| **Epic**        | EPIC-0003   |
-| **Domains**     | Engine      |
-| **Last synced** | 2026-04-15  |
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Completed |
+| **Parent Epic**               | [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md) |
+| **Related Feature PRDs**      | [FEAT-0006-runtime-state-model-and-engine-public-surface](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)<br>[FEAT-0008-condition-registry-and-graph-traversal-semantics](../features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md) |
+| **Related ADRs**              | [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md) |
+| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
 
 # FEAT-0007 - Block Registry and Action Executor
 
@@ -18,25 +17,6 @@ Define and implement the engine-owned block registry plus deterministic block ex
 FEAT-0006 established runtime state shape and engine entrypoints (`startSession`, `loadSession`, `submitAction`, `traverse`) but intentionally did not define concrete block execution semantics. FEAT-0007 now owns the block-interaction half of that runtime surface.
 
 The architecture baseline remains: block definitions own pure per-block logic, while the executor owns orchestration (block resolution, validation sequence, state bucket selection, and runtime error mapping). Execution remains engine-only and host-agnostic.
-
-## Related Docs
-
-### Parent Epic
-
-- [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)
-
-### Related Feature PRDs
-
-- [FEAT-0006-runtime-state-model-and-engine-public-surface](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)
-- [FEAT-0008-condition-registry-and-graph-traversal-semantics](../features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)
-
-### Related ADRs
-
-- [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)
-
-### Related Architecture Docs
-
-- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
 
 ## Scope
 

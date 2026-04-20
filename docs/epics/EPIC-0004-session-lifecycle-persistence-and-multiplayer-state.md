@@ -1,9 +1,10 @@
-| Field           | Value      |
-| --------------- | ---------- |
-| **Type**        | Epic       |
-| **Epic ID**     | EPIC-0004  |
-| **Status**      | Planned    |
-| **Last synced** | 2026-04-15 |
+| Field                                        | Value |
+| -------------------------------------------- | ----- |
+| **Status**                                   | Planned |
+| **Product and Architecture Docs**            | [product-roadmap](../product/product-roadmap.md)<br>[product-strategy](../product/product-strategy.md)<br>[hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
+| **Related Epics and Cross-PRD Dependencies** | [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md) |
+| **Related ADRs**                             | None. |
+| **Feature Breakdown**                        | [FEAT-0009-session-records-membership-and-pinned-resume-contract](../features/FEAT-0009-session-records-membership-and-pinned-resume-contract.md) |
 
 # EPIC-0004 - Session Lifecycle, Persistence, and Multiplayer State
 
@@ -42,22 +43,6 @@ EPIC-0003 completed the engine-owned execution contracts for `StoryPackage` load
 - Ownership of player-scoped versus shared session state is explicit enough for later feature PRDs to implement without reopening core boundaries.
 - Session resume works against pinned published package versions and fails explicitly when compatibility requirements are not met.
 
-## Dependencies
-
-### Product and Architecture Docs
-
-- [product-roadmap](../product/product-roadmap.md)
-- [product-strategy](../product/product-strategy.md)
-- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
-
-### Related Epics and Cross-PRD Dependencies
-
-- [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)
-
-### Related ADRs
-
-- None.
-
 ## Risks and Mitigations
 
 - Risk: session orchestration starts to reimplement gameplay logic outside the engine. Mitigation: keep the engine as the sole execution authority and restrict this epic to lifecycle, persistence, and coordination responsibilities.
@@ -74,17 +59,14 @@ EPIC-0003 completed the engine-owned execution contracts for `StoryPackage` load
 - Sessions pin `storyPackageVersionId` at start and always resume against that pinned version unless a later explicit upgrade action is defined and succeeds compatibility checks.
 - Co-op remains local-first and selective-sync: players may progress independently offline, while shared-state touches and multiplayer checkpoints trigger session-layer coordination.
 
-## Feature Breakdown
-
-- [FEAT-0009-session-records-membership-and-pinned-resume-contract](../features/FEAT-0009-session-records-membership-and-pinned-resume-contract.md)
-- Planned follow-up feature: checkpoint and shared-state sync orchestration on top of the FEAT-0009 session boundary.
-
 ## Milestones and Sequencing
 
 1. Lock the session/persistence boundary and ownership of player-scoped versus shared state around the existing engine surface.
 2. Define the session lifecycle and persistence slices needed for start, join, load, resume, and completion behavior.
 3. Define multiplayer sync and resume orchestration on top of the completed engine contracts.
 4. Hand off player-facing rendering and gameplay UX integration to `EPIC-0005`.
+
+The next planned follow-up feature after `FEAT-0009` is checkpoint and shared-state sync orchestration on top of that session boundary.
 
 ## Open Questions
 

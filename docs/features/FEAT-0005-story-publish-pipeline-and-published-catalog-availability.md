@@ -1,13 +1,10 @@
-
-| Field           | Value                   |
-| --------------- | ----------------------- |
-| **Type**        | PRD                     |
-| **Feature ID**  | FEAT-0005               |
-| **Status**      | Completed               |
-| **Epic**        | EPIC-0002               |
-| **Domains**     | API, Data Model, Engine |
-| **Last synced** | 2026-03-30              |
-
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Completed |
+| **Parent Epic**               | [EPIC-0002-story-package-contract-and-internal-publishing-pipeline](../epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md) |
+| **Related Feature PRDs**      | [FEAT-0003-story-package-schema-and-validation-contract](../features/FEAT-0003-story-package-schema-and-validation-contract.md)<br>[FEAT-0004-story-draft-storage-and-internal-story-crud-api](../features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md) |
+| **Related ADRs**              | [ADR-0001-story-package-object-storage-links](../adrs/ADR-0001-story-package-object-storage-links.md) |
+| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
 
 # FEAT-0005 - Story Publish Pipeline and Published Catalog Availability
 
@@ -20,25 +17,6 @@ Turn validated draft stories into immutable published story packages and make th
 The product strategy defines publishing as the step that validates structure, optimizes story packages, and makes stories available to players inside the single Plotpoint app. The architecture already reserves `publish-story` as a route slice and states that published story packages are stamped with the engine's major version for migration compatibility.
 
 This feature closes EPIC-0002 by making publish a real transition instead of an implied future step. Draft content stays mutable for internal authors, while published content becomes a stable artifact that later runtime and mobile features can browse and load.
-
-## Related Docs
-
-### Parent Epic
-
-- [EPIC-0002-story-package-contract-and-internal-publishing-pipeline](../epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md)
-
-### Related Feature PRDs
-
-- [FEAT-0003-story-package-schema-and-validation-contract](../features/FEAT-0003-story-package-schema-and-validation-contract.md)
-- [FEAT-0004-story-draft-storage-and-internal-story-crud-api](../features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)
-
-### Related ADRs
-
-- [ADR-0001-story-package-object-storage-links](../adrs/ADR-0001-story-package-object-storage-links.md)
-
-### Related Architecture Docs
-
-- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
 
 ## Scope
 

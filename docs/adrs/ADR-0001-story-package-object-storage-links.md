@@ -1,9 +1,11 @@
-| Field           | Value               |
-| --------------- | ------------------- |
-| **Type**        | ADR                 |
-| **Status**      | Accepted            |
-| **Owner**       | product-engineering |
-| **Last synced** | 2026-03-24          |
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Accepted |
+| **Date**                      | 2026-03-24 |
+| **Deciders**                  | product-engineering |
+| **Related Epics**             | [EPIC-0002-story-package-contract-and-internal-publishing-pipeline](../epics/EPIC-0002-story-package-contract-and-internal-publishing-pipeline.md) |
+| **Related Feature PRDs**      | [FEAT-0004-story-draft-storage-and-internal-story-crud-api](../features/FEAT-0004-story-draft-storage-and-internal-story-crud-api.md)<br>[FEAT-0005-story-publish-pipeline-and-published-catalog-availability](../features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md) |
+| **Related Architecture Docs** | None. |
 
 # ADR-0001 - Story Package Object Storage Links
 

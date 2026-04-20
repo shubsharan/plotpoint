@@ -1,13 +1,10 @@
-
-| Field           | Value      |
-| --------------- | ---------- |
-| **Type**        | PRD        |
-| **Feature ID**  | FEAT-0006  |
-| **Status**      | Completed  |
-| **Epic**        | EPIC-0003  |
-| **Domains**     | Engine     |
-| **Last synced** | 2026-04-15 |
-
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Completed |
+| **Parent Epic**               | [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md) |
+| **Related Feature PRDs**      | [FEAT-0007-block-registry-and-action-executor](../features/FEAT-0007-block-registry-and-action-executor.md)<br>[FEAT-0008-condition-registry-and-graph-traversal-semantics](../features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md) |
+| **Related ADRs**              | [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md) |
+| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
 
 # FEAT-0006 - Runtime State Model and Engine Public Surface
 
@@ -20,26 +17,6 @@ Define the engine-owned runtime snapshot model and narrow public API that turn p
 EPIC-0003 starts by locking the engine surface that every later runtime consumer depends on. FEAT-0005 now guarantees immutable published story package versions plus a current pointer, so the next step is to define how the engine pins runtime state to a package version, loads that package, and exposes deterministic entrypoints for session startup and action execution.
 
 The architecture already sketches the target shape: `createEngine` owns public runtime methods, runtime execution stays inside `packages/engine`, and the engine must remain host-agnostic so both mobile and API adapters can depend on the same gameplay authority. This feature turns those implied examples into an explicit engine contract and deliberately stops short of durable save orchestration, sync timing, or multiplayer authority policy.
-
-## Related Docs
-
-### Parent Epic
-
-- [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md)
-
-### Related Feature PRDs
-
-- [FEAT-0005-story-publish-pipeline-and-published-catalog-availability](../features/FEAT-0005-story-publish-pipeline-and-published-catalog-availability.md)
-- [FEAT-0007-block-registry-and-action-executor](../features/FEAT-0007-block-registry-and-action-executor.md)
-- [FEAT-0008-condition-registry-and-graph-traversal-semantics](../features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)
-
-### Related ADRs
-
-- [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)
-
-### Related Architecture Docs
-
-- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
 
 ## Scope
 

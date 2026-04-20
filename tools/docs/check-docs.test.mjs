@@ -69,12 +69,14 @@ function createBaseDocsFixture() {
   write('docs/architecture/test-architecture.md', '# Architecture\n', cwd);
   write(
     'docs/adrs/ADR-0001-test-decision.md',
-    `| Field           | Value               |
-| --------------- | ------------------- |
-| **Type**        | ADR                 |
-| **Date**        | 2026-04-15          |
-| **Deciders**    | product-engineering |
-| **Last synced** | 2026-04-15          |
+    `| Field                           | Value |
+| ------------------------------- | ----- |
+| **Status**                      | Accepted |
+| **Date**                        | 2026-04-15 |
+| **Deciders**                    | product-engineering |
+| **Related Epics**               | [EPIC-0001-test-epic](../epics/EPIC-0001-test-epic.md) |
+| **Related Feature PRDs**        | [FEAT-0001-test-feature](../features/FEAT-0001-test-feature.md) |
+| **Related Architecture Docs**   | [test-architecture](../architecture/test-architecture.md) |
 
 # ADR-0001 - Test Decision
 `,
@@ -84,12 +86,13 @@ function createBaseDocsFixture() {
 
   write(
     'docs/epics/EPIC-0001-test-epic.md',
-    `| Field           | Value      |
-| --------------- | ---------- |
-| **Type**        | Epic       |
-| **Epic ID**     | EPIC-0001  |
-| **Status**      | Planned    |
-| **Last synced** | 2026-04-15 |
+    `| Field                                        | Value |
+| -------------------------------------------- | ----- |
+| **Status**                                   | Planned |
+| **Product and Architecture Docs**            | [product-roadmap](../product/product-roadmap.md)<br>[product-strategy](../product/product-strategy.md)<br>[test-architecture](../architecture/test-architecture.md) |
+| **Related Epics and Cross-PRD Dependencies** | None. |
+| **Related ADRs**                             | [ADR-0001-test-decision](../adrs/ADR-0001-test-decision.md) |
+| **Feature Breakdown**                        | [FEAT-0001-test-feature](../features/FEAT-0001-test-feature.md) |
 
 # EPIC-0001 - Test Epic
 
@@ -115,29 +118,9 @@ Test context.
 
 - Works
 
-## Dependencies
-
-### Product and Architecture Docs
-
-- [product-roadmap](../product/product-roadmap.md)
-- [product-strategy](../product/product-strategy.md)
-- [test-architecture](../architecture/test-architecture.md)
-
-### Related Epics and Cross-PRD Dependencies
-
-- None.
-
-### Related ADRs
-
-- [ADR-0001-test-decision](../adrs/ADR-0001-test-decision.md)
-
 ## Risks and Mitigations
 
 - Risk and mitigation
-
-## Feature Breakdown
-
-- [FEAT-0001-test-feature](../features/FEAT-0001-test-feature.md)
 
 ## Milestones and Sequencing
 
@@ -152,14 +135,13 @@ Test context.
 
   write(
     'docs/features/FEAT-0001-test-feature.md',
-    `| Field           | Value      |
-| --------------- | ---------- |
-| **Type**        | PRD        |
-| **Feature ID**  | FEAT-0001  |
-| **Status**      | Not Started |
-| **Epic**        | EPIC-0001  |
-| **Domains**     | Docs       |
-| **Last synced** | 2026-04-15 |
+    `| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Not Started |
+| **Parent Epic**               | [EPIC-0001-test-epic](../epics/EPIC-0001-test-epic.md) |
+| **Related Feature PRDs**      | None. |
+| **Related ADRs**              | [ADR-0001-test-decision](../adrs/ADR-0001-test-decision.md) |
+| **Related Architecture Docs** | [test-architecture](../architecture/test-architecture.md) |
 
 # FEAT-0001 - Test Feature
 
@@ -170,24 +152,6 @@ Test feature.
 ## Background and Context
 
 Test context.
-
-## Related Docs
-
-### Parent Epic
-
-- [EPIC-0001-test-epic](../epics/EPIC-0001-test-epic.md)
-
-### Related Feature PRDs
-
-- None.
-
-### Related ADRs
-
-- [ADR-0001-test-decision](../adrs/ADR-0001-test-decision.md)
-
-### Related Architecture Docs
-
-- [test-architecture](../architecture/test-architecture.md)
 
 ## Scope
 
@@ -249,69 +213,54 @@ function runDocsCheckFailure(cwd) {
   }
 }
 
-test('docs:check passes for valid related-doc contracts', () => {
+test('docs:check passes for valid metadata-table contracts', () => {
   const cwd = createBaseDocsFixture();
   assert.doesNotThrow(() => runDocsCheck(cwd));
 });
 
-test('docs:check fails when a feature PRD is missing the related docs section', () => {
+test('docs:check fails when a feature PRD is missing the parent epic row', () => {
   const cwd = createBaseDocsFixture();
   write(
     'docs/features/FEAT-0001-test-feature.md',
     readFileSync(path.join(cwd, 'docs/features/FEAT-0001-test-feature.md'), 'utf8').replace(
-      /## Related Docs[\s\S]*?## Scope/,
-      '## Scope',
-    ),
-    cwd,
-  );
-
-  const stderr = runDocsCheckFailure(cwd);
-  assert.match(stderr, /missing "## Related Docs" section/);
-});
-
-test('docs:check fails when a feature PRD omits the ADR declaration', () => {
-  const cwd = createBaseDocsFixture();
-  write(
-    'docs/features/FEAT-0001-test-feature.md',
-    readFileSync(path.join(cwd, 'docs/features/FEAT-0001-test-feature.md'), 'utf8').replace(
-      /### Related ADRs[\s\S]*?### Related Architecture Docs/,
-      '### Related Architecture Docs',
-    ),
-    cwd,
-  );
-
-  const stderr = runDocsCheckFailure(cwd);
-  assert.match(stderr, /missing "### Related ADRs" subsection/);
-});
-
-test('docs:check fails when parent epic is plain text instead of a link', () => {
-  const cwd = createBaseDocsFixture();
-  write(
-    'docs/features/FEAT-0001-test-feature.md',
-    readFileSync(path.join(cwd, 'docs/features/FEAT-0001-test-feature.md'), 'utf8').replace(
-      '- [EPIC-0001-test-epic](../epics/EPIC-0001-test-epic.md)',
-      '- EPIC-0001-test-epic',
-    ),
-    cwd,
-  );
-
-  const stderr = runDocsCheckFailure(cwd);
-  assert.match(stderr, /"Parent Epic" must contain linked docs/);
-});
-
-test('docs:check fails when a required group is empty without None', () => {
-  const cwd = createBaseDocsFixture();
-  write(
-    'docs/features/FEAT-0001-test-feature.md',
-    readFileSync(path.join(cwd, 'docs/features/FEAT-0001-test-feature.md'), 'utf8').replace(
-      '- None.',
+      /^\| \*\*Parent Epic\*\*.*\n/m,
       '',
     ),
     cwd,
   );
 
   const stderr = runDocsCheckFailure(cwd);
-  assert.match(stderr, /"Related Feature PRDs" must contain linked docs or '- None\.'/);
+  assert.match(stderr, /missing table field \*\*Parent Epic\*\*/);
+});
+
+test('docs:check fails when a relationship row mixes links with None', () => {
+  const cwd = createBaseDocsFixture();
+  write(
+    'docs/features/FEAT-0001-test-feature.md',
+    readFileSync(path.join(cwd, 'docs/features/FEAT-0001-test-feature.md'), 'utf8').replace(
+      '| **Related Feature PRDs**      | None. |',
+      '| **Related Feature PRDs**      | None.<br>[FEAT-9999-missing](../features/FEAT-9999-missing.md) |',
+    ),
+    cwd,
+  );
+
+  const stderr = runDocsCheckFailure(cwd);
+  assert.match(stderr, /"Related Feature PRDs" cannot mix doc links with 'None\.'/);
+});
+
+test('docs:check fails when a parent epic cell is plain text instead of a link', () => {
+  const cwd = createBaseDocsFixture();
+  write(
+    'docs/features/FEAT-0001-test-feature.md',
+    readFileSync(path.join(cwd, 'docs/features/FEAT-0001-test-feature.md'), 'utf8').replace(
+      /\[EPIC-0001-test-epic\]\(\.\.\/epics\/EPIC-0001-test-epic\.md\)/,
+      'EPIC-0001-test-epic',
+    ),
+    cwd,
+  );
+
+  const stderr = runDocsCheckFailure(cwd);
+  assert.match(stderr, /"Parent Epic" must contain linked docs/);
 });
 
 test('docs:check fails when a required related-doc link target is missing', () => {
@@ -329,7 +278,94 @@ test('docs:check fails when a required related-doc link target is missing', () =
   assert.match(stderr, /links missing doc 'adrs\/ADR-missing\.md'/);
 });
 
-test('docs:check allows an epic with no feature PRDs when Feature Breakdown uses None', () => {
+test('docs:check parses multi-link table cells', () => {
+  const cwd = createBaseDocsFixture();
+  write(
+    'docs/features/FEAT-0002-peer-feature.md',
+    `| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Not Started |
+| **Parent Epic**               | [EPIC-0001-test-epic](../epics/EPIC-0001-test-epic.md) |
+| **Related Feature PRDs**      | [FEAT-0001-test-feature](../features/FEAT-0001-test-feature.md) |
+| **Related ADRs**              | None. |
+| **Related Architecture Docs** | None. |
+
+# FEAT-0002 - Peer Feature
+
+## Goal
+
+Peer feature.
+
+## Background and Context
+
+Peer context.
+
+## Scope
+
+### In scope
+
+- Item
+
+### Out of scope
+
+- Item
+
+## Requirements
+
+1. Requirement
+
+## Architecture and Technical Notes
+
+- Note
+
+## Acceptance Criteria
+
+- [ ] Done
+
+## Test Plan
+
+- Tests
+
+## Rollout and Observability
+
+- None.
+
+## Risks and Mitigations
+
+- Risk and mitigation
+
+## Open Questions
+
+- None.
+`,
+    cwd,
+  );
+  write(
+    'docs/index.md',
+    readFileSync(path.join(cwd, 'docs/index.md'), 'utf8').replace(
+      '| FEAT-0001 | EPIC-0001 | Not Started | [features/FEAT-0001-test-feature.md](features/FEAT-0001-test-feature.md) |',
+      `| FEAT-0001 | EPIC-0001 | Not Started | [features/FEAT-0001-test-feature.md](features/FEAT-0001-test-feature.md) |
+| FEAT-0002 | EPIC-0001 | Not Started | [features/FEAT-0002-peer-feature.md](features/FEAT-0002-peer-feature.md) |`,
+    ).replace(
+      '- [features/FEAT-0001-test-feature.md](features/FEAT-0001-test-feature.md)',
+      `- [features/FEAT-0001-test-feature.md](features/FEAT-0001-test-feature.md)
+- [features/FEAT-0002-peer-feature.md](features/FEAT-0002-peer-feature.md)`,
+    ),
+    cwd,
+  );
+  write(
+    'docs/features/FEAT-0001-test-feature.md',
+    readFileSync(path.join(cwd, 'docs/features/FEAT-0001-test-feature.md'), 'utf8').replace(
+      '| **Related Feature PRDs**      | None. |',
+      '| **Related Feature PRDs**      | [FEAT-0002-peer-feature](../features/FEAT-0002-peer-feature.md)<br>[FEAT-0001-test-feature](../features/FEAT-0001-test-feature.md) |',
+    ),
+    cwd,
+  );
+
+  assert.doesNotThrow(() => runDocsCheck(cwd));
+});
+
+test('docs:check allows an epic with no feature PRDs when feature breakdown uses None', () => {
   const cwd = createBaseDocsFixture();
   write(
     'docs/index.md',
@@ -376,8 +412,16 @@ test('docs:check allows an epic with no feature PRDs when Feature Breakdown uses
   write(
     'docs/epics/EPIC-0001-test-epic.md',
     readFileSync(path.join(cwd, 'docs/epics/EPIC-0001-test-epic.md'), 'utf8').replace(
-      '- [FEAT-0001-test-feature](../features/FEAT-0001-test-feature.md)',
-      '- None.',
+      /\| \*\*Feature Breakdown\*\*.*\n/,
+      '| **Feature Breakdown**                        | None. |\n',
+    ),
+    cwd,
+  );
+  write(
+    'docs/adrs/ADR-0001-test-decision.md',
+    readFileSync(path.join(cwd, 'docs/adrs/ADR-0001-test-decision.md'), 'utf8').replace(
+      /\| \*\*Related Feature PRDs\*\*.*\n/,
+      '| **Related Feature PRDs**        | None. |\n',
     ),
     cwd,
   );
@@ -385,4 +429,34 @@ test('docs:check allows an epic with no feature PRDs when Feature Breakdown uses
   rmSync(path.join(cwd, 'docs/features/FEAT-0001-test-feature.md'));
 
   assert.doesNotThrow(() => runDocsCheck(cwd));
+});
+
+test('docs:check fails when an epic feature breakdown links a non-feature doc', () => {
+  const cwd = createBaseDocsFixture();
+  write(
+    'docs/epics/EPIC-0001-test-epic.md',
+    readFileSync(path.join(cwd, 'docs/epics/EPIC-0001-test-epic.md'), 'utf8').replace(
+      '../features/FEAT-0001-test-feature.md',
+      '../adrs/ADR-0001-test-decision.md',
+    ),
+    cwd,
+  );
+
+  const stderr = runDocsCheckFailure(cwd);
+  assert.match(stderr, /"Feature Breakdown" contains invalid link 'adrs\/ADR-0001-test-decision\.md'/);
+});
+
+test('docs:check fails when an ADR is missing a required metadata row', () => {
+  const cwd = createBaseDocsFixture();
+  write(
+    'docs/adrs/ADR-0001-test-decision.md',
+    readFileSync(path.join(cwd, 'docs/adrs/ADR-0001-test-decision.md'), 'utf8').replace(
+      /^\| \*\*Date\*\*.*\n/m,
+      '',
+    ),
+    cwd,
+  );
+
+  const stderr = runDocsCheckFailure(cwd);
+  assert.match(stderr, /missing table field \*\*Date\*\*/);
 });

@@ -1,12 +1,10 @@
-| Field           | Value                                                                                   |
-| --------------- | --------------------------------------------------------------------------------------- |
-| **Source**      | [Monorepo Scaffold + Contracts](https://www.notion.so/321997b3842e81929d84dc1272a1ea51) |
-| **Type**        | PRD                                                                                     |
-| **Feature ID**  | FEAT-0001                                                                               |
-| **Status**      | Completed                                                                               |
-| **Epic**        | EPIC-0001                                                                               |
-| **Domains**     | Infrastructure, Engine, API, Data Model                                                 |
-| **Last synced** | 2026-03-30                                                                              |
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Completed |
+| **Parent Epic**               | [EPIC-0001-platform-and-planning-foundation](../epics/EPIC-0001-platform-and-planning-foundation.md) |
+| **Related Feature PRDs**      | [FEAT-0002-spec-driven-delivery-automation](../features/FEAT-0002-spec-driven-delivery-automation.md) |
+| **Related ADRs**              | None. |
+| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
 
 # FEAT-0001 - Monorepo and Shared Config Finalization
 
@@ -19,24 +17,6 @@ Close the remaining monorepo foundation gaps so downstream MVP work starts from 
 Plotpoint already has a scaffold-stage monorepo, but EPIC-0001 still needs one foundation feature that codifies what "ready to build on" means. In this feature, "ready" means the repo shape, naming, shared config, and root workspace commands are clean and reliable before deeper runtime and mobile work begins.
 
 The scope stays intentionally narrow: this feature finalizes the platform foundation. It does not pre-build future story-runtime behavior that belongs to later epics.
-
-## Related Docs
-
-### Parent Epic
-
-- [EPIC-0001-platform-and-planning-foundation](../epics/EPIC-0001-platform-and-planning-foundation.md)
-
-### Related Feature PRDs
-
-- [FEAT-0002-spec-driven-delivery-automation](../features/FEAT-0002-spec-driven-delivery-automation.md)
-
-### Related ADRs
-
-- None.
-
-### Related Architecture Docs
-
-- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
 
 ## Scope
 

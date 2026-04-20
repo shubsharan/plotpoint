@@ -1,11 +1,10 @@
-| Field           | Value            |
-| --------------- | ---------------- |
-| **Type**        | PRD              |
-| **Feature ID**  | FEAT-XXXX        |
-| **Status**      | Not Started      |
-| **Epic**        | EPIC-XXXX        |
-| **Domains**     | DomainA, DomainB |
-| **Last synced** | YYYY-MM-DD       |
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Not Started |
+| **Parent Epic**               | [EPIC-XXXX-<epic-slug>](../epics/EPIC-XXXX-<epic-slug>.md) |
+| **Related Feature PRDs**      | None. |
+| **Related ADRs**              | None. |
+| **Related Architecture Docs** | None. |
 
 # FEAT-XXXX - <title>
 
@@ -16,27 +15,6 @@ What this feature delivers and why.
 ## Background and Context
 
 Relevant product and user context.
-
-## Related Docs
-
-### Parent Epic
-
-- [EPIC-XXXX-<epic-slug>](../epics/EPIC-XXXX-<epic-slug>.md)
-
-### Related Feature PRDs
-
-- [FEAT-XXXX-<feature-slug>](../features/FEAT-XXXX-<feature-slug>.md)
-- None.
-
-### Related ADRs
-
-- [ADR-XXXX-<decision-slug>](../adrs/ADR-XXXX-<decision-slug>.md)
-- None.
-
-### Related Architecture Docs
-
-- [<architecture-doc>](../architecture/<architecture-doc>.md)
-- None.
 
 ## Scope
 
@@ -55,8 +33,8 @@ Relevant product and user context.
 
 ## Architecture and Technical Notes
 
-- Use the links declared in `## Related Docs` as the planning contract
-- Key implementation notes
+- Use the metadata-table links as the planning contract.
+- Key implementation notes.
 
 ## Acceptance Criteria
 

@@ -9,7 +9,7 @@
 
 ## Purpose
 
-Provide a fast, repeatable guide for choosing the right doc type and linking planning artifacts correctly before implementation.
+Provide a fast, repeatable guide for choosing the right doc type and keeping Plotpoint's docs contract aligned with `pnpm docs:check`.
 
 ## Scope
 
@@ -52,17 +52,48 @@ This runbook covers authoring and maintaining roadmap, epic, architecture, featu
 
 - Epic docs use `EPIC-XXXX` IDs and filenames like `docs/epics/EPIC-0001-<slug>.md`.
 - Feature PRDs use `FEAT-XXXX` IDs and filenames like `docs/features/FEAT-0001-<slug>.md`.
+- ADRs use `ADR-XXXX` IDs and filenames like `docs/adrs/ADR-0001-<slug>.md`.
+- Scoped-doc IDs come from filenames; do not duplicate them in metadata rows.
 - Feature implementation branches use `FEAT-XXXX-<slug>`.
+
+## Metadata Table Contract
+
+- Each feature, epic, and ADR stores machine-checked metadata in the top markdown table.
+- Metadata rows are the only canonical source for related-doc links; do not duplicate those inventories in body sections.
+- Scalar state belongs in the table only when tooling actually reads it. For scoped docs, `Status` is the behavior-bearing scalar.
+- Relationship groups use inline Markdown links inside the value cell.
+- Multiple links in one cell use `<br>`.
+- Empty optional relationship groups use `None.` exactly.
+
+## Required Relationship Rows
+
+- Feature PRDs must include:
+  - `Status`
+  - `Parent Epic`
+  - `Related Feature PRDs`
+  - `Related ADRs`
+  - `Related Architecture Docs`
+- Epics must include:
+  - `Status`
+  - `Product and Architecture Docs`
+  - `Related Epics and Cross-PRD Dependencies`
+  - `Related ADRs`
+  - `Feature Breakdown`
+- ADRs must include:
+  - `Status`
+  - `Date`
+  - `Deciders`
+  - `Related Epics`
+  - `Related Feature PRDs`
+  - `Related Architecture Docs`
 
 ## Linking Rules
 
-- Each feature PRD declares a `## Related Docs` section.
-- Feature PRD `## Related Docs` includes exactly one linked parent epic.
-- Feature PRD `## Related Docs` includes related feature PRDs, related ADRs, and related architecture docs as markdown links or `- None.`.
-- Each epic `## Dependencies` section declares related epic/cross-PRD dependencies and related ADRs as markdown links or `- None.`.
-- Each epic `## Feature Breakdown` lists linked feature PRDs or `- None.` if no feature PRDs exist yet.
-- ADRs reference related epics/features and architecture docs.
-- Roadmap reflects current epic status at all times.
+- Feature `Parent Epic` contains exactly one epic link.
+- Feature optional relationship rows contain markdown links or `None.`.
+- Epic `Feature Breakdown` contains feature links or `None.`.
+- Epic `Product and Architecture Docs` may include `product/`, `architecture/`, or `runbooks/` links when those are the governing docs for the epic.
+- ADR relationship rows contain markdown links or `None.`.
 - `docs/index.md` lists every markdown file under `docs/` except `docs/index.md` itself.
 
 ## Implementation Gate
@@ -71,7 +102,7 @@ Before coding starts:
 
 - Feature PRD status is `In Progress`.
 - Feature PRD has acceptance criteria and test plan.
-- Feature PRD related-doc declarations are complete and use markdown links or `- None.`.
+- Feature metadata-table relationship rows are complete and valid.
 - Branch and draft PR are created from the feature PRD context.
 
 ## Status Hygiene
@@ -79,15 +110,16 @@ Before coding starts:
 - Update feature status during delivery: `Not Started -> In Progress -> In Review -> Completed`.
 - Allowed feature statuses: `Not Started`, `In Progress`, `In Review`, `Completed`, `Cancelled`.
 - Allowed epic statuses: `Planned`, `In Progress`, `Completed`, `Cancelled`.
+- ADR statuses should stay within `Proposed`, `Accepted`, `Deprecated`, or `Superseded by ADR-XXXX-<slug>`.
 - Update epic status as grouped features move forward, then sync `docs/index.md` in the same patch.
 - Keep roadmap strategic; avoid using it as a feature execution dashboard.
 
 ## Verification Checklist
 
 - [ ] New doc uses the correct template.
-- [ ] Metadata table is complete and current.
-- [ ] Links to related docs are present and valid.
-- [ ] PRD related-doc groups use markdown links or `- None.` exactly.
+- [ ] Metadata table contains all required rows for that doc type.
+- [ ] Relationship rows use markdown links, `<br>`, and `None.` exactly as required.
+- [ ] Body sections do not duplicate canonical related-doc inventories.
 - [ ] Status fields reflect real project state.
 - [ ] Feature PRD includes acceptance criteria and test plan.
 - [ ] `docs/index.md` rollup statuses match epic/feature doc statuses.

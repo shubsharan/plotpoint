@@ -1,9 +1,10 @@
-| Field                | Value               |
-| -------------------- | ------------------- |
-| **Type**             | Epic                |
-| **Epic ID**          | EPIC-0001           |
-| **Status**           | Completed           |
-| **Last synced**      | 2026-03-19          |
+| Field                                        | Value |
+| -------------------------------------------- | ----- |
+| **Status**                                   | Completed |
+| **Product and Architecture Docs**            | [product-roadmap](../product/product-roadmap.md)<br>[spec-driven-delivery-workflow](../runbooks/spec-driven-delivery-workflow.md)<br>[doc-authoring-quickstart](../runbooks/doc-authoring-quickstart.md) |
+| **Related Epics and Cross-PRD Dependencies** | None. |
+| **Related ADRs**                             | None. |
+| **Feature Breakdown**                        | [FEAT-0001-monorepo-and-shared-config-finalization](../features/FEAT-0001-monorepo-and-shared-config-finalization.md)<br>[FEAT-0002-spec-driven-delivery-automation](../features/FEAT-0002-spec-driven-delivery-automation.md) |
 
 # EPIC-0001 - Platform and Planning Foundation
 
@@ -38,32 +39,11 @@ EPIC-0001 delivered the foundation docs and monorepo cleanup needed to start rea
 - Future work stays in the roadmap until the team is ready to activate the next epic.
 - Monorepo build, test, typecheck, and lint surfaces are reliable enough for downstream work.
 
-## Dependencies
-
-### Product and Architecture Docs
-
-- [product-roadmap](../product/product-roadmap.md)
-- [spec-driven-delivery-workflow](../runbooks/spec-driven-delivery-workflow.md)
-- [doc-authoring-quickstart](../runbooks/doc-authoring-quickstart.md)
-
-### Related Epics and Cross-PRD Dependencies
-
-- None.
-
-### Related ADRs
-
-- None.
-
 ## Risks and Mitigations
 
 - Risk: the team creates docs that are too heavyweight to maintain. Mitigation: keep templates concise and tie every implementation branch to one feature PRD.
 - Risk: repo structure and workflow docs drift apart. Mitigation: update templates and AGENTS guidance together in the same change set.
 - Risk: workflow automation remains undone. Mitigation: defer it unless implementation pain makes it necessary later.
-
-## Feature Breakdown
-
-- [FEAT-0001-monorepo-and-shared-config-finalization](../features/FEAT-0001-monorepo-and-shared-config-finalization.md)
-- [FEAT-0002-spec-driven-delivery-automation](../features/FEAT-0002-spec-driven-delivery-automation.md) (Cancelled on 2026-03-19)
 
 ## Milestones and Sequencing
 

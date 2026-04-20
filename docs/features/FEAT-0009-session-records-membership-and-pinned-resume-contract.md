@@ -1,11 +1,10 @@
-| Field           | Value       |
-| --------------- | ----------- |
-| **Type**        | PRD         |
-| **Feature ID**  | FEAT-0009   |
-| **Status**      | Not Started |
-| **Epic**        | EPIC-0004   |
-| **Domains**     | API, DB, Engine |
-| **Last synced** | 2026-04-15  |
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Not Started |
+| **Parent Epic**               | [EPIC-0004-session-lifecycle-persistence-and-multiplayer-state](../epics/EPIC-0004-session-lifecycle-persistence-and-multiplayer-state.md) |
+| **Related Feature PRDs**      | [FEAT-0006-runtime-state-model-and-engine-public-surface](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)<br>[FEAT-0008-condition-registry-and-graph-traversal-semantics](../features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md) |
+| **Related ADRs**              | [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md) |
+| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
 
 # FEAT-0009 - Session Records, Membership, and Pinned Resume Contract
 
@@ -18,25 +17,6 @@ Define the first EPIC-0004 session boundary around the completed engine runtime 
 EPIC-0003 finished the headless runtime surface inside `packages/engine`, including sparse `SessionState`, deterministic block execution, and fact-based traversal. EPIC-0004 now needs the first adapter-owned session layer that can host those engine contracts across real co-op runs without duplicating gameplay authority.
 
 The product strategy calls for local-first co-op stories where players receive roles, progress independently when offline, and synchronize only when shared state or multiplayer checkpoints require coordination. This feature locks the durable session record model needed for that experience while intentionally stopping short of checkpoint barriers, realtime fanout, or shared-state conflict handling.
-
-## Related Docs
-
-### Parent Epic
-
-- [EPIC-0004-session-lifecycle-persistence-and-multiplayer-state](../epics/EPIC-0004-session-lifecycle-persistence-and-multiplayer-state.md)
-
-### Related Feature PRDs
-
-- [FEAT-0006-runtime-state-model-and-engine-public-surface](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)
-- [FEAT-0008-condition-registry-and-graph-traversal-semantics](../features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)
-
-### Related ADRs
-
-- [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md)
-
-### Related Architecture Docs
-
-- [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)
 
 ## Scope
 

@@ -1,15 +1,13 @@
-| Field           | Value      |
-| --------------- | ---------- |
-| **Type**        | ADR        |
-| **Date**        | YYYY-MM-DD |
-| **Deciders**    | Name, Name |
-| **Last synced** | YYYY-MM-DD |
+| Field                         | Value |
+| ----------------------------- | ----- |
+| **Status**                    | Proposed |
+| **Date**                      | YYYY-MM-DD |
+| **Deciders**                  | Name, Name |
+| **Related Epics**             | None. |
+| **Related Feature PRDs**      | None. |
+| **Related Architecture Docs** | None. |
 
 # ADR-XXXX - <short-title>
-
-## Status
-
-Proposed | Accepted | Deprecated | Superseded by ADR-XXXX-<slug>
 
 ## Context
 
@@ -44,9 +42,3 @@ Chosen option and rationale.
 ### Follow-up
 
 - Required implementation or migration work
-
-## References
-
-- Related epic(s)
-- Related feature PRD(s)
-- Related architecture docs
