@@ -1,7 +1,5 @@
 import type { TraversalFactKind } from '../blocks/contracts.js';
-import type { StoryPackage, StoryPackageCondition } from './schema.js';
-
-type StoryPackageBlock = StoryPackage['graph']['nodes'][number]['blocks'][number];
+import type { StoryPackage, StoryPackageBlock, StoryPackageCondition } from './schema.js';
 
 export type StoryPackageConditionPath = ReadonlyArray<number | string>;
 export type StoryPackageBlockRef = {

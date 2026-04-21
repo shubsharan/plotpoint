@@ -42,7 +42,17 @@ export type {
   StoryPackageValidationPath,
   StoryPackageValidator,
 } from './story-packages/types.js';
-export type { StoryPackage, StoryPackageCondition } from './story-packages/schema.js';
+export type {
+  StoryPackage,
+  StoryPackageCondition,
+  StoryPackageBlock,
+  StoryPackageEdge,
+  StoryPackageGraph,
+  StoryPackageMetadata,
+  StoryPackageNode,
+  StoryPackageRole,
+  StoryPackageVersion,
+} from './story-packages/schema.js';
 export { validateStoryPackageCompatibility } from './story-packages/validate-compatibility.js';
 export { validateStoryPackageStructure } from './story-packages/validate-structure.js';
 export { currentEngineMajor } from './version.js';

@@ -2,7 +2,7 @@
 | --------------- | ---------- |
 | **Type**        | Strategy   |
 | **Status**      | Active     |
-| **Last synced** | 2026-03-12 |
+| **Last synced** | 2026-04-20 |
 
 # Plotpoint — Product Strategy
 
@@ -22,7 +22,7 @@ You and your friends each get a role: detective, witness, suspect, etc. Everyone
 
 The story unfolds in the real world. You walk to actual locations, find real objects, receive phone calls from characters. The city is the game board.
 
-Play offline**.** The game runs locally on your phone. It only syncs when your actions need to affect other players – when you unlock a clue that changes the shared world state, or when the story needs to verify everyone has reached a checkpoint.
+Play offline**.** The game runs locally on your phone. It only syncs when your actions need to affect other players – when you unlock a clue that changes the shared world state, or when the story needs to verify that the required roles for a sync gate have reached it.
 
 This is co-op narrative, not competition. The story is the point. Players work together across their separate storylines, and the experience is richer because everyone sees it from a different angle.
 
@@ -34,9 +34,9 @@ Each player follows a personal storyline based on their assigned role. Paths div
 
 Player choices and actions unlock new paths. Conditions on edges determine which transitions are available: "the door is unlocked," "three clues have been found," "the timer has expired." The engine evaluates these conditions against the current state and opens the paths that qualify.
 
-State lives in two layers. Each player has a personal save file tracking their individual progress: where they are in the graph, which blocks they've interacted with, etc. The story also has a shared game state that all players can read and affect. When a detective unseals a crime scene, every player in the game sees it change. This split is what makes multiplayer narratives work without constant connectivity.
+State lives in two layers. Each player has a personal save file tracking their individual progress: where they are in the graph, which blocks they've interacted with, etc. The story also has a shared story-run state that all players can read and affect. When a detective unseals a crime scene, every player in the run sees it change. This split is what makes multiplayer narratives work without constant connectivity.
 
-Local-first architecture means players can progress without a network connection. The game syncs only at critical points, like when a player's action touches shared state, we need access to geolocation triggers, or the story hits a multiplayer checkpoint. Solo experiences work mostly offline.
+Local-first architecture means players can progress without a network connection. The game syncs only at critical points, like when a player's action touches shared state, we need access to geolocation triggers, or the story hits a sync gate that targets a required set of roles. Solo experiences work mostly offline.
 
 ## 4. Creator Ecosystem
 
@@ -66,7 +66,7 @@ Not Niantic. Pokémon GO bolts location onto a game. For Plotpoint, narrative is
 
 Not Roblox**.** Roblox is virtual worlds. Plotpoint is real-world interaction. But we borrow the platform model of a single app where creators publish and players discover.
 
-Not walking tour apps**.** Walking tours are passive, single-player, linear content. Plotpoint is multiplayer, branching, interactive, with role-based storylines and real-time shared state. We may offer some single player nonfiction narratives, but must be careful to remain differentiated.
+Not walking tour apps**.** Walking tours are passive, single-player, linear content. Plotpoint is multiplayer, branching, interactive, with role-based storylines and shared world state. We may offer some single player nonfiction narratives, but must be careful to remain differentiated.
 
 Not general AR platforms**.** We don't try to be everything. The entire component registry, tooling, and business model are **shaped around storytelling.** This focus is a feature, not a limitation.
 
@@ -79,7 +79,7 @@ The moat is the flywheel between three reinforcing bets: AI-assisted story creat
 - **Supabase** for Postgres, and realtime sync
 - **Better-Auth** for authentication and authorization
 - **Engine is pure TypeScript** — zero UI dependencies, fully headless-testable
-- **Local-first architecture** with sync only at critical multiplayer checkpoints
+- **Local-first architecture** with sync only at critical shared-state changes and sync gates
 - **Hexagonal architecture** — the engine defines abstract ports, concrete implementations are injected at runtime
 - **Drizzle ORM** with Zod validation for type-safe data access
 

@@ -364,7 +364,7 @@ export const getBlockDefinition = (blockType: string): BlockRegistryEntry | unde
 
 ## Runtime Session Model
 
-Plotpoint has two related session/runtime concepts. The adapter-owned session aggregate tracks membership, shared-state durability, and resume metadata for a co-op run. Engine `SessionState` is one player's resumable runtime inside that broader session. Player-scoped state tracks an individual player's progress through a story, while shared state tracks world state that every player in the same session can read and affect. FEAT-0006 keeps the engine portion of that boundary as a runtime contract, while durable session persistence and sync policy are deferred to later adapters.
+Plotpoint has two related run/runtime concepts. The adapter-owned `StoryRun` aggregate tracks lobby status, role slots, participant bindings, shared-state durability, and resume metadata for a co-op run. Engine `SessionState` is one player's resumable runtime inside that broader run. Player-scoped state tracks an individual role's progress through a story, while shared state tracks world state that every player in the same run can read and affect. FEAT-0006 keeps the engine portion of that boundary as a runtime contract, while durable run persistence and sync policy are deferred to later adapters. Adapters map `StoryRun.runId` to engine `SessionState.sessionId` at resume time rather than introducing a second engine contract.
 
 ### SessionState
 
@@ -407,7 +407,7 @@ type RuntimeFrame = {
 
 `SessionState` is the authoritative, resumable engine state for one player and stores only sparse progression facts. `RuntimeView` is a derived hydration projection used for rendering and navigation. `RuntimeFrame` is the command return envelope that combines both as `{ state, view }`.
 
-Later session persistence reconstructs one engine `SessionState` from adapter-owned session records such as session metadata, membership, shared sparse state, and player sparse state rather than persisting the full runtime as one opaque blob.
+Later run persistence reconstructs one engine `SessionState` from adapter-owned run records such as run metadata, role bindings, shared sparse state, and role sparse state rather than persisting the full runtime as one opaque blob.
 
 When processing a block action, the engine reads the relevant bucket from the current `SessionState`, determines the target block's runtime policy, updates the correct bucket, then produces a new `RuntimeFrame` with refreshed `view.currentNode` hydration and `view.traversableEdges`. When processing traversal, the engine validates the selected edge, updates `currentNodeId`, and returns a fresh frame whose `view.currentNode.blocks[*].state` values resolve from persisted state or deterministic block defaults.
 

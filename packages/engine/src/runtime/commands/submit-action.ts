@@ -1,12 +1,13 @@
-import { getBlockSpec, hasBlockType } from '../../blocks/registry.js';
-import type { BlockAction, BlockConfig, BlockSpec, BlockState } from '../../blocks/contracts.js';
 import { executeBlockActionOrThrow } from '../actions/execute-block-action.js';
 import {
   getTargetBlockOrThrow,
   loadSessionStoryContextOrThrow,
   parseSessionCommandInputOrThrow,
 } from '../context/story-context.js';
-import { resolveEffectiveBlockStateOrThrow } from '../context/block-resolution.js';
+import {
+  isInteractiveResolvedEffectiveBlockState,
+  resolveEffectiveBlockStateOrThrow,
+} from '../context/block-resolution.js';
 import { submitActionInputSchema } from '../contracts/command-inputs.js';
 import { EngineRuntimeError } from '../errors.js';
 import { projectRuntimeFrame } from '../projection/runtime-frame.js';
@@ -18,10 +19,13 @@ import { writeScopedBlockState } from '../state/scoped-block-state.js';
 import { deriveTraversableEdgesOrThrow } from '../traversal/condition-evaluator.js';
 import type { EnginePorts, RuntimeFrame, SubmitActionInput } from '../types.js';
 
-type RuntimeInteractiveBlockSpec = Extract<
-  BlockSpec<BlockConfig, BlockState, BlockAction>,
-  { interactive: true }
->;
+const resolveActionType = (action: unknown): string | undefined => {
+  if (typeof action !== 'object' || action === null || !('type' in action)) {
+    return undefined;
+  }
+
+  return typeof action.type === 'string' ? action.type : undefined;
+};
 
 export const submitAction = async (
   ports: EnginePorts,
@@ -30,36 +34,14 @@ export const submitAction = async (
   const { action, state, blockId } = parseSessionCommandInputOrThrow(submitActionInputSchema, input);
   const { currentNode, story } = await loadSessionStoryContextOrThrow(ports, state);
   const targetBlock = getTargetBlockOrThrow(story, currentNode, blockId);
-
-  if (!hasBlockType(targetBlock.type)) {
-    throw new EngineRuntimeError(
-      'runtime_block_type_unregistered',
-      `Runtime block type "${targetBlock.type}" is not registered in the block registry.`,
-      {
-        details: {
-          blockId,
-          blockType: targetBlock.type,
-          nodeId: currentNode.id,
-        },
-      },
-    );
-  }
-
   const resolvedBlockState = resolveEffectiveBlockStateOrThrow(state, currentNode.id, targetBlock);
-  const blockSpec = getBlockSpec(targetBlock.type);
-  if (!blockSpec.interactive) {
+  if (!isInteractiveResolvedEffectiveBlockState(resolvedBlockState)) {
     throw new EngineRuntimeError(
       'runtime_block_not_actionable',
       `Runtime block "${blockId}" is non-interactive and cannot accept actions.`,
       {
         details: {
-          actionType:
-            typeof action === 'object' &&
-            action !== null &&
-            Object.hasOwn(action, 'type') &&
-            typeof (action as { type: unknown }).type === 'string'
-              ? (action as { type: string }).type
-              : undefined,
+          actionType: resolveActionType(action),
           blockId,
           blockType: targetBlock.type,
           nodeId: currentNode.id,
@@ -72,7 +54,7 @@ export const submitAction = async (
   const actionResult = await executeBlockActionOrThrow({
     action,
     blockId,
-    blockSpec: blockSpec as RuntimeInteractiveBlockSpec,
+    blockSpec: resolvedBlockState.blockSpec,
     blockType: targetBlock.type,
     nodeId: currentNode.id,
     parsedConfig: resolvedBlockState.parsedConfig,

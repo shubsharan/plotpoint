@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { storyPackageJsonObjectSchema } from '../../story-packages/schema.js';
+import { storyPackageJsonObjectSchema, type StoryPackageBlock } from '../../story-packages/schema.js';
 import { nonEmptyStringSchema } from './session-state.js';
 
 export type TraversableEdge = {
@@ -8,12 +8,15 @@ export type TraversableEdge = {
   targetNodeId: string;
 };
 
-export type CurrentNodeBlockView = {
-  config: Record<string, unknown>;
+export type CurrentNodeBlockView<
+  TConfig extends Record<string, unknown> = StoryPackageBlock['config'],
+  TState = unknown,
+> = {
+  config: TConfig;
   id: string;
   interactive: boolean;
-  state: unknown;
-  type: string;
+  state: TState;
+  type: StoryPackageBlock['type'];
 };
 
 export type CurrentNodeView = {

@@ -176,6 +176,8 @@ export const storyPackageConditionSchema: z.ZodType<StoryPackageConditionShape> 
   ]),
 );
 export type StoryPackageCondition = z.infer<typeof storyPackageConditionSchema>;
+export type StoryPackageMetadata = z.infer<typeof storyPackageMetadataSchema>;
+export type StoryPackageRole = z.infer<typeof storyPackageRoleSchema>;
 
 export const storyPackageBlockSchema: z.ZodType<StoryPackageBlockShape> = z
   .object({
@@ -184,6 +186,7 @@ export const storyPackageBlockSchema: z.ZodType<StoryPackageBlockShape> = z
     config: storyPackageJsonObjectSchema,
   })
   .strict();
+export type StoryPackageBlock = z.infer<typeof storyPackageBlockSchema>;
 
 export const storyPackageEdgeSchema: z.ZodType<StoryPackageEdgeShape> = z
   .object({
@@ -193,6 +196,7 @@ export const storyPackageEdgeSchema: z.ZodType<StoryPackageEdgeShape> = z
     condition: storyPackageConditionSchema.optional(),
   })
   .strict();
+export type StoryPackageEdge = z.infer<typeof storyPackageEdgeSchema>;
 
 export const storyPackageNodeSchema: z.ZodType<StoryPackageNodeShape> = z
   .object({
@@ -202,6 +206,7 @@ export const storyPackageNodeSchema: z.ZodType<StoryPackageNodeShape> = z
     edges: z.array(storyPackageEdgeSchema),
   })
   .strict();
+export type StoryPackageNode = z.infer<typeof storyPackageNodeSchema>;
 
 export const storyPackageGraphSchema: z.ZodType<StoryPackageGraphShape> = z
   .object({
@@ -209,6 +214,7 @@ export const storyPackageGraphSchema: z.ZodType<StoryPackageGraphShape> = z
     nodes: z.array(storyPackageNodeSchema),
   })
   .strict();
+export type StoryPackageGraph = z.infer<typeof storyPackageGraphSchema>;
 
 export const storyPackageVersionSchema: z.ZodType<StoryPackageVersionShape> = z
   .object({
@@ -216,6 +222,7 @@ export const storyPackageVersionSchema: z.ZodType<StoryPackageVersionShape> = z
     engineMajor: z.number().int().nonnegative().nullable(),
   })
   .strict();
+export type StoryPackageVersion = z.infer<typeof storyPackageVersionSchema>;
 
 export const storyPackageSchema: z.ZodType<StoryPackageShape> = z
   .object({

@@ -1,12 +1,10 @@
-import type { StoryPackage } from '../../story-packages/schema.js';
+import type { StoryPackageNode } from '../../story-packages/schema.js';
 import { resolveEffectiveBlockStateOrThrow } from '../context/block-resolution.js';
 import type { CurrentNodeView, RuntimeView, SessionState, TraversableEdge } from '../types.js';
 
-type StoryNode = StoryPackage['graph']['nodes'][number];
-
 export const projectCurrentNodeViewOrThrow = (
   state: SessionState,
-  node: StoryNode,
+  node: StoryPackageNode,
 ): CurrentNodeView => ({
   blocks: node.blocks.map(
     (block) => resolveEffectiveBlockStateOrThrow(state, node.id, block).currentNodeBlock,

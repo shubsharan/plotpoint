@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getBlockSpec } from '../blocks/registry.js';
 import { EngineRuntimeError } from '../runtime/errors.js';
 import {
   createTraversalFactCache,
@@ -28,25 +29,23 @@ describe('@plotpoint/engine traversal internals', () => {
 
   it('maps traversal fact projector failures to runtime_condition_evaluation_failed', () => {
     const projectorError = new Error('boom');
-    const blockRuntime: Parameters<typeof deriveTraversalFactOrThrow>[0] = {
+    const codeBlockSpec = getBlockSpec('code');
+    const blockRuntime = {
       currentNodeBlock: {
-        config: {},
+        config: {
+          expected: '1847',
+          mode: 'passcode' as const,
+        },
         id: 'vault-code',
         interactive: true,
         state: {
+          attempts: [],
           unlocked: false,
         },
         type: 'code',
       },
       blockSpec: {
-        actionSchema: {} as never,
-        configSchema: {} as never,
-        initialState: () => ({ unlocked: true as const }),
-        interactive: true,
-        onAction: () => ({ unlocked: true as const }),
-        requiredContext: [],
-        stateSchema: {} as never,
-        stateScope: 'player',
+        ...codeBlockSpec,
         traversalFacts: {
           unlocked: {
             derive: () => {
@@ -56,11 +55,15 @@ describe('@plotpoint/engine traversal internals', () => {
           },
         },
       },
-      parsedConfig: {},
+      parsedConfig: {
+        expected: '1847',
+        mode: 'passcode' as const,
+      },
       parsedState: {
+        attempts: [],
         unlocked: false,
       },
-    };
+    } as Parameters<typeof deriveTraversalFactOrThrow>[0];
 
     let thrownError: unknown;
 

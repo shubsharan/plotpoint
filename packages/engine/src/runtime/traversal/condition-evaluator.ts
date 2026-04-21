@@ -1,32 +1,33 @@
 import type {
-  BlockConfig,
-  BlockState,
-  TraversalFactDefinition,
   TraversalFactKind,
   TraversalFactValue,
 } from '../../blocks/contracts.js';
 import {
   appendConditionChildPath,
   buildStoryPackageBlockIndex,
-  getTraversalFactKind,
-  isFactComparisonCondition,
-  type StoryPackageFactComparisonCondition,
-  type StoryPackageFactCondition,
-} from '../../story-packages/condition-helpers.js';
-import type { StoryPackage, StoryPackageCondition } from '../../story-packages/schema.js';
+    getTraversalFactKind,
+    isFactComparisonCondition,
+    type StoryPackageFactComparisonCondition,
+    type StoryPackageFactCondition,
+  } from '../../story-packages/condition-helpers.js';
+import type {
+  StoryPackage,
+  StoryPackageCondition,
+  StoryPackageEdge,
+  StoryPackageNode,
+} from '../../story-packages/schema.js';
 import { EngineRuntimeError } from '../errors.js';
+import type { ResolvedEffectiveBlockState } from '../context/block-resolution.js';
 import { resolveEffectiveBlockStateOrThrow } from '../context/block-resolution.js';
 import { formatIssuePath } from '../context/story-context.js';
 import type { SessionState, TraversableEdge } from '../types.js';
 
-type StoryNode = StoryPackage['graph']['nodes'][number];
-type StoryEdge = StoryNode['edges'][number];
 type ResolvedTraversalFact = {
   kind: TraversalFactKind;
   value: TraversalFactValue;
 };
 type ResolvedBlockRuntime = Pick<
-  ReturnType<typeof resolveEffectiveBlockStateOrThrow>,
+  ResolvedEffectiveBlockState,
   'blockSpec' | 'currentNodeBlock' | 'parsedConfig' | 'parsedState'
 >;
 type ConditionEvaluationContext = {
@@ -48,7 +49,19 @@ type TraversalFactCache = {
   set: (blockId: string, fact: string, resolvedFact: ResolvedTraversalFact) => void;
 };
 
-const createTraversableEdge = (edge: StoryEdge): TraversableEdge => {
+const projectTraversalFactOrThrow = <TBlockRuntime extends ResolvedBlockRuntime>(
+  blockRuntime: TBlockRuntime,
+  factDefinition: TBlockRuntime['blockSpec']['traversalFacts'][string],
+): TraversalFactValue =>
+  (factDefinition.derive as (input: {
+    config: TBlockRuntime['parsedConfig'];
+    state: TBlockRuntime['parsedState'];
+  }) => TraversalFactValue)({
+    config: blockRuntime.parsedConfig,
+    state: blockRuntime.parsedState,
+  });
+
+const createTraversableEdge = (edge: StoryPackageEdge): TraversableEdge => {
   if (edge.label === undefined) {
     return {
       edgeId: edge.id,
@@ -108,9 +121,7 @@ export const deriveTraversalFactOrThrow = (
   fact: string,
   context: ConditionEvaluationContext,
 ): ResolvedTraversalFact => {
-  const factDefinition = blockRuntime.blockSpec.traversalFacts[fact] as
-    | TraversalFactDefinition<BlockConfig, BlockState>
-    | undefined;
+  const factDefinition = blockRuntime.blockSpec.traversalFacts[fact];
   if (!factDefinition) {
     throw createConditionEvaluationFailedError(
       context,
@@ -127,10 +138,7 @@ export const deriveTraversalFactOrThrow = (
 
   let factValue: TraversalFactValue;
   try {
-    factValue = factDefinition.derive({
-      config: blockRuntime.parsedConfig,
-      state: blockRuntime.parsedState,
-    });
+    factValue = projectTraversalFactOrThrow(blockRuntime, factDefinition);
   } catch (error) {
     throw createConditionEvaluationFailedError(
       context,
@@ -174,13 +182,13 @@ const createTraversalFactResolver = (
   state: SessionState,
 ): TraversalFactResolver => {
   const blockIndex = buildStoryPackageBlockIndex(story);
-  const blockRuntimeCache = new Map<string, ReturnType<typeof resolveEffectiveBlockStateOrThrow>>();
+  const blockRuntimeCache = new Map<string, ResolvedEffectiveBlockState>();
   const factValueCache = createTraversalFactCache();
 
   const resolveBlockRuntimeOrThrow = (
     blockId: string,
     context: ConditionEvaluationContext,
-  ): ReturnType<typeof resolveEffectiveBlockStateOrThrow> => {
+  ): ResolvedEffectiveBlockState => {
     const cachedRuntime = blockRuntimeCache.get(blockId);
     if (cachedRuntime) {
       return cachedRuntime;
@@ -403,7 +411,7 @@ export const evaluateConditionOrThrow = (
 export const deriveTraversableEdgesOrThrow = (
   story: StoryPackage,
   state: SessionState,
-  node: StoryNode,
+  node: StoryPackageNode,
 ): TraversableEdge[] => {
   const nodeIndex = story.graph.nodes.findIndex((candidate) => candidate.id === node.id);
   const resolver = createTraversalFactResolver(story, state);

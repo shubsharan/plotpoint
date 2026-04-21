@@ -1,38 +1,37 @@
 import type { z } from 'zod';
-import type { BlockAction, BlockConfig, BlockState, InteractiveBlockSpec } from '../../blocks/contracts.js';
+import type {
+  BlockSpecConfig,
+  BlockSpecState,
+  InteractiveBlockSpecAction,
+} from '../../blocks/contracts.js';
 import { BlockUpdateError, type BlockActionContext, type BlockContextKey } from '../../blocks/contracts.js';
+import type { InteractiveKnownBlockSpec } from '../../blocks/registry.js';
 import { EngineRuntimeError } from '../errors.js';
 import { formatIssuePath } from '../context/story-context.js';
 import type { EnginePorts } from '../types.js';
 
-type ActionExecutionResult = {
-  updatedBlockState: unknown;
+type ActionExecutionResult<TBlockSpec extends InteractiveKnownBlockSpec> = {
+  updatedBlockState: BlockSpecState<TBlockSpec> & { unlocked: boolean };
 };
 
-type RuntimeInteractiveBlockSpec = InteractiveBlockSpec<BlockConfig, BlockState, BlockAction>;
-
-type ExecuteBlockActionParams = {
+type ExecuteBlockActionParams<TBlockSpec extends InteractiveKnownBlockSpec> = {
   action: unknown;
   blockId: string;
-  blockSpec: RuntimeInteractiveBlockSpec;
+  blockSpec: TBlockSpec;
   blockType: string;
   nodeId: string;
-  parsedConfig: BlockConfig;
-  parsedState: BlockState;
+  parsedConfig: BlockSpecConfig<TBlockSpec>;
+  parsedState: BlockSpecState<TBlockSpec> & { unlocked: boolean };
   playerId: string;
   ports: EnginePorts;
 };
 
 const resolveActionType = (action: unknown): string | undefined => {
-  if (typeof action !== 'object' || action === null) {
+  if (typeof action !== 'object' || action === null || !('type' in action)) {
     return undefined;
   }
 
-  if (!Object.hasOwn(action, 'type')) {
-    return undefined;
-  }
-
-  const actionType = (action as { type: unknown }).type;
+  const { type: actionType } = action;
   return typeof actionType === 'string' ? actionType : undefined;
 };
 
@@ -40,6 +39,93 @@ const toValidationDetails = (issue: z.core.$ZodIssue): Record<string, unknown> =
   validationCode: issue.code,
   validationPath: formatIssuePath(issue.path),
 });
+
+const isActionable = <TState, TConfig>(
+  canAct: ((state: TState, config: TConfig) => boolean) | undefined,
+  parsedState: TState,
+  parsedConfig: TConfig,
+): boolean =>
+  (canAct as unknown as ((state: TState, config: TConfig) => boolean) | undefined)?.(
+    parsedState,
+    parsedConfig,
+  ) ?? true;
+
+const runBlockAction = <TState, TAction, TConfig>(
+  onAction: (
+    state: TState,
+    action: TAction,
+    context: BlockActionContext,
+    config: TConfig,
+  ) => TState,
+  parsedState: TState,
+  parsedAction: TAction,
+  actionContext: BlockActionContext,
+  parsedConfig: TConfig,
+): TState =>
+  (onAction as unknown as (
+    state: TState,
+    action: TAction,
+    context: BlockActionContext,
+    config: TConfig,
+  ) => TState)(parsedState, parsedAction, actionContext, parsedConfig);
+
+const isActionableOrThrow = <TBlockSpec extends InteractiveKnownBlockSpec>(
+  blockSpec: TBlockSpec,
+  parsedState: BlockSpecState<TBlockSpec> & { unlocked: boolean },
+  parsedConfig: BlockSpecConfig<TBlockSpec>,
+  details: {
+    actionType?: string | undefined;
+    blockId: string;
+    blockType: string;
+    nodeId: string;
+  },
+): void => {
+  if (
+    isActionable(
+      blockSpec.isActionable as unknown as
+        | ((state: BlockSpecState<TBlockSpec>, config: BlockSpecConfig<TBlockSpec>) => boolean)
+        | undefined,
+      parsedState,
+      parsedConfig,
+    )
+  ) {
+    return;
+  }
+
+  throw new EngineRuntimeError(
+    'runtime_block_not_actionable',
+    `Runtime block "${details.blockId}" is no longer actionable in its current state.`,
+    {
+      details: {
+        actionType: details.actionType,
+        blockId: details.blockId,
+        blockType: details.blockType,
+        nodeId: details.nodeId,
+        reason: 'state_not_actionable',
+      },
+    },
+  );
+};
+
+const reduceBlockAction = <TBlockSpec extends InteractiveKnownBlockSpec>(
+  blockSpec: TBlockSpec,
+  parsedState: BlockSpecState<TBlockSpec> & { unlocked: boolean },
+  parsedAction: InteractiveBlockSpecAction<TBlockSpec>,
+  actionContext: BlockActionContext,
+  parsedConfig: BlockSpecConfig<TBlockSpec>,
+): BlockSpecState<TBlockSpec> & { unlocked: boolean } =>
+  runBlockAction(
+    blockSpec.onAction as unknown as (
+      state: BlockSpecState<TBlockSpec> & { unlocked: boolean },
+      action: InteractiveBlockSpecAction<TBlockSpec>,
+      context: BlockActionContext,
+      config: BlockSpecConfig<TBlockSpec>,
+    ) => BlockSpecState<TBlockSpec> & { unlocked: boolean },
+    parsedState,
+    parsedAction,
+    actionContext,
+    parsedConfig,
+  );
 
 const resolveExecutionContextOrThrow = async (
   params: {
@@ -108,9 +194,9 @@ const resolveExecutionContextOrThrow = async (
   return context;
 };
 
-export const executeBlockActionOrThrow = async (
-  params: ExecuteBlockActionParams,
-): Promise<ActionExecutionResult> => {
+export const executeBlockActionOrThrow = async <TBlockSpec extends InteractiveKnownBlockSpec>(
+  params: ExecuteBlockActionParams<TBlockSpec>,
+): Promise<ActionExecutionResult<TBlockSpec>> => {
   const {
     action,
     blockId,
@@ -139,21 +225,12 @@ export const executeBlockActionOrThrow = async (
     );
   }
 
-  if (blockSpec.isActionable !== undefined && !blockSpec.isActionable(parsedState, parsedConfig)) {
-    throw new EngineRuntimeError(
-      'runtime_block_not_actionable',
-      `Runtime block "${blockId}" is no longer actionable in its current state.`,
-      {
-        details: {
-          actionType,
-          blockId,
-          blockType,
-          nodeId,
-          reason: 'state_not_actionable',
-        },
-      },
-    );
-  }
+  isActionableOrThrow(blockSpec, parsedState, parsedConfig, {
+    actionType,
+    blockId,
+    blockType,
+    nodeId,
+  });
 
   const parsedAction = blockSpec.actionSchema.safeParse(action);
   if (!parsedAction.success) {
@@ -183,11 +260,12 @@ export const executeBlockActionOrThrow = async (
     requiredContext: blockSpec.requiredContext,
   });
 
-  let updatedState: unknown;
+  let updatedState: BlockSpecState<TBlockSpec> & { unlocked: boolean };
   try {
-    updatedState = blockSpec.onAction(
+    updatedState = reduceBlockAction(
+      blockSpec,
       parsedState,
-      parsedAction.data,
+      parsedAction.data as InteractiveBlockSpecAction<TBlockSpec>,
       actionContext,
       parsedConfig,
     );
@@ -260,6 +338,8 @@ export const executeBlockActionOrThrow = async (
   }
 
   return {
-    updatedBlockState: parsedUpdatedState.data,
+    updatedBlockState: parsedUpdatedState.data as BlockSpecState<TBlockSpec> & {
+      unlocked: boolean;
+    },
   };
 };

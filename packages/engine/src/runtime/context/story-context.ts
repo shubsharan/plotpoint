@@ -1,6 +1,11 @@
 import type { ZodError, ZodType } from 'zod';
 import type { PublishedStoryPackage } from '../../ports/story-package-repo.js';
-import type { StoryPackage } from '../../story-packages/schema.js';
+import type {
+  StoryPackage,
+  StoryPackageBlock,
+  StoryPackageEdge,
+  StoryPackageNode,
+} from '../../story-packages/schema.js';
 import type { StoryPackageValidationIssue } from '../../story-packages/types.js';
 import { validateStoryPackageCompatibility } from '../../story-packages/validate-compatibility.js';
 import { validateStoryPackageStructure } from '../../story-packages/validate-structure.js';
@@ -8,12 +13,8 @@ import { currentEngineMajor } from '../../version.js';
 import { EngineRuntimeError } from '../errors.js';
 import type { EnginePorts, SessionState } from '../types.js';
 
-type StoryNode = StoryPackage['graph']['nodes'][number];
-type StoryBlock = StoryNode['blocks'][number];
-type StoryEdge = StoryNode['edges'][number];
-
 export type LoadedSessionStoryContext = {
-  currentNode: StoryNode;
+  currentNode: StoryPackageNode;
   story: StoryPackage;
 };
 
@@ -164,7 +165,7 @@ export const loadStoryByVersionOrThrow = async (
   return validateStoryOrThrow(story, storyId);
 };
 
-export const getNodeOrThrow = (story: StoryPackage, nodeId: string): StoryNode => {
+export const getNodeOrThrow = (story: StoryPackage, nodeId: string): StoryPackageNode => {
   const node = story.graph.nodes.find((candidate) => candidate.id === nodeId);
 
   if (!node) {
@@ -184,9 +185,9 @@ export const assertRoleExistsOrThrow = (story: StoryPackage, roleId: string): vo
 
 export const getTargetBlockOrThrow = (
   story: StoryPackage,
-  node: StoryNode,
+  node: StoryPackageNode,
   blockId: string,
-): StoryBlock => {
+): StoryPackageBlock => {
   const block = node.blocks.find((candidate) => candidate.id === blockId);
   if (!block) {
     throw runtimeError.blockNotFound(story.metadata.storyId, node.id, blockId);
@@ -197,9 +198,9 @@ export const getTargetBlockOrThrow = (
 
 export const getTargetEdgeOrThrow = (
   story: StoryPackage,
-  node: StoryNode,
+  node: StoryPackageNode,
   edgeId: string,
-): StoryEdge => {
+): StoryPackageEdge => {
   const edge = node.edges.find((candidate) => candidate.id === edgeId);
   if (!edge) {
     throw runtimeError.edgeNotFound(story.metadata.storyId, node.id, edgeId);

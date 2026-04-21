@@ -3,8 +3,19 @@ import type { SessionState } from '../types.js';
 import type { SessionStateBucket } from '../contracts/session-state.js';
 
 export type BlockStateReadResult = {
-  found: boolean;
+  found: false;
+  value: undefined;
+} | {
+  found: true;
   value: unknown;
+};
+
+export type TypedBlockStateReadResult<TBlockState> = {
+  found: false;
+  value: undefined;
+} | {
+  found: true;
+  value: TBlockState;
 };
 
 const getSessionStateBucket = (
@@ -12,16 +23,16 @@ const getSessionStateBucket = (
   stateScope: BlockStateScope,
 ): SessionStateBucket => (stateScope === 'player' ? state.playerState : state.sharedState);
 
-export const readScopedBlockState = (
+export const readScopedBlockState = <TBlockState = unknown>(
   state: SessionState,
   stateScope: BlockStateScope,
   blockId: string,
-): BlockStateReadResult => {
+): TypedBlockStateReadResult<TBlockState> => {
   const blockStates = getSessionStateBucket(state, stateScope).blockStates;
   return Object.hasOwn(blockStates, blockId)
     ? {
         found: true,
-        value: blockStates[blockId],
+        value: blockStates[blockId] as TBlockState,
       }
     : {
         found: false,
@@ -29,14 +40,14 @@ export const readScopedBlockState = (
       };
 };
 
-export const writeScopedBlockState = (
+export const writeScopedBlockState = <TBlockState>(
   state: SessionState,
   stateScope: BlockStateScope,
   blockId: string,
-  blockState: unknown,
+  blockState: TBlockState,
 ): SessionState => {
   const blockStates = getSessionStateBucket(state, stateScope).blockStates;
-  const nextStateMap = {
+  const nextStateMap: SessionStateBucket['blockStates'] = {
     ...blockStates,
     [blockId]: blockState,
   };

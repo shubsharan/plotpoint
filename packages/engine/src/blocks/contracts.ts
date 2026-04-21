@@ -94,6 +94,16 @@ export type BlockSpec<
   | InteractiveBlockSpec<TConfig, TState, TAction>
   | NonInteractiveBlockSpec<TConfig, TState>;
 
+export type BlockSpecConfig<TSpec extends { configSchema: z.ZodTypeAny }> = z.output<
+  TSpec['configSchema']
+>;
+export type BlockSpecState<TSpec extends { stateSchema: z.ZodTypeAny }> = z.output<
+  TSpec['stateSchema']
+>;
+export type InteractiveBlockSpecAction<TSpec extends { actionSchema: z.ZodTypeAny }> = z.output<
+  TSpec['actionSchema']
+>;
+
 export function defineBlockSpec<
   TConfig extends BlockConfig,
   TState extends BlockState,
