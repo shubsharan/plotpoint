@@ -41,9 +41,9 @@ Although this slice is driven by co-op requirements, the lifecycle contract must
 
 ## Requirements
 
-1. The feature must define adapter use cases for `createRun`, `inviteParticipant`, `assignParticipantToRole`, `startRun`, `resumeRun`, `replaceParticipant`, `transferRunAdmin`, `completeRole`, and `completeRun`.
-2. `createRun` must create a `StoryRunRecord` in `lobby` plus the required `RunRoleSlotRecord` rows without pinning `storyPackageVersionId` yet.
-3. `startRun` must validate required role assignment, pin `storyPackageVersionId`, create the initial empty `StoryRunSharedStateRecord` and `RoleRunStateRecord` rows, and then invoke engine `startSession` without persisting `RuntimeFrame` as authoritative run data.
+1. The feature must define adapter use cases for `createRun`, `inviteParticipantToRole`, `cancelInvite`, `acceptInvite`, `assignSelfToRole`, `startRun`, `resumeRun`, `replaceParticipant`, `transferRunAdmin`, `completeRole`, and `completeRun`.
+2. `createRun` must create a `StoryRunRecord` in `lobby` plus the required `RunRoleSlotRecord` rows without pinning `storyPackageVersionId` yet, and one-role stories must auto-bind the host/admin to the only slot without creating an invite.
+3. `startRun` must validate required role assignment through active bindings, pin `storyPackageVersionId`, create the initial empty `StoryRunSharedStateRecord` and `RoleRunStateRecord` rows, and then invoke engine `startSession` without persisting `RuntimeFrame` as authoritative run data.
 4. Run admin is durable run metadata and is transferable for MVP lifecycle decisions, including future upgrade authorization.
 5. After `startRun`, the role roster is fixed. Adapters may replace the participant bound to an existing role slot, but they must reject new role-slot creation or ad hoc late joins.
 6. `resumeRun` must reconstruct the member runtime from the caller's active role binding, the latest accepted run records, and pinned `storyPackageVersionId` before invoking engine `loadSession`.
@@ -59,8 +59,10 @@ Although this slice is driven by co-op requirements, the lifecycle contract must
 ### Lifecycle Service Surface
 
 - `createRun(request)` creates the `StoryRunRecord` in `lobby`, required `RunRoleSlotRecord` rows, and initial run admin metadata.
-- `inviteParticipant(request)` creates or updates a `RunInviteRecord` while the run is in `lobby`.
-- `assignParticipantToRole(request)` creates or updates a `RunParticipantBindingRecord` for a role slot while the run is in `lobby`.
+- `inviteParticipantToRole(request)` creates one role-specific `RunInviteRecord` while the run is in `lobby`.
+- `cancelInvite(request)` explicitly cancels a pending role-specific invite so that slot or participant can be reused.
+- `acceptInvite(request)` atomically marks the invite accepted and creates the corresponding `RunParticipantBindingRecord`.
+- `assignSelfToRole(request)` lets the host/admin claim one unbound role slot directly in `lobby` without creating a synthetic self-invite.
 - `startRun(request)` validates required role assignment, creates initial empty `StoryRunSharedStateRecord` and `RoleRunStateRecord` rows, pins `storyPackageVersionId`, transitions the run to `active`, and invokes engine `startSession`.
 - `resumeRun(request)` requires an active binding, assembles the latest `RunResumeEnvelope`, and invokes engine `loadSession`.
 - `replaceParticipant(request)` requires run admin authorization, rebinds an existing role slot to a new participant, and leaves the slot's `RoleRunStateRecord` unchanged.
