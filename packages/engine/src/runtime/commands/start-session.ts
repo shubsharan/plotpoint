@@ -1,5 +1,6 @@
 import {
   assertRoleExistsOrThrow,
+  loadStoryByVersionOrThrow,
   getNodeOrThrow,
   loadStoryOrThrow,
   parseSessionCommandInputOrThrow,
@@ -18,10 +19,16 @@ export const startSession = async (
   input: StartSessionInput,
 ): Promise<RuntimeFrame> => {
   const parsedInput = parseSessionCommandInputOrThrow(startSessionInputSchema, input);
-  const { storyPackage, storyPackageVersionId } = await loadStoryOrThrow(
-    ports,
-    parsedInput.storyId,
-  );
+  const { storyPackage, storyPackageVersionId } = parsedInput.storyPackageVersionId
+    ? {
+        storyPackage: await loadStoryByVersionOrThrow(
+          ports,
+          parsedInput.storyId,
+          parsedInput.storyPackageVersionId,
+        ),
+        storyPackageVersionId: parsedInput.storyPackageVersionId,
+      }
+    : await loadStoryOrThrow(ports, parsedInput.storyId);
 
   assertRoleExistsOrThrow(storyPackage, parsedInput.roleId);
 
