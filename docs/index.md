@@ -29,7 +29,7 @@ Use it as the one-page status rollup across epics and features.
 | FEAT-0006 | EPIC-0003 | Completed | [features/FEAT-0006-runtime-state-model-and-engine-public-surface.md](features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)                       |
 | FEAT-0007 | EPIC-0003 | Completed | [features/FEAT-0007-block-registry-and-action-executor.md](features/FEAT-0007-block-registry-and-action-executor.md)                                             |
 | FEAT-0008 | EPIC-0003 | Completed | [features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md](features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md)                 |
-| FEAT-0009 | EPIC-0004 | Not Started | [features/FEAT-0009-story-run-records-lobby-and-pinned-resume-contract.md](features/FEAT-0009-story-run-records-lobby-and-pinned-resume-contract.md)             |
+| FEAT-0009 | EPIC-0004 | In Progress | [features/FEAT-0009-story-run-records-lobby-and-pinned-resume-contract.md](features/FEAT-0009-story-run-records-lobby-and-pinned-resume-contract.md)             |
 | FEAT-0010 | EPIC-0004 | Not Started | [features/FEAT-0010-story-run-lifecycle-replacement-and-completion-contract.md](features/FEAT-0010-story-run-lifecycle-replacement-and-completion-contract.md)   |
 | FEAT-0011 | EPIC-0004 | Not Started | [features/FEAT-0011-shared-state-commits-sync-gates-and-notification-contract.md](features/FEAT-0011-shared-state-commits-sync-gates-and-notification-contract.md) |
 | FEAT-0012 | EPIC-0004 | Not Started | [features/FEAT-0012-story-run-package-upgrade-and-compatibility-contract.md](features/FEAT-0012-story-run-package-upgrade-and-compatibility-contract.md)         |
