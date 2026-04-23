@@ -297,6 +297,37 @@ const readRunOrThrow = async (
   return run;
 };
 
+const assertRunStatusForOperationOrThrow = (
+  run: StoryRunRecord,
+  input: {
+    expectedStatuses: readonly StoryRunRecord['status'][];
+    operation: string;
+  },
+): void => {
+  if (input.expectedStatuses.includes(run.status)) {
+    return;
+  }
+
+  throw new StoryRunPersistenceError(
+    'story_run_invalid_status_for_operation',
+    `Operation "${input.operation}" requires run "${run.runId}" to be in ${input.expectedStatuses.join(' | ')} but found "${run.status}".`,
+    {
+      details: {
+        actualStatus: run.status,
+        ...(input.expectedStatuses.length === 1
+          ? {
+              expectedStatus: input.expectedStatuses[0],
+            }
+          : {
+              expectedStatuses: [...input.expectedStatuses],
+            }),
+        operation: input.operation,
+        runId: run.runId,
+      },
+    },
+  );
+};
+
 const readPendingInviteForSlot = async (
   transaction: StoryRunTransaction,
   runId: string,
@@ -582,7 +613,11 @@ export const createStoryRunQueries = (
     input: InviteParticipantToRoleInput,
   ): Promise<RunInviteRecord> =>
     database.transaction(async (transaction) => {
-      await readRunOrThrow(transaction, input.runId);
+      const run = await readRunOrThrow(transaction, input.runId);
+      assertRunStatusForOperationOrThrow(run, {
+        expectedStatuses: ['lobby'],
+        operation: 'inviteParticipantToRole',
+      });
       await assertNoPendingInviteForSlotOrThrow(transaction, input.runId, input.roleId);
       await assertNoActiveBindingConflictOrThrow(transaction, {
         participantId: input.participantId,
@@ -624,6 +659,12 @@ export const createStoryRunQueries = (
     });
 
   const cancelInvite = async (input: CancelInviteInput): Promise<RunInviteRecord | null> => {
+    const run = await readRunOrThrow(database, input.runId);
+    assertRunStatusForOperationOrThrow(run, {
+      expectedStatuses: ['lobby'],
+      operation: 'cancelInvite',
+    });
+
     const [invite] = await database
       .update(runInvites)
       .set({
@@ -643,6 +684,12 @@ export const createStoryRunQueries = (
 
   const acceptInvite = async (input: AcceptInviteInput): Promise<AcceptInviteResult | null> =>
     database.transaction(async (transaction) => {
+      const run = await readRunOrThrow(transaction, input.runId);
+      assertRunStatusForOperationOrThrow(run, {
+        expectedStatuses: ['lobby'],
+        operation: 'acceptInvite',
+      });
+
       const [invite] = await transaction
         .select()
         .from(runInvites)
@@ -754,7 +801,11 @@ export const createStoryRunQueries = (
     input: AssignSelfToRoleInput,
   ): Promise<RunParticipantBindingRecord> =>
     database.transaction(async (transaction) => {
-      await readRunOrThrow(transaction, input.runId);
+      const run = await readRunOrThrow(transaction, input.runId);
+      assertRunStatusForOperationOrThrow(run, {
+        expectedStatuses: ['lobby'],
+        operation: 'assignSelfToRole',
+      });
       await assertNoPendingInviteForSlotOrThrow(transaction, input.runId, input.roleId);
       await assertNoActiveBindingConflictOrThrow(transaction, {
         participantId: input.participantId,
@@ -908,6 +959,10 @@ export const createStoryRunQueries = (
   const startRun = async (input: StartRunInput): Promise<RunResumeEnvelope> => {
     const now = input.now ?? new Date();
     const run = await readRunOrThrow(database, input.runId);
+    assertRunStatusForOperationOrThrow(run, {
+      expectedStatuses: ['lobby'],
+      operation: 'startRun',
+    });
     const currentPublishedPackage = await loadCurrentPublishedStoryPackageOrThrow(
       getStoryPackageRepoOrThrow(),
       run.storyId,
@@ -915,6 +970,10 @@ export const createStoryRunQueries = (
 
     return database.transaction(async (transaction) => {
       const runInTransaction = await readRunOrThrow(transaction, input.runId);
+      assertRunStatusForOperationOrThrow(runInTransaction, {
+        expectedStatuses: ['lobby'],
+        operation: 'startRun',
+      });
       const publishedRoleIds = currentPublishedPackage.storyPackage.roles
         .map((role) => role.id)
         .sort();
@@ -978,10 +1037,17 @@ export const createStoryRunQueries = (
           storyPackageVersionId: currentPublishedPackage.storyPackageVersionId,
           startedAt: now,
         })
-        .where(eq(storyRuns.runId, runInTransaction.runId))
+        .where(
+          and(eq(storyRuns.runId, runInTransaction.runId), eq(storyRuns.status, 'lobby')),
+        )
         .returning();
 
       if (!updatedRun) {
+        const currentRun = await readRunOrThrow(transaction, runInTransaction.runId);
+        assertRunStatusForOperationOrThrow(currentRun, {
+          expectedStatuses: ['lobby'],
+          operation: 'startRun',
+        });
         throw new Error(`Failed to activate run "${runInTransaction.runId}".`);
       }
 

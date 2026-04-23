@@ -539,6 +539,180 @@ describe('@plotpoint/db story runs', () => {
     }
   }, TEST_TIMEOUT_MS);
 
+  it('rejects lobby-only mutations once a run is active with consistent status error details', async () => {
+    await publishStoryVersion({
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-lifecycle-gates/v1.json',
+      publishedAt: new Date('2026-04-22T17:00:00.000Z'),
+      publishedPackageUri: 's3://plotpoint-stories/published/story-lifecycle-gates/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-v1',
+      roleIds: ['detective', 'historian'],
+      storyId: 'story-lifecycle-gates',
+      title: 'Lifecycle Gates Story',
+    });
+
+    await storyRunQueries.createRun({
+      adminParticipantId: 'participant-admin',
+      runId: 'run-lifecycle-gates',
+      storyId: 'story-lifecycle-gates',
+    });
+    await storyRunQueries.assignSelfToRole({
+      participantId: 'participant-a',
+      roleId: 'detective',
+      runId: 'run-lifecycle-gates',
+    });
+    await storyRunQueries.assignSelfToRole({
+      participantId: 'participant-b',
+      roleId: 'historian',
+      runId: 'run-lifecycle-gates',
+    });
+    await storyRunQueries.startRun({
+      participantId: 'participant-a',
+      runId: 'run-lifecycle-gates',
+    });
+
+    await database.insert(runInvites).values({
+      inviteId: 'invite-active-run',
+      runId: 'run-lifecycle-gates',
+      roleId: 'detective',
+      participantId: 'participant-c',
+      status: 'pending',
+      createdAt: new Date('2026-04-22T17:30:00.000Z'),
+      acceptedAt: null,
+    });
+
+    await expect(
+      storyRunQueries.inviteParticipantToRole({
+        participantId: 'participant-c',
+        roleId: 'detective',
+        runId: 'run-lifecycle-gates',
+      }),
+    ).rejects.toMatchObject({
+      code: 'story_run_invalid_status_for_operation',
+      details: {
+        actualStatus: 'active',
+        expectedStatus: 'lobby',
+        operation: 'inviteParticipantToRole',
+        runId: 'run-lifecycle-gates',
+      },
+    } satisfies Partial<StoryRunPersistenceError>);
+
+    await expect(
+      storyRunQueries.assignSelfToRole({
+        participantId: 'participant-c',
+        roleId: 'detective',
+        runId: 'run-lifecycle-gates',
+      }),
+    ).rejects.toMatchObject({
+      code: 'story_run_invalid_status_for_operation',
+      details: {
+        actualStatus: 'active',
+        expectedStatus: 'lobby',
+        operation: 'assignSelfToRole',
+        runId: 'run-lifecycle-gates',
+      },
+    } satisfies Partial<StoryRunPersistenceError>);
+
+    await expect(
+      storyRunQueries.acceptInvite({
+        inviteId: 'invite-active-run',
+        runId: 'run-lifecycle-gates',
+      }),
+    ).rejects.toMatchObject({
+      code: 'story_run_invalid_status_for_operation',
+      details: {
+        actualStatus: 'active',
+        expectedStatus: 'lobby',
+        operation: 'acceptInvite',
+        runId: 'run-lifecycle-gates',
+      },
+    } satisfies Partial<StoryRunPersistenceError>);
+
+    await expect(
+      storyRunQueries.cancelInvite({
+        inviteId: 'invite-active-run',
+        runId: 'run-lifecycle-gates',
+      }),
+    ).rejects.toMatchObject({
+      code: 'story_run_invalid_status_for_operation',
+      details: {
+        actualStatus: 'active',
+        expectedStatus: 'lobby',
+        operation: 'cancelInvite',
+        runId: 'run-lifecycle-gates',
+      },
+    } satisfies Partial<StoryRunPersistenceError>);
+  }, TEST_TIMEOUT_MS);
+
+  it('rejects startRun re-entry and preserves pinned package and startedAt', async () => {
+    await publishStoryVersion({
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-start-reentry/v1.json',
+      publishedAt: new Date('2026-04-22T17:00:00.000Z'),
+      publishedPackageUri: 's3://plotpoint-stories/published/story-start-reentry/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-v1',
+      roleIds: ['detective', 'historian'],
+      storyId: 'story-start-reentry',
+      title: 'Start Reentry Story V1',
+    });
+
+    await storyRunQueries.createRun({
+      adminParticipantId: 'participant-admin',
+      runId: 'run-start-reentry',
+      storyId: 'story-start-reentry',
+    });
+    await storyRunQueries.assignSelfToRole({
+      participantId: 'participant-a',
+      roleId: 'detective',
+      runId: 'run-start-reentry',
+    });
+    await storyRunQueries.assignSelfToRole({
+      participantId: 'participant-b',
+      roleId: 'historian',
+      runId: 'run-start-reentry',
+    });
+
+    const firstStartAt = new Date('2026-04-22T17:45:00.000Z');
+    await storyRunQueries.startRun({
+      now: firstStartAt,
+      participantId: 'participant-a',
+      runId: 'run-start-reentry',
+    });
+
+    await publishStoryVersion({
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-start-reentry/v2.json',
+      publishedAt: new Date('2026-04-22T18:00:00.000Z'),
+      publishedPackageUri: 's3://plotpoint-stories/published/story-start-reentry/v2.json',
+      publishedStoryPackageVersionId: 'snapshot-v2',
+      roleIds: ['detective', 'historian'],
+      storyId: 'story-start-reentry',
+      title: 'Start Reentry Story V2',
+    });
+
+    await expect(
+      storyRunQueries.startRun({
+        now: new Date('2026-04-22T19:00:00.000Z'),
+        participantId: 'participant-a',
+        runId: 'run-start-reentry',
+      }),
+    ).rejects.toMatchObject({
+      code: 'story_run_invalid_status_for_operation',
+      details: {
+        actualStatus: 'active',
+        expectedStatus: 'lobby',
+        operation: 'startRun',
+        runId: 'run-start-reentry',
+      },
+    } satisfies Partial<StoryRunPersistenceError>);
+
+    const [run] = await database
+      .select()
+      .from(storyRuns)
+      .where(eq(storyRuns.runId, 'run-start-reentry'))
+      .limit(1);
+    expect(run).toBeDefined();
+    expect(run?.storyPackageVersionId).toBe('snapshot-v1');
+    expect(run?.startedAt?.toISOString()).toBe(firstStartAt.toISOString());
+  }, TEST_TIMEOUT_MS);
+
   it('fails closed on role-slot drift between createRun and startRun', async () => {
     await publishStoryVersion({
       draftPackageUri: 's3://plotpoint-stories/drafts/story-drift/v1.json',

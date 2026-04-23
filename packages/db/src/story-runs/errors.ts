@@ -1,5 +1,6 @@
 export type StoryRunPersistenceErrorCode =
   | 'story_run_run_not_found'
+  | 'story_run_invalid_status_for_operation'
   | 'story_run_missing_published_package'
   | 'story_run_role_slot_drift'
   | 'story_run_pending_invite_conflict'

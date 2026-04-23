@@ -93,6 +93,7 @@ Use it as the one-page status rollup across epics and features.
 ### `architecture/`
 
 - [architecture/hexagonal-feature-slice-architecture.md](architecture/hexagonal-feature-slice-architecture.md)
+- [architecture/story-run-lifecycle-and-state-ownership.md](architecture/story-run-lifecycle-and-state-ownership.md)
 
 ### `adrs/`
 
