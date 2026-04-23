@@ -547,6 +547,66 @@ describe('@plotpoint/db story runs', () => {
     }
   }, TEST_TIMEOUT_MS);
 
+  it('fails closed with a domain error when a malformed zero-role package reaches startRun', async () => {
+    await publishStoryVersion({
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-zero-role-defensive/v1.json',
+      publishedAt: new Date('2026-04-22T17:00:00.000Z'),
+      publishedPackageUri: 's3://plotpoint-stories/published/story-zero-role-defensive/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-v1',
+      roleIds: ['detective'],
+      storyId: 'story-zero-role-defensive',
+      title: 'Zero Role Defensive Story',
+    });
+
+    const malformedStoryRunQueries = createStoryRunQueries(database, {
+      storyPackageRepo: {
+        getCurrentPublishedPackage: async (storyId: string) => ({
+          storyPackage: createStoryPackage({
+            roleIds: [],
+            storyId,
+            title: 'Malformed Zero-Role Package',
+          }),
+          storyPackageVersionId: 'snapshot-zero-role',
+        }),
+        getPublishedPackage: async (storyId: string) =>
+          createStoryPackage({
+            roleIds: [],
+            storyId,
+            title: 'Malformed Zero-Role Package',
+          }),
+      },
+    });
+
+    const created = await malformedStoryRunQueries.createRun({
+      adminParticipantId: 'participant-admin',
+      runId: 'run-zero-role-defensive',
+      storyId: 'story-zero-role-defensive',
+    });
+    expect(created.run.status).toBe('lobby');
+    expect(created.roleSlots).toHaveLength(0);
+
+    let thrown: unknown;
+    try {
+      await malformedStoryRunQueries.startRun({
+        runId: 'run-zero-role-defensive',
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(StoryRunPersistenceError);
+    expect(thrown).toMatchObject({
+      code: 'story_run_role_slot_drift',
+      details: {
+        publishedRoleIds: [],
+        runId: 'run-zero-role-defensive',
+        storyId: 'story-zero-role-defensive',
+        storyPackageVersionId: 'snapshot-zero-role',
+      },
+    } satisfies Partial<StoryRunPersistenceError>);
+    expect((thrown as Error).message).not.toContain('values() must be called');
+  }, TEST_TIMEOUT_MS);
+
   it('rejects lobby-only mutations once a run is active with consistent status error details', async () => {
     await publishStoryVersion({
       draftPackageUri: 's3://plotpoint-stories/drafts/story-lifecycle-gates/v1.json',

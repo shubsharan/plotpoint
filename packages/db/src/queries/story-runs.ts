@@ -963,6 +963,23 @@ export const createStoryRunQueries = (
       getStoryPackageRepoOrThrow(),
       run.storyId,
     );
+    const publishedRoleIds = currentPublishedPackage.storyPackage.roles
+      .map((role) => role.id)
+      .sort();
+    if (publishedRoleIds.length === 0) {
+      throw new StoryRunPersistenceError(
+        'story_run_role_slot_drift',
+        `Published package for run "${run.runId}" has no roles and cannot be started.`,
+        {
+          details: {
+            publishedRoleIds,
+            runId: run.runId,
+            storyId: run.storyId,
+            storyPackageVersionId: currentPublishedPackage.storyPackageVersionId,
+          },
+        },
+      );
+    }
 
     return database.transaction(async (transaction) => {
       const runInTransaction = await lockRunForMutationOrThrow(transaction, {
@@ -970,9 +987,6 @@ export const createStoryRunQueries = (
         operation: 'startRun',
         runId: input.runId,
       });
-      const publishedRoleIds = currentPublishedPackage.storyPackage.roles
-        .map((role) => role.id)
-        .sort();
 
       const roleSlots = await transaction
         .select()
