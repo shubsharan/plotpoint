@@ -283,6 +283,92 @@ describe('@plotpoint/engine runtime surface', () => {
     expect(submitted.state.currentNodeId).toBe('archive-door');
   });
 
+  it('starts from an explicit storyPackageVersionId when provided', async () => {
+    const storyPackageV1 = createValidStoryPackageFixture();
+    storyPackageV1.version.engineMajor = currentEngineMajor;
+
+    const storyPackageV2 = createValidStoryPackageFixture();
+    storyPackageV2.metadata.storyId = storyPackageV1.metadata.storyId;
+    storyPackageV2.version.engineMajor = currentEngineMajor;
+    storyPackageV2.graph.entryNodeId = 'atrium';
+    storyPackageV2.graph.nodes = [
+      {
+        id: 'atrium',
+        title: 'Atrium',
+        blocks: [
+          {
+            id: 'briefing-v2',
+            type: 'text',
+            config: {
+              document: {
+                children: [
+                  {
+                    children: [
+                      {
+                        text: 'Pinned opening',
+                        type: 'text',
+                      },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'doc',
+              },
+            },
+          },
+        ],
+        edges: [],
+      },
+    ];
+
+    const storyPackagesByVersion = new Map<string, StoryPackage>([
+      ['snapshot-v1', storyPackageV1],
+      ['snapshot-v2', storyPackageV2],
+    ]);
+    let currentStoryPackageVersionId = 'snapshot-v1';
+
+    const engine = createEngine({
+      storyPackageRepo: createStoryPackageRepo({
+        getCurrentPublishedPackage: async (storyId) => {
+          if (storyId !== storyPackageV1.metadata.storyId) {
+            throw new Error(`Unexpected story id "${storyId}".`);
+          }
+
+          const storyPackage = storyPackagesByVersion.get(currentStoryPackageVersionId);
+          if (!storyPackage) {
+            throw new Error(`Missing package version "${currentStoryPackageVersionId}".`);
+          }
+
+          return {
+            storyPackage,
+            storyPackageVersionId: currentStoryPackageVersionId,
+          };
+        },
+        getPublishedPackage: async (storyId, storyPackageVersionId) => {
+          if (storyId !== storyPackageV1.metadata.storyId) {
+            throw new Error(`Unexpected story id "${storyId}".`);
+          }
+
+          const storyPackage = storyPackagesByVersion.get(storyPackageVersionId);
+          if (!storyPackage) {
+            throw new Error(`Missing package version "${storyPackageVersionId}".`);
+          }
+
+          return storyPackage;
+        },
+      }),
+    });
+
+    currentStoryPackageVersionId = 'snapshot-v2';
+    const started = await startRuntime(engine, storyPackageV1.metadata.storyId, {
+      storyPackageVersionId: 'snapshot-v1',
+    });
+
+    expect(started.state.storyPackageVersionId).toBe('snapshot-v1');
+    expect(started.state.currentNodeId).toBe('foyer');
+    expect(started.view.currentNode.id).toBe('foyer');
+  });
+
   it('rehydrates and submits from SessionState inputs without persisting derived fields', async () => {
     const { engine, storyId } = createRuntimeContext();
     const started = await startRuntime(engine, storyId);

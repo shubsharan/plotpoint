@@ -4,7 +4,7 @@
 | **Parent Epic**               | [EPIC-0004-story-run-lifecycle-persistence-and-multiplayer-state](../epics/EPIC-0004-story-run-lifecycle-persistence-and-multiplayer-state.md) |
 | **Related Feature PRDs**      | [FEAT-0009-story-run-records-lobby-and-pinned-resume-contract](../features/FEAT-0009-story-run-records-lobby-and-pinned-resume-contract.md)<br>[FEAT-0010-story-run-lifecycle-replacement-and-completion-contract](../features/FEAT-0010-story-run-lifecycle-replacement-and-completion-contract.md)<br>[FEAT-0012-story-run-package-upgrade-and-compatibility-contract](../features/FEAT-0012-story-run-package-upgrade-and-compatibility-contract.md) |
 | **Related ADRs**              | [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md) |
-| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
+| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)<br>[story-run-lifecycle-and-state-ownership](../architecture/story-run-lifecycle-and-state-ownership.md) |
 
 # FEAT-0011 - Shared-State Commits, Sync Gates, and Notification Contract
 

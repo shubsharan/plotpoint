@@ -64,6 +64,30 @@ describe('@plotpoint/engine story package schema', () => {
     ]);
   });
 
+  it('rejects story packages without roles', () => {
+    const storyPackage = createValidStoryPackageFixture();
+    storyPackage.roles = [];
+
+    const result = storyPackageSchema.safeParse(storyPackage);
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      return;
+    }
+
+    expect(
+      result.error.issues.map((issue) => ({
+        code: issue.code,
+        path: issue.path,
+      })),
+    ).toEqual([
+      {
+        code: 'too_small',
+        path: ['roles'],
+      },
+    ]);
+  });
+
   it('keeps unknown block types as compatibility-layer concerns', () => {
     const storyPackage = createValidStoryPackageFixture();
     const firstNode = storyPackage.graph.nodes[0];

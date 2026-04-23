@@ -1,6 +1,9 @@
 export {
   createStoryQueries,
 } from './stories.js';
+export {
+  createStoryRunQueries,
+} from './story-runs.js';
 export type {
   CurrentPublishedStoryPackageVersionRef,
   CreateStoryInput,
@@ -14,3 +17,20 @@ export type {
   StoryQueries,
   UpdateStoryInput,
 } from './stories.js';
+export type {
+  AcceptInviteInput,
+  AcceptInviteResult,
+  AssignSelfToRoleInput,
+  CancelInviteInput,
+  CreateRunInput,
+  CreateRunResult,
+  CreateStoryRunQueriesDeps,
+  GetStoryRunResumeBundleInput,
+  InviteParticipantToRoleInput,
+  ReplaceActiveParticipantInput,
+  ReplaceActiveParticipantResult,
+  ReassignLobbyBindingInput,
+  StartRunInput,
+  StartRunResult,
+  StoryRunQueries,
+} from './story-runs.js';

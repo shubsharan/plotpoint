@@ -152,7 +152,12 @@ const invalidStoryPackageFixturesInternal = {
       storyId: 'story-the-stolen-ledger',
       title: 'The Stolen Ledger',
     },
-    roles: [],
+    roles: [
+      {
+        id: 'detective',
+        title: 'Detective',
+      },
+    ],
     graph: {
       entryNodeId: 'foyer',
       nodes: [
@@ -180,7 +185,12 @@ const invalidStoryPackageFixturesInternal = {
       storyId: 'story-empty-condition',
       title: 'Empty Condition Story',
     },
-    roles: [],
+    roles: [
+      {
+        id: 'detective',
+        title: 'Detective',
+      },
+    ],
     graph: {
       entryNodeId: 'foyer',
       nodes: [
@@ -217,7 +227,12 @@ const invalidStoryPackageFixturesInternal = {
       storyId: 'story-invalid-code-config',
       title: 'Invalid Code Config Story',
     },
-    roles: [],
+    roles: [
+      {
+        id: 'detective',
+        title: 'Detective',
+      },
+    ],
     graph: {
       entryNodeId: 'foyer',
       nodes: [

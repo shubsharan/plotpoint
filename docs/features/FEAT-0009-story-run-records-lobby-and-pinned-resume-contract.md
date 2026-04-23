@@ -1,10 +1,10 @@
 | Field                         | Value |
 | ----------------------------- | ----- |
-| **Status**                    | Not Started |
+| **Status**                    | In Progress |
 | **Parent Epic**               | [EPIC-0004-story-run-lifecycle-persistence-and-multiplayer-state](../epics/EPIC-0004-story-run-lifecycle-persistence-and-multiplayer-state.md) |
 | **Related Feature PRDs**      | [FEAT-0006-runtime-state-model-and-engine-public-surface](../features/FEAT-0006-runtime-state-model-and-engine-public-surface.md)<br>[FEAT-0008-condition-registry-and-graph-traversal-semantics](../features/FEAT-0008-condition-registry-and-graph-traversal-semantics.md) |
 | **Related ADRs**              | [ADR-0002-headless-engine-runtime-boundary](../adrs/ADR-0002-headless-engine-runtime-boundary.md) |
-| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
+| **Related Architecture Docs** | [hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)<br>[story-run-lifecycle-and-state-ownership](../architecture/story-run-lifecycle-and-state-ownership.md) |
 
 # FEAT-0009 - Story Run Records, Lobby, and Pinned Resume Contract
 
@@ -26,7 +26,7 @@ The product strategy calls for local-first co-op stories where players receive r
 - Define lobby, role-slot, invite, participant-binding, and role-state boundaries required for pre-start coordination and post-start resume.
 - Define how sparse role-scoped and shared-scoped persistence reconstruct engine `SessionState`.
 - Define pinned resume behavior around `storyPackageVersionId`.
-- Define the adapter-owned resume envelope that adapters assemble before invoking the engine.
+- Define the adapter-owned resume bundle that adapters assemble before invoking the engine.
 - Preserve engine `sessionId` terminology while clarifying that adapters map `StoryRun.runId` into engine `SessionState.sessionId`.
 
 ### Out of scope
@@ -58,7 +58,7 @@ The product strategy calls for local-first co-op stories where players receive r
 17. One-role stories must auto-bind the host/admin to the only slot at `createRun`, must not use invites, and must still remain in `lobby` until an explicit `startRun`.
 18. Multi-role stories must leave all slots unbound at `createRun`; the host may self-assign in `lobby`, but only one current binding may exist per slot and per participant.
 19. Run admin is separate run-level metadata, not a role-progress owner, and may transfer only to a participant already known to the run through an invite or binding.
-20. API transport DTOs must remain route-local and map into the feature's adapter-owned records or assembler envelope before engine invocation.
+20. API transport DTOs must remain route-local and map into the feature's adapter-owned records or assembler bundle before engine invocation.
 21. Public naming for this boundary must use `StoryRun` terminology for adapters while preserving engine `sessionId` naming inside `SessionState`.
 22. The feature must explicitly defer lifecycle orchestration, shared-state commit policy, sync-gate rules, and realtime delivery to later EPIC-0004 slices.
 
@@ -85,9 +85,9 @@ The product strategy calls for local-first co-op stories where players receive r
 - `RunRoleSlotRecord`
   - `runId`
   - `roleId`
-  - slot status
   - `createdAt`
   - `completedAt`
+  - slot phase is derived from `StoryRun.status`, active binding presence, and `completedAt` rather than persisted as a separate status field
 - `RunInviteRecord`
   - `inviteId`
   - `runId`
@@ -120,7 +120,7 @@ The product strategy calls for local-first co-op stories where players receive r
   - sparse `playerState.blockStates`
   - last accepted shared revision pointer with initial baseline `0`
   - `updatedAt`
-- `RunResumeEnvelope`
+- `StoryRunResumeBundle`
   - the adapter-owned assembler input that combines the run, the caller's active binding, the bound role slot, the shared state record, and that role slot's `RoleRunStateRecord` into one engine `SessionState` for `loadSession`
 
 ### Invite / Binding Constraints
@@ -159,7 +159,7 @@ The product strategy calls for local-first co-op stories where players receive r
 - This feature intentionally stops at persistence and reconstruction contracts. Lifecycle orchestration, direct shared commits, sync-gate rules, and realtime delivery stay out of scope so later slices can own them cleanly.
 - Route handlers should persist sparse role/shared records and reconstruct engine `SessionState`; they should not persist hydrated `RuntimeView` or whole `RuntimeFrame` snapshots as authoritative data.
 - Engine naming remains stable: use `sessionId` rather than `gameId` inside engine-facing contracts, treat `StoryRun.runId -> SessionState.sessionId` as the adapter mapping boundary, and treat binding `participantId -> SessionState.playerId` as the runtime identity mapping boundary.
-- `RunParticipantBindingStatus = 'bound' | 'replaced'` is unchanged for MVP. `bound` covers both finalized lobby ownership and active-run ownership; run and slot lifecycle phases stay on `StoryRun.status` and `RunRoleSlotRecord.status`.
+- `RunParticipantBindingStatus = 'bound' | 'replaced'` is unchanged for MVP. `bound` covers both finalized lobby ownership and active-run ownership; `StoryRun.status` remains the stored lifecycle phase while slot phase is derived from bindings plus slot completion state.
 
 ## Acceptance Criteria
 

@@ -35,6 +35,7 @@
     "@types/node": "^24.6.1",
     "dotenv": "^17.2.3",
     "drizzle-kit": "1.0.0-beta.19",
+    "supabase": "^2.93.1",
     "tsdown": "^0.21.2",
     "typescript": "6.0.1-rc",
     "vitest": "^4.0.18"

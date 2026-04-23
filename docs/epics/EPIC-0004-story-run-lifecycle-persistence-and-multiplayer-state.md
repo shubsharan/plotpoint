@@ -1,7 +1,7 @@
 | Field                                        | Value |
 | -------------------------------------------- | ----- |
 | **Status**                                   | Planned |
-| **Product and Architecture Docs**            | [product-roadmap](../product/product-roadmap.md)<br>[product-strategy](../product/product-strategy.md)<br>[hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md) |
+| **Product and Architecture Docs**            | [product-roadmap](../product/product-roadmap.md)<br>[product-strategy](../product/product-strategy.md)<br>[hexagonal-feature-slice-architecture](../architecture/hexagonal-feature-slice-architecture.md)<br>[story-run-lifecycle-and-state-ownership](../architecture/story-run-lifecycle-and-state-ownership.md) |
 | **Related Epics and Cross-PRD Dependencies** | [EPIC-0003-headless-runtime-engine-and-condition-system](../epics/EPIC-0003-headless-runtime-engine-and-condition-system.md) |
 | **Related ADRs**                             | None. |
 | **Feature Breakdown**                        | [FEAT-0009-story-run-records-lobby-and-pinned-resume-contract](../features/FEAT-0009-story-run-records-lobby-and-pinned-resume-contract.md)<br>[FEAT-0010-story-run-lifecycle-replacement-and-completion-contract](../features/FEAT-0010-story-run-lifecycle-replacement-and-completion-contract.md)<br>[FEAT-0011-shared-state-commits-sync-gates-and-notification-contract](../features/FEAT-0011-shared-state-commits-sync-gates-and-notification-contract.md)<br>[FEAT-0012-story-run-package-upgrade-and-compatibility-contract](../features/FEAT-0012-story-run-package-upgrade-and-compatibility-contract.md) |

@@ -11,6 +11,7 @@ export type StartSessionInput = {
   playerId: string;
   roleId: string;
   storyId: string;
+  storyPackageVersionId?: string | undefined;
 };
 
 export type SubmitActionInput = {
@@ -40,6 +41,7 @@ export const startSessionInputSchema: z.ZodType<StartSessionInput> = z
     playerId: nonEmptyStringSchema,
     roleId: nonEmptyStringSchema,
     storyId: nonEmptyStringSchema,
+    storyPackageVersionId: nonEmptyStringSchema.optional(),
   })
   .strict();
 

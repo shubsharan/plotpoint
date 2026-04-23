@@ -227,7 +227,7 @@ export type StoryPackageVersion = z.infer<typeof storyPackageVersionSchema>;
 export const storyPackageSchema: z.ZodType<StoryPackageShape> = z
   .object({
     metadata: storyPackageMetadataSchema,
-    roles: z.array(storyPackageRoleSchema),
+    roles: z.array(storyPackageRoleSchema).min(1),
     graph: storyPackageGraphSchema,
     version: storyPackageVersionSchema,
   })
