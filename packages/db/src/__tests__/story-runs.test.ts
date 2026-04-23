@@ -250,7 +250,6 @@ describe('@plotpoint/db story runs', () => {
       expect.objectContaining({
         roleId: 'host',
         runId: 'run-one-role',
-        status: 'assigned',
       }),
     ]);
     expect(created.adminBinding).toMatchObject({
@@ -321,9 +320,10 @@ describe('@plotpoint/db story runs', () => {
 
     expect(created.adminBinding).toBeNull();
     expect(created.roleSlots).toHaveLength(2);
-    for (const roleSlot of created.roleSlots) {
-      expect(roleSlot.status).toBe('pending');
-    }
+    expect(created.roleSlots.map((roleSlot) => roleSlot.roleId).sort()).toEqual([
+      'detective',
+      'historian',
+    ]);
 
     await storyQueries.createStory({
       draftPackageUri: 's3://plotpoint-stories/drafts/story-unpublished/v1.json',
@@ -471,7 +471,7 @@ describe('@plotpoint/db story runs', () => {
     } satisfies Partial<StoryRunPersistenceError>);
   }, TEST_TIMEOUT_MS);
 
-  it('startRun fails on incomplete assignments, then seeds revision baselines and entry-node state', async () => {
+  it('startRun fails on incomplete assignments, then activates with seeded revision baselines and entry-node state', async () => {
     await publishStoryVersion({
       draftPackageUri: 's3://plotpoint-stories/drafts/story-start/v1.json',
       publishedAt: new Date('2026-04-22T17:00:00.000Z'),
@@ -489,14 +489,13 @@ describe('@plotpoint/db story runs', () => {
     });
 
     await storyRunQueries.assignSelfToRole({
-      participantId: 'participant-admin',
+      participantId: 'participant-a',
       roleId: 'detective',
       runId: 'run-start',
     });
 
     await expect(
       storyRunQueries.startRun({
-        participantId: 'participant-admin',
         runId: 'run-start',
       }),
     ).rejects.toMatchObject({
@@ -508,15 +507,24 @@ describe('@plotpoint/db story runs', () => {
       roleId: 'historian',
       runId: 'run-start',
     });
+    const adminBindings = await database
+      .select()
+      .from(runParticipantBindings)
+      .where(
+        and(
+          eq(runParticipantBindings.runId, 'run-start'),
+          eq(runParticipantBindings.participantId, 'participant-admin'),
+          eq(runParticipantBindings.status, 'bound'),
+        ),
+      );
+    expect(adminBindings).toHaveLength(0);
 
-    const startBundle = await storyRunQueries.startRun({
-      participantId: 'participant-admin',
+    const startedRun = await storyRunQueries.startRun({
       runId: 'run-start',
     });
 
-    expect(startBundle.run.status).toBe('active');
-    expect(startBundle.run.storyPackageVersionId).toBe('snapshot-v1');
-    expect(startBundle.roleState.currentNodeId).toBe('foyer');
+    expect(startedRun.status).toBe('active');
+    expect(startedRun.storyPackageVersionId).toBe('snapshot-v1');
 
     const [sharedState] = await database
       .select()
@@ -566,7 +574,6 @@ describe('@plotpoint/db story runs', () => {
       runId: 'run-lifecycle-gates',
     });
     await storyRunQueries.startRun({
-      participantId: 'participant-a',
       runId: 'run-lifecycle-gates',
     });
 
@@ -689,7 +696,6 @@ describe('@plotpoint/db story runs', () => {
     const firstStartAt = new Date('2026-04-22T17:45:00.000Z');
     await storyRunQueries.startRun({
       now: firstStartAt,
-      participantId: 'participant-a',
       runId: 'run-start-reentry',
     });
 
@@ -706,7 +712,6 @@ describe('@plotpoint/db story runs', () => {
     await expect(
       storyRunQueries.startRun({
         now: new Date('2026-04-22T19:00:00.000Z'),
-        participantId: 'participant-a',
         runId: 'run-start-reentry',
       }),
     ).rejects.toMatchObject({
@@ -768,7 +773,6 @@ describe('@plotpoint/db story runs', () => {
 
     await expect(
       storyRunQueries.startRun({
-        participantId: 'participant-admin',
         runId: 'run-drift',
       }),
     ).rejects.toMatchObject({
@@ -803,7 +807,6 @@ describe('@plotpoint/db story runs', () => {
       runId: 'run-replace',
     });
     await storyRunQueries.startRun({
-      participantId: 'participant-a',
       runId: 'run-replace',
     });
 
@@ -902,7 +905,6 @@ describe('@plotpoint/db story runs', () => {
       runId: 'run-pinned',
     });
     await storyRunQueries.startRun({
-      participantId: 'participant-a',
       runId: 'run-pinned',
     });
 
@@ -935,6 +937,40 @@ describe('@plotpoint/db story runs', () => {
     });
   }, TEST_TIMEOUT_MS);
 
+  it('prevents deleting a pinned story package version for an active run', async () => {
+    await publishStoryVersion({
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-pin-delete-guard/v1.json',
+      publishedAt: new Date('2026-04-22T17:00:00.000Z'),
+      publishedPackageUri: 's3://plotpoint-stories/published/story-pin-delete-guard/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-v1',
+      roleIds: ['detective'],
+      storyId: 'story-pin-delete-guard',
+      title: 'Pin Delete Guard Story',
+    });
+
+    await storyRunQueries.createRun({
+      adminParticipantId: 'participant-admin',
+      runId: 'run-pin-delete-guard',
+      storyId: 'story-pin-delete-guard',
+    });
+    await storyRunQueries.startRun({
+      runId: 'run-pin-delete-guard',
+    });
+
+    await expect(
+      database
+        .delete(publishedStoryPackageVersions)
+        .where(eq(publishedStoryPackageVersions.id, 'snapshot-v1')),
+    ).rejects.toThrow();
+
+    const [run] = await database
+      .select()
+      .from(storyRuns)
+      .where(eq(storyRuns.runId, 'run-pin-delete-guard'))
+      .limit(1);
+    expect(run?.storyPackageVersionId).toBe('snapshot-v1');
+  }, TEST_TIMEOUT_MS);
+
   it('fails resume when the pinned package cannot be loaded', async () => {
     await publishStoryVersion({
       draftPackageUri: 's3://plotpoint-stories/drafts/story-missing-pinned/v1.json',
@@ -952,7 +988,6 @@ describe('@plotpoint/db story runs', () => {
       storyId: 'story-missing-pinned',
     });
     await storyRunQueries.startRun({
-      participantId: 'participant-admin',
       runId: 'run-missing-pinned',
     });
 

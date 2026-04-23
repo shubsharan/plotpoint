@@ -20,11 +20,6 @@ export const storyRunStatusEnum: PgEnum<['lobby', 'active', 'completed']> = pgEn
   ['lobby', 'active', 'completed'],
 );
 
-export const runRoleSlotStatusEnum: PgEnum<['pending', 'assigned', 'active', 'completed']> = pgEnum(
-  'run_role_slot_status',
-  ['pending', 'assigned', 'active', 'completed'],
-);
-
 export const runInviteStatusEnum: PgEnum<['pending', 'accepted', 'cancelled']> = pgEnum(
   'run_invite_status',
   ['pending', 'accepted', 'cancelled'],
@@ -42,7 +37,7 @@ export const storyRuns = pgTable.withRLS('story_runs', {
     .references((): AnyPgColumn => stories.id, { onDelete: 'restrict' }),
   storyPackageVersionId: text('story_package_version_id').references(
     (): AnyPgColumn => publishedStoryPackageVersions.id,
-    { onDelete: 'set null' },
+    { onDelete: 'restrict' },
   ),
   status: storyRunStatusEnum('status').notNull().default('lobby'),
   adminParticipantId: text('admin_participant_id').notNull(),
@@ -69,7 +64,6 @@ export const runRoleSlots = pgTable.withRLS(
       .notNull()
       .references((): AnyPgColumn => storyRuns.runId, { onDelete: 'cascade' }),
     roleId: text('role_id').notNull(),
-    status: runRoleSlotStatusEnum('status').notNull().default('pending'),
     createdAt: timestamp('created_at', {
       mode: 'date',
       withTimezone: true,

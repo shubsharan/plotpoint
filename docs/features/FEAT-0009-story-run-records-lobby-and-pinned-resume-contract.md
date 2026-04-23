@@ -85,9 +85,9 @@ The product strategy calls for local-first co-op stories where players receive r
 - `RunRoleSlotRecord`
   - `runId`
   - `roleId`
-  - slot status
   - `createdAt`
   - `completedAt`
+  - slot phase is derived from `StoryRun.status`, active binding presence, and `completedAt` rather than persisted as a separate status field
 - `RunInviteRecord`
   - `inviteId`
   - `runId`
@@ -159,7 +159,7 @@ The product strategy calls for local-first co-op stories where players receive r
 - This feature intentionally stops at persistence and reconstruction contracts. Lifecycle orchestration, direct shared commits, sync-gate rules, and realtime delivery stay out of scope so later slices can own them cleanly.
 - Route handlers should persist sparse role/shared records and reconstruct engine `SessionState`; they should not persist hydrated `RuntimeView` or whole `RuntimeFrame` snapshots as authoritative data.
 - Engine naming remains stable: use `sessionId` rather than `gameId` inside engine-facing contracts, treat `StoryRun.runId -> SessionState.sessionId` as the adapter mapping boundary, and treat binding `participantId -> SessionState.playerId` as the runtime identity mapping boundary.
-- `RunParticipantBindingStatus = 'bound' | 'replaced'` is unchanged for MVP. `bound` covers both finalized lobby ownership and active-run ownership; run and slot lifecycle phases stay on `StoryRun.status` and `RunRoleSlotRecord.status`.
+- `RunParticipantBindingStatus = 'bound' | 'replaced'` is unchanged for MVP. `bound` covers both finalized lobby ownership and active-run ownership; `StoryRun.status` remains the stored lifecycle phase while slot phase is derived from bindings plus slot completion state.
 
 ## Acceptance Criteria
 

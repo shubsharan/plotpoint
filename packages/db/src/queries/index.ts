@@ -31,5 +31,6 @@ export type {
   ReplaceActiveParticipantResult,
   ReassignLobbyBindingInput,
   StartRunInput,
+  StartRunResult,
   StoryRunQueries,
 } from './story-runs.js';

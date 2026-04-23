@@ -10,12 +10,10 @@ import {
   runRoleSlots,
   storyRunSharedState,
   storyRuns,
-  type RoleRunStateRecord,
   type RunInviteRecord,
   type RunParticipantBindingRecord,
   type RunRoleSlotRecord,
   type StoryRunRecord,
-  type StoryRunSharedStateRecord,
 } from '../schema/story-runs.js';
 import { StoryRunPersistenceError } from '../story-runs/errors.js';
 import type { StoryRunResumeBundle } from '../story-runs/types.js';
@@ -87,9 +85,10 @@ export type ReassignLobbyBindingInput = {
 
 export type StartRunInput = {
   now?: Date | undefined;
-  participantId: string;
   runId: string;
 };
+
+export type StartRunResult = StoryRunRecord;
 
 export type ReplaceActiveParticipantInput = {
   bindingId?: string | undefined;
@@ -121,7 +120,7 @@ export type StoryRunQueries = {
     input: ReplaceActiveParticipantInput,
   ) => Promise<ReplaceActiveParticipantResult>;
   reassignLobbyBinding: (input: ReassignLobbyBindingInput) => Promise<RunParticipantBindingRecord>;
-  startRun: (input: StartRunInput) => Promise<StoryRunResumeBundle>;
+  startRun: (input: StartRunInput) => Promise<StartRunResult>;
 };
 
 const storyRunStatusGuardOperations = [
@@ -585,7 +584,6 @@ export const createStoryRunQueries = (
     const roleIds = currentPublishedPackage.storyPackage.roles.map((role) => role.id);
 
     return database.transaction(async (transaction) => {
-
       const [createdRun] = await transaction
         .insert(storyRuns)
         .values({
@@ -610,18 +608,12 @@ export const createStoryRunQueries = (
           : await transaction
               .insert(runRoleSlots)
               .values(
-                roleIds.map((roleId) => {
-                  const slotStatus: 'assigned' | 'pending' =
-                    roleIds.length === 1 && roleId === roleIds[0] ? 'assigned' : 'pending';
-
-                  return {
-                    runId: input.runId,
-                    roleId,
-                    status: slotStatus,
-                    createdAt: now,
-                    completedAt: null,
-                  };
-                }),
+                roleIds.map((roleId) => ({
+                  runId: input.runId,
+                  roleId,
+                  createdAt: now,
+                  completedAt: null,
+                })),
               )
               .returning();
 
@@ -827,18 +819,6 @@ export const createStoryRunQueries = (
         throw new Error(`Failed to mark invite "${invite.inviteId}" as accepted.`);
       }
 
-      await transaction
-        .update(runRoleSlots)
-        .set({
-          status: 'assigned',
-        })
-        .where(
-          and(
-            eq(runRoleSlots.runId, invite.runId),
-            eq(runRoleSlots.roleId, invite.roleId),
-          ),
-        );
-
       return {
         binding,
         invite: acceptedInvite,
@@ -882,18 +862,6 @@ export const createStoryRunQueries = (
             `Failed to assign participant "${input.participantId}" to role "${input.roleId}" in run "${input.runId}".`,
           );
         }
-
-        await transaction
-          .update(runRoleSlots)
-          .set({
-            status: 'assigned',
-          })
-          .where(
-            and(
-              eq(runRoleSlots.runId, input.runId),
-              eq(runRoleSlots.roleId, input.roleId),
-            ),
-          );
 
         return binding;
       } catch (error) {
@@ -981,22 +949,10 @@ export const createStoryRunQueries = (
         );
       }
 
-      await transaction
-        .update(runRoleSlots)
-        .set({
-          status: 'assigned',
-        })
-        .where(
-          and(
-            eq(runRoleSlots.runId, input.runId),
-            eq(runRoleSlots.roleId, input.roleId),
-          ),
-        );
-
       return binding;
     });
 
-  const startRun = async (input: StartRunInput): Promise<StoryRunResumeBundle> => {
+  const startRun = async (input: StartRunInput): Promise<StartRunResult> => {
     const now = input.now ?? new Date();
     const run = await readRunOrThrow(database, input.runId);
     assertRunStatusForOperationOrThrow(run, {
@@ -1091,13 +1047,6 @@ export const createStoryRunQueries = (
         throw new Error(`Failed to activate run "${runInTransaction.runId}".`);
       }
 
-      await transaction
-        .update(runRoleSlots)
-        .set({
-          status: 'active',
-        })
-        .where(eq(runRoleSlots.runId, runInTransaction.runId));
-
       const [sharedState] = await transaction
         .insert(storyRunSharedState)
         .values({
@@ -1134,10 +1083,7 @@ export const createStoryRunQueries = (
         )
         .onConflictDoNothing();
 
-      return buildStoryRunResumeBundleOrThrow(transaction, {
-        participantId: input.participantId,
-        run: updatedRun,
-      });
+      return updatedRun;
     });
   };
 

@@ -26,7 +26,6 @@ export {
   runParticipantBindings,
   runRoleSlotInsertSchema,
   runRoleSlotSelectSchema,
-  runRoleSlotStatusEnum,
   runRoleSlotUpdateSchema,
   runRoleSlots,
   storyRunInsertSchema,
