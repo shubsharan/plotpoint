@@ -64,7 +64,7 @@ Although this slice is driven by co-op requirements, the lifecycle contract must
 - `acceptInvite(request)` atomically marks the invite accepted and creates the corresponding `RunParticipantBindingRecord`.
 - `assignSelfToRole(request)` lets the host/admin claim one unbound role slot directly in `lobby` without creating a synthetic self-invite.
 - `startRun(request)` validates required role assignment, creates initial empty `StoryRunSharedStateRecord` and `RoleRunStateRecord` rows, pins `storyPackageVersionId`, transitions the run to `active`, and invokes engine `startSession`.
-- `resumeRun(request)` requires an active binding, assembles the latest `RunResumeEnvelope`, and invokes engine `loadSession`.
+- `resumeRun(request)` requires an active binding, assembles the latest `StoryRunResumeBundle`, and invokes engine `loadSession`.
 - `replaceParticipant(request)` requires run admin authorization, rebinds an existing role slot to a new participant, and leaves the slot's `RoleRunStateRecord` unchanged.
 - `transferRunAdmin(request)` reassigns run admin without mutating role-slot progress or shared state.
 - `completeRole(request)` persists the caller's terminal role state, marks that role slot `completed`, and completes the run only if every required role slot is now `completed`.
@@ -81,8 +81,8 @@ Although this slice is driven by co-op requirements, the lifecycle contract must
 
 ### Resume Assembly Contract
 
-- `RunResumeEnvelope` remains the adapter-owned assembly boundary from `FEAT-0009`.
-- The envelope used by `resumeRun` must contain the `StoryRunRecord`, the caller's active `RunParticipantBindingRecord`, the bound `RunRoleSlotRecord`, the latest accepted `StoryRunSharedStateRecord`, the bound role slot's `RoleRunStateRecord`, and the pinned `storyPackageVersionId`.
+- `StoryRunResumeBundle` remains the adapter-owned assembly boundary from `FEAT-0009`.
+- The bundle used by `resumeRun` must contain the `StoryRunRecord`, the caller's active `RunParticipantBindingRecord`, the bound `RunRoleSlotRecord`, the latest accepted `StoryRunSharedStateRecord`, the bound role slot's `RoleRunStateRecord`, and the pinned `storyPackageVersionId`.
 - Adapters may derive route-local response DTOs from the loaded engine `RuntimeFrame`, but they must not persist `RuntimeView` or `RuntimeFrame` as authoritative lifecycle state.
 
 ### Route-Local DTO Boundary
@@ -140,7 +140,7 @@ Although this slice is driven by co-op requirements, the lifecycle contract must
 
 ## Risks and Mitigations
 
-- Risk: lifecycle services start storing or returning transport-shaped blobs as durable truth. Mitigation: keep the authoritative boundary on `StoryRunRecord`, `RunRoleSlotRecord`, `RunParticipantBindingRecord`, `StoryRunSharedStateRecord`, `RoleRunStateRecord`, and `RunResumeEnvelope`.
+- Risk: lifecycle services start storing or returning transport-shaped blobs as durable truth. Mitigation: keep the authoritative boundary on `StoryRunRecord`, `RunRoleSlotRecord`, `RunParticipantBindingRecord`, `StoryRunSharedStateRecord`, `RoleRunStateRecord`, and `StoryRunResumeBundle`.
 - Risk: participant replacement mutates progress by accident. Mitigation: lock replacement to rebinding an existing role slot while preserving that slot's role state exactly.
 - Risk: completion semantics drift into UI or route handlers. Mitigation: define completion decisions and status transitions in the lifecycle service contract.
 

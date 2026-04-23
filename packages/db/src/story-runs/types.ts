@@ -16,7 +16,7 @@ export type {
   StoryRunSharedStateRecord,
 };
 
-export type RunResumeEnvelope = {
+export type StoryRunResumeBundle = {
   binding: RunParticipantBindingRecord;
   roleState: RoleRunStateRecord;
   roleSlot: RunRoleSlotRecord;

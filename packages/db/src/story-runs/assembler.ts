@@ -1,43 +1,33 @@
+import type { SessionState as EngineSessionState } from '@plotpoint/engine';
 import { StoryRunPersistenceError } from './errors.js';
-import type { RunResumeEnvelope } from './types.js';
+import type { StoryRunResumeBundle } from './types.js';
 
-export type RunSessionState = {
-  currentNodeId: string;
-  sessionId: string;
-  playerId: string;
-  playerState: {
-    blockStates: Record<string, unknown>;
-  };
-  roleId: string;
-  sharedState: {
-    blockStates: Record<string, unknown>;
-  };
-  storyId: string;
-  storyPackageVersionId: string;
-};
+type SessionState = EngineSessionState extends { sessionId: string }
+  ? EngineSessionState
+  : Omit<EngineSessionState, 'gameId'> & { sessionId: string };
 
-export const assembleSessionStateFromRunResumeEnvelope = (
-  envelope: RunResumeEnvelope,
-): RunSessionState => {
-  if (!envelope.run.storyPackageVersionId) {
+export const assembleSessionStateFromStoryRunResumeBundle = (
+  bundle: StoryRunResumeBundle,
+): SessionState => {
+  if (!bundle.run.storyPackageVersionId) {
     throw new StoryRunPersistenceError(
       'story_run_pinned_package_missing',
-      `Run "${envelope.run.runId}" has no pinned storyPackageVersionId.`,
+      `Run "${bundle.run.runId}" has no pinned storyPackageVersionId.`,
     );
   }
 
   return {
-    currentNodeId: envelope.roleState.currentNodeId,
-    sessionId: envelope.run.runId,
-    playerId: envelope.binding.participantId,
+    currentNodeId: bundle.roleState.currentNodeId,
+    sessionId: bundle.run.runId,
+    playerId: bundle.binding.participantId,
     playerState: {
-      blockStates: envelope.roleState.blockStates,
+      blockStates: bundle.roleState.blockStates,
     },
-    roleId: envelope.binding.roleId,
+    roleId: bundle.binding.roleId,
     sharedState: {
-      blockStates: envelope.sharedState.blockStates,
+      blockStates: bundle.sharedState.blockStates,
     },
-    storyId: envelope.run.storyId,
-    storyPackageVersionId: envelope.run.storyPackageVersionId,
+    storyId: bundle.run.storyId,
+    storyPackageVersionId: bundle.run.storyPackageVersionId,
   };
 };

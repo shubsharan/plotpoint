@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   StoryRunPersistenceError,
-  assembleSessionStateFromRunResumeEnvelope,
+  assembleSessionStateFromStoryRunResumeBundle,
   createStoryPackageRepo,
   createStoryQueries,
   createStoryRunQueries,
@@ -253,7 +253,7 @@ describe('@plotpoint/db story runs', () => {
         status: 'assigned',
       }),
     ]);
-    expect(created.hostBinding).toMatchObject({
+    expect(created.adminBinding).toMatchObject({
       participantId: 'participant-admin',
       roleId: 'host',
       runId: 'run-one-role',
@@ -319,7 +319,7 @@ describe('@plotpoint/db story runs', () => {
       storyId: 'story-multi-role',
     });
 
-    expect(created.hostBinding).toBeNull();
+    expect(created.adminBinding).toBeNull();
     expect(created.roleSlots).toHaveLength(2);
     for (const roleSlot of created.roleSlots) {
       expect(roleSlot.status).toBe('pending');
@@ -430,7 +430,7 @@ describe('@plotpoint/db story runs', () => {
       runId: 'run-lobby',
     });
 
-    const replaced = await storyRunQueries.replaceLobbyBinding({
+    const replaced = await storyRunQueries.reassignLobbyBinding({
       participantId: 'participant-new',
       roleId: 'detective',
       runId: 'run-lobby',
@@ -461,7 +461,7 @@ describe('@plotpoint/db story runs', () => {
     });
 
     await expect(
-      storyRunQueries.replaceLobbyBinding({
+      storyRunQueries.reassignLobbyBinding({
         participantId: 'participant-other',
         roleId: 'historian',
         runId: 'run-lobby',
@@ -509,14 +509,14 @@ describe('@plotpoint/db story runs', () => {
       runId: 'run-start',
     });
 
-    const startEnvelope = await storyRunQueries.startRun({
+    const startBundle = await storyRunQueries.startRun({
       participantId: 'participant-admin',
       runId: 'run-start',
     });
 
-    expect(startEnvelope.run.status).toBe('active');
-    expect(startEnvelope.run.storyPackageVersionId).toBe('snapshot-v1');
-    expect(startEnvelope.roleState.currentNodeId).toBe('foyer');
+    expect(startBundle.run.status).toBe('active');
+    expect(startBundle.run.storyPackageVersionId).toBe('snapshot-v1');
+    expect(startBundle.roleState.currentNodeId).toBe('foyer');
 
     const [sharedState] = await database
       .select()
@@ -638,6 +638,22 @@ describe('@plotpoint/db story runs', () => {
         actualStatus: 'active',
         expectedStatus: 'lobby',
         operation: 'cancelInvite',
+        runId: 'run-lifecycle-gates',
+      },
+    } satisfies Partial<StoryRunPersistenceError>);
+
+    await expect(
+      storyRunQueries.reassignLobbyBinding({
+        participantId: 'participant-c',
+        roleId: 'detective',
+        runId: 'run-lifecycle-gates',
+      }),
+    ).rejects.toMatchObject({
+      code: 'story_run_invalid_status_for_operation',
+      details: {
+        actualStatus: 'active',
+        expectedStatus: 'lobby',
+        operation: 'reassignLobbyBinding',
         runId: 'run-lifecycle-gates',
       },
     } satisfies Partial<StoryRunPersistenceError>);
@@ -791,7 +807,7 @@ describe('@plotpoint/db story runs', () => {
       runId: 'run-replace',
     });
 
-    const replacement = await storyRunQueries.replaceActiveBinding({
+    const replacement = await storyRunQueries.replaceActiveParticipant({
       participantId: 'participant-c',
       roleId: 'detective',
       runId: 'run-replace',
@@ -815,7 +831,51 @@ describe('@plotpoint/db story runs', () => {
     expect(detectiveBindings.some((binding) => binding.status === 'bound')).toBe(true);
   }, TEST_TIMEOUT_MS);
 
-  it('reconstructs deterministic SessionState from pinned resume envelope after newer publishes', async () => {
+  it('rejects replaceActiveParticipant while a run is still in lobby with the shared status error contract', async () => {
+    await publishStoryVersion({
+      draftPackageUri: 's3://plotpoint-stories/drafts/story-replace-lobby-gate/v1.json',
+      publishedAt: new Date('2026-04-22T17:00:00.000Z'),
+      publishedPackageUri: 's3://plotpoint-stories/published/story-replace-lobby-gate/v1.json',
+      publishedStoryPackageVersionId: 'snapshot-v1',
+      roleIds: ['detective', 'historian'],
+      storyId: 'story-replace-lobby-gate',
+      title: 'Replace Lobby Gate Story',
+    });
+
+    await storyRunQueries.createRun({
+      adminParticipantId: 'participant-admin',
+      runId: 'run-replace-lobby-gate',
+      storyId: 'story-replace-lobby-gate',
+    });
+    await storyRunQueries.assignSelfToRole({
+      participantId: 'participant-a',
+      roleId: 'detective',
+      runId: 'run-replace-lobby-gate',
+    });
+    await storyRunQueries.assignSelfToRole({
+      participantId: 'participant-b',
+      roleId: 'historian',
+      runId: 'run-replace-lobby-gate',
+    });
+
+    await expect(
+      storyRunQueries.replaceActiveParticipant({
+        participantId: 'participant-c',
+        roleId: 'detective',
+        runId: 'run-replace-lobby-gate',
+      }),
+    ).rejects.toMatchObject({
+      code: 'story_run_invalid_status_for_operation',
+      details: {
+        actualStatus: 'lobby',
+        expectedStatus: 'active',
+        operation: 'replaceActiveParticipant',
+        runId: 'run-replace-lobby-gate',
+      },
+    } satisfies Partial<StoryRunPersistenceError>);
+  }, TEST_TIMEOUT_MS);
+
+  it('reconstructs deterministic SessionState from pinned resume bundle after newer publishes', async () => {
     await publishStoryVersion({
       draftPackageUri: 's3://plotpoint-stories/drafts/story-pinned/v1.json',
       publishedAt: new Date('2026-04-22T17:00:00.000Z'),
@@ -856,14 +916,14 @@ describe('@plotpoint/db story runs', () => {
       title: 'Pinned Story V2',
     });
 
-    const resumeEnvelope = await storyRunQueries.getRunResumeEnvelope({
+    const resumeBundle = await storyRunQueries.getStoryRunResumeBundle({
       participantId: 'participant-a',
       runId: 'run-pinned',
     });
-    expect(resumeEnvelope.run.storyPackageVersionId).toBe('snapshot-v1');
+    expect(resumeBundle.run.storyPackageVersionId).toBe('snapshot-v1');
 
-    const assembledA = assembleSessionStateFromRunResumeEnvelope(resumeEnvelope);
-    const assembledB = assembleSessionStateFromRunResumeEnvelope(resumeEnvelope);
+    const assembledA = assembleSessionStateFromStoryRunResumeBundle(resumeBundle);
+    const assembledB = assembleSessionStateFromStoryRunResumeBundle(resumeBundle);
     expect(assembledA).toEqual(assembledB);
     expect(assembledA).toMatchObject({
       currentNodeId: 'foyer',
@@ -899,7 +959,7 @@ describe('@plotpoint/db story runs', () => {
     packageStorage.delete('s3://plotpoint-stories/published/story-missing-pinned/v1.json');
 
     await expect(
-      storyRunQueries.getRunResumeEnvelope({
+      storyRunQueries.getStoryRunResumeBundle({
         participantId: 'participant-admin',
         runId: 'run-missing-pinned',
       }),

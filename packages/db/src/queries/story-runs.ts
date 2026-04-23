@@ -18,7 +18,7 @@ import {
   type StoryRunSharedStateRecord,
 } from '../schema/story-runs.js';
 import { StoryRunPersistenceError } from '../story-runs/errors.js';
-import type { RunResumeEnvelope } from '../story-runs/types.js';
+import type { StoryRunResumeBundle } from '../story-runs/types.js';
 
 type StoryRunDatabase = PgAsyncDatabase<any, any, any>;
 type StoryRunTransaction = Parameters<Parameters<StoryRunDatabase['transaction']>[0]>[0];
@@ -38,7 +38,7 @@ export type CreateRunInput = {
 };
 
 export type CreateRunResult = {
-  hostBinding: RunParticipantBindingRecord | null;
+  adminBinding: RunParticipantBindingRecord | null;
   roleSlots: RunRoleSlotRecord[];
   run: StoryRunRecord;
 };
@@ -77,7 +77,7 @@ export type AssignSelfToRoleInput = {
   runId: string;
 };
 
-export type ReplaceLobbyBindingInput = {
+export type ReassignLobbyBindingInput = {
   bindingId?: string | undefined;
   now?: Date | undefined;
   participantId: string;
@@ -91,7 +91,7 @@ export type StartRunInput = {
   runId: string;
 };
 
-export type ReplaceActiveBindingInput = {
+export type ReplaceActiveParticipantInput = {
   bindingId?: string | undefined;
   now?: Date | undefined;
   participantId: string;
@@ -100,12 +100,12 @@ export type ReplaceActiveBindingInput = {
   sourceInviteId?: string | null | undefined;
 };
 
-export type ReplaceActiveBindingResult = {
+export type ReplaceActiveParticipantResult = {
   currentBinding: RunParticipantBindingRecord;
   replacedBinding: RunParticipantBindingRecord;
 };
 
-export type GetRunResumeEnvelopeInput = {
+export type GetStoryRunResumeBundleInput = {
   participantId: string;
   runId: string;
 };
@@ -115,14 +115,26 @@ export type StoryRunQueries = {
   assignSelfToRole: (input: AssignSelfToRoleInput) => Promise<RunParticipantBindingRecord>;
   cancelInvite: (input: CancelInviteInput) => Promise<RunInviteRecord | null>;
   createRun: (input: CreateRunInput) => Promise<CreateRunResult>;
-  getRunResumeEnvelope: (input: GetRunResumeEnvelopeInput) => Promise<RunResumeEnvelope>;
+  getStoryRunResumeBundle: (input: GetStoryRunResumeBundleInput) => Promise<StoryRunResumeBundle>;
   inviteParticipantToRole: (input: InviteParticipantToRoleInput) => Promise<RunInviteRecord>;
-  replaceActiveBinding: (
-    input: ReplaceActiveBindingInput,
-  ) => Promise<ReplaceActiveBindingResult>;
-  replaceLobbyBinding: (input: ReplaceLobbyBindingInput) => Promise<RunParticipantBindingRecord>;
-  startRun: (input: StartRunInput) => Promise<RunResumeEnvelope>;
+  replaceActiveParticipant: (
+    input: ReplaceActiveParticipantInput,
+  ) => Promise<ReplaceActiveParticipantResult>;
+  reassignLobbyBinding: (input: ReassignLobbyBindingInput) => Promise<RunParticipantBindingRecord>;
+  startRun: (input: StartRunInput) => Promise<StoryRunResumeBundle>;
 };
+
+const storyRunStatusGuardOperations = [
+  'acceptInvite',
+  'assignSelfToRole',
+  'cancelInvite',
+  'inviteParticipantToRole',
+  'replaceActiveParticipant',
+  'reassignLobbyBinding',
+  'startRun',
+] as const satisfies readonly (keyof StoryRunQueries)[];
+
+type StoryRunStatusGuardOperation = (typeof storyRunStatusGuardOperations)[number];
 
 const getPostgresError = (
   error: unknown,
@@ -301,7 +313,7 @@ const assertRunStatusForOperationOrThrow = (
   run: StoryRunRecord,
   input: {
     expectedStatuses: readonly StoryRunRecord['status'][];
-    operation: string;
+    operation: StoryRunStatusGuardOperation;
   },
 ): void => {
   if (input.expectedStatuses.includes(run.status)) {
@@ -326,6 +338,41 @@ const assertRunStatusForOperationOrThrow = (
       },
     },
   );
+};
+
+const lockRunForMutationOrThrow = async (
+  transaction: StoryRunTransaction,
+  input: {
+    expectedStatuses: readonly StoryRunRecord['status'][];
+    operation: StoryRunStatusGuardOperation;
+    runId: string;
+  },
+): Promise<StoryRunRecord> => {
+  const [run] = await transaction
+    .select()
+    .from(storyRuns)
+    .where(eq(storyRuns.runId, input.runId))
+    .limit(1)
+    .for('update');
+
+  if (!run) {
+    throw new StoryRunPersistenceError(
+      'story_run_run_not_found',
+      `Story run "${input.runId}" was not found.`,
+      {
+        details: {
+          runId: input.runId,
+        },
+      },
+    );
+  }
+
+  assertRunStatusForOperationOrThrow(run, {
+    expectedStatuses: input.expectedStatuses,
+    operation: input.operation,
+  });
+
+  return run;
 };
 
 const readPendingInviteForSlot = async (
@@ -435,13 +482,13 @@ const assertNoActiveBindingConflictOrThrow = async (
   );
 };
 
-const buildRunResumeEnvelopeOrThrow = async (
+const buildStoryRunResumeBundleOrThrow = async (
   executor: StoryRunReadExecutor,
   input: {
     participantId: string;
     run: StoryRunRecord;
   },
-): Promise<RunResumeEnvelope> => {
+): Promise<StoryRunResumeBundle> => {
   const [binding] = await executor
     .select()
     .from(runParticipantBindings)
@@ -578,7 +625,7 @@ export const createStoryRunQueries = (
               )
               .returning();
 
-      let hostBinding: RunParticipantBindingRecord | null = null;
+      let adminBinding: RunParticipantBindingRecord | null = null;
       if (roleIds.length === 1 && roleIds[0]) {
         const [createdBinding] = await transaction
           .insert(runParticipantBindings)
@@ -595,14 +642,14 @@ export const createStoryRunQueries = (
           .returning();
 
         if (!createdBinding) {
-          throw new Error(`Failed to create host binding for run "${input.runId}".`);
+          throw new Error(`Failed to create admin binding for run "${input.runId}".`);
         }
 
-        hostBinding = createdBinding;
+        adminBinding = createdBinding;
       }
 
       return {
-        hostBinding,
+        adminBinding,
         roleSlots: createdSlots,
         run: createdRun,
       };
@@ -613,10 +660,10 @@ export const createStoryRunQueries = (
     input: InviteParticipantToRoleInput,
   ): Promise<RunInviteRecord> =>
     database.transaction(async (transaction) => {
-      const run = await readRunOrThrow(transaction, input.runId);
-      assertRunStatusForOperationOrThrow(run, {
+      await lockRunForMutationOrThrow(transaction, {
         expectedStatuses: ['lobby'],
         operation: 'inviteParticipantToRole',
+        runId: input.runId,
       });
       await assertNoPendingInviteForSlotOrThrow(transaction, input.runId, input.roleId);
       await assertNoActiveBindingConflictOrThrow(transaction, {
@@ -658,36 +705,37 @@ export const createStoryRunQueries = (
       }
     });
 
-  const cancelInvite = async (input: CancelInviteInput): Promise<RunInviteRecord | null> => {
-    const run = await readRunOrThrow(database, input.runId);
-    assertRunStatusForOperationOrThrow(run, {
-      expectedStatuses: ['lobby'],
-      operation: 'cancelInvite',
+  const cancelInvite = async (input: CancelInviteInput): Promise<RunInviteRecord | null> =>
+    database.transaction(async (transaction) => {
+      await lockRunForMutationOrThrow(transaction, {
+        expectedStatuses: ['lobby'],
+        operation: 'cancelInvite',
+        runId: input.runId,
+      });
+
+      const [invite] = await transaction
+        .update(runInvites)
+        .set({
+          status: 'cancelled',
+        })
+        .where(
+          and(
+            eq(runInvites.inviteId, input.inviteId),
+            eq(runInvites.runId, input.runId),
+            eq(runInvites.status, 'pending'),
+          ),
+        )
+        .returning();
+
+      return invite ?? null;
     });
-
-    const [invite] = await database
-      .update(runInvites)
-      .set({
-        status: 'cancelled',
-      })
-      .where(
-        and(
-          eq(runInvites.inviteId, input.inviteId),
-          eq(runInvites.runId, input.runId),
-          eq(runInvites.status, 'pending'),
-        ),
-      )
-      .returning();
-
-    return invite ?? null;
-  };
 
   const acceptInvite = async (input: AcceptInviteInput): Promise<AcceptInviteResult | null> =>
     database.transaction(async (transaction) => {
-      const run = await readRunOrThrow(transaction, input.runId);
-      assertRunStatusForOperationOrThrow(run, {
+      await lockRunForMutationOrThrow(transaction, {
         expectedStatuses: ['lobby'],
         operation: 'acceptInvite',
+        runId: input.runId,
       });
 
       const [invite] = await transaction
@@ -801,10 +849,10 @@ export const createStoryRunQueries = (
     input: AssignSelfToRoleInput,
   ): Promise<RunParticipantBindingRecord> =>
     database.transaction(async (transaction) => {
-      const run = await readRunOrThrow(transaction, input.runId);
-      assertRunStatusForOperationOrThrow(run, {
+      await lockRunForMutationOrThrow(transaction, {
         expectedStatuses: ['lobby'],
         operation: 'assignSelfToRole',
+        runId: input.runId,
       });
       await assertNoPendingInviteForSlotOrThrow(transaction, input.runId, input.roleId);
       await assertNoActiveBindingConflictOrThrow(transaction, {
@@ -862,23 +910,15 @@ export const createStoryRunQueries = (
       }
     });
 
-  const replaceLobbyBinding = async (
-    input: ReplaceLobbyBindingInput,
+  const reassignLobbyBinding = async (
+    input: ReassignLobbyBindingInput,
   ): Promise<RunParticipantBindingRecord> =>
     database.transaction(async (transaction) => {
-      const run = await readRunOrThrow(transaction, input.runId);
-      if (run.status !== 'lobby') {
-        throw new StoryRunPersistenceError(
-          'story_run_active_binding_conflict',
-          `Run "${input.runId}" is not in lobby.`,
-          {
-            details: {
-              runId: input.runId,
-              status: run.status,
-            },
-          },
-        );
-      }
+      await lockRunForMutationOrThrow(transaction, {
+        expectedStatuses: ['lobby'],
+        operation: 'reassignLobbyBinding',
+        runId: input.runId,
+      });
 
       await assertNoPendingInviteForSlotOrThrow(transaction, input.runId, input.roleId);
 
@@ -937,7 +977,7 @@ export const createStoryRunQueries = (
 
       if (!binding) {
         throw new Error(
-          `Failed to replace lobby binding for role "${input.roleId}" in run "${input.runId}".`,
+          `Failed to reassign lobby binding for role "${input.roleId}" in run "${input.runId}".`,
         );
       }
 
@@ -956,7 +996,7 @@ export const createStoryRunQueries = (
       return binding;
     });
 
-  const startRun = async (input: StartRunInput): Promise<RunResumeEnvelope> => {
+  const startRun = async (input: StartRunInput): Promise<StoryRunResumeBundle> => {
     const now = input.now ?? new Date();
     const run = await readRunOrThrow(database, input.runId);
     assertRunStatusForOperationOrThrow(run, {
@@ -969,10 +1009,10 @@ export const createStoryRunQueries = (
     );
 
     return database.transaction(async (transaction) => {
-      const runInTransaction = await readRunOrThrow(transaction, input.runId);
-      assertRunStatusForOperationOrThrow(runInTransaction, {
+      const runInTransaction = await lockRunForMutationOrThrow(transaction, {
         expectedStatuses: ['lobby'],
         operation: 'startRun',
+        runId: input.runId,
       });
       const publishedRoleIds = currentPublishedPackage.storyPackage.roles
         .map((role) => role.id)
@@ -1094,30 +1134,22 @@ export const createStoryRunQueries = (
         )
         .onConflictDoNothing();
 
-      return buildRunResumeEnvelopeOrThrow(transaction, {
+      return buildStoryRunResumeBundleOrThrow(transaction, {
         participantId: input.participantId,
         run: updatedRun,
       });
     });
   };
 
-  const replaceActiveBinding = async (
-    input: ReplaceActiveBindingInput,
-  ): Promise<ReplaceActiveBindingResult> =>
+  const replaceActiveParticipant = async (
+    input: ReplaceActiveParticipantInput,
+  ): Promise<ReplaceActiveParticipantResult> =>
     database.transaction(async (transaction) => {
-      const run = await readRunOrThrow(transaction, input.runId);
-      if (run.status !== 'active') {
-        throw new StoryRunPersistenceError(
-          'story_run_active_binding_conflict',
-          `Run "${run.runId}" is not active.`,
-          {
-            details: {
-              runId: run.runId,
-              status: run.status,
-            },
-          },
-        );
-      }
+      await lockRunForMutationOrThrow(transaction, {
+        expectedStatuses: ['active'],
+        operation: 'replaceActiveParticipant',
+        runId: input.runId,
+      });
 
       const [replacedBinding] = await transaction
         .select()
@@ -1229,9 +1261,9 @@ export const createStoryRunQueries = (
       };
     });
 
-  const getRunResumeEnvelope = async (
-    input: GetRunResumeEnvelopeInput,
-  ): Promise<RunResumeEnvelope> => {
+  const getStoryRunResumeBundle = async (
+    input: GetStoryRunResumeBundleInput,
+  ): Promise<StoryRunResumeBundle> => {
     const run = await readRunOrThrow(database, input.runId);
 
     if (!run.storyPackageVersionId) {
@@ -1279,13 +1311,13 @@ export const createStoryRunQueries = (
       run.storyPackageVersionId,
     );
 
-    const envelope = await buildRunResumeEnvelopeOrThrow(database, {
+    const bundle = await buildStoryRunResumeBundleOrThrow(database, {
       participantId: input.participantId,
       run,
     });
-    const hasRole = storyPackage.roles.some((role) => role.id === envelope.binding.roleId);
+    const hasRole = storyPackage.roles.some((role) => role.id === bundle.binding.roleId);
     const hasNode = storyPackage.graph.nodes.some(
-      (node) => node.id === envelope.roleState.currentNodeId,
+      (node) => node.id === bundle.roleState.currentNodeId,
     );
 
     if (!hasRole || !hasNode) {
@@ -1294,8 +1326,8 @@ export const createStoryRunQueries = (
         `Pinned story package "${run.storyPackageVersionId}" is incompatible with resume records for run "${run.runId}".`,
         {
           details: {
-            currentNodeId: envelope.roleState.currentNodeId,
-            roleId: envelope.binding.roleId,
+            currentNodeId: bundle.roleState.currentNodeId,
+            roleId: bundle.binding.roleId,
             runId: run.runId,
             storyPackageVersionId: run.storyPackageVersionId,
           },
@@ -1303,7 +1335,7 @@ export const createStoryRunQueries = (
       );
     }
 
-    return envelope;
+    return bundle;
   };
 
   return {
@@ -1311,10 +1343,10 @@ export const createStoryRunQueries = (
     assignSelfToRole,
     cancelInvite,
     createRun,
-    getRunResumeEnvelope,
+    getStoryRunResumeBundle,
     inviteParticipantToRole,
-    replaceActiveBinding,
-    replaceLobbyBinding,
+    replaceActiveParticipant,
+    reassignLobbyBinding,
     startRun,
   };
 };

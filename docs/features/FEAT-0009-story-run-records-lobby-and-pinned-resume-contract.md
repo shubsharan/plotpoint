@@ -26,7 +26,7 @@ The product strategy calls for local-first co-op stories where players receive r
 - Define lobby, role-slot, invite, participant-binding, and role-state boundaries required for pre-start coordination and post-start resume.
 - Define how sparse role-scoped and shared-scoped persistence reconstruct engine `SessionState`.
 - Define pinned resume behavior around `storyPackageVersionId`.
-- Define the adapter-owned resume envelope that adapters assemble before invoking the engine.
+- Define the adapter-owned resume bundle that adapters assemble before invoking the engine.
 - Preserve engine `sessionId` terminology while clarifying that adapters map `StoryRun.runId` into engine `SessionState.sessionId`.
 
 ### Out of scope
@@ -58,7 +58,7 @@ The product strategy calls for local-first co-op stories where players receive r
 17. One-role stories must auto-bind the host/admin to the only slot at `createRun`, must not use invites, and must still remain in `lobby` until an explicit `startRun`.
 18. Multi-role stories must leave all slots unbound at `createRun`; the host may self-assign in `lobby`, but only one current binding may exist per slot and per participant.
 19. Run admin is separate run-level metadata, not a role-progress owner, and may transfer only to a participant already known to the run through an invite or binding.
-20. API transport DTOs must remain route-local and map into the feature's adapter-owned records or assembler envelope before engine invocation.
+20. API transport DTOs must remain route-local and map into the feature's adapter-owned records or assembler bundle before engine invocation.
 21. Public naming for this boundary must use `StoryRun` terminology for adapters while preserving engine `sessionId` naming inside `SessionState`.
 22. The feature must explicitly defer lifecycle orchestration, shared-state commit policy, sync-gate rules, and realtime delivery to later EPIC-0004 slices.
 
@@ -120,7 +120,7 @@ The product strategy calls for local-first co-op stories where players receive r
   - sparse `playerState.blockStates`
   - last accepted shared revision pointer with initial baseline `0`
   - `updatedAt`
-- `RunResumeEnvelope`
+- `StoryRunResumeBundle`
   - the adapter-owned assembler input that combines the run, the caller's active binding, the bound role slot, the shared state record, and that role slot's `RoleRunStateRecord` into one engine `SessionState` for `loadSession`
 
 ### Invite / Binding Constraints
