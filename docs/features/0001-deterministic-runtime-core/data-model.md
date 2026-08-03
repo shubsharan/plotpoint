@@ -85,13 +85,13 @@ A rejected decision cannot contain next state, events, effects, or progression i
 
 ## Execution Result
 
-| Variant                     | Aggregate after                | Record | Outputs                                            | Version behavior                                  |
-| --------------------------- | ------------------------------ | ------ | -------------------------------------------------- | ------------------------------------------------- |
-| `invalid`, phase `preflight`| Absent                         | Absent | Diagnostics                                        | No canonical aggregate exists                     |
-| `invalid`, phase `execution`| Canonical original             | Yes    | Diagnostics and non-committable attempted trace    | Preserve version                                  |
-| `accepted`                  | Canonical stabilized candidate | Yes    | Outcome, ordered events/effects, progression trace | Advance once if game or progression state changed |
-| `no-op`                     | Canonical original             | Yes    | Outcome only                                       | Preserve version                                  |
-| `rejected`                  | Canonical original             | Yes    | Rejection outcome only                             | Preserve version                                  |
+| Variant                      | Aggregate after                | Record | Outputs                                            | Version behavior                                  |
+| ---------------------------- | ------------------------------ | ------ | -------------------------------------------------- | ------------------------------------------------- |
+| `invalid`, phase `preflight` | Absent                         | Absent | Diagnostics                                        | No canonical aggregate exists                     |
+| `invalid`, phase `execution` | Canonical original             | Yes    | Diagnostics and non-committable attempted trace    | Preserve version                                  |
+| `accepted`                   | Canonical stabilized candidate | Yes    | Outcome, ordered events/effects, progression trace | Advance once if game or progression state changed |
+| `no-op`                      | Canonical original             | Yes    | Outcome only                                       | Preserve version                                  |
+| `rejected`                   | Canonical original             | Yes    | Rejection outcome only                             | Preserve version                                  |
 
 Preflight covers policy, aggregate, command, and observation canonicalization and shape validation. If an accepted candidate has no final state or progression difference, it is a no-op only when events, effects, direct intents, automatic transitions, and the complete progression trace are empty. Otherwise the candidate is invalid because it performed commit-dependent work without a durable change.
 

@@ -272,7 +272,9 @@ export function evaluateProgression<
         createDiagnostic("progression-cycle", {
           commandId: input.command.id,
           cycleLength: appliedCount - firstSeenAutomaticCount,
-          cycleTrace: automaticTrace.slice(firstSeenAutomaticCount) as unknown as readonly JsonObject[],
+          cycleTrace: automaticTrace.slice(
+            firstSeenAutomaticCount,
+          ) as unknown as readonly JsonObject[],
           firstSeenTransition: firstSeenAutomaticCount,
           graphId: input.definition.graphId,
           graphVersion: input.definition.graphVersion,

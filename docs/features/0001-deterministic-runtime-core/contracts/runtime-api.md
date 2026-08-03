@@ -22,8 +22,11 @@ export interface ProgressionInstance {
   readonly nodes: readonly ProgressionNodeState[];
 }
 
-export interface Aggregate<State extends JsonObject = JsonObject> {
-  readonly kind: AggregateKind;
+export interface Aggregate<
+  State extends JsonObject = JsonObject,
+  Kind extends AggregateKind = AggregateKind,
+> {
+  readonly kind: Kind;
   readonly id: string;
   readonly schemaVersion: number;
   readonly stateVersion: number;
@@ -32,10 +35,13 @@ export interface Aggregate<State extends JsonObject = JsonObject> {
   readonly progression?: ProgressionInstance;
 }
 
-export interface Command<Payload extends JsonObject = JsonObject> {
+export interface Command<
+  Payload extends JsonObject = JsonObject,
+  Kind extends AggregateKind = AggregateKind,
+> {
   readonly id: string;
   readonly type: string;
-  readonly target: { readonly kind: AggregateKind; readonly id: string };
+  readonly target: { readonly kind: Kind; readonly id: string };
   readonly expectedStateVersion: number;
   readonly payload: Payload;
 }
@@ -77,20 +83,21 @@ export interface CommandDefinition<
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
+  Kind extends AggregateKind,
 > {
   readonly definitionId: string;
   readonly commandType: string;
-  readonly aggregateKind: AggregateKind;
+  readonly aggregateKind: Kind;
   readonly handle: (
-    aggregate: Readonly<Aggregate<State>>,
-    command: Readonly<Command<Payload>>,
+    aggregate: Readonly<Aggregate<State, Kind>>,
+    command: Readonly<Command<Payload, Kind>>,
     context: TransitionContext,
   ) => HandlerDecision<State, Outcome>;
 }
 
-export function defineCommand<State, Payload, Outcome>(
-  definition: CommandDefinition<State, Payload, Outcome>,
-): CommandDefinition<State, Payload, Outcome>;
+export function defineCommand<Kind, State, Payload, Outcome>(
+  definition: CommandDefinition<State, Payload, Outcome, Kind>,
+): CommandDefinition<State, Payload, Outcome, Kind>;
 ```
 
 Generic parameters are constrained to canonical objects. Definitions and handlers are explicit immutable values, not registrations in a mutable runtime registry. Handlers are synchronous; a promise-shaped result is invalid.
@@ -105,30 +112,27 @@ export interface RuntimePolicy {
   readonly maxAutomaticTransitions: number;
 }
 
-export interface ExecuteCommandInput<State, Payload, Outcome> {
-  readonly definition: CommandDefinition<State, Payload, Outcome>;
-  readonly aggregate: Aggregate<State>;
-  readonly command: Command<Payload>;
+export interface ExecuteCommandInput<State, Payload, Outcome, Kind> {
+  readonly definition: CommandDefinition<State, Payload, Outcome, Kind>;
+  readonly aggregate: Aggregate<State, Kind>;
+  readonly command: Command<Payload, Kind>;
   readonly observations: readonly Observation[];
   readonly policy?: Partial<RuntimePolicy>;
-  readonly progression?: ProgressionDefinition<State, Payload, Outcome>;
+  readonly progression?: DefinedProgression<State, Payload, Outcome, Kind>;
 }
 
-export type ExecutionResult<State, Outcome> =
-  | AcceptedExecution<State, Outcome>
-  | NoOpExecution<State, Outcome>
-  | RejectedExecution<State, Outcome>
-  | InvalidExecution<State>;
+export type ExecutionResult<State, Outcome, Payload, Kind> =
+  PreflightInvalidExecution | RecordedExecutionResult<State, Outcome, Payload, Kind>;
 
-export function executeCommand<State, Payload, Outcome>(
-  input: ExecuteCommandInput<State, Payload, Outcome>,
-): ExecutionResult<State, Outcome>;
+export function executeCommand<State, Payload, Outcome, Kind>(
+  input: ExecuteCommandInput<State, Payload, Outcome, Kind>,
+): ExecutionResult<State, Outcome, Payload, Kind>;
 ```
 
 ### Required Evaluation Order
 
 1. Resolve and validate the runtime policy.
-2. Validate and canonicalize the aggregate, command, observations, definition identity, and progression definition/state.
+2. Canonicalize the aggregate, command, and observations independently; malformed values return a preflight invalid result without a record.
 3. Verify command type and exact target kind/identity.
 4. Verify expected state version before invoking the handler or consuming observations.
 5. Invoke the handler with detached frozen inputs and an ordered observation cursor.
@@ -139,27 +143,28 @@ export function executeCommand<State, Payload, Outcome>(
 10. If progression fails, return invalid with the original aggregate and non-committable attempted trace.
 11. Compare final state and progression with the original. A true no-op preserves the version and permits no events, effects, or progression work.
 12. For a state change, increment the runtime-owned state version exactly once, guarding overflow.
-13. Canonicalize the complete execution record and return the committable result.
+13. Assemble the execution record from branded canonical components and return the terminal result.
 
 ## Result Invariants
 
 - `accepted`: contains a new aggregate with `stateVersion + 1`, semantic outcome, ordered events, ordered effect intents, progression trace, and execution record.
 - `no-op`: contains the original canonical aggregate and outcome; no events, effects, or progression trace.
 - `rejected`: contains the original canonical aggregate and rejection outcome; no events, effects, or progression evaluation.
-- `invalid`: contains the original canonical aggregate, one or more stable diagnostics, and any attempted trace strictly marked non-committable.
+- preflight `invalid`: contains stable diagnostics only because no canonical input set exists to replay.
+- execution `invalid`: contains the original canonical aggregate, a record, stable diagnostics, and any attempted trace strictly marked non-committable.
 - No result executes an effect.
 - Candidate events and effects are absent from the committable surface when later validation or progression fails.
 
 ## Canonicalization API
 
 ```ts
-export interface CanonicalValue<Value extends JsonValue = JsonValue> {
-  readonly value: Value;
+export interface CanonicalValue {
+  readonly value: JsonValue;
   readonly text: string;
 }
 
-export type CanonicalizeResult<Value extends JsonValue = JsonValue> =
-  | { readonly kind: "valid"; readonly canonical: CanonicalValue<Value> }
+export type CanonicalizeResult =
+  | { readonly kind: "valid"; readonly canonical: CanonicalValue }
   | { readonly kind: "invalid"; readonly diagnostic: Diagnostic };
 
 export function canonicalizeValue(

@@ -35,33 +35,38 @@ export interface ProgressionIntent {
   readonly to: ProgressionStatus;
 }
 
-export interface AutomaticRule<Kind, State, Payload, Outcome> {
+export interface AutomaticRule<State, Payload, Outcome, Kind> {
   readonly ruleId: string;
   readonly targetNodeId: string;
   readonly from: readonly ProgressionStatus[];
   readonly to: ProgressionStatus;
   readonly priority: number;
-  readonly when: (input: ProgressionRuleInput<State, Payload, Outcome>) => boolean;
+  readonly when: (input: ProgressionRuleInput<State, Payload, Outcome, Kind>) => boolean;
 }
 
-export interface ProgressionDefinition<Kind, State, Payload, Outcome> {
+export interface ProgressionDefinition<State, Payload, Outcome, Kind> {
+  readonly aggregateKind: Kind;
   readonly graphId: string;
   readonly graphVersion: number;
   readonly nodes: readonly {
     readonly nodeId: string;
     readonly initialStatus: ProgressionStatus;
   }[];
-  readonly automaticRules: readonly AutomaticRule<State, Payload, Outcome>[];
+  readonly automaticRules: readonly AutomaticRule<State, Payload, Outcome, Kind>[];
 }
 
-export interface DefinedProgression<Kind, State, Payload, Outcome>
-  extends ProgressionDefinition<Kind, State, Payload, Outcome> {
-  readonly definitionBrand: unique symbol;
+export interface DefinedProgression<State, Payload, Outcome, Kind> extends ProgressionDefinition<
+  State,
+  Payload,
+  Outcome,
+  Kind
+> {
+  readonly [definedProgressionBrand]: true;
 }
 
 export function defineProgression<Kind, State, Payload, Outcome>(
-  definition: ProgressionDefinition<Kind, State, Payload, Outcome>,
-): DefinedProgression<Kind, State, Payload, Outcome>;
+  definition: ProgressionDefinition<State, Payload, Outcome, Kind>,
+): DefinedProgression<State, Payload, Outcome, Kind>;
 ```
 
 Rule input contains frozen candidate game state, current progression, command, semantic outcome, domain events, and the already-consumed observation trace. Rules cannot consume new observations, inspect accumulated automatic traversal, mutate state, return a promise, or execute effects.

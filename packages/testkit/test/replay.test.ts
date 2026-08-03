@@ -11,7 +11,7 @@ import { replayScenario } from "@plotpoint/testkit";
 
 type State = JsonObject & { readonly value: number };
 
-const aggregate: Aggregate<State> = {
+const aggregate: Aggregate<State, "player"> = {
   kind: "player",
   id: "p1",
   schemaVersion: 1,
@@ -19,7 +19,7 @@ const aggregate: Aggregate<State> = {
   authority: "local",
   state: { value: 0 },
 };
-const command: Command = {
+const command: Command<JsonObject, "player"> = {
   id: "c1",
   type: "change",
   target: { kind: "player", id: "p1" },
@@ -29,7 +29,7 @@ const command: Command = {
 
 describe("record replay", () => {
   it("matches the complete canonical record", () => {
-    const definition = defineCommand<State, JsonObject, JsonObject>({
+    const definition = defineCommand<"player", State, JsonObject, JsonObject>({
       definitionId: "replay.v1",
       commandType: "change",
       aggregateKind: "player",
@@ -45,6 +45,7 @@ describe("record replay", () => {
       },
     });
     const original = executeCommand({ definition, aggregate, command, observations: [] });
+    if (!("record" in original)) throw new Error("expected recorded result");
 
     const replay = replayScenario({ record: original.record, definition });
 
@@ -52,7 +53,7 @@ describe("record replay", () => {
   });
 
   it("reports the first divergent record path", () => {
-    const originalDefinition = defineCommand<State, JsonObject, JsonObject>({
+    const originalDefinition = defineCommand<"player", State, JsonObject, JsonObject>({
       definitionId: "replay.v1",
       commandType: "change",
       aggregateKind: "player",
@@ -67,7 +68,7 @@ describe("record replay", () => {
         };
       },
     });
-    const changedDefinition = defineCommand<State, JsonObject, JsonObject>({
+    const changedDefinition = defineCommand<"player", State, JsonObject, JsonObject>({
       ...originalDefinition,
       handle() {
         return {
@@ -86,6 +87,7 @@ describe("record replay", () => {
       command,
       observations: [],
     });
+    if (!("record" in original)) throw new Error("expected recorded result");
 
     const replay = replayScenario({ record: original.record, definition: changedDefinition });
 

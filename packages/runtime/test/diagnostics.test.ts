@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { createDiagnostic, DIAGNOSTIC_CODES, isDiagnosticCode } from "@plotpoint/runtime";
+import { DIAGNOSTIC_CODES } from "@plotpoint/runtime";
+import { createDiagnostic, isDiagnosticCode } from "../src/diagnostics.js";
 
 describe("diagnostics", () => {
   it("exposes stable diagnostic codes", () => {

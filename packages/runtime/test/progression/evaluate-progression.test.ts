@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  evaluateProgression,
+  defineProgression,
   type Command,
+  type DefinedProgression,
   type JsonObject,
-  type ProgressionDefinition,
   type ProgressionInstance,
 } from "@plotpoint/runtime";
+import { evaluateProgression } from "../../src/progression/evaluate-progression.js";
 
 type State = JsonObject & { readonly unlocked: boolean };
 type Outcome = JsonObject & { readonly result: string };
 
-const command: Command = {
+const command: Command<JsonObject, "player"> = {
   id: "c1",
   type: "advance",
   target: { kind: "player", id: "p1" },
@@ -20,7 +21,7 @@ const command: Command = {
 };
 
 function run(
-  definition: ProgressionDefinition<State, JsonObject, Outcome>,
+  definition: DefinedProgression<State, JsonObject, Outcome, "player">,
   progression: ProgressionInstance,
 ) {
   return evaluateProgression({
@@ -38,7 +39,8 @@ function run(
 
 describe("evaluateProgression", () => {
   it("applies independent winners as one canonical parallel batch", () => {
-    const definition: ProgressionDefinition<State, JsonObject, Outcome> = {
+    const definition = defineProgression<"player", State, JsonObject, Outcome>({
+      aggregateKind: "player",
       graphId: "parallel.v1",
       graphVersion: 1,
       nodes: [
@@ -64,7 +66,7 @@ describe("evaluateProgression", () => {
           when: ({ progression }) => progression.nodes.every((node) => node.status !== "available"),
         },
       ],
-    };
+    });
     const progression: ProgressionInstance = {
       graphId: "parallel.v1",
       graphVersion: 1,
@@ -92,7 +94,8 @@ describe("evaluateProgression", () => {
   });
 
   it("selects the lowest priority per node", () => {
-    const definition: ProgressionDefinition<State, JsonObject, Outcome> = {
+    const definition = defineProgression<"player", State, JsonObject, Outcome>({
+      aggregateKind: "player",
       graphId: "priority.v1",
       graphVersion: 1,
       nodes: [{ nodeId: "node", initialStatus: "available" }],
@@ -114,7 +117,7 @@ describe("evaluateProgression", () => {
           when: () => true,
         },
       ],
-    };
+    });
     const result = run(definition, {
       graphId: "priority.v1",
       graphVersion: 1,
@@ -126,7 +129,8 @@ describe("evaluateProgression", () => {
   });
 
   it("reports equal-priority conflicts", () => {
-    const definition: ProgressionDefinition<State, JsonObject, Outcome> = {
+    const definition = defineProgression<"player", State, JsonObject, Outcome>({
+      aggregateKind: "player",
       graphId: "conflict.v1",
       graphVersion: 1,
       nodes: [{ nodeId: "node", initialStatus: "available" }],
@@ -148,7 +152,7 @@ describe("evaluateProgression", () => {
           when: () => true,
         },
       ],
-    };
+    });
     const result = run(definition, {
       graphId: "conflict.v1",
       graphVersion: 1,
@@ -160,7 +164,8 @@ describe("evaluateProgression", () => {
   });
 
   it("applies command completion and skipping intents before stable evaluation", () => {
-    const definition: ProgressionDefinition<State, JsonObject, Outcome> = {
+    const definition = defineProgression<"player", State, JsonObject, Outcome>({
+      aggregateKind: "player",
       graphId: "direct.v1",
       graphVersion: 1,
       nodes: [
@@ -168,7 +173,7 @@ describe("evaluateProgression", () => {
         { nodeId: "b", initialStatus: "available" },
       ],
       automaticRules: [],
-    };
+    });
     const result = evaluateProgression({
       definition,
       progression: {

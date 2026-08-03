@@ -1,12 +1,12 @@
 import {
   canonicalizeValue,
   executeCommand,
-  type Command,
+  type AggregateKind,
   type CommandDefinition,
+  type DefinedProgression,
   type ExecutionRecord,
-  type ExecutionResult,
+  type RecordedExecutionResult,
   type JsonObject,
-  type ProgressionDefinition,
 } from "@plotpoint/runtime";
 
 import { firstDifference } from "./assertions.js";
@@ -15,36 +15,47 @@ export interface ReplayInput<
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
+  Kind extends AggregateKind = AggregateKind,
 > {
-  readonly record: ExecutionRecord<State, Outcome>;
-  readonly definition: CommandDefinition<State, Payload, Outcome>;
-  readonly progression?: ProgressionDefinition<State, Payload, Outcome>;
+  readonly record: ExecutionRecord<State, Outcome, Payload, Kind>;
+  readonly definition: CommandDefinition<State, Payload, Outcome, Kind>;
+  readonly progression?: DefinedProgression<State, Payload, Outcome, Kind>;
 }
 
-export type ReplayResult<State extends JsonObject, Outcome extends JsonObject> =
-  | { readonly kind: "match"; readonly result: ExecutionResult<State, Outcome> }
+export type ReplayResult<
+  State extends JsonObject,
+  Payload extends JsonObject,
+  Outcome extends JsonObject,
+  Kind extends AggregateKind = AggregateKind,
+> =
+  | {
+      readonly kind: "match";
+      readonly result: RecordedExecutionResult<State, Outcome, Payload, Kind>;
+    }
   | {
       readonly kind: "mismatch";
       readonly path: string;
-      readonly result?: ExecutionResult<State, Outcome>;
+      readonly result?: RecordedExecutionResult<State, Outcome, Payload, Kind>;
     };
 
 export function replayScenario<
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
->(input: ReplayInput<State, Payload, Outcome>): ReplayResult<State, Outcome> {
+  Kind extends AggregateKind,
+>(input: ReplayInput<State, Payload, Outcome, Kind>): ReplayResult<State, Payload, Outcome, Kind> {
   if (input.record.definitionId !== input.definition.definitionId) {
     return { kind: "mismatch", path: "/definitionId" };
   }
   const result = executeCommand({
     definition: input.definition,
     aggregate: input.record.aggregateBefore,
-    command: input.record.command as Command<Payload>,
+    command: input.record.command,
     observations: input.record.observations,
     policy: input.record.policy,
     ...(input.progression === undefined ? {} : { progression: input.progression }),
   });
+  if (!("record" in result)) return { kind: "mismatch", path: "/preflight" };
   const expected = canonicalizeValue(input.record);
   const actual = canonicalizeValue(result.record);
   if (expected.kind === "invalid" || actual.kind === "invalid") {

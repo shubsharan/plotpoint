@@ -5,7 +5,10 @@ import { clock, createRuntimeHarness } from "@plotpoint/testkit";
 
 type State = JsonObject & { readonly count: number };
 
-function fixture(): { aggregate: Aggregate<State>; command: Command } {
+function fixture(): {
+  aggregate: Aggregate<State, "player">;
+  command: Command<JsonObject, "player">;
+} {
   return {
     aggregate: {
       kind: "player",
@@ -28,7 +31,7 @@ function fixture(): { aggregate: Aggregate<State>; command: Command } {
 describe("runtime harness", () => {
   it("runs a strict scenario 100 times with identical records", () => {
     const { aggregate, command } = fixture();
-    const definition = defineCommand<State, JsonObject, JsonObject>({
+    const definition = defineCommand<"player", State, JsonObject, JsonObject>({
       definitionId: "repeat.v1",
       commandType: "change",
       aggregateKind: "player",
@@ -53,13 +56,14 @@ describe("runtime harness", () => {
     });
 
     expect(result.kind).toBe("accepted");
+    if (result.kind !== "accepted") throw new Error("expected accepted");
     expect(result.record.terminal).toBe("accepted");
   });
 
   it("reports the first material path for nondeterministic repeats", () => {
     const { aggregate, command } = fixture();
     let count = 0;
-    const definition = defineCommand<State, JsonObject, JsonObject>({
+    const definition = defineCommand<"player", State, JsonObject, JsonObject>({
       definitionId: "vary.v1",
       commandType: "change",
       aggregateKind: "player",
@@ -84,7 +88,7 @@ describe("runtime harness", () => {
         command,
         observations: [],
       }),
-    ).toThrow(/\/aggregateAfter\/state\/count/);
+    ).toThrow(/\/aggregate\/state\/count/);
   });
 
   it("detects caller and non-target mutation", () => {
@@ -95,7 +99,7 @@ describe("runtime harness", () => {
       id: "team-1",
       state: { count: 0 },
     };
-    const definition = defineCommand<State, JsonObject, JsonObject>({
+    const definition = defineCommand<"player", State, JsonObject, JsonObject>({
       definitionId: "mutation.v1",
       commandType: "change",
       aggregateKind: "player",
@@ -127,7 +131,7 @@ describe("runtime harness", () => {
 
   it("enforces exact observation consumption", () => {
     const { aggregate, command } = fixture();
-    const definition = defineCommand<State, JsonObject, JsonObject>({
+    const definition = defineCommand<"player", State, JsonObject, JsonObject>({
       definitionId: "consume.v1",
       commandType: "change",
       aggregateKind: "player",

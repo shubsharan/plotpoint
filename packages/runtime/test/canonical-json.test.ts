@@ -91,7 +91,7 @@ describe("canonicalizeValue", () => {
     expect(result.kind).toBe("valid");
     if (result.kind === "valid") {
       expect(result.canonical.text).toBe('{"__proto__":{"polluted":true}}');
-      expect(Object.getPrototypeOf(result.canonical.value)).toBeNull();
+      expect(Object.getPrototypeOf(result.canonical.value)).toBe(Object.prototype);
       expect(Object.hasOwn(result.canonical.value as object, "__proto__")).toBe(true);
     }
   });

@@ -12,7 +12,7 @@ type State = JsonObject & { readonly seen: string };
 type Payload = JsonObject;
 type Outcome = JsonObject & { readonly result: string };
 
-const aggregate: Aggregate<State> = {
+const aggregate: Aggregate<State, "player"> = {
   kind: "player",
   id: "p1",
   schemaVersion: 1,
@@ -20,14 +20,14 @@ const aggregate: Aggregate<State> = {
   authority: "local",
   state: { seen: "" },
 };
-const command: Command<Payload> = {
+const command: Command<Payload, "player"> = {
   id: "c1",
   type: "observe",
   target: { kind: "player", id: "p1" },
   expectedStateVersion: 0,
   payload: {},
 };
-const definition = defineCommand<State, Payload, Outcome>({
+const definition = defineCommand<"player", State, Payload, Outcome>({
   definitionId: "observe.v1",
   commandType: "observe",
   aggregateKind: "player",
@@ -54,6 +54,7 @@ describe("ordered observation consumption", () => {
     });
 
     expect(result.kind).toBe("accepted");
+    if (result.kind !== "accepted") throw new Error("expected accepted");
     expect(result.record.observationTrace).toEqual([
       {
         index: 0,

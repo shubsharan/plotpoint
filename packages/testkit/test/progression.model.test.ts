@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 
-import { evaluateProgression, type Command, type ProgressionDefinition } from "@plotpoint/runtime";
+import { defineProgression, type Command, type JsonObject } from "@plotpoint/runtime";
+import { evaluateProgression } from "../../runtime/src/progression/evaluate-progression.js";
 
-const command: Command = {
+const command: Command<JsonObject, "player"> = {
   id: "c1",
   type: "unlock",
   target: { kind: "player", id: "p1" },
@@ -16,7 +17,8 @@ function reference(enabled: readonly boolean[]): readonly string[] {
 }
 
 function implementation(enabled: readonly boolean[]): readonly string[] {
-  const definition: ProgressionDefinition = {
+  const definition = defineProgression({
+    aggregateKind: "player",
     graphId: "model.v1",
     graphVersion: 1,
     nodes: enabled.map((_value, index) => ({ nodeId: `n${index}`, initialStatus: "locked" })),
@@ -28,7 +30,7 @@ function implementation(enabled: readonly boolean[]): readonly string[] {
       priority: 0,
       when: () => value,
     })),
-  };
+  });
   const result = evaluateProgression({
     definition,
     progression: {
@@ -37,7 +39,7 @@ function implementation(enabled: readonly boolean[]): readonly string[] {
       nodes: enabled.map((_value, index) => ({ nodeId: `n${index}`, status: "locked" })),
     },
     intents: [],
-    aggregateState: {},
+    aggregateState: {} as JsonObject,
     command,
     outcome: {},
     domainEvents: [],

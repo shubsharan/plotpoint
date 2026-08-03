@@ -157,18 +157,10 @@ export function canonicalizeValue(
 
     visited += 1;
     if (visited > limits.maxCanonicalNodes) {
-      return invalid(
-        item.path,
-        "node-limit-exceeded",
-        limits.maxCanonicalNodes,
-      );
+      return invalid(item.path, "node-limit-exceeded", limits.maxCanonicalNodes);
     }
     if (item.depth > limits.maxCanonicalDepth) {
-      return invalid(
-        item.path,
-        "depth-limit-exceeded",
-        limits.maxCanonicalDepth,
-      );
+      return invalid(item.path, "depth-limit-exceeded", limits.maxCanonicalDepth);
     }
 
     const value = item.source;
@@ -177,22 +169,19 @@ export function canonicalizeValue(
       continue;
     }
     if (typeof value === "number") {
-      if (!Number.isFinite(value))
-        return invalid(item.path, "non-finite-number");
+      if (!Number.isFinite(value)) return invalid(item.path, "non-finite-number");
       item.assign(Object.is(value, -0) ? 0 : value);
       continue;
     }
     if (typeof value === "string") {
-      if (containsLoneSurrogate(value))
-        return invalid(item.path, "lone-surrogate");
+      if (containsLoneSurrogate(value)) return invalid(item.path, "lone-surrogate");
       item.assign(value);
       continue;
     }
     if (typeof value !== "object") {
       return invalid(item.path, `unsupported-${typeof value}`);
     }
-    if (active.has(value))
-      return invalid(item.path, "cyclic-reference");
+    if (active.has(value)) return invalid(item.path, "cyclic-reference");
 
     if (Array.isArray(value)) {
       if (Object.getPrototypeOf(value) !== Array.prototype) {
@@ -200,8 +189,7 @@ export function canonicalizeValue(
       }
       const ownKeys = Reflect.ownKeys(value);
       for (const key of ownKeys) {
-        if (typeof key === "symbol")
-          return invalid(item.path, "symbol-key");
+        if (typeof key === "symbol") return invalid(item.path, "symbol-key");
         if (key === "length") continue;
         const index = Number(key);
         if (
@@ -210,10 +198,7 @@ export function canonicalizeValue(
           String(index) !== key ||
           index >= value.length
         ) {
-          return invalid(
-            `${item.path}/${pointerSegment(key)}`,
-            "extended-array",
-          );
+          return invalid(`${item.path}/${pointerSegment(key)}`, "extended-array");
         }
       }
       const clone: JsonValue[] = Array.from({ length: value.length }, () => null);
@@ -223,8 +208,7 @@ export function canonicalizeValue(
       for (let index = value.length - 1; index >= 0; index -= 1) {
         const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
         const path = `${item.path}/${index}`;
-        if (descriptor === undefined)
-          return invalid(path, "sparse-array");
+        if (descriptor === undefined) return invalid(path, "sparse-array");
         if (!("value" in descriptor) || !descriptor.enumerable) {
           return invalid(path, "invalid-property-descriptor");
         }
@@ -258,8 +242,7 @@ export function canonicalizeValue(
       const key = stringKeys[index] as string;
       const descriptor = descriptors[key];
       const path = `${item.path}/${pointerSegment(key)}`;
-      if (containsLoneSurrogate(key))
-        return invalid(path, "lone-surrogate-key");
+      if (containsLoneSurrogate(key)) return invalid(path, "lone-surrogate-key");
       if (descriptor === undefined || !("value" in descriptor) || !descriptor.enumerable) {
         return invalid(path, "invalid-property-descriptor");
       }

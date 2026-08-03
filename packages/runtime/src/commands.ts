@@ -57,10 +57,10 @@ export interface CommandDefinition<
 }
 
 export function defineCommand<
+  Kind extends AggregateKind,
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
-  Kind extends AggregateKind = AggregateKind,
 >(
   definition: CommandDefinition<State, Payload, Outcome, Kind>,
 ): CommandDefinition<State, Payload, Outcome, Kind> {

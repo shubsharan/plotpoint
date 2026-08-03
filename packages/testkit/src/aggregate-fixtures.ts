@@ -16,10 +16,10 @@ export interface FixtureOverrides<State extends JsonObject> {
   readonly progression?: ProgressionInstance;
 }
 
-function aggregateFixture<State extends JsonObject>(
-  kind: AggregateKind,
+function aggregateFixture<State extends JsonObject, Kind extends AggregateKind>(
+  kind: Kind,
   overrides: FixtureOverrides<State>,
-): Aggregate<State> {
+): Aggregate<State, Kind> {
   const candidate = {
     kind,
     id: overrides.id ?? `${kind}-fixture`,
@@ -33,23 +33,23 @@ function aggregateFixture<State extends JsonObject>(
   if (canonical.kind === "invalid") {
     throw new TypeError(`Invalid ${kind} fixture: ${canonical.diagnostic.code}`);
   }
-  return canonical.canonical.value as unknown as Aggregate<State>;
+  return canonical.canonical.value as unknown as Aggregate<State, Kind>;
 }
 
 export function playerFixture<State extends JsonObject>(
   overrides: FixtureOverrides<State>,
-): Aggregate<State> {
+): Aggregate<State, "player"> {
   return aggregateFixture("player", overrides);
 }
 
 export function teamFixture<State extends JsonObject>(
   overrides: FixtureOverrides<State>,
-): Aggregate<State> {
+): Aggregate<State, "team"> {
   return aggregateFixture("team", overrides);
 }
 
 export function sessionFixture<State extends JsonObject>(
   overrides: FixtureOverrides<State>,
-): Aggregate<State> {
+): Aggregate<State, "session"> {
   return aggregateFixture("session", overrides);
 }

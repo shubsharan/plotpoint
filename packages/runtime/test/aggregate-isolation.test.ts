@@ -12,7 +12,10 @@ import {
 type State = JsonObject & { readonly nested: { readonly value: number } };
 type Outcome = JsonObject & { readonly result: string };
 
-function aggregateFor(kind: AggregateKind, stateVersion = 2): Aggregate<State> {
+function aggregateFor<Kind extends AggregateKind>(
+  kind: Kind,
+  stateVersion = 2,
+): Aggregate<State, Kind> {
   return {
     kind,
     id: `${kind}-1`,
@@ -23,7 +26,10 @@ function aggregateFor(kind: AggregateKind, stateVersion = 2): Aggregate<State> {
   };
 }
 
-function commandFor(kind: AggregateKind, expectedStateVersion = 2): Command {
+function commandFor<Kind extends AggregateKind>(
+  kind: Kind,
+  expectedStateVersion = 2,
+): Command<JsonObject, Kind> {
   return {
     id: `command-${kind}`,
     type: "change",
@@ -38,7 +44,7 @@ describe("aggregate isolation", () => {
     "advances only an accepted %s target once",
     (kind) => {
       const source = aggregateFor(kind);
-      const definition = defineCommand<State, JsonObject, Outcome>({
+      const definition = defineCommand<typeof kind, State, JsonObject, Outcome>({
         definitionId: `change-${kind}.v1`,
         commandType: "change",
         aggregateKind: kind,
@@ -62,6 +68,7 @@ describe("aggregate isolation", () => {
       });
 
       expect(result.kind).toBe("accepted");
+      if (result.kind !== "accepted") throw new Error("expected accepted");
       expect(result.aggregate.stateVersion).toBe(3);
       expect(source.stateVersion).toBe(2);
       expect(source.state.nested.value).toBe(1);
@@ -70,7 +77,7 @@ describe("aggregate isolation", () => {
 
   it("short-circuits stale versions before the handler or observations", () => {
     const handler = vi.fn();
-    const definition = defineCommand<State, JsonObject, Outcome>({
+    const definition = defineCommand<"player", State, JsonObject, Outcome>({
       definitionId: "stale.v1",
       commandType: "change",
       aggregateKind: "player",
@@ -85,11 +92,14 @@ describe("aggregate isolation", () => {
 
     expect(result.kind).toBe("invalid");
     expect(handler).not.toHaveBeenCalled();
+    if (result.kind !== "invalid" || result.phase !== "execution") {
+      throw new Error("expected recorded invalid result");
+    }
     expect(result.record.observationTrace).toEqual([]);
   });
 
   it("rejects an exact target mismatch", () => {
-    const definition = defineCommand<State, JsonObject, Outcome>({
+    const definition = defineCommand<"player", State, JsonObject, Outcome>({
       definitionId: "target.v1",
       commandType: "change",
       aggregateKind: "player",
@@ -114,7 +124,7 @@ describe("aggregate isolation", () => {
 
   it("rejects version overflow without changing the target", () => {
     const source = aggregateFor("team", Number.MAX_SAFE_INTEGER);
-    const definition = defineCommand<State, JsonObject, Outcome>({
+    const definition = defineCommand<"team", State, JsonObject, Outcome>({
       definitionId: "overflow.v1",
       commandType: "change",
       aggregateKind: "team",
@@ -138,6 +148,9 @@ describe("aggregate isolation", () => {
     });
 
     expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid" || result.phase !== "execution") {
+      throw new Error("expected recorded invalid result");
+    }
     expect(result.aggregate).toEqual(source);
   });
 
@@ -145,7 +158,7 @@ describe("aggregate isolation", () => {
     const shared = { value: 1 };
     const source = { ...aggregateFor("session"), state: { nested: shared } };
     const nonTarget = { ...aggregateFor("team"), state: { nested: shared } };
-    const definition = defineCommand<State, JsonObject, Outcome>({
+    const definition = defineCommand<"session", State, JsonObject, Outcome>({
       definitionId: "alias.v1",
       commandType: "change",
       aggregateKind: "session",

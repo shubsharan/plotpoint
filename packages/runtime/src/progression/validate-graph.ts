@@ -53,7 +53,9 @@ export function validateProgressionGraph<
   Payload extends JsonObject,
   Outcome extends JsonObject,
   Kind extends AggregateKind,
->(input: ValidateProgressionGraphInput<State, Payload, Outcome, Kind>): ValidateProgressionGraphResult {
+>(
+  input: ValidateProgressionGraphInput<State, Payload, Outcome, Kind>,
+): ValidateProgressionGraphResult {
   const { definition, progression, intents = [] } = input;
   const nodeIds = new Set(definition.nodes.map((node) => node.nodeId));
 

@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  defineProgression,
   defineCommand,
-  evaluateProgression,
   executeCommand,
   type Aggregate,
   type Command,
   type JsonObject,
-  type ProgressionDefinition,
+  type DefinedProgression,
   type ProgressionInstance,
 } from "@plotpoint/runtime";
+import { evaluateProgression } from "../../src/progression/evaluate-progression.js";
 
-const command: Command = {
+const command: Command<JsonObject, "player"> = {
   id: "c1",
   type: "advance",
   target: { kind: "player", id: "p1" },
@@ -20,7 +21,7 @@ const command: Command = {
 };
 
 function evaluate(
-  definition: ProgressionDefinition,
+  definition: DefinedProgression<JsonObject, JsonObject, JsonObject, "player">,
   progression: ProgressionInstance,
   maxAutomaticTransitions: number,
 ) {
@@ -38,7 +39,8 @@ function evaluate(
 }
 
 describe("progression failures", () => {
-  const parallel: ProgressionDefinition = {
+  const parallel = defineProgression({
+    aggregateKind: "player",
     graphId: "parallel.v1",
     graphVersion: 1,
     nodes: [
@@ -63,7 +65,7 @@ describe("progression failures", () => {
         when: () => true,
       },
     ],
-  };
+  });
   const start: ProgressionInstance = {
     graphId: "parallel.v1",
     graphVersion: 1,
@@ -90,7 +92,8 @@ describe("progression failures", () => {
   });
 
   it("diagnoses a complete-state cycle", () => {
-    const cyclic: ProgressionDefinition = {
+    const cyclic = defineProgression({
+      aggregateKind: "player",
       graphId: "cycle.v1",
       graphVersion: 1,
       nodes: [{ nodeId: "a", initialStatus: "active" }],
@@ -112,7 +115,7 @@ describe("progression failures", () => {
           when: () => true,
         },
       ],
-    };
+    });
     const result = evaluate(
       cyclic,
       { graphId: "cycle.v1", graphVersion: 1, nodes: [{ nodeId: "a", status: "active" }] },
@@ -125,7 +128,7 @@ describe("progression failures", () => {
 
   it("rolls back the aggregate and suppresses candidate effects when progression fails", () => {
     type AtomicState = JsonObject & { readonly changed: boolean };
-    const aggregate: Aggregate<AtomicState> = {
+    const aggregate: Aggregate<AtomicState, "player"> = {
       kind: "player",
       id: "p1",
       schemaVersion: 1,
@@ -134,7 +137,7 @@ describe("progression failures", () => {
       state: { changed: false },
       progression: start,
     };
-    const definition = defineCommand<AtomicState, JsonObject, JsonObject>({
+    const definition = defineCommand<"player", AtomicState, JsonObject, JsonObject>({
       definitionId: "atomic.v1",
       commandType: "advance",
       aggregateKind: "player",
@@ -160,11 +163,69 @@ describe("progression failures", () => {
     });
 
     expect(result.kind).toBe("invalid");
-    expect(result.aggregate).toEqual(aggregate);
-    if (result.kind === "invalid") {
-      expect(result.diagnostics[0]?.code).toBe("progression-limit-overrun");
-      expect(result.record.effectIntents).toBeUndefined();
-      expect(result.record.domainEvents).toBeUndefined();
+    if (result.kind !== "invalid" || result.phase !== "execution") {
+      throw new Error("expected recorded invalid result");
     }
+    expect(result.aggregate).toEqual(aggregate);
+    expect(result.diagnostics[0]?.code).toBe("progression-limit-overrun");
+    expect(result.record.effectIntents).toBeUndefined();
+    expect(result.record.domainEvents).toBeUndefined();
+  });
+
+  it("rejects reverted progression instead of returning a traced no-op", () => {
+    const reverted = defineProgression({
+      aggregateKind: "player",
+      graphId: "reverted.v1",
+      graphVersion: 1,
+      nodes: [{ nodeId: "node", initialStatus: "active" }],
+      automaticRules: [
+        {
+          ruleId: "restore",
+          targetNodeId: "node",
+          from: ["available"],
+          to: "active",
+          priority: 0,
+          when: () => true,
+        },
+      ],
+    });
+    const aggregate: Aggregate<JsonObject, "player"> = {
+      kind: "player",
+      id: "p1",
+      schemaVersion: 1,
+      stateVersion: 0,
+      authority: "local",
+      state: {},
+      progression: {
+        graphId: "reverted.v1",
+        graphVersion: 1,
+        nodes: [{ nodeId: "node", status: "active" }],
+      },
+    };
+    const definition = defineCommand<"player", JsonObject, JsonObject, JsonObject>({
+      definitionId: "reverted.v1",
+      commandType: "advance",
+      aggregateKind: "player",
+      handle: (target) => ({
+        kind: "accepted",
+        nextState: target.state,
+        outcome: {},
+        domainEvents: [],
+        effectIntents: [],
+        progressionIntents: [{ nodeId: "node", from: "active", to: "available" }],
+      }),
+    });
+
+    const result = executeCommand({
+      definition,
+      aggregate,
+      command,
+      observations: [],
+      progression: reverted,
+    });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") throw new Error("expected invalid");
+    expect(result.diagnostics[0]?.code).toBe("no-op-output-invalid");
   });
 });

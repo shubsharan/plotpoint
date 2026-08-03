@@ -5,7 +5,7 @@ This is the executable external-consumer acceptance path for the Gate 1 API. It 
 ## 1. Define Durable State and a Command
 
 ```ts
-import { defineCommand, type JsonObject, type ProgressionDefinition } from "@plotpoint/runtime";
+import { defineCommand, defineProgression, type JsonObject } from "@plotpoint/runtime";
 
 type ClueState = JsonObject & {
   readonly discovered: readonly string[];
@@ -19,7 +19,7 @@ type RecordClueOutcome = JsonObject & {
   readonly result: "recorded" | "already-recorded";
 };
 
-const recordClue = defineCommand<ClueState, RecordCluePayload, RecordClueOutcome>({
+const recordClue = defineCommand<"player", ClueState, RecordCluePayload, RecordClueOutcome>({
   definitionId: "example.record-clue.v1",
   commandType: "record-clue",
   aggregateKind: "player",
@@ -52,7 +52,8 @@ The handler receives a detached frozen aggregate and command. The clock value is
 ## 2. Define Parallel Progression
 
 ```ts
-const progression: ProgressionDefinition<ClueState, RecordCluePayload, RecordClueOutcome> = {
+const progression = defineProgression<"player", ClueState, RecordCluePayload, RecordClueOutcome>({
+  aggregateKind: "player",
   graphId: "tour.v1",
   graphVersion: 1,
   nodes: [
@@ -78,7 +79,7 @@ const progression: ProgressionDefinition<ClueState, RecordCluePayload, RecordClu
       when: ({ aggregateState }) => aggregateState.discovered.includes("alpha"),
     },
   ],
-};
+});
 ```
 
 Both unlock rules see the same pre-round state and apply as one batch. The stable result has two available nodes; there is no global current node.
@@ -107,7 +108,7 @@ const aggregate = playerFixture<ClueState>({
 
 const harness = createRuntimeHarness({
   failOnUnusedObservations: true,
-  auditAmbientApis: true,
+  auditKnownAmbientApis: true,
   repeat: 100,
 });
 

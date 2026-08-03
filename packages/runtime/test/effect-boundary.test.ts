@@ -11,7 +11,7 @@ import {
 type State = JsonObject & { readonly done: boolean };
 type Outcome = JsonObject & { readonly result: string };
 
-const aggregate: Aggregate<State> = {
+const aggregate: Aggregate<State, "session"> = {
   kind: "session",
   id: "s1",
   schemaVersion: 1,
@@ -19,7 +19,7 @@ const aggregate: Aggregate<State> = {
   authority: "server",
   state: { done: false },
 };
-const command: Command = {
+const command: Command<JsonObject, "session"> = {
   id: "c1",
   type: "finish",
   target: { kind: "session", id: "s1" },
@@ -30,7 +30,7 @@ const command: Command = {
 describe("event and effect boundary", () => {
   it("preserves order and never invokes effect-shaped data", () => {
     const invoked = vi.fn();
-    const definition = defineCommand<State, JsonObject, Outcome>({
+    const definition = defineCommand<"session", State, JsonObject, Outcome>({
       definitionId: "finish.v1",
       commandType: "finish",
       aggregateKind: "session",
@@ -57,7 +57,7 @@ describe("event and effect boundary", () => {
   });
 
   it("rejects commit-dependent outputs on a no-op", () => {
-    const definition = defineCommand<State, JsonObject, Outcome>({
+    const definition = defineCommand<"session", State, JsonObject, Outcome>({
       definitionId: "noop-output.v1",
       commandType: "finish",
       aggregateKind: "session",

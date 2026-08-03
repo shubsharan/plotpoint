@@ -21,13 +21,13 @@ Helpers construct ordinary canonical observation entries; they do not expose fal
 ```ts
 export function playerFixture<State extends JsonObject>(
   overrides: FixtureOverrides<State>,
-): Aggregate<State>;
+): Aggregate<State, "player">;
 export function teamFixture<State extends JsonObject>(
   overrides: FixtureOverrides<State>,
-): Aggregate<State>;
+): Aggregate<State, "team">;
 export function sessionFixture<State extends JsonObject>(
   overrides: FixtureOverrides<State>,
-): Aggregate<State>;
+): Aggregate<State, "session">;
 ```
 
 Fixture defaults are explicit stable Gate 1 values and appear in returned data. Builders create detached values so test fixtures cannot share mutable nested references accidentally.
@@ -35,25 +35,25 @@ Fixture defaults are explicit stable Gate 1 values and appear in returned data. 
 ## Scenario Harness
 
 ```ts
-export interface RuntimeScenario<State, Payload, Outcome> {
+export interface RuntimeScenario<State, Payload, Outcome, Kind> {
   readonly name: string;
-  readonly definition: CommandDefinition<State, Payload, Outcome>;
-  readonly aggregate: Aggregate<State>;
-  readonly command: Command<Payload>;
+  readonly definition: CommandDefinition<State, Payload, Outcome, Kind>;
+  readonly aggregate: Aggregate<State, Kind>;
+  readonly command: Command<Payload, Kind>;
   readonly observations: readonly Observation[];
-  readonly progression?: ProgressionDefinition<State, Payload, Outcome>;
+  readonly progression?: DefinedProgression<State, Payload, Outcome, Kind>;
   readonly policy?: Partial<RuntimePolicy>;
 }
 
 export interface HarnessOptions {
   readonly failOnUnusedObservations?: boolean;
-  readonly auditAmbientApis?: boolean;
+  readonly auditKnownAmbientApis?: boolean;
   readonly repeat?: number;
 }
 
 export function createRuntimeHarness(options?: HarnessOptions): RuntimeHarness;
-export function runScenario<State, Payload, Outcome>(
-  scenario: RuntimeScenario<State, Payload, Outcome>,
+export function runScenario<State, Payload, Outcome, Kind>(
+  scenario: RuntimeScenario<State, Payload, Outcome, Kind>,
   options?: HarnessOptions,
 ): ScenarioResult<State, Outcome>;
 ```
@@ -83,10 +83,10 @@ The harness never supplies a default ambient value.
 ## Replay
 
 ```ts
-export interface ReplayInput<State, Payload, Outcome> {
+export interface ReplayInput<State, Payload, Outcome, Kind> {
   readonly record: ExecutionRecord<State, Outcome>;
-  readonly definition: CommandDefinition<State, Payload, Outcome>;
-  readonly progression?: ProgressionDefinition<State, Payload, Outcome>;
+  readonly definition: CommandDefinition<State, Payload, Outcome, Kind>;
+  readonly progression?: DefinedProgression<State, Payload, Outcome, Kind>;
 }
 
 export function replayScenario<State, Payload, Outcome>(
@@ -94,7 +94,7 @@ export function replayScenario<State, Payload, Outcome>(
 ): ReplayResult<State, Outcome>;
 ```
 
-Replay requires the same stable command definition and progression definition identity because release identity and compiled definition lookup are later-gate concerns. It reuses the record's canonical aggregate, command, observations, and resolved policy, then compares the complete canonical result and record. A mismatch identifies the first material path rather than returning only `false`.
+Replay accepts only a recorded execution result's record. Preflight invalidity is intentionally non-replayable. Replay requires the same stable command and progression definition identity because release identity and compiled definition lookup are later-gate concerns. It reuses the record's canonical aggregate, command, observations, and resolved policy, then compares the complete canonical result and record. A mismatch identifies the first material path rather than returning only `false`.
 
 ## Assertions
 
@@ -103,13 +103,11 @@ Public assertions cover:
 - accepted, rejected, no-op, and invalid result variants;
 - canonical record equality;
 - caller input and nested alias preservation;
-- one-target aggregate isolation;
 - exact observation consumption;
-- effects returned only as data;
-- stabilized progression;
 - expected cycle, conflict, and limit diagnostics.
 
 Assertions produce test-framework-neutral thrown assertion errors. Plotpoint's own suite and documented contributor workflow use Vitest, while consumers may use another runner without changing runtime semantics.
+Mutation, isolation, effect non-execution, progression stability, exact consumption, and repeatability are enforced by the harness rather than exposed as assertions that overstate what one result can prove. Known ambient API use is reported as an explicit harness error naming the blocked API; it is not flattened into `handler-threw`.
 
 ## Internal Model Evidence
 

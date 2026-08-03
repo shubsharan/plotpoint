@@ -9,6 +9,7 @@ import {
   canonicalizeValue,
   DEFAULT_CANONICAL_LIMITS,
   type JsonObject,
+  type JsonValue,
 } from "./canonical-json.js";
 import type {
   Command,
@@ -82,9 +83,9 @@ function resolvePolicy(policy: Partial<RuntimePolicy> | undefined): RuntimePolic
   return Object.freeze(resolved as RuntimePolicy);
 }
 
-function canonicalClone<Value>(value: unknown, policy: RuntimePolicy): Value | Diagnostic {
+function canonicalClone(value: unknown, policy: RuntimePolicy): JsonValue | Diagnostic {
   const result = canonicalizeValue(value, policy);
-  return result.kind === "valid" ? (result.canonical.value as Value) : result.diagnostic;
+  return result.kind === "valid" ? result.canonical.value : result.diagnostic;
 }
 
 function isDiagnostic(value: unknown): value is Diagnostic {
@@ -99,7 +100,19 @@ function buildRecord<
 >(
   record: ExecutionRecord<State, Outcome, Payload, Kind>,
 ): ExecutionRecord<State, Outcome, Payload, Kind> {
-  return Object.freeze(record);
+  return Object.freeze({
+    ...record,
+    observations: Object.freeze([...record.observations]),
+    observationTrace: Object.freeze([...record.observationTrace]),
+    ...(record.domainEvents === undefined
+      ? {}
+      : { domainEvents: Object.freeze([...record.domainEvents]) }),
+    ...(record.effectIntents === undefined
+      ? {}
+      : { effectIntents: Object.freeze([...record.effectIntents]) }),
+    progressionTrace: Object.freeze([...record.progressionTrace]),
+    diagnostics: Object.freeze([...record.diagnostics]),
+  });
 }
 
 interface RecordContext<
@@ -132,20 +145,18 @@ function invalidResult<
   diagnostics: readonly Diagnostic[],
   attemptedProgressionTrace: readonly ProgressionTransition[] = [],
 ): InvalidExecution<State, Payload, Kind> {
-  const record = buildRecord<State, Payload, JsonObject, Kind>(
-    {
-      formatVersion: 1,
-      definitionId: context.definitionId,
-      policy: context.policy,
-      aggregateBefore: context.aggregate,
-      command: context.command,
-      observations: context.observations,
-      observationTrace: context.observationTrace,
-      terminal: "invalid",
-      progressionTrace: attemptedProgressionTrace,
-      diagnostics,
-    },
-  );
+  const record = buildRecord<State, Payload, JsonObject, Kind>({
+    formatVersion: 1,
+    definitionId: context.definitionId,
+    policy: context.policy,
+    aggregateBefore: context.aggregate,
+    command: context.command,
+    observations: context.observations,
+    observationTrace: context.observationTrace,
+    terminal: "invalid",
+    progressionTrace: attemptedProgressionTrace,
+    diagnostics,
+  });
   return Object.freeze({
     kind: "invalid",
     phase: "execution",
@@ -257,30 +268,31 @@ export function executeCommand<
     return preflightInvalid(resolvedPolicy);
   }
 
-  const aggregateClone = canonicalClone<Aggregate<State, Kind>>(input.aggregate, resolvedPolicy);
-  if (isDiagnostic(aggregateClone)) {
-    return preflightInvalid(aggregateClone);
+  const canonicalAggregate = canonicalClone(input.aggregate, resolvedPolicy);
+  if (isDiagnostic(canonicalAggregate)) {
+    return preflightInvalid(canonicalAggregate);
   }
-  const commandClone = canonicalClone<Command<Payload, Kind>>(input.command, resolvedPolicy);
-  const observationsClone = canonicalClone<readonly Observation[]>(
-    input.observations,
-    resolvedPolicy,
-  );
-  const contextBase = {
-    definitionId: input.definition.definitionId,
-    policy: resolvedPolicy,
-    aggregate: aggregateClone,
-    command: isDiagnostic(commandClone) ? input.command : commandClone,
-    observations: isDiagnostic(observationsClone) ? [] : observationsClone,
-    observationTrace: [],
-  };
-  if (isDiagnostic(commandClone)) return preflightInvalid(commandClone);
-  if (isDiagnostic(observationsClone)) return preflightInvalid(observationsClone);
-
-  const aggregateDiagnostic = validateAggregate(aggregateClone);
+  const aggregateDiagnostic = validateAggregate(canonicalAggregate);
   if (aggregateDiagnostic !== null) return preflightInvalid(aggregateDiagnostic);
-  const commandDiagnostic = validateCommandShape(commandClone);
+  const aggregateClone = canonicalAggregate as unknown as Aggregate<State, Kind>;
+
+  const canonicalCommand = canonicalClone(input.command, resolvedPolicy);
+  if (isDiagnostic(canonicalCommand)) return preflightInvalid(canonicalCommand);
+  const commandDiagnostic = validateCommandShape(canonicalCommand);
   if (commandDiagnostic !== null) return preflightInvalid(commandDiagnostic);
+  const commandClone = canonicalCommand as unknown as Command<Payload, Kind>;
+
+  const canonicalObservations = canonicalClone(input.observations, resolvedPolicy);
+  if (isDiagnostic(canonicalObservations)) return preflightInvalid(canonicalObservations);
+  if (!Array.isArray(canonicalObservations)) {
+    return preflightInvalid(
+      createDiagnostic("canonical-value-invalid", {
+        path: "/observations",
+        reason: "not-array",
+      }),
+    );
+  }
+  const observationsClone = canonicalObservations as readonly unknown[];
   const invalidObservationIndex = observationsClone.findIndex((observation) => {
     if (observation === null || typeof observation !== "object" || Array.isArray(observation))
       return true;
@@ -301,6 +313,15 @@ export function executeCommand<
       }),
     );
   }
+  const canonicalObservationScript = observationsClone as readonly Observation[];
+  const contextBase = {
+    definitionId: input.definition.definitionId,
+    policy: resolvedPolicy,
+    aggregate: aggregateClone,
+    command: commandClone,
+    observations: canonicalObservationScript,
+    observationTrace: [],
+  };
 
   if (
     commandClone.type !== input.definition.commandType ||
@@ -328,7 +349,7 @@ export function executeCommand<
     ]);
   }
 
-  const cursor = createObservationCursor(observationsClone);
+  const cursor = createObservationCursor(canonicalObservationScript);
   let rawDecision: unknown;
   try {
     rawDecision = input.definition.handle(aggregateClone, commandClone, cursor.context);
@@ -343,37 +364,33 @@ export function executeCommand<
     return invalidResult({ ...contextBase, observationTrace: cursor.trace }, [diagnostic]);
   }
 
-  const decisionClone = canonicalClone<HandlerDecision<State, Outcome>>(
-    rawDecision,
-    resolvedPolicy,
-  );
-  if (isDiagnostic(decisionClone) || !validateDecision<State, Outcome>(decisionClone)) {
+  const canonicalDecision = canonicalClone(rawDecision, resolvedPolicy);
+  if (isDiagnostic(canonicalDecision) || !validateDecision<State, Outcome>(canonicalDecision)) {
     return invalidResult({ ...contextBase, observationTrace: cursor.trace }, [
       createDiagnostic("handler-result-invalid", {
         commandId: commandClone.id,
-        reason: isDiagnostic(decisionClone) ? decisionClone.code : "invalid-shape",
+        reason: isDiagnostic(canonicalDecision) ? canonicalDecision.code : "invalid-shape",
       }),
     ]);
   }
+  const decisionClone = canonicalDecision;
 
   const recordContext = { ...contextBase, observationTrace: cursor.trace };
   if (decisionClone.kind === "rejected") {
-    const record = buildRecord<State, Payload, Outcome, Kind>(
-      {
-        formatVersion: 1,
-        definitionId: input.definition.definitionId,
-        policy: resolvedPolicy,
-        aggregateBefore: aggregateClone,
-        command: commandClone,
-        observations: observationsClone,
-        observationTrace: cursor.trace,
-        terminal: "rejected",
-        aggregateAfter: aggregateClone,
-        outcome: decisionClone.outcome,
-        progressionTrace: [],
-        diagnostics: [],
-      },
-    );
+    const record = buildRecord<State, Payload, Outcome, Kind>({
+      formatVersion: 1,
+      definitionId: input.definition.definitionId,
+      policy: resolvedPolicy,
+      aggregateBefore: aggregateClone,
+      command: commandClone,
+      observations: canonicalObservationScript,
+      observationTrace: cursor.trace,
+      terminal: "rejected",
+      aggregateAfter: aggregateClone,
+      outcome: decisionClone.outcome,
+      progressionTrace: [],
+      diagnostics: [],
+    });
     return Object.freeze({
       kind: "rejected",
       aggregate: aggregateClone,
@@ -441,22 +458,20 @@ export function executeCommand<
         }),
       ]);
     }
-    const record = buildRecord<State, Payload, Outcome, Kind>(
-      {
-        formatVersion: 1,
-        definitionId: input.definition.definitionId,
-        policy: resolvedPolicy,
-        aggregateBefore: aggregateClone,
-        command: commandClone,
-        observations: observationsClone,
-        observationTrace: cursor.trace,
-        terminal: "no-op",
-        aggregateAfter: aggregateClone,
-        outcome: decisionClone.outcome,
-        progressionTrace,
-        diagnostics: [],
-      },
-    );
+    const record = buildRecord<State, Payload, Outcome, Kind>({
+      formatVersion: 1,
+      definitionId: input.definition.definitionId,
+      policy: resolvedPolicy,
+      aggregateBefore: aggregateClone,
+      command: commandClone,
+      observations: canonicalObservationScript,
+      observationTrace: cursor.trace,
+      terminal: "no-op",
+      aggregateAfter: aggregateClone,
+      outcome: decisionClone.outcome,
+      progressionTrace,
+      diagnostics: [],
+    });
     return Object.freeze({
       kind: "no-op",
       aggregate: aggregateClone,
@@ -473,7 +488,7 @@ export function executeCommand<
       }),
     ]);
   }
-  const aggregateAfter = canonicalClone<Aggregate<State, Kind>>(
+  const canonicalAggregateAfter = canonicalClone(
     {
       ...aggregateClone,
       stateVersion: aggregateClone.stateVersion + 1,
@@ -482,28 +497,33 @@ export function executeCommand<
     },
     resolvedPolicy,
   );
-  if (isDiagnostic(aggregateAfter)) return invalidResult(recordContext, [aggregateAfter]);
+  if (isDiagnostic(canonicalAggregateAfter)) {
+    return invalidResult(recordContext, [canonicalAggregateAfter]);
+  }
+  const aggregateAfterDiagnostic = validateAggregate(canonicalAggregateAfter);
+  if (aggregateAfterDiagnostic !== null) {
+    return invalidResult(recordContext, [aggregateAfterDiagnostic]);
+  }
+  const aggregateAfter = canonicalAggregateAfter as unknown as Aggregate<State, Kind>;
 
   const domainEvents = decisionClone.domainEvents as readonly DomainEvent[];
   const effectIntents = decisionClone.effectIntents as readonly EffectIntent[];
-  const record = buildRecord<State, Payload, Outcome, Kind>(
-    {
-      formatVersion: 1,
-      definitionId: input.definition.definitionId,
-      policy: resolvedPolicy,
-      aggregateBefore: aggregateClone,
-      command: commandClone,
-      observations: observationsClone,
-      observationTrace: cursor.trace,
-      terminal: "accepted",
-      aggregateAfter,
-      outcome: decisionClone.outcome,
-      domainEvents,
-      effectIntents,
-      progressionTrace,
-      diagnostics: [],
-    },
-  );
+  const record = buildRecord<State, Payload, Outcome, Kind>({
+    formatVersion: 1,
+    definitionId: input.definition.definitionId,
+    policy: resolvedPolicy,
+    aggregateBefore: aggregateClone,
+    command: commandClone,
+    observations: canonicalObservationScript,
+    observationTrace: cursor.trace,
+    terminal: "accepted",
+    aggregateAfter,
+    outcome: decisionClone.outcome,
+    domainEvents,
+    effectIntents,
+    progressionTrace,
+    diagnostics: [],
+  });
   return Object.freeze({
     kind: "accepted",
     aggregate: aggregateAfter,

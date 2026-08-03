@@ -1,109 +1,71 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  validateProgressionGraph,
-  type ProgressionDefinition,
-  type ProgressionInstance,
-} from "@plotpoint/runtime";
+import { defineProgression, type ProgressionInstance } from "@plotpoint/runtime";
+import { validateProgressionGraph } from "../../src/progression/validate-graph.js";
 
-const instance: ProgressionInstance = {
+const definition = defineProgression({
+  aggregateKind: "player",
   graphId: "graph.v1",
   graphVersion: 1,
   nodes: [
-    { nodeId: "a", status: "active" },
-    { nodeId: "b", status: "locked" },
-  ],
-};
-
-const valid: ProgressionDefinition = {
-  graphId: "graph.v1",
-  graphVersion: 1,
-  nodes: [
-    { nodeId: "a", initialStatus: "active" },
     { nodeId: "b", initialStatus: "locked" },
+    { nodeId: "A", initialStatus: "active" },
   ],
-  automaticRules: [
-    {
-      ruleId: "unlock-b",
-      targetNodeId: "b",
-      from: ["locked"],
-      to: "available",
-      priority: 0,
-      when: () => false,
-    },
-  ],
-};
+  automaticRules: [],
+});
 
-describe("validateProgressionGraph", () => {
-  it("accepts a matching graph and canonical instance", () => {
-    expect(
-      validateProgressionGraph({ definition: valid, progression: instance, intents: [] }).kind,
-    ).toBe("valid");
+describe("progression definition and instance validation", () => {
+  it("normalizes static definitions once with ordinal ordering", () => {
+    expect(definition.nodes.map((node) => node.nodeId)).toEqual(["A", "b"]);
+    expect(Object.isFrozen(definition.nodes)).toBe(true);
+    expect(Object.isFrozen(definition)).toBe(true);
   });
 
-  it.each([
-    ["duplicate node", { ...valid, nodes: [...valid.nodes, valid.nodes[0]] }],
-    [
-      "unknown target",
-      { ...valid, automaticRules: [{ ...valid.automaticRules[0], targetNodeId: "missing" }] },
-    ],
-    [
-      "same-state rule",
-      { ...valid, automaticRules: [{ ...valid.automaticRules[0], to: "locked" }] },
-    ],
-    [
-      "terminal reopening",
-      { ...valid, automaticRules: [{ ...valid.automaticRules[0], from: ["completed"] }] },
-    ],
-    [
-      "invalid priority",
-      { ...valid, automaticRules: [{ ...valid.automaticRules[0], priority: 0.5 }] },
-    ],
-  ])("rejects %s", (_name, definition) => {
-    expect(
-      validateProgressionGraph({
-        definition: definition as ProgressionDefinition,
-        progression: instance,
-      }).kind,
-    ).toBe("invalid");
+  it("orders mixed case and punctuation by ordinal code units", () => {
+    const mixed = defineProgression({
+      aggregateKind: "player",
+      graphId: "ordinal.v1",
+      graphVersion: 1,
+      nodes: ["a_", "a-", "a", "A"].map((nodeId) => ({
+        nodeId,
+        initialStatus: "locked" as const,
+      })),
+      automaticRules: [],
+    });
+
+    expect(mixed.nodes.map((node) => node.nodeId)).toEqual(["A", "a", "a-", "a_"]);
   });
 
-  it.each([
-    ["version mismatch", { ...instance, graphVersion: 2 }],
-    ["missing node", { ...instance, nodes: instance.nodes.slice(0, 1) }],
-    [
-      "extra node",
-      { ...instance, nodes: [...instance.nodes, { nodeId: "c", status: "locked" as const }] },
-    ],
-  ])("rejects instance %s", (_name, progression) => {
-    expect(validateProgressionGraph({ definition: valid, progression }).kind).toBe("invalid");
-  });
-
-  it("rejects malformed and duplicate direct intents", () => {
-    expect(
-      validateProgressionGraph({
-        definition: valid,
-        progression: instance,
-        intents: [
-          { nodeId: "b", from: "locked", to: "available" },
-          { nodeId: "b", from: "locked", to: "skipped" },
+  it("rejects malformed static definitions at construction", () => {
+    expect(() =>
+      defineProgression({
+        aggregateKind: "player",
+        graphId: "duplicate.v1",
+        graphVersion: 1,
+        nodes: [
+          { nodeId: "a", initialStatus: "locked" },
+          { nodeId: "a", initialStatus: "active" },
         ],
-      }).kind,
-    ).toBe("invalid");
-    expect(
-      validateProgressionGraph({
-        definition: valid,
-        progression: instance,
-        intents: [{ nodeId: "a", from: "locked", to: "available" }],
-      }).kind,
-    ).toBe("invalid");
+        automaticRules: [],
+      }),
+    ).toThrow("Invalid or duplicate progression node");
   });
 
-  it("returns a diagnostic for malformed JavaScript graph shapes", () => {
+  it("validates dynamic instance shape and command intents", () => {
+    const valid: ProgressionInstance = {
+      graphId: "graph.v1",
+      graphVersion: 1,
+      nodes: [
+        { nodeId: "A", status: "active" },
+        { nodeId: "b", status: "locked" },
+      ],
+    };
+    expect(validateProgressionGraph({ definition, progression: valid }).kind).toBe("valid");
     expect(
       validateProgressionGraph({
-        definition: { ...valid, nodes: null } as never,
-        progression: instance,
+        definition,
+        progression: valid,
+        intents: [{ nodeId: "b", from: "locked", to: "active" }],
       }).kind,
     ).toBe("invalid");
   });

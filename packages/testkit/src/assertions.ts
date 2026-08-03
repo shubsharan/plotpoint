@@ -1,6 +1,5 @@
 import {
   canonicalizeValue,
-  type Aggregate,
   type DiagnosticCode,
   type ExecutionRecord,
   type ExecutionResult,
@@ -102,28 +101,12 @@ export function assertInputsPreserved(before: unknown, after: unknown): void {
   if (difference !== null) throw new PlotpointAssertionError(`input-mutated:${difference}`);
 }
 
-export function assertAggregateIsolation(
-  before: readonly Aggregate[],
-  after: readonly Aggregate[],
-): void {
-  assertInputsPreserved(before, after);
-}
-
 export function assertObservationConsumption(record: ExecutionRecord, expectedCount: number): void {
   if (record.observationTrace.length !== expectedCount) {
     throw new PlotpointAssertionError(
       `observation-consumption-mismatch:${record.observationTrace.length}:${expectedCount}`,
     );
   }
-}
-
-export function assertEffectsAsData(record: ExecutionRecord): void {
-  canonicalValue(record.effectIntents ?? []);
-}
-
-export function assertProgressionStable(result: ExecutionResult<JsonObject, JsonObject>): void {
-  if (result.kind === "invalid") throw new PlotpointAssertionError("progression-not-stable");
-  canonicalValue(result.aggregate.progression ?? null);
 }
 
 export function assertDiagnostic(

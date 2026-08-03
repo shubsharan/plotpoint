@@ -2,16 +2,16 @@ import { bench, describe } from "vitest";
 
 import {
   defineCommand,
+  defineProgression,
   executeCommand,
   type Aggregate,
   type Command,
   type JsonObject,
-  type ProgressionDefinition,
 } from "@plotpoint/runtime";
 
 type State = JsonObject & { readonly count: number };
 
-const aggregate: Aggregate<State> = {
+const aggregate: Aggregate<State, "player"> = {
   kind: "player",
   id: "player-1",
   schemaVersion: 1,
@@ -27,14 +27,14 @@ const aggregate: Aggregate<State> = {
     })),
   },
 };
-const command: Command = {
+const command: Command<JsonObject, "player"> = {
   id: "command-1",
   type: "increment",
   target: { kind: "player", id: "player-1" },
   expectedStateVersion: 0,
   payload: {},
 };
-const definition = defineCommand<State, JsonObject, JsonObject>({
+const definition = defineCommand<"player", State, JsonObject, JsonObject>({
   definitionId: "benchmark.increment.v1",
   commandType: "increment",
   aggregateKind: "player",
@@ -49,7 +49,8 @@ const definition = defineCommand<State, JsonObject, JsonObject>({
     };
   },
 });
-const progression: ProgressionDefinition<State, JsonObject, JsonObject> = {
+const progression = defineProgression<"player", State, JsonObject, JsonObject>({
+  aggregateKind: "player",
   graphId: "benchmark.v1",
   graphVersion: 1,
   nodes: Array.from({ length: 20 }, (_value, index) => ({
@@ -64,7 +65,7 @@ const progression: ProgressionDefinition<State, JsonObject, JsonObject> = {
     priority: 0,
     when: () => true,
   })),
-};
+});
 
 describe("representative Gate 1 baselines", () => {
   bench("command with a twenty-node parallel progression batch", () => {

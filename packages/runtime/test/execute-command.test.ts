@@ -13,7 +13,7 @@ type State = JsonObject & { readonly count: number };
 type Payload = JsonObject & { readonly amount: number };
 type Outcome = JsonObject & { readonly result: string };
 
-const aggregate: Aggregate<State> = {
+const aggregate: Aggregate<State, "player"> = {
   kind: "player",
   id: "player-1",
   schemaVersion: 1,
@@ -22,7 +22,7 @@ const aggregate: Aggregate<State> = {
   state: { count: 1 },
 };
 
-const command: Command<Payload> = {
+const command: Command<Payload, "player"> = {
   id: "command-1",
   type: "increment",
   target: { kind: "player", id: "player-1" },
@@ -32,7 +32,7 @@ const command: Command<Payload> = {
 
 describe("executeCommand", () => {
   it("returns an accepted deterministic state change", () => {
-    const definition = defineCommand<State, Payload, Outcome>({
+    const definition = defineCommand<"player", State, Payload, Outcome>({
       definitionId: "increment.v1",
       commandType: "increment",
       aggregateKind: "player",
@@ -56,13 +56,14 @@ describe("executeCommand", () => {
     });
 
     expect(result.kind).toBe("accepted");
+    if (result.kind !== "accepted") throw new Error("expected accepted");
     expect(result.aggregate.stateVersion).toBe(5);
     expect(result.aggregate.state).toEqual({ count: 3 });
     expect(aggregate.stateVersion).toBe(4);
   });
 
   it("returns semantic rejection without changing state", () => {
-    const definition = defineCommand<State, Payload, Outcome>({
+    const definition = defineCommand<"player", State, Payload, Outcome>({
       definitionId: "reject.v1",
       commandType: "increment",
       aggregateKind: "player",
@@ -79,11 +80,12 @@ describe("executeCommand", () => {
     });
 
     expect(result.kind).toBe("rejected");
+    if (result.kind !== "rejected") throw new Error("expected rejected");
     expect(result.aggregate).toEqual(aggregate);
   });
 
   it("returns a true no-op without advancing the version", () => {
-    const definition = defineCommand<State, Payload, Outcome>({
+    const definition = defineCommand<"player", State, Payload, Outcome>({
       definitionId: "noop.v1",
       commandType: "increment",
       aggregateKind: "player",
@@ -107,6 +109,7 @@ describe("executeCommand", () => {
     });
 
     expect(result.kind).toBe("no-op");
+    if (result.kind !== "no-op") throw new Error("expected no-op");
     expect(result.aggregate.stateVersion).toBe(4);
   });
 
@@ -124,7 +127,7 @@ describe("executeCommand", () => {
       code: "handler-result-invalid",
     },
   ])("returns invalid for $name", ({ handle, code }) => {
-    const definition = defineCommand<State, Payload, Outcome>({
+    const definition = defineCommand<"player", State, Payload, Outcome>({
       definitionId: "invalid.v1",
       commandType: "increment",
       aggregateKind: "player",
@@ -144,7 +147,7 @@ describe("executeCommand", () => {
   });
 
   it("produces identical complete records across 100 executions", () => {
-    const definition = defineCommand<State, Payload, Outcome>({
+    const definition = defineCommand<"player", State, Payload, Outcome>({
       definitionId: "repeat.v1",
       commandType: "increment",
       aggregateKind: "player",
@@ -167,6 +170,7 @@ describe("executeCommand", () => {
         command,
         observations: [],
       });
+      if (!("record" in result)) throw new Error("expected recorded result");
       const canonical = canonicalizeValue(result.record);
       if (canonical.kind === "invalid") throw new Error(canonical.diagnostic.code);
       return canonical.canonical.text;
@@ -176,7 +180,7 @@ describe("executeCommand", () => {
   });
 
   it("diagnoses malformed JavaScript command and handler output shapes", () => {
-    const definition = defineCommand<State, Payload, Outcome>({
+    const definition = defineCommand<"player", State, Payload, Outcome>({
       definitionId: "shape.v1",
       commandType: "increment",
       aggregateKind: "player",
@@ -200,11 +204,87 @@ describe("executeCommand", () => {
 
     expect(malformedCommand.kind).toBe("invalid");
     if (malformedCommand.kind === "invalid") {
+      expect(malformedCommand.phase).toBe("preflight");
       expect(malformedCommand.diagnostics[0]?.code).toBe("command-invalid");
     }
     expect(malformedOutput.kind).toBe("invalid");
     if (malformedOutput.kind === "invalid") {
       expect(malformedOutput.diagnostics[0]?.code).toBe("handler-result-invalid");
+    }
+  });
+
+  it("returns preflight invalidity for non-canonical inputs without throwing", () => {
+    const definition = defineCommand<"player", State, Payload, Outcome>({
+      definitionId: "preflight.v1",
+      commandType: "increment",
+      aggregateKind: "player",
+      handle: () => ({ kind: "rejected", outcome: { result: "unused" } }),
+    });
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+
+    const cyclicCommandPayload: Record<string, unknown> = {};
+    cyclicCommandPayload.self = cyclicCommandPayload;
+    const inputs = [
+      {
+        definition,
+        aggregate: { ...aggregate, state: cyclic as never },
+        command,
+        observations: [],
+      },
+      {
+        definition,
+        aggregate,
+        command: { ...command, payload: cyclicCommandPayload as never },
+        observations: [],
+      },
+      {
+        definition,
+        aggregate,
+        command,
+        observations: [{ kind: "clock", key: "now" } as never],
+      },
+      {
+        definition,
+        aggregate,
+        command,
+        observations: [],
+        policy: { maxCanonicalNodes: -1 },
+      },
+    ];
+
+    for (const input of inputs) {
+      expect(() => executeCommand(input)).not.toThrow();
+      const result = executeCommand(input);
+      expect(result).toMatchObject({ kind: "invalid", phase: "preflight" });
+      expect("record" in result).toBe(false);
+      expect("aggregate" in result).toBe(false);
+    }
+  });
+
+  it("does not impose the component node limit again on the assembled record", () => {
+    const definition = defineCommand<"player", State, Payload, Outcome>({
+      definitionId: "record-budget.v1",
+      commandType: "increment",
+      aggregateKind: "player",
+      handle: () => ({ kind: "rejected", outcome: { result: "bounded" } }),
+    });
+
+    const result = executeCommand({
+      definition,
+      aggregate,
+      command,
+      observations: [],
+      policy: { maxCanonicalNodes: 20 },
+    });
+
+    expect(result.kind).toBe("rejected");
+    if (result.kind === "rejected") {
+      expect(Object.isFrozen(result.record)).toBe(true);
+      expect(Object.isFrozen(result.record.observations)).toBe(true);
+      expect(Object.isFrozen(result.record.observationTrace)).toBe(true);
+      expect(Object.isFrozen(result.record.progressionTrace)).toBe(true);
+      expect(Object.isFrozen(result.record.diagnostics)).toBe(true);
     }
   });
 });

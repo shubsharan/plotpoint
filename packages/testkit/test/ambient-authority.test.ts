@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { defineCommand, type Aggregate, type Command, type JsonObject } from "@plotpoint/runtime";
 import { createRuntimeHarness } from "@plotpoint/testkit";
 
-const aggregate: Aggregate = {
+const aggregate: Aggregate<JsonObject, "player"> = {
   kind: "player",
   id: "p1",
   schemaVersion: 1,
@@ -11,7 +11,7 @@ const aggregate: Aggregate = {
   authority: "local",
   state: { value: 0 },
 };
-const command: Command = {
+const command: Command<JsonObject, "player"> = {
   id: "c1",
   type: "audit",
   target: { kind: "player", id: "p1" },
@@ -28,7 +28,7 @@ describe.sequential("ambient authority audit", () => {
     ["storage", () => globalThis.localStorage.getItem("value")],
   ] as const)("blocks %s access and restores the global", (_name, access) => {
     const originalNow = Date.now;
-    const definition = defineCommand<JsonObject, JsonObject, JsonObject>({
+    const definition = defineCommand<"player", JsonObject, JsonObject, JsonObject>({
       definitionId: "audit.v1",
       commandType: "audit",
       aggregateKind: "player",
@@ -45,16 +45,15 @@ describe.sequential("ambient authority audit", () => {
       },
     });
 
-    const result = createRuntimeHarness({ auditAmbientApis: true }).run({
-      name: "ambient access",
-      definition,
-      aggregate,
-      command,
-      observations: [],
-    });
-
-    expect(result.kind).toBe("invalid");
-    if (result.kind === "invalid") expect(result.diagnostics[0]?.code).toBe("handler-threw");
+    expect(() =>
+      createRuntimeHarness({ auditKnownAmbientApis: true }).run({
+        name: "ambient access",
+        definition,
+        aggregate,
+        command,
+        observations: [],
+      }),
+    ).toThrow(`ambient-authority-used:${_name}`);
     expect(Date.now).toBe(originalNow);
     expect(() => Date.now()).not.toThrow();
   });

@@ -1,5 +1,5 @@
 import type { JsonObject } from "../canonical-json.js";
-import type { AggregateKind } from "../aggregates.js";
+import { isAggregateKind, type AggregateKind } from "../aggregates.js";
 import type { Command, DomainEvent } from "../commands.js";
 import type { ObservationConsumption } from "../observations.js";
 import { PROGRESSION_STATUSES, type ProgressionInstance, type ProgressionStatus } from "./state.js";
@@ -63,6 +63,7 @@ export interface ProgressionDefinition<
   Outcome extends JsonObject = JsonObject,
   Kind extends AggregateKind = AggregateKind,
 > {
+  readonly aggregateKind: Kind;
   readonly graphId: string;
   readonly graphVersion: number;
   readonly nodes: readonly ProgressionNodeDefinition[];
@@ -81,10 +82,10 @@ export interface DefinedProgression<
 }
 
 export function defineProgression<
+  Kind extends AggregateKind,
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
-  Kind extends AggregateKind = AggregateKind,
 >(
   definition: ProgressionDefinition<State, Payload, Outcome, Kind>,
 ): DefinedProgression<State, Payload, Outcome, Kind> {
@@ -93,6 +94,7 @@ export function defineProgression<
     typeof definition !== "object" ||
     !Array.isArray(definition.nodes) ||
     !Array.isArray(definition.automaticRules) ||
+    !isAggregateKind(definition.aggregateKind) ||
     !validIdentity(definition.graphId) ||
     !Number.isSafeInteger(definition.graphVersion) ||
     definition.graphVersion < 1
@@ -158,6 +160,7 @@ export function defineProgression<
   );
 
   return Object.freeze({
+    aggregateKind: definition.aggregateKind,
     graphId: definition.graphId,
     graphVersion: definition.graphVersion,
     nodes: Object.freeze(nodes),

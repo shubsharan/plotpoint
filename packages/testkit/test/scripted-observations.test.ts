@@ -44,7 +44,7 @@ describe("scripted observations", () => {
 
   it("preserves runtime exhaustion and order diagnostics without fallbacks", () => {
     type State = JsonObject & { readonly value: string };
-    const aggregate: Aggregate<State> = {
+    const aggregate: Aggregate<State, "player"> = {
       kind: "player",
       id: "p1",
       schemaVersion: 1,
@@ -52,14 +52,14 @@ describe("scripted observations", () => {
       authority: "local",
       state: { value: "" },
     };
-    const command: Command = {
+    const command: Command<JsonObject, "player"> = {
       id: "c1",
       type: "observe",
       target: { kind: "player", id: "p1" },
       expectedStateVersion: 0,
       payload: {},
     };
-    const definition = defineCommand<State, JsonObject, JsonObject>({
+    const definition = defineCommand<"player", State, JsonObject, JsonObject>({
       definitionId: "observe.v1",
       commandType: "observe",
       aggregateKind: "player",
@@ -95,7 +95,7 @@ describe("scripted observations", () => {
     expect(() =>
       harness.run({
         name: "unused observation",
-        definition: defineCommand<State, JsonObject, JsonObject>({
+        definition: defineCommand<"player", State, JsonObject, JsonObject>({
           definitionId: "unused.v1",
           commandType: "observe",
           aggregateKind: "player",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { defineCommand, type JsonObject, type ProgressionDefinition } from "@plotpoint/runtime";
+import { defineCommand, defineProgression, type JsonObject } from "@plotpoint/runtime";
 import {
   assertAccepted,
   clock,
@@ -15,7 +15,7 @@ type Outcome = JsonObject & { readonly result: string };
 
 describe("quickstart acceptance", () => {
   it("repeats and replays the parallel unlock scenario through package roots", () => {
-    const definition = defineCommand<ClueState, Payload, Outcome>({
+    const definition = defineCommand<"player", ClueState, Payload, Outcome>({
       definitionId: "example.record-clue.v1",
       commandType: "record-clue",
       aggregateKind: "player",
@@ -31,7 +31,8 @@ describe("quickstart acceptance", () => {
         };
       },
     });
-    const progression: ProgressionDefinition<ClueState, Payload, Outcome> = {
+    const progression = defineProgression<"player", ClueState, Payload, Outcome>({
+      aggregateKind: "player",
       graphId: "tour.v1",
       graphVersion: 1,
       nodes: [
@@ -57,7 +58,7 @@ describe("quickstart acceptance", () => {
           when: ({ aggregateState }) => aggregateState.discovered.includes("alpha"),
         },
       ],
-    };
+    });
     const aggregate = playerFixture<ClueState>({
       id: "player-1",
       stateVersion: 4,
