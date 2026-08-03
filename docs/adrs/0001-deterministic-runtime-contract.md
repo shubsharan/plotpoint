@@ -1,5 +1,5 @@
 ---
-status: Proposed
+status: Accepted
 ---
 
 # ADR: Deterministic Runtime Contract
