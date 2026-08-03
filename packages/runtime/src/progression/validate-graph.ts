@@ -1,6 +1,7 @@
+import type { AggregateKind } from "../aggregates.js";
 import type { JsonObject } from "../canonical-json.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics.js";
-import type { ProgressionDefinition } from "./graph.js";
+import type { DefinedProgression } from "./graph.js";
 import {
   PROGRESSION_STATUSES,
   type ProgressionInstance,
@@ -31,8 +32,9 @@ export interface ValidateProgressionGraphInput<
   State extends JsonObject = JsonObject,
   Payload extends JsonObject = JsonObject,
   Outcome extends JsonObject = JsonObject,
+  Kind extends AggregateKind = AggregateKind,
 > {
-  readonly definition: ProgressionDefinition<State, Payload, Outcome>;
+  readonly definition: DefinedProgression<State, Payload, Outcome, Kind>;
   readonly progression: ProgressionInstance;
   readonly intents?: readonly ProgressionIntent[];
   readonly commandId?: string;
@@ -46,119 +48,14 @@ function invalid(code: Diagnostic["code"], details: JsonObject): ValidateProgres
   return { kind: "invalid", diagnostic: createDiagnostic(code, details) };
 }
 
-function validIdentity(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && /^[\x21-\x7e]+$/.test(value);
-}
-
 export function validateProgressionGraph<
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
->(input: ValidateProgressionGraphInput<State, Payload, Outcome>): ValidateProgressionGraphResult {
+  Kind extends AggregateKind,
+>(input: ValidateProgressionGraphInput<State, Payload, Outcome, Kind>): ValidateProgressionGraphResult {
   const { definition, progression, intents = [] } = input;
-  if (
-    definition === null ||
-    typeof definition !== "object" ||
-    !Array.isArray(definition.nodes) ||
-    !Array.isArray(definition.automaticRules)
-  ) {
-    return invalid("progression-graph-invalid", {
-      field: "definition",
-      reason: "invalid-definition-shape",
-    });
-  }
-  if (
-    !validIdentity(definition.graphId) ||
-    !Number.isSafeInteger(definition.graphVersion) ||
-    definition.graphVersion < 1
-  ) {
-    return invalid("progression-graph-invalid", { field: "identity", graphId: definition.graphId });
-  }
-
-  const nodeIds = new Set<string>();
-  for (const node of definition.nodes) {
-    if (node === null || typeof node !== "object" || Array.isArray(node)) {
-      return invalid("progression-graph-invalid", {
-        field: "nodes",
-        graphId: definition.graphId,
-        reason: "invalid-node",
-      });
-    }
-    if (
-      !validIdentity(node.nodeId) ||
-      !isProgressionStatus(node.initialStatus) ||
-      nodeIds.has(node.nodeId)
-    ) {
-      return invalid("progression-graph-invalid", {
-        field: "nodes",
-        graphId: definition.graphId,
-        nodeId: node.nodeId,
-        reason: nodeIds.has(node.nodeId) ? "duplicate-node" : "invalid-node",
-      });
-    }
-    nodeIds.add(node.nodeId);
-  }
-
-  const ruleIds = new Set<string>();
-  for (const rule of definition.automaticRules) {
-    if (
-      rule === null ||
-      typeof rule !== "object" ||
-      Array.isArray(rule) ||
-      !Array.isArray(rule.from)
-    ) {
-      return invalid("progression-graph-invalid", {
-        field: "automaticRules",
-        graphId: definition.graphId,
-        reason: "invalid-rule-shape",
-      });
-    }
-    if (!validIdentity(rule.ruleId) || ruleIds.has(rule.ruleId)) {
-      return invalid("progression-graph-invalid", {
-        field: "automaticRules",
-        graphId: definition.graphId,
-        reason: "invalid-or-duplicate-rule",
-        ruleId: rule.ruleId,
-      });
-    }
-    ruleIds.add(rule.ruleId);
-    if (
-      !nodeIds.has(rule.targetNodeId) ||
-      !Number.isSafeInteger(rule.priority) ||
-      typeof rule.when !== "function"
-    ) {
-      return invalid("progression-graph-invalid", {
-        field: "automaticRules",
-        graphId: definition.graphId,
-        reason: "invalid-rule-target-priority-or-predicate",
-        ruleId: rule.ruleId,
-      });
-    }
-    if (
-      rule.from.length === 0 ||
-      !isProgressionStatus(rule.to) ||
-      new Set(rule.from).size !== rule.from.length
-    ) {
-      return invalid("progression-graph-invalid", {
-        field: "automaticRules",
-        graphId: definition.graphId,
-        reason: "invalid-rule-statuses",
-        ruleId: rule.ruleId,
-      });
-    }
-    for (const from of rule.from) {
-      if (!isProgressionStatus(from) || !isLegalProgressionTransition(from, rule.to)) {
-        return invalid("progression-graph-invalid", {
-          field: "automaticRules",
-          from,
-          graphId: definition.graphId,
-          reason: "illegal-lifecycle-transition",
-          ruleId: rule.ruleId,
-          to: rule.to,
-        });
-      }
-    }
-  }
+  const nodeIds = new Set(definition.nodes.map((node) => node.nodeId));
 
   if (
     progression === null ||

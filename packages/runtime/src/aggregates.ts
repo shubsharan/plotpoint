@@ -8,8 +8,11 @@ export type AggregateKind = (typeof AGGREGATE_KINDS)[number];
 export const AGGREGATE_AUTHORITIES = ["local", "server"] as const;
 export type AggregateAuthority = (typeof AGGREGATE_AUTHORITIES)[number];
 
-export interface Aggregate<State extends JsonObject = JsonObject> {
-  readonly kind: AggregateKind;
+export interface Aggregate<
+  State extends JsonObject = JsonObject,
+  Kind extends AggregateKind = AggregateKind,
+> {
+  readonly kind: Kind;
   readonly id: string;
   readonly schemaVersion: number;
   readonly stateVersion: number;

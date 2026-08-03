@@ -9,9 +9,9 @@ JsonValue = null | boolean | finite number | string | JsonValue[] | JsonObject
 JsonObject = string-keyed JsonValue properties
 ```
 
-Canonicalization returns an isolated, recursively frozen value plus canonical text. Arrays retain order; object keys sort lexicographically; negative zero becomes zero. Validation uses the caller-resolved policy limits and reports the first invalid path without invoking getters, accessors, or `toJSON`.
+Canonicalization of `unknown` returns an isolated `JsonValue` plus canonical text; it does not claim a caller-selected domain type. Arrays retain order; object keys use ordinal code-unit order; negative zero becomes zero. Objects retain `Object.prototype`, are built with descriptor-safe data properties so reserved keys remain inert, and are recursively frozen. Validation uses the caller-resolved policy limits and reports the first invalid path without invoking getters, accessors, or `toJSON`.
 
-Invalid values include undefined, bigint, symbol, function, non-finite number, sparse or extended arrays, accessors, symbol keys, non-enumerable properties, custom prototypes, class instances, dates, maps, sets, typed arrays, host handles, cyclic references, and strings containing lone UTF-16 surrogates.
+Invalid values include undefined, bigint, symbol, function, non-finite number, sparse or extended arrays, accessors, symbol keys, non-enumerable properties, custom input prototypes, class instances, dates, maps, sets, typed arrays, host handles, cyclic references, and strings containing lone UTF-16 surrogates.
 
 ## Runtime Policy
 
@@ -49,7 +49,7 @@ An aggregate owns at most one Gate 1 progression instance. This is not a second 
 | `expectedStateVersion` | non-negative safe integer | Must equal aggregate state version    | Concurrency precondition                         |
 | `payload`              | canonical object          | Definition validates domain shape     | Game-defined input                               |
 
-Each command definition binds one command type to one aggregate kind and a synchronous handler. No runtime registry is introduced; definitions are explicit values later composed at build time.
+Each command definition binds one command type and one aggregate-kind generic to a synchronous handler. Aggregate, command, definition, progression, fixture, result, and replay types share that kind. No runtime registry is introduced; definitions are explicit values later composed at build time.
 
 ## Observation Script
 
@@ -85,16 +85,23 @@ A rejected decision cannot contain next state, events, effects, or progression i
 
 ## Execution Result
 
-| Variant    | Aggregate after                | Outputs                                            | Version behavior                                  |
-| ---------- | ------------------------------ | -------------------------------------------------- | ------------------------------------------------- |
-| `accepted` | Canonical stabilized candidate | Outcome, ordered events/effects, progression trace | Advance once if game or progression state changed |
-| `no-op`    | Canonical original             | Outcome only                                       | Preserve version                                  |
-| `rejected` | Canonical original             | Rejection outcome only                             | Preserve version                                  |
-| `invalid`  | Canonical original             | Diagnostics and non-committable attempted trace    | Preserve version                                  |
+| Variant                     | Aggregate after                | Record | Outputs                                            | Version behavior                                  |
+| --------------------------- | ------------------------------ | ------ | -------------------------------------------------- | ------------------------------------------------- |
+| `invalid`, phase `preflight`| Absent                         | Absent | Diagnostics                                        | No canonical aggregate exists                     |
+| `invalid`, phase `execution`| Canonical original             | Yes    | Diagnostics and non-committable attempted trace    | Preserve version                                  |
+| `accepted`                  | Canonical stabilized candidate | Yes    | Outcome, ordered events/effects, progression trace | Advance once if game or progression state changed |
+| `no-op`                     | Canonical original             | Yes    | Outcome only                                       | Preserve version                                  |
+| `rejected`                  | Canonical original             | Yes    | Rejection outcome only                             | Preserve version                                  |
 
-If an accepted candidate has no final state or progression difference, it is a no-op. Events, effects, or progression work on a no-op are invalid because they imply commit-dependent work without a committed durable change.
+Preflight covers policy, aggregate, command, and observation canonicalization and shape validation. If an accepted candidate has no final state or progression difference, it is a no-op only when events, effects, direct intents, automatic transitions, and the complete progression trace are empty. Otherwise the candidate is invalid because it performed commit-dependent work without a durable change.
 
 ## Progression Definition
+
+Authors pass static graph metadata to `defineProgression`. The builder validates identities,
+lifecycle moves, references, priorities, and predicate shape; normalizes nodes and rules with ordinal
+ordering; freezes all static metadata; and returns a kind-parameterized defined progression. Command
+execution accepts only this defined value and validates the current durable instance and dynamic
+rule behavior.
 
 ### Node Definition
 
@@ -165,7 +172,8 @@ Core codes:
 
 ## Execution Record
 
-`formatVersion: 1` records:
+Every post-preflight terminal result contains a record. Preflight invalidity has no record because its
+raw input cannot safely become canonical. The redesigned record format records:
 
 - stable command definition identity and resolved runtime policy;
 - canonical command, aggregate before, progression before, and observations provided;
@@ -175,7 +183,11 @@ Core codes:
 - semantic outcome, ordered domain events, and ordered effect intents when committable;
 - direct and automatic progression trace plus stable state or attempted failure context.
 
-The record excludes execution time, duration, stack traces, host errors, generated record IDs, and hashes used as the only source of truth. It is a replay fixture containing raw game state, not an operational log; later telemetry must apply redaction policy.
+The record is assembled from already canonical components rather than canonicalizing a raw combined
+object. Canonical depth and node limits apply independently to each input or output boundary. The
+record excludes execution time, duration, stack traces, host errors, generated record IDs, and
+hashes used as the only source of truth. It is a replay fixture containing game state, not an
+operational log; later telemetry must apply redaction policy.
 
 ## Relationships and Atomicity
 

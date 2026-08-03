@@ -1,8 +1,14 @@
+import type { AggregateKind } from "../aggregates.js";
 import { canonicalizeValue, type JsonObject } from "../canonical-json.js";
 import type { Command, DomainEvent } from "../commands.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics.js";
 import type { ObservationConsumption } from "../observations.js";
-import type { AutomaticRule, ProgressionDefinition, ProgressionRuleInput } from "./graph.js";
+import {
+  compareOrdinal,
+  type AutomaticRule,
+  type DefinedProgression,
+  type ProgressionRuleInput,
+} from "./graph.js";
 import type {
   ProgressionInstance,
   ProgressionIntent,
@@ -15,12 +21,13 @@ export interface EvaluateProgressionInput<
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
+  Kind extends AggregateKind = AggregateKind,
 > {
-  readonly definition: ProgressionDefinition<State, Payload, Outcome>;
+  readonly definition: DefinedProgression<State, Payload, Outcome, Kind>;
   readonly progression: ProgressionInstance;
   readonly intents: readonly ProgressionIntent[];
   readonly aggregateState: State;
-  readonly command: Command<Payload>;
+  readonly command: Command<Payload, Kind>;
   readonly outcome: Outcome;
   readonly domainEvents: readonly DomainEvent[];
   readonly observationTrace: readonly ObservationConsumption[];
@@ -48,7 +55,7 @@ function canonicalProgression(
     graphId,
     graphVersion,
     nodes: [...statuses.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => compareOrdinal(left, right))
       .map(([nodeId, status]) => ({ nodeId, status })),
   };
   const result = canonicalizeValue(candidate);
@@ -79,7 +86,8 @@ export function evaluateProgression<
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
->(input: EvaluateProgressionInput<State, Payload, Outcome>): ProgressionEvaluationResult {
+  Kind extends AggregateKind,
+>(input: EvaluateProgressionInput<State, Payload, Outcome, Kind>): ProgressionEvaluationResult {
   const validation = validateProgressionGraph({
     definition: input.definition,
     progression: input.progression,
@@ -125,7 +133,7 @@ export function evaluateProgression<
 
   while (true) {
     round += 1;
-    const ruleInputCandidate: ProgressionRuleInput<State, Payload, Outcome> = {
+    const ruleInputCandidate: ProgressionRuleInput<State, Payload, Outcome, Kind> = {
       aggregateState: input.aggregateState,
       progression,
       command: input.command,
@@ -147,9 +155,10 @@ export function evaluateProgression<
     const frozenInput = canonicalInput.canonical.value as unknown as ProgressionRuleInput<
       State,
       Payload,
-      Outcome
+      Outcome,
+      Kind
     >;
-    const enabled: AutomaticRule<State, Payload, Outcome>[] = [];
+    const enabled: AutomaticRule<State, Payload, Outcome, Kind>[] = [];
     for (const rule of input.definition.automaticRules) {
       const current = statuses.get(rule.targetNodeId);
       if (current === undefined || !rule.from.includes(current)) continue;
@@ -181,13 +190,13 @@ export function evaluateProgression<
       if (selected) enabled.push(rule);
     }
 
-    const byTarget = new Map<string, AutomaticRule<State, Payload, Outcome>[]>();
+    const byTarget = new Map<string, AutomaticRule<State, Payload, Outcome, Kind>[]>();
     for (const rule of enabled) {
       const group = byTarget.get(rule.targetNodeId) ?? [];
       group.push(rule);
       byTarget.set(rule.targetNodeId, group);
     }
-    const winners: AutomaticRule<State, Payload, Outcome>[] = [];
+    const winners: AutomaticRule<State, Payload, Outcome, Kind>[] = [];
     for (const [nodeId, rules] of byTarget) {
       const lowestPriority = Math.min(...rules.map((rule) => rule.priority));
       const lowest = rules.filter((rule) => rule.priority === lowestPriority);
@@ -203,12 +212,12 @@ export function evaluateProgression<
           trace,
         );
       }
-      winners.push(lowest[0] as AutomaticRule<State, Payload, Outcome>);
+      winners.push(lowest[0] as AutomaticRule<State, Payload, Outcome, Kind>);
     }
     winners.sort(
       (left, right) =>
-        left.targetNodeId.localeCompare(right.targetNodeId) ||
-        left.ruleId.localeCompare(right.ruleId),
+        compareOrdinal(left.targetNodeId, right.targetNodeId) ||
+        compareOrdinal(left.ruleId, right.ruleId),
     );
     if (winners.length === 0) {
       return Object.freeze({ kind: "stable", progression, trace: Object.freeze([...trace]) });
@@ -256,14 +265,15 @@ export function evaluateProgression<
       statuses,
     );
     const text = stateText(progression);
-    const firstSeen = seen.get(text);
-    if (firstSeen !== undefined) {
+    const firstSeenAutomaticCount = seen.get(text);
+    if (firstSeenAutomaticCount !== undefined) {
+      const automaticTrace = trace.filter((transition) => transition.source === "automatic");
       return invalid(
         createDiagnostic("progression-cycle", {
           commandId: input.command.id,
-          cycleLength: appliedCount - firstSeen,
-          cycleTrace: trace.slice(firstSeen) as unknown as readonly JsonObject[],
-          firstSeenTransition: firstSeen,
+          cycleLength: appliedCount - firstSeenAutomaticCount,
+          cycleTrace: automaticTrace.slice(firstSeenAutomaticCount) as unknown as readonly JsonObject[],
+          firstSeenTransition: firstSeenAutomaticCount,
           graphId: input.definition.graphId,
           graphVersion: input.definition.graphVersion,
           repeatedSnapshot: progression as unknown as JsonObject,

@@ -3,15 +3,18 @@ import type { JsonObject } from "./canonical-json.js";
 import type { TransitionContext } from "./observations.js";
 import type { ProgressionIntent } from "./progression/state.js";
 
-export interface CommandTarget {
-  readonly kind: AggregateKind;
+export interface CommandTarget<Kind extends AggregateKind = AggregateKind> {
+  readonly kind: Kind;
   readonly id: string;
 }
 
-export interface Command<Payload extends JsonObject = JsonObject> {
+export interface Command<
+  Payload extends JsonObject = JsonObject,
+  Kind extends AggregateKind = AggregateKind,
+> {
   readonly id: string;
   readonly type: string;
-  readonly target: CommandTarget;
+  readonly target: CommandTarget<Kind>;
   readonly expectedStateVersion: number;
   readonly payload: Payload;
 }
@@ -41,13 +44,14 @@ export interface CommandDefinition<
   State extends JsonObject = JsonObject,
   Payload extends JsonObject = JsonObject,
   Outcome extends JsonObject = JsonObject,
+  Kind extends AggregateKind = AggregateKind,
 > {
   readonly definitionId: string;
   readonly commandType: string;
-  readonly aggregateKind: AggregateKind;
+  readonly aggregateKind: Kind;
   readonly handle: (
-    aggregate: Readonly<Aggregate<State>>,
-    command: Readonly<Command<Payload>>,
+    aggregate: Readonly<Aggregate<State, Kind>>,
+    command: Readonly<Command<Payload, Kind>>,
     context: TransitionContext,
   ) => HandlerDecision<State, Outcome>;
 }
@@ -56,9 +60,10 @@ export function defineCommand<
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
+  Kind extends AggregateKind = AggregateKind,
 >(
-  definition: CommandDefinition<State, Payload, Outcome>,
-): CommandDefinition<State, Payload, Outcome> {
+  definition: CommandDefinition<State, Payload, Outcome, Kind>,
+): CommandDefinition<State, Payload, Outcome, Kind> {
   if (definition === null || typeof definition !== "object" || Array.isArray(definition)) {
     throw new TypeError("Command definition must be an object");
   }

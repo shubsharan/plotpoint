@@ -1,4 +1,9 @@
-import { isAggregateKind, validateAggregate, type Aggregate } from "./aggregates.js";
+import {
+  isAggregateKind,
+  validateAggregate,
+  type Aggregate,
+  type AggregateKind,
+} from "./aggregates.js";
 import {
   canonicalEquals,
   canonicalizeValue,
@@ -17,6 +22,7 @@ import type {
   ExecutionRecord,
   ExecutionResult,
   InvalidExecution,
+  PreflightInvalidExecution,
   RuntimePolicy,
 } from "./execution-record.js";
 import {
@@ -25,7 +31,7 @@ import {
   type Observation,
   type ObservationConsumption,
 } from "./observations.js";
-import type { ProgressionDefinition } from "./progression/graph.js";
+import type { DefinedProgression } from "./progression/graph.js";
 import { evaluateProgression } from "./progression/evaluate-progression.js";
 import type { ProgressionTransition } from "./progression/state.js";
 
@@ -33,13 +39,14 @@ export interface ExecuteCommandInput<
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
+  Kind extends AggregateKind = AggregateKind,
 > {
-  readonly definition: CommandDefinition<State, Payload, Outcome>;
-  readonly aggregate: Aggregate<State>;
-  readonly command: Command<Payload>;
+  readonly definition: CommandDefinition<State, Payload, Outcome, Kind>;
+  readonly aggregate: Aggregate<State, Kind>;
+  readonly command: Command<Payload, Kind>;
   readonly observations: readonly Observation[];
   readonly policy?: Partial<RuntimePolicy>;
-  readonly progression?: ProgressionDefinition<State, Payload, Outcome>;
+  readonly progression?: DefinedProgression<State, Payload, Outcome, Kind>;
 }
 
 export const DEFAULT_RUNTIME_POLICY: RuntimePolicy = Object.freeze({
@@ -84,31 +91,48 @@ function isDiagnostic(value: unknown): value is Diagnostic {
   return value !== null && typeof value === "object" && "code" in value && "details" in value;
 }
 
-function canonicalRecord<State extends JsonObject, Outcome extends JsonObject>(
-  record: ExecutionRecord<State, Outcome>,
-  policy: RuntimePolicy,
-): ExecutionRecord<State, Outcome> {
-  const result = canonicalizeValue(record, policy);
-  if (result.kind === "invalid")
-    throw new TypeError("Runtime constructed a non-canonical execution record");
-  return result.canonical.value as unknown as ExecutionRecord<State, Outcome>;
+function buildRecord<
+  State extends JsonObject,
+  Payload extends JsonObject,
+  Outcome extends JsonObject,
+  Kind extends AggregateKind,
+>(
+  record: ExecutionRecord<State, Outcome, Payload, Kind>,
+): ExecutionRecord<State, Outcome, Payload, Kind> {
+  return Object.freeze(record);
 }
 
-interface RecordContext<State extends JsonObject, Payload extends JsonObject> {
+interface RecordContext<
+  State extends JsonObject,
+  Payload extends JsonObject,
+  Kind extends AggregateKind,
+> {
   readonly definitionId: string;
   readonly policy: RuntimePolicy;
-  readonly aggregate: Aggregate<State>;
-  readonly command: Command<Payload>;
+  readonly aggregate: Aggregate<State, Kind>;
+  readonly command: Command<Payload, Kind>;
   readonly observations: readonly Observation[];
   readonly observationTrace: readonly ObservationConsumption[];
 }
 
-function invalidResult<State extends JsonObject, Payload extends JsonObject>(
-  context: RecordContext<State, Payload>,
+function preflightInvalid(diagnostic: Diagnostic): PreflightInvalidExecution {
+  return Object.freeze({
+    kind: "invalid",
+    phase: "preflight",
+    diagnostics: Object.freeze([diagnostic]),
+  });
+}
+
+function invalidResult<
+  State extends JsonObject,
+  Payload extends JsonObject,
+  Kind extends AggregateKind,
+>(
+  context: RecordContext<State, Payload, Kind>,
   diagnostics: readonly Diagnostic[],
   attemptedProgressionTrace: readonly ProgressionTransition[] = [],
-): InvalidExecution<State> {
-  const record = canonicalRecord<State, JsonObject>(
+): InvalidExecution<State, Payload, Kind> {
+  const record = buildRecord<State, Payload, JsonObject, Kind>(
     {
       formatVersion: 1,
       definitionId: context.definitionId,
@@ -121,10 +145,10 @@ function invalidResult<State extends JsonObject, Payload extends JsonObject>(
       progressionTrace: attemptedProgressionTrace,
       diagnostics,
     },
-    context.policy,
   );
   return Object.freeze({
     kind: "invalid",
+    phase: "execution",
     aggregate: context.aggregate,
     diagnostics: Object.freeze([...diagnostics]),
     attemptedProgressionTrace: Object.freeze([...attemptedProgressionTrace]),
@@ -224,38 +248,20 @@ export function executeCommand<
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
->(input: ExecuteCommandInput<State, Payload, Outcome>): ExecutionResult<State, Outcome> {
+  Kind extends AggregateKind,
+>(
+  input: ExecuteCommandInput<State, Payload, Outcome, Kind>,
+): ExecutionResult<State, Outcome, Payload, Kind> {
   const resolvedPolicy = resolvePolicy(input.policy);
   if (isDiagnostic(resolvedPolicy)) {
-    const fallbackPolicy = DEFAULT_RUNTIME_POLICY;
-    return invalidResult(
-      {
-        definitionId: input.definition.definitionId,
-        policy: fallbackPolicy,
-        aggregate: input.aggregate,
-        command: input.command,
-        observations: input.observations,
-        observationTrace: [],
-      },
-      [resolvedPolicy],
-    );
+    return preflightInvalid(resolvedPolicy);
   }
 
-  const aggregateClone = canonicalClone<Aggregate<State>>(input.aggregate, resolvedPolicy);
+  const aggregateClone = canonicalClone<Aggregate<State, Kind>>(input.aggregate, resolvedPolicy);
   if (isDiagnostic(aggregateClone)) {
-    return invalidResult(
-      {
-        definitionId: input.definition.definitionId,
-        policy: resolvedPolicy,
-        aggregate: input.aggregate,
-        command: input.command,
-        observations: [],
-        observationTrace: [],
-      },
-      [aggregateClone],
-    );
+    return preflightInvalid(aggregateClone);
   }
-  const commandClone = canonicalClone<Command<Payload>>(input.command, resolvedPolicy);
+  const commandClone = canonicalClone<Command<Payload, Kind>>(input.command, resolvedPolicy);
   const observationsClone = canonicalClone<readonly Observation[]>(
     input.observations,
     resolvedPolicy,
@@ -268,13 +274,13 @@ export function executeCommand<
     observations: isDiagnostic(observationsClone) ? [] : observationsClone,
     observationTrace: [],
   };
-  if (isDiagnostic(commandClone)) return invalidResult(contextBase, [commandClone]);
-  if (isDiagnostic(observationsClone)) return invalidResult(contextBase, [observationsClone]);
+  if (isDiagnostic(commandClone)) return preflightInvalid(commandClone);
+  if (isDiagnostic(observationsClone)) return preflightInvalid(observationsClone);
 
   const aggregateDiagnostic = validateAggregate(aggregateClone);
-  if (aggregateDiagnostic !== null) return invalidResult(contextBase, [aggregateDiagnostic]);
+  if (aggregateDiagnostic !== null) return preflightInvalid(aggregateDiagnostic);
   const commandDiagnostic = validateCommandShape(commandClone);
-  if (commandDiagnostic !== null) return invalidResult(contextBase, [commandDiagnostic]);
+  if (commandDiagnostic !== null) return preflightInvalid(commandDiagnostic);
   const invalidObservationIndex = observationsClone.findIndex((observation) => {
     if (observation === null || typeof observation !== "object" || Array.isArray(observation))
       return true;
@@ -288,12 +294,12 @@ export function executeCommand<
     );
   });
   if (invalidObservationIndex !== -1) {
-    return invalidResult(contextBase, [
+    return preflightInvalid(
       createDiagnostic("canonical-value-invalid", {
         path: `/observations/${invalidObservationIndex}`,
         reason: "invalid-observation-identity",
       }),
-    ]);
+    );
   }
 
   if (
@@ -352,7 +358,7 @@ export function executeCommand<
 
   const recordContext = { ...contextBase, observationTrace: cursor.trace };
   if (decisionClone.kind === "rejected") {
-    const record = canonicalRecord<State, Outcome>(
+    const record = buildRecord<State, Payload, Outcome, Kind>(
       {
         formatVersion: 1,
         definitionId: input.definition.definitionId,
@@ -367,7 +373,6 @@ export function executeCommand<
         progressionTrace: [],
         diagnostics: [],
       },
-      resolvedPolicy,
     );
     return Object.freeze({
       kind: "rejected",
@@ -422,16 +427,21 @@ export function executeCommand<
         )
       : false;
   if (!stateChanged && !progressionChanged) {
-    if (decisionClone.domainEvents.length > 0 || decisionClone.effectIntents.length > 0) {
+    if (
+      decisionClone.domainEvents.length > 0 ||
+      decisionClone.effectIntents.length > 0 ||
+      progressionTrace.length > 0
+    ) {
       return invalidResult(recordContext, [
         createDiagnostic("no-op-output-invalid", {
           commandId: commandClone.id,
           domainEventCount: decisionClone.domainEvents.length,
           effectIntentCount: decisionClone.effectIntents.length,
+          progressionTransitionCount: progressionTrace.length,
         }),
       ]);
     }
-    const record = canonicalRecord<State, Outcome>(
+    const record = buildRecord<State, Payload, Outcome, Kind>(
       {
         formatVersion: 1,
         definitionId: input.definition.definitionId,
@@ -446,7 +456,6 @@ export function executeCommand<
         progressionTrace,
         diagnostics: [],
       },
-      resolvedPolicy,
     );
     return Object.freeze({
       kind: "no-op",
@@ -464,7 +473,7 @@ export function executeCommand<
       }),
     ]);
   }
-  const aggregateAfter = canonicalClone<Aggregate<State>>(
+  const aggregateAfter = canonicalClone<Aggregate<State, Kind>>(
     {
       ...aggregateClone,
       stateVersion: aggregateClone.stateVersion + 1,
@@ -477,7 +486,7 @@ export function executeCommand<
 
   const domainEvents = decisionClone.domainEvents as readonly DomainEvent[];
   const effectIntents = decisionClone.effectIntents as readonly EffectIntent[];
-  const record = canonicalRecord<State, Outcome>(
+  const record = buildRecord<State, Payload, Outcome, Kind>(
     {
       formatVersion: 1,
       definitionId: input.definition.definitionId,
@@ -494,7 +503,6 @@ export function executeCommand<
       progressionTrace,
       diagnostics: [],
     },
-    resolvedPolicy,
   );
   return Object.freeze({
     kind: "accepted",

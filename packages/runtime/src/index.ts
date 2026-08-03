@@ -1,4 +1,4 @@
-export { canonicalEquals, canonicalizeValue, DEFAULT_CANONICAL_LIMITS } from "./canonical-json.js";
+export { canonicalizeValue, DEFAULT_CANONICAL_LIMITS } from "./canonical-json.js";
 export type {
   CanonicalLimits,
   CanonicalizeResult,
@@ -8,13 +8,7 @@ export type {
   JsonValue,
 } from "./canonical-json.js";
 
-export {
-  AGGREGATE_AUTHORITIES,
-  AGGREGATE_KINDS,
-  isAggregateAuthority,
-  isAggregateKind,
-  validateAggregate,
-} from "./aggregates.js";
+export { AGGREGATE_AUTHORITIES, AGGREGATE_KINDS } from "./aggregates.js";
 export type { Aggregate, AggregateAuthority, AggregateKind } from "./aggregates.js";
 
 export { defineCommand } from "./commands.js";
@@ -29,7 +23,7 @@ export type {
   RejectedDecision,
 } from "./commands.js";
 
-export { createDiagnostic, DIAGNOSTIC_CODES, isDiagnosticCode } from "./diagnostics.js";
+export { DIAGNOSTIC_CODES } from "./diagnostics.js";
 export type { Diagnostic, DiagnosticCode } from "./diagnostics.js";
 
 export type { Observation, ObservationConsumption, TransitionContext } from "./observations.js";
@@ -41,6 +35,8 @@ export type {
   ExecutionResult,
   InvalidExecution,
   NoOpExecution,
+  PreflightInvalidExecution,
+  RecordedExecutionResult,
   RejectedExecution,
   RuntimePolicy,
 } from "./execution-record.js";
@@ -55,21 +51,9 @@ export type {
 } from "./progression/state.js";
 export type {
   AutomaticRule,
+  DefinedProgression,
   ProgressionDefinition,
   ProgressionNodeDefinition,
   ProgressionRuleInput,
 } from "./progression/graph.js";
-export {
-  isLegalProgressionTransition,
-  isProgressionStatus,
-  validateProgressionGraph,
-} from "./progression/validate-graph.js";
-export type {
-  ValidateProgressionGraphInput,
-  ValidateProgressionGraphResult,
-} from "./progression/validate-graph.js";
-export { evaluateProgression } from "./progression/evaluate-progression.js";
-export type {
-  EvaluateProgressionInput,
-  ProgressionEvaluationResult,
-} from "./progression/evaluate-progression.js";
+export { defineProgression } from "./progression/graph.js";

@@ -9,13 +9,13 @@ export interface CanonicalLimits {
   readonly maxCanonicalNodes: number;
 }
 
-export interface CanonicalValue<Value extends JsonValue = JsonValue> {
-  readonly value: Value;
+export interface CanonicalValue {
+  readonly value: JsonValue;
   readonly text: string;
 }
 
-export type CanonicalizeResult<Value extends JsonValue = JsonValue> =
-  | { readonly kind: "valid"; readonly canonical: CanonicalValue<Value> }
+export type CanonicalizeResult =
+  | { readonly kind: "valid"; readonly canonical: CanonicalValue }
   | { readonly kind: "invalid"; readonly diagnostic: Diagnostic };
 
 export const DEFAULT_CANONICAL_LIMITS: CanonicalLimits = Object.freeze({
@@ -59,7 +59,7 @@ function containsLoneSurrogate(value: string): boolean {
   return false;
 }
 
-function invalid(path: string, reason: string, limit?: number): CanonicalizeResult<never> {
+function invalid(path: string, reason: string, limit?: number): CanonicalizeResult {
   const details: Record<string, JsonValue> = { path, reason };
   if (limit !== undefined) details.limit = limit;
   const code = limit === undefined ? "canonical-value-invalid" : "canonical-limit-exceeded";
@@ -125,12 +125,12 @@ function canonicalText(root: JsonValue): string {
   return output.join("");
 }
 
-export function canonicalizeValue<Value extends JsonValue = JsonValue>(
+export function canonicalizeValue(
   source: unknown,
   limits: CanonicalLimits = DEFAULT_CANONICAL_LIMITS,
-): CanonicalizeResult<Value> {
+): CanonicalizeResult {
   if (!validateLimit(limits.maxCanonicalDepth) || !validateLimit(limits.maxCanonicalNodes)) {
-    return invalid("", "invalid-canonical-limits") as CanonicalizeResult<Value>;
+    return invalid("", "invalid-canonical-limits");
   }
 
   let root: JsonValue = null;
@@ -161,14 +161,14 @@ export function canonicalizeValue<Value extends JsonValue = JsonValue>(
         item.path,
         "node-limit-exceeded",
         limits.maxCanonicalNodes,
-      ) as CanonicalizeResult<Value>;
+      );
     }
     if (item.depth > limits.maxCanonicalDepth) {
       return invalid(
         item.path,
         "depth-limit-exceeded",
         limits.maxCanonicalDepth,
-      ) as CanonicalizeResult<Value>;
+      );
     }
 
     const value = item.source;
@@ -178,30 +178,30 @@ export function canonicalizeValue<Value extends JsonValue = JsonValue>(
     }
     if (typeof value === "number") {
       if (!Number.isFinite(value))
-        return invalid(item.path, "non-finite-number") as CanonicalizeResult<Value>;
+        return invalid(item.path, "non-finite-number");
       item.assign(Object.is(value, -0) ? 0 : value);
       continue;
     }
     if (typeof value === "string") {
       if (containsLoneSurrogate(value))
-        return invalid(item.path, "lone-surrogate") as CanonicalizeResult<Value>;
+        return invalid(item.path, "lone-surrogate");
       item.assign(value);
       continue;
     }
     if (typeof value !== "object") {
-      return invalid(item.path, `unsupported-${typeof value}`) as CanonicalizeResult<Value>;
+      return invalid(item.path, `unsupported-${typeof value}`);
     }
     if (active.has(value))
-      return invalid(item.path, "cyclic-reference") as CanonicalizeResult<Value>;
+      return invalid(item.path, "cyclic-reference");
 
     if (Array.isArray(value)) {
       if (Object.getPrototypeOf(value) !== Array.prototype) {
-        return invalid(item.path, "invalid-array-prototype") as CanonicalizeResult<Value>;
+        return invalid(item.path, "invalid-array-prototype");
       }
       const ownKeys = Reflect.ownKeys(value);
       for (const key of ownKeys) {
         if (typeof key === "symbol")
-          return invalid(item.path, "symbol-key") as CanonicalizeResult<Value>;
+          return invalid(item.path, "symbol-key");
         if (key === "length") continue;
         const index = Number(key);
         if (
@@ -213,7 +213,7 @@ export function canonicalizeValue<Value extends JsonValue = JsonValue>(
           return invalid(
             `${item.path}/${pointerSegment(key)}`,
             "extended-array",
-          ) as CanonicalizeResult<Value>;
+          );
         }
       }
       const clone: JsonValue[] = Array.from({ length: value.length }, () => null);
@@ -224,9 +224,9 @@ export function canonicalizeValue<Value extends JsonValue = JsonValue>(
         const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
         const path = `${item.path}/${index}`;
         if (descriptor === undefined)
-          return invalid(path, "sparse-array") as CanonicalizeResult<Value>;
+          return invalid(path, "sparse-array");
         if (!("value" in descriptor) || !descriptor.enumerable) {
-          return invalid(path, "invalid-property-descriptor") as CanonicalizeResult<Value>;
+          return invalid(path, "invalid-property-descriptor");
         }
         stack.push({
           source: descriptor.value,
@@ -242,15 +242,15 @@ export function canonicalizeValue<Value extends JsonValue = JsonValue>(
 
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) {
-      return invalid(item.path, "invalid-object-prototype") as CanonicalizeResult<Value>;
+      return invalid(item.path, "invalid-object-prototype");
     }
     const descriptors = Object.getOwnPropertyDescriptors(value);
     const keys = Reflect.ownKeys(descriptors);
     if (keys.some((key) => typeof key === "symbol")) {
-      return invalid(item.path, "symbol-key") as CanonicalizeResult<Value>;
+      return invalid(item.path, "symbol-key");
     }
     const stringKeys = (keys as string[]).sort();
-    const clone = Object.create(null) as Record<string, JsonValue>;
+    const clone: Record<string, JsonValue> = {};
     item.assign(clone);
     active.add(value);
     stack.push({ source: value, value: clone });
@@ -259,27 +259,31 @@ export function canonicalizeValue<Value extends JsonValue = JsonValue>(
       const descriptor = descriptors[key];
       const path = `${item.path}/${pointerSegment(key)}`;
       if (containsLoneSurrogate(key))
-        return invalid(path, "lone-surrogate-key") as CanonicalizeResult<Value>;
+        return invalid(path, "lone-surrogate-key");
       if (descriptor === undefined || !("value" in descriptor) || !descriptor.enumerable) {
-        return invalid(path, "invalid-property-descriptor") as CanonicalizeResult<Value>;
+        return invalid(path, "invalid-property-descriptor");
       }
       stack.push({
         source: descriptor.value,
         path,
         depth: item.depth + 1,
         assign(child) {
-          clone[key] = child;
+          Object.defineProperty(clone, key, {
+            configurable: false,
+            enumerable: true,
+            value: child,
+            writable: false,
+          });
         },
       });
     }
   }
 
-  const frozenRoot = root as Value;
   return Object.freeze({
     kind: "valid",
     canonical: Object.freeze({
-      value: frozenRoot,
-      text: canonicalText(frozenRoot),
+      value: root,
+      text: canonicalText(root),
     }),
   });
 }

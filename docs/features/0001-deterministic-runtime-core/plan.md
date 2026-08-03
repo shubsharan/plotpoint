@@ -5,7 +5,7 @@
 
 ## Summary
 
-Build Plotpoint's first author-facing runtime kernel in `@plotpoint/runtime`: a dependency-free, portable library for canonical durable values, one-aggregate command evaluation, explicit observations, semantic outcomes, domain events, post-commit effect intents, replayable execution records, and bounded progression. Build `@plotpoint/testkit` on that public root API with scripted external values, aggregate fixtures, replay, mutation/isolation assertions, and reference-model graph tests. Command evaluation and progression stabilization form one atomic proposal; later player, storage, network, compiler, and effect-delivery work remains outside this feature.
+Redesign Plotpoint's first author-facing runtime kernel before its private `0.0.0` contract is frozen. Preserve explicit observations, one-aggregate commands, semantic outcomes, post-commit effect intents, atomic bounded progression, and replay, while making malformed preflight inputs total, sharing aggregate kind across the type system, validating static progression through `defineProgression`, returning frozen ordinary canonical objects, using ordinal ordering, and reducing the runtime and testkit root surfaces. Later player, storage, network, compiler, and effect-delivery work remains outside this feature.
 
 ## Technical Context
 
@@ -16,7 +16,7 @@ Build Plotpoint's first author-facing runtime kernel in `@plotpoint/runtime`: a 
 **Target Platform**: Portable ES2022 library for the future browser web runtime; Node.js 25 or newer for builds and author tests
 **Project Type**: Monorepo library feature spanning the existing runtime and testkit packages
 **Performance Goals**: Correctness and bounded termination are the Gate 1 goals; record benchmark baselines for representative graphs but establish no speculative latency or throughput gate
-**Constraints**: No ambient I/O, no effect execution, canonical JSON-compatible durable values, one aggregate per command, exact state-version checks, deterministic output ordering, no platform or protocol dependency, and no partial result after progression failure
+**Constraints**: No ambient I/O, no effect execution, canonical JSON-compatible durable values, one aggregate per command, exact state-version checks, ordinal deterministic output ordering, no exception for expected malformed input, no record before successful preflight, no platform or protocol dependency, and no partial result after progression failure
 **Scale/Scope**: Player, team, and session aggregates; representative branching and parallel graphs; configurable validation and automatic-transition limits; no player, compiler, persistence, synchronization, backend, or physical capability integration
 
 ## Constitution Check
@@ -48,7 +48,7 @@ No gate violation requires a complexity exception.
 
 **Impact**: Major
 
-- [Deterministic Runtime Contract](../../adrs/0001-deterministic-runtime-contract.md) - **Accepted**. It governs the public aggregate and execution contract, canonical durable values, package ownership, explicit observations, command/progression atomicity, and the Gate 1 ambient-authority boundary.
+- [Deterministic Runtime Contract](../../adrs/0001-deterministic-runtime-contract.md) - **Accepted**. It governs preflight invalidity, kind-safe types, canonical object ergonomics, static progression definition, ordinal ordering, record construction, explicit observations, atomic progression, and the Gate 1 ambient-authority boundary.
 
 ## Project Structure
 
@@ -117,7 +117,7 @@ turbo.json                       # Test task orchestration
 vitest.config.ts                 # Named runtime and testkit projects
 ```
 
-**Structure Decision**: Extend only the existing `@plotpoint/runtime` and `@plotpoint/testkit` boundaries. Runtime owns the production contract and pure evaluators with root-only named exports. Testkit consumes the public runtime API and, for Gate 1, removes premature dependencies on compiler, database, modules, and protocol packages. Tests live in each package's dedicated `test/` directory, are excluded from production emission through test-specific TypeScript configurations, and run as named projects from one root Vitest configuration. Package scripts select their named project so filtered and root Turbo runs exercise the same setup.
+**Structure Decision**: Extend only the existing `@plotpoint/runtime` and `@plotpoint/testkit` boundaries. Runtime source is organized by typed execution phase: canonical preparation, handler evaluation, progression stabilization, result classification, and record construction. Static graph validation moves behind `defineProgression`; raw validators and evaluators are not public compatibility surfaces. Testkit consumes only the public runtime root and keeps strict scenario, replay, fixture, scripted-observation, and honest assertion helpers. Tests remain outside production emission. Generic Spec Kit and workspace scaffolding are delivered as a separate foundation change rather than mixed into the runtime feature history.
 
 ## Phase 0: Research
 

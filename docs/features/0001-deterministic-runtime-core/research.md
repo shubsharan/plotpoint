@@ -107,6 +107,36 @@
 - Serialize functions into an ad hoc sandbox: rejected because closures, modules, browser parity, and security semantics require a separate architecture decision.
 - Ignore ambient access entirely: rejected because deterministic test evidence is a Gate 1 exit requirement.
 
+## Preflight Invalidity and Record Construction
+
+**Decision**: Canonical policy and input preparation is a distinct preflight phase. If preparation fails, return typed diagnostics without an aggregate or execution record. After preflight, construct records only from canonical components and never revalidate the complete record under a second combined node budget.
+
+**Rationale**: An invalid raw value cannot be embedded in a canonical record. Making the record optional only for preflight failure keeps expected invalidity total and prevents a valid collection of individually bounded values from failing merely because the explanatory record repeats them.
+
+**Alternatives considered**:
+
+- Sanitized placeholders in one record shape: rejected because the record would no longer contain replay inputs.
+- A preflight record containing canonical subsets: rejected as extra compatibility machinery without replay value.
+- Throwing when the invalid record cannot be built: rejected because malformed durable input is an expected diagnostic result.
+
+## Type, Object, and Definition Ergonomics
+
+**Decision**: Share aggregate kind as a generic parameter across the complete author API. Canonicalization of `unknown` returns `JsonValue` and domain validators narrow it. Canonical objects are recursively frozen ordinary objects constructed descriptor-safely. Add `defineProgression` to validate and freeze static graph metadata once.
+
+**Rationale**: These choices make TypeScript reject cross-kind composition, avoid an unchecked generic cast, preserve familiar object behavior, and remove repeated static graph validation from the hot path.
+
+**Alternatives considered**:
+
+- Preserve null-prototype author objects: rejected because ordinary JSON-shaped state should retain ordinary object ergonomics.
+- Preserve raw progression literals on every execution: rejected because definitions are static author artifacts.
+- Add compatibility wrappers: rejected because the packages are private, unreleased, and version `0.0.0`.
+
+## Canonical Ordering and No-Op Semantics
+
+**Decision**: Use one ordinal code-unit comparator for every durable node/rule ordering. A final aggregate equal to the original is a valid no-op only when events, effects, and the complete progression trace are empty. Direct-intent trace offsets remain separate from automatic-transition counts used for cycle diagnostics.
+
+**Rationale**: Locale collation is not a portable canonical order, and a traced transition that later reverts is still progression work even if its final snapshot matches the original.
+
 ## Sources
 
 - [Vitest guide](https://vitest.dev/guide/) - TypeScript/ESM test authoring, watch mode, filtering, and runner behavior.

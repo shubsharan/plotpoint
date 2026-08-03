@@ -35,7 +35,7 @@ export interface ProgressionIntent {
   readonly to: ProgressionStatus;
 }
 
-export interface AutomaticRule<State, Payload, Outcome> {
+export interface AutomaticRule<Kind, State, Payload, Outcome> {
   readonly ruleId: string;
   readonly targetNodeId: string;
   readonly from: readonly ProgressionStatus[];
@@ -44,7 +44,7 @@ export interface AutomaticRule<State, Payload, Outcome> {
   readonly when: (input: ProgressionRuleInput<State, Payload, Outcome>) => boolean;
 }
 
-export interface ProgressionDefinition<State, Payload, Outcome> {
+export interface ProgressionDefinition<Kind, State, Payload, Outcome> {
   readonly graphId: string;
   readonly graphVersion: number;
   readonly nodes: readonly {
@@ -53,11 +53,25 @@ export interface ProgressionDefinition<State, Payload, Outcome> {
   }[];
   readonly automaticRules: readonly AutomaticRule<State, Payload, Outcome>[];
 }
+
+export interface DefinedProgression<Kind, State, Payload, Outcome>
+  extends ProgressionDefinition<Kind, State, Payload, Outcome> {
+  readonly definitionBrand: unique symbol;
+}
+
+export function defineProgression<Kind, State, Payload, Outcome>(
+  definition: ProgressionDefinition<Kind, State, Payload, Outcome>,
+): DefinedProgression<Kind, State, Payload, Outcome>;
 ```
 
 Rule input contains frozen candidate game state, current progression, command, semantic outcome, domain events, and the already-consumed observation trace. Rules cannot consume new observations, inspect accumulated automatic traversal, mutate state, return a promise, or execute effects.
 
-Definitions reject duplicate graph, node, or rule identities; unknown references; missing or extra instance nodes; graph-version mismatch; same-state rules; illegal lifecycle changes; duplicate command intents for one node; and structurally unreachable nodes where reachability can be established soundly.
+`defineProgression` rejects malformed or duplicate graph, node, or rule identities; unknown
+references; same-state rules; illegal lifecycle changes; invalid priorities; and invalid predicate
+shape. It normalizes nodes, rule status lists, and rules with one ordinal comparator and freezes the
+metadata. Execution separately rejects missing or extra instance nodes, graph-version mismatch,
+duplicate command intents, and dynamic rule failures. Raw graph validation and direct evaluation are
+not public root APIs.
 
 ## Atomic Evaluation
 
@@ -70,7 +84,7 @@ Automatic progression uses rounds:
 3. Group enabled rules by target node.
 4. Select the lowest numeric priority for each node.
 5. If two enabled rules tie for a target's lowest priority, return `progression-conflict`.
-6. Order independent winners by node ID and then rule ID.
+6. Order independent winners by node ID and then rule ID using ordinal code-unit comparison.
 7. If there are no winners, return the stable candidate.
 8. If the whole batch exceeds the remaining automatic-transition budget, return `progression-limit-overrun` without applying any part of it.
 9. Apply the complete batch simultaneously and append transition records in canonical order.
@@ -112,7 +126,10 @@ A limit diagnostic includes limit, applied count, next batch size, and ordered c
 
 Cycle comparison uses the complete canonical progression state: graph identity, graph version, and every ordered node status. An implementation may index states by a deterministic fingerprint, but it must retain and compare canonical state rather than trusting a hash alone.
 
-Cycle diagnostics include graph identity/version, first-seen transition index, repeated transition index, cycle length, ordered cycle trace, repeated snapshot, and the triggering rules/nodes.
+Cycle diagnostics include graph identity/version, first-seen automatic-transition count, repeated
+automatic-transition count, cycle length, ordered automatic cycle trace, repeated snapshot, and the
+triggering rules/nodes. Direct command-intent trace offsets are tracked separately and never used as
+automatic-transition indexes.
 
 ## Trace
 

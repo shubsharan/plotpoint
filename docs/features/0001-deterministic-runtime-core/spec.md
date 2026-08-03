@@ -102,20 +102,25 @@ A game author can construct deterministic fixtures for clocks, identifiers, rand
 - **FR-007**: Rejected and invalid commands MUST leave the target aggregate unchanged and MUST NOT produce effect intents that depend on a commit.
 - **FR-008**: Durable aggregate state and every durable transition output MUST have a canonical JSON-compatible representation.
 - **FR-009**: Validation MUST reject unsupported durable values, including non-finite numbers, functions, class instances, cyclic references, and host-specific handles, with a diagnostic that locates the invalid value.
+- **FR-009a**: A policy or input that cannot be canonicalized MUST return a preflight invalid result without throwing, without claiming a canonical aggregate, and without constructing a replay record.
 - **FR-010**: The runtime MUST support separately identified player, team, and session aggregates, each with an aggregate type, aggregate identity, schema version, state version, authority designation, and durable state.
 - **FR-011**: A command MUST target exactly one aggregate and MUST NOT mutate any non-target aggregate or any caller-owned input.
 - **FR-012**: An accepted state-changing command MUST advance the target aggregate's state version exactly once; a rejected or invalid command MUST NOT advance it.
 - **FR-013**: A command whose expected state version differs from the target aggregate's current state version MUST fail with an explicit stale-version diagnostic before mutation.
+- **FR-013a**: Aggregate kind MUST be shared by aggregate, command, command definition, progression definition, execution result, fixture, and replay types so a mismatched kind fails static checking and runtime validation.
 - **FR-014**: The runtime MUST represent progression as addressable nodes and transitions rather than requiring one global current scene.
 - **FR-015**: Progression nodes MUST support locked, available, active, completed, and skipped lifecycle states, including multiple available or active nodes at the same time.
 - **FR-016**: Progression evaluation MUST support branching, parallel availability, activation, completion, skipping, and automatic transitions after an accepted command.
 - **FR-017**: Automatic progression MUST stop at a stable state or at a configured transition bound and MUST record each automatic transition in order.
 - **FR-018**: Progression evaluation MUST detect a repeated progression state or traversal cycle and return an explicit cycle diagnostic instead of continuing indefinitely.
 - **FR-019**: Exceeding the automatic-transition bound MUST return an explicit limit-overrun diagnostic and MUST NOT present the partial traversal as a successfully stabilized result.
+- **FR-019a**: Static progression definitions MUST be validated, normalized, ordinally ordered, and frozen once before execution; locale-aware collation MUST NOT determine durable ordering.
 - **FR-020**: Diagnostics MUST identify the command or progression evaluation involved, classify the failure, and include enough aggregate, value-path, version, node, or traversal context for a game author to reproduce it.
 - **FR-021**: The authoring test surface MUST provide deterministic controls for time, identifiers, randomness, external observations, and declared capability results.
 - **FR-022**: The authoring test surface MUST detect missing, exhausted, out-of-order, and unused scripted external values and report them explicitly.
 - **FR-023**: A complete execution record MUST allow a command and its resulting progression evaluation to be replayed without a player, persistence service, network service, physical device, or other platform infrastructure.
+- **FR-024**: Every result produced after successful preflight MUST contain a canonical execution record assembled only from validated canonical components.
+- **FR-025**: A no-op MUST contain no events, effects, direct progression work, automatic progression work, or progression trace.
 
 ### Key Entities
 
@@ -142,6 +147,8 @@ A game author can construct deterministic fixtures for clocks, identifiers, rand
 - **SC-005**: Model-based progression tests cover branching, simultaneous availability, activation, completion, skipping, cycles, and transition-bound overruns, with 100% of generated traversals either stabilizing within the configured bound or stopping with the expected explicit diagnostic.
 - **SC-006**: 100% of accepted fixtures that request external work return that work as post-commit effect intent data, and zero fixtures perform the work during transition evaluation.
 - **SC-007**: A game author can replay every recorded representative scenario without player or service infrastructure and obtain the same complete result and explanation as the original run.
+- **SC-008**: Every malformed policy, aggregate, command, and observation fixture returns a typed preflight failure without throwing, while every post-preflight result contains a replayable record.
+- **SC-009**: Compile-time contract fixtures reject every player/team/session mismatch across commands, aggregates, progression, fixtures, results, and replay.
 
 ## Assumptions
 
