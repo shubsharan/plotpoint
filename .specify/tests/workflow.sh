@@ -5,6 +5,31 @@ SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEST_ROOT=$(mktemp -d)
 trap 'rm -rf "$TEST_ROOT"' EXIT
 
+require_content() {
+    local file="$1" expected="$2"
+    grep -Fq -- "$expected" "$SOURCE_ROOT/$file" || {
+        echo "Missing restored Spec Kit content in $file: $expected" >&2
+        exit 1
+    }
+}
+
+require_content .agents/skills/speckit-specify/SKILL.md 'Specification Quality Validation'
+require_content .agents/skills/speckit-plan/SKILL.md 'Phase 0: Generate research.md'
+require_content .agents/skills/speckit-tasks/SKILL.md 'Generate dependency graph showing user story completion order'
+require_content .agents/skills/speckit-analyze/SKILL.md 'STRICTLY READ-ONLY'
+require_content .agents/skills/speckit-implement/SKILL.md 'Check checklists status'
+require_content .specify/templates/spec-template.md '## User Scenarios & Testing'
+require_content .specify/templates/spec-template.md '## Success Criteria'
+require_content .specify/templates/plan-template.md '## Technical Context'
+require_content .specify/templates/plan-template.md '## Constitution Check'
+require_content .specify/templates/tasks-template.md '## Dependencies & Execution Order'
+require_content .specify/templates/spec-template.md '**Epic**: None'
+require_content .specify/templates/plan-template.md '**Impact**: None'
+require_content .specify/workflows/speckit/workflow.yml 'id: review-spec'
+require_content .specify/workflows/speckit/workflow.yml 'id: review-plan'
+require_content .specify/workflows/speckit/workflow.yml 'id: analyze'
+require_content .specify/workflows/speckit/workflow.yml 'id: review-readiness'
+
 cp -R "$SOURCE_ROOT/.specify" "$TEST_ROOT/.specify"
 mkdir -p "$TEST_ROOT/docs/adrs"
 cp "$SOURCE_ROOT/docs/adrs/README.md" "$TEST_ROOT/docs/adrs/README.md"

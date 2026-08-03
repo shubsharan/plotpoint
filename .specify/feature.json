@@ -1,1 +1,3 @@
-{"feature_directory":"docs/features/0001-first-experiment"}
+{
+  "feature_directory": "docs/features/0001-deterministic-runtime-core"
+}

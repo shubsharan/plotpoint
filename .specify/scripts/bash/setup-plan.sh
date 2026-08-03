@@ -8,17 +8,17 @@ ARGS=()
 
 for arg in "$@"; do
     case "$arg" in
-        --json) 
-            JSON_MODE=true 
+        --json)
+            JSON_MODE=true
             ;;
-        --help|-h) 
+        --help|-h)
             echo "Usage: $0 [--json]"
             echo "  --json    Output results in JSON format"
             echo "  --help    Show this help message"
-            exit 0 
+            exit 0
             ;;
-        *) 
-            ARGS+=("$arg") 
+        *)
+            ARGS+=("$arg")
             ;;
     esac
 done
@@ -60,15 +60,15 @@ if $JSON_MODE; then
             --arg specs_dir "$FEATURE_DIR" \
             --arg branch "$CURRENT_BRANCH" \
             --arg has_git "$HAS_GIT" \
-            '{FEATURE_SPEC:$feature_spec,IMPL_PLAN:$impl_plan,FEATURE_DIR:$specs_dir,BRANCH:$branch,HAS_GIT:$has_git}'
+            '{FEATURE_SPEC:$feature_spec,IMPL_PLAN:$impl_plan,SPECS_DIR:$specs_dir,BRANCH:$branch,HAS_GIT:$has_git}'
     else
-        printf '{"FEATURE_SPEC":"%s","IMPL_PLAN":"%s","FEATURE_DIR":"%s","BRANCH":"%s","HAS_GIT":"%s"}\n' \
+        printf '{"FEATURE_SPEC":"%s","IMPL_PLAN":"%s","SPECS_DIR":"%s","BRANCH":"%s","HAS_GIT":"%s"}\n' \
             "$(json_escape "$FEATURE_SPEC")" "$(json_escape "$IMPL_PLAN")" "$(json_escape "$FEATURE_DIR")" "$(json_escape "$CURRENT_BRANCH")" "$(json_escape "$HAS_GIT")"
     fi
 else
     echo "FEATURE_SPEC: $FEATURE_SPEC"
-    echo "IMPL_PLAN: $IMPL_PLAN" 
-    echo "FEATURE_DIR: $FEATURE_DIR"
+    echo "IMPL_PLAN: $IMPL_PLAN"
+    echo "SPECS_DIR: $FEATURE_DIR"
     echo "BRANCH: $CURRENT_BRANCH"
     echo "HAS_GIT: $HAS_GIT"
 fi

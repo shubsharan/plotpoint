@@ -29,7 +29,7 @@
     "workflow": {
       "version": "1.0.0",
       "source": "local",
-      "manifest_hash": "sha256:76637603518dd170193af7f7d38860d5f435bb741ea34a167d75d1709b2b10be",
+      "manifest_hash": "sha256:a4f5d47fbe5dc705354b44e829581a2b7b7222ed1f8170de678b14b5fc8f02fa",
       "enabled": true,
       "priority": 20,
       "registered_commands": {

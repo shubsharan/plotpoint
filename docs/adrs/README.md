@@ -4,6 +4,6 @@ Create an ADR only for a major architectural decision. Accepted ADRs are immutab
 
 <!-- speckit:generated:adr-index START -->
 
-_No ADRs yet._
+- [Deterministic Runtime Contract](0001-deterministic-runtime-contract.md) — Proposed
 
 <!-- speckit:generated:adr-index END -->

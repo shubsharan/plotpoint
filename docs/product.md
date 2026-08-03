@@ -457,6 +457,7 @@ packages/
   runtime/       pure commands, aggregates, progression, and module contracts
   protocol/      release, bridge, and synchronization wire formats
   compiler/      project validation, composition, bundling, and manifests
+  db/            PostgreSQL schema, migrations, transactions, repositories, and outboxes
   modules/       first-party mechanics and their adapters
   testkit/       deterministic fakes, fixtures, and runtime harnesses
 

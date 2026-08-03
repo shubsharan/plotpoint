@@ -45,6 +45,7 @@ get_repo_root() {
     (cd "$script_dir/../../.." && pwd)
 }
 
+# Resolve project content roots without changing the upstream Spec Kit workflow.
 read_init_option() {
     local repo_root="$1" key="$2" default="$3" file="$1/.specify/init-options.json"
     [[ -f "$file" ]] || { printf '%s' "$default"; return; }
@@ -120,16 +121,27 @@ get_current_branch() {
     if [[ -d "$specs_dir" ]]; then
         local latest_feature=""
         local highest=0
+        local latest_timestamp=""
 
         for dir in "$specs_dir"/*; do
             if [[ -d "$dir" ]]; then
                 local dirname=$(basename "$dir")
-                if [[ "$dirname" =~ ^([0-9]{4})- ]]; then
+                if [[ "$dirname" =~ ^([0-9]{8}-[0-9]{6})- ]]; then
+                    # Timestamp-based branch: compare lexicographically
+                    local ts="${BASH_REMATCH[1]}"
+                    if [[ "$ts" > "$latest_timestamp" ]]; then
+                        latest_timestamp="$ts"
+                        latest_feature=$dirname
+                    fi
+                elif [[ "$dirname" =~ ^([0-9]{3,})- ]]; then
                     local number=${BASH_REMATCH[1]}
                     number=$((10#$number))
                     if [[ "$number" -gt "$highest" ]]; then
                         highest=$number
-                        latest_feature=$dirname
+                        # Only update if no timestamp branch found yet
+                        if [[ -z "$latest_timestamp" ]]; then
+                            latest_feature=$dirname
+                        fi
                     fi
                 fi
             fi
@@ -157,9 +169,15 @@ has_git() {
     git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1
 }
 
+# Strip a single optional path segment (e.g. gitflow "feat/004-name" -> "004-name").
+# Only when the full name is exactly two slash-free segments; otherwise returns the raw name.
 spec_kit_effective_branch_name() {
     local raw="$1"
-    printf '%s\n' "${raw#feature/}"
+    if [[ "$raw" =~ ^([^/]+)/([^/]+)$ ]]; then
+        printf '%s\n' "${BASH_REMATCH[2]}"
+    else
+        printf '%s\n' "$raw"
+    fi
 }
 
 check_feature_branch() {
@@ -172,9 +190,18 @@ check_feature_branch() {
         return 0
     fi
 
-    if [[ ! "$raw" =~ ^feature/[0-9]{4}-[a-z0-9][a-z0-9-]*$ ]] || [[ "$raw" == *--* ]] || [[ "$raw" == *- ]]; then
+    local branch
+    branch=$(spec_kit_effective_branch_name "$raw")
+
+    # Accept sequential prefix (3+ digits) but exclude malformed timestamps
+    # Malformed: 7-or-8 digit date + 6-digit time with no trailing slug (e.g. "2026031-143022" or "20260319-143022")
+    local is_sequential=false
+    if [[ "$branch" =~ ^[0-9]{3,}- ]] && [[ ! "$branch" =~ ^[0-9]{7}-[0-9]{6}- ]] && [[ ! "$branch" =~ ^[0-9]{7,8}-[0-9]{6}$ ]]; then
+        is_sequential=true
+    fi
+    if [[ "$is_sequential" != "true" ]] && [[ ! "$branch" =~ ^[0-9]{8}-[0-9]{6}- ]]; then
         echo "ERROR: Not on a feature branch. Current branch: $raw" >&2
-        echo "Feature branches must be named feature/NNNN-<short-name>" >&2
+        echo "Feature branches should be named like: 001-feature-name, 1234-feature-name, or 20260319-143022-feature-name" >&2
         return 1
     fi
 
@@ -234,25 +261,48 @@ feature_json_matches_feature_dir() {
     [[ "$norm_json" == "$norm_active" ]]
 }
 
+# Find feature directory by numeric prefix instead of exact branch match
+# This allows multiple branches to work on the same spec (e.g., 004-fix-bug, 004-add-feature)
 find_feature_dir_by_prefix() {
     local repo_root="$1"
-    local slug specs_dir
-    slug=$(spec_kit_effective_branch_name "$2")
+    local branch_name
+    branch_name=$(spec_kit_effective_branch_name "$2")
+    local specs_dir
     specs_dir=$(get_features_dir "$repo_root")
+
+    # Extract prefix from branch (e.g., "004" from "004-whatever" or "20260319-143022" from timestamp branches)
+    local prefix=""
+    if [[ "$branch_name" =~ ^([0-9]{8}-[0-9]{6})- ]]; then
+        prefix="${BASH_REMATCH[1]}"
+    elif [[ "$branch_name" =~ ^([0-9]{3,})- ]]; then
+        prefix="${BASH_REMATCH[1]}"
+    else
+        # If branch doesn't have a recognized prefix, fall back to exact match
+        echo "$specs_dir/$branch_name"
+        return
+    fi
+
+    # Search for directories in specs/ that start with this prefix
     local matches=()
     if [[ -d "$specs_dir" ]]; then
-        for dir in "$specs_dir"/"$slug"; do
+        for dir in "$specs_dir"/"$prefix"-*; do
             if [[ -d "$dir" ]]; then
-                matches+=("$dir")
+                matches+=("$(basename "$dir")")
             fi
         done
     fi
+
+    # Handle results
     if [[ ${#matches[@]} -eq 0 ]]; then
-        echo "$specs_dir/$slug"
+        # No match found - return the branch name path (will fail later with clear error)
+        echo "$specs_dir/$branch_name"
     elif [[ ${#matches[@]} -eq 1 ]]; then
-        echo "${matches[0]}"
+        # Exactly one match - perfect!
+        echo "$specs_dir/${matches[0]}"
     else
-        echo "ERROR: Multiple feature directories found for branch '$2': ${matches[*]}" >&2
+        # Multiple matches - this shouldn't happen with proper naming convention
+        echo "ERROR: Multiple spec directories found with prefix '$prefix': ${matches[*]}" >&2
+        echo "Please ensure only one spec directory exists per prefix." >&2
         return 1
     fi
 }

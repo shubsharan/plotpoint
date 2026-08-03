@@ -2,8 +2,19 @@
   "name": "@plotpoint/worker",
   "version": "0.0.0",
   "private": true,
+  "description": "Plotpoint asynchronous effects and build or media worker.",
   "type": "module",
-  "dependencies": {},
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@plotpoint/compiler": "workspace:*",
+    "@plotpoint/db": "workspace:*",
+    "@plotpoint/modules": "workspace:*",
+    "@plotpoint/protocol": "workspace:*",
+    "@plotpoint/runtime": "workspace:*"
+  },
   "devDependencies": {
     "@plotpoint/typescript-config": "workspace:*"
   }

@@ -22,36 +22,106 @@ importers:
         version: 7.0.2
 
   apps/api:
+    dependencies:
+      '@plotpoint/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@plotpoint/modules':
+        specifier: workspace:*
+        version: link:../../packages/modules
+      '@plotpoint/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@plotpoint/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
     devDependencies:
       '@plotpoint/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
 
   apps/player:
+    dependencies:
+      '@plotpoint/modules':
+        specifier: workspace:*
+        version: link:../../packages/modules
+      '@plotpoint/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@plotpoint/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
     devDependencies:
       '@plotpoint/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
 
   apps/worker:
+    dependencies:
+      '@plotpoint/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
+      '@plotpoint/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@plotpoint/modules':
+        specifier: workspace:*
+        version: link:../../packages/modules
+      '@plotpoint/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@plotpoint/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
     devDependencies:
       '@plotpoint/typescript-config':
         specifier: workspace:*
         version: link:../../packages/typescript-config
 
   packages/compiler:
+    dependencies:
+      '@plotpoint/modules':
+        specifier: workspace:*
+        version: link:../modules
+      '@plotpoint/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@plotpoint/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+    devDependencies:
+      '@plotpoint/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+
+  packages/db:
+    dependencies:
+      '@plotpoint/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@plotpoint/runtime':
+        specifier: workspace:*
+        version: link:../runtime
     devDependencies:
       '@plotpoint/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
 
   packages/modules:
+    dependencies:
+      '@plotpoint/runtime':
+        specifier: workspace:*
+        version: link:../runtime
     devDependencies:
       '@plotpoint/typescript-config':
         specifier: workspace:*
         version: link:../typescript-config
 
   packages/protocol:
+    dependencies:
+      '@plotpoint/runtime':
+        specifier: workspace:*
+        version: link:../runtime
     devDependencies:
       '@plotpoint/typescript-config':
         specifier: workspace:*
@@ -64,6 +134,22 @@ importers:
         version: link:../typescript-config
 
   packages/testkit:
+    dependencies:
+      '@plotpoint/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+      '@plotpoint/db':
+        specifier: workspace:*
+        version: link:../db
+      '@plotpoint/modules':
+        specifier: workspace:*
+        version: link:../modules
+      '@plotpoint/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@plotpoint/runtime':
+        specifier: workspace:*
+        version: link:../runtime
     devDependencies:
       '@plotpoint/typescript-config':
         specifier: workspace:*
