@@ -3,7 +3,8 @@
 set -euo pipefail
 SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEST_ROOT=$(mktemp -d)
-trap 'rm -rf "$TEST_ROOT"' EXIT
+REMOTE_ROOT=$(mktemp -d)
+trap 'rm -rf "$TEST_ROOT" "$REMOTE_ROOT"' EXIT
 
 require_content() {
     local file="$1" expected="$2"
@@ -70,6 +71,23 @@ extension_next=$(.specify/extensions/git/scripts/bash/create-new-feature.sh --dr
 [[ "$extension_existing" == feature/0001-budget-policy ]]
 [[ "$core_next" == feature/0002-next-feature ]]
 [[ "$extension_next" == feature/0002-next-feature ]]
+
+git branch feature/0007-existing
+core_after_local=$(.specify/scripts/bash/create-new-feature.sh --dry-run --short-name after-local 'After local' | field_from BRANCH_NAME)
+extension_after_local=$(.specify/extensions/git/scripts/bash/create-new-feature.sh --dry-run --short-name after-local 'After local' | field_from BRANCH_NAME)
+[[ "$core_after_local" == feature/0008-after-local ]]
+[[ "$extension_after_local" == feature/0008-after-local ]]
+
+git init -q --bare "$REMOTE_ROOT/repository.git"
+git remote add origin "$REMOTE_ROOT/repository.git"
+git branch feature/0009-remote-only
+git push -q origin feature/0009-remote-only
+git branch -D feature/0009-remote-only >/dev/null
+git update-ref -d refs/remotes/origin/feature/0009-remote-only
+core_after_remote=$(.specify/scripts/bash/create-new-feature.sh --dry-run --short-name after-remote 'After remote' | field_from BRANCH_NAME)
+extension_after_remote=$(.specify/extensions/git/scripts/bash/create-new-feature.sh --dry-run --short-name after-remote 'After remote' | field_from BRANCH_NAME)
+[[ "$core_after_remote" == feature/0010-after-remote ]]
+[[ "$extension_after_remote" == feature/0010-after-remote ]]
 
 mkdir docs/features/0007-budget-policy
 if .specify/scripts/bash/create-new-feature.sh --dry-run --short-name budget-policy 'Budget policy' >/dev/null 2>&1; then

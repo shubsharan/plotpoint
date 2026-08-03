@@ -59,44 +59,64 @@ export function validateProgressionGraph<
   const { definition, progression, intents = [] } = input;
   const nodeIds = new Set(definition.nodes.map((node) => node.nodeId));
 
-  if (
-    progression === null ||
-    typeof progression !== "object" ||
-    !Array.isArray(progression.nodes)
-  ) {
+  if (progression === null || typeof progression !== "object" || Array.isArray(progression)) {
     return invalid("progression-state-invalid", {
       graphId: definition.graphId,
       reason: "invalid-progression-shape",
     });
   }
+
+  const progressionValue = progression as unknown as Record<string, unknown>;
   if (
-    progression.graphId !== definition.graphId ||
-    progression.graphVersion !== definition.graphVersion
+    typeof progressionValue.graphId !== "string" ||
+    !Number.isSafeInteger(progressionValue.graphVersion) ||
+    (progressionValue.graphVersion as number) < 1 ||
+    !Array.isArray(progressionValue.nodes)
   ) {
     return invalid("progression-state-invalid", {
-      actualGraphId: progression.graphId,
-      actualGraphVersion: progression.graphVersion,
+      graphId: definition.graphId,
+      reason: "invalid-progression-fields",
+    });
+  }
+
+  const graphId = progressionValue.graphId;
+  const graphVersion = progressionValue.graphVersion as number;
+  const nodes = progressionValue.nodes;
+  if (graphId !== definition.graphId || graphVersion !== definition.graphVersion) {
+    return invalid("progression-state-invalid", {
+      actualGraphId: graphId,
+      actualGraphVersion: graphVersion,
       expectedGraphId: definition.graphId,
       expectedGraphVersion: definition.graphVersion,
+      reason: "graph-identity-mismatch",
     });
   }
   const expectedIds = [...nodeIds].sort();
-  if (
-    progression.nodes.some(
-      (node) => node === null || typeof node !== "object" || Array.isArray(node),
-    )
-  ) {
-    return invalid("progression-state-invalid", {
-      expectedNodeIds: expectedIds,
-      graphId: definition.graphId,
-      reason: "invalid-node-state-shape",
-    });
+  const actualIds: string[] = [];
+  const stateByNode = new Map<string, ProgressionStatus>();
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes[index];
+    if (node === null || typeof node !== "object" || Array.isArray(node)) {
+      return invalid("progression-state-invalid", {
+        graphId: definition.graphId,
+        nodeIndex: index,
+        reason: "invalid-node-state-shape",
+      });
+    }
+    const nodeValue = node as Record<string, unknown>;
+    if (typeof nodeValue.nodeId !== "string" || !isProgressionStatus(nodeValue.status)) {
+      return invalid("progression-state-invalid", {
+        graphId: definition.graphId,
+        nodeIndex: index,
+        reason: "invalid-node-state-fields",
+      });
+    }
+    actualIds.push(nodeValue.nodeId);
+    stateByNode.set(nodeValue.nodeId, nodeValue.status);
   }
-  const actualIds = progression.nodes.map((node) => node.nodeId);
   if (
     actualIds.length !== expectedIds.length ||
-    actualIds.some((nodeId, index) => nodeId !== expectedIds[index]) ||
-    progression.nodes.some((node) => !isProgressionStatus(node.status))
+    actualIds.some((nodeId, index) => nodeId !== expectedIds[index])
   ) {
     return invalid("progression-state-invalid", {
       actualNodeIds: actualIds,
@@ -106,7 +126,6 @@ export function validateProgressionGraph<
     });
   }
 
-  const stateByNode = new Map(progression.nodes.map((node) => [node.nodeId, node.status]));
   if (!Array.isArray(intents)) {
     return invalid("progression-intent-invalid", {
       commandId: input.commandId ?? "",
@@ -115,34 +134,50 @@ export function validateProgressionGraph<
     });
   }
   const intentNodes = new Set<string>();
-  for (const intent of intents) {
+  for (let index = 0; index < intents.length; index += 1) {
+    const intent = intents[index];
     if (intent === null || typeof intent !== "object" || Array.isArray(intent)) {
       return invalid("progression-intent-invalid", {
         commandId: input.commandId ?? "",
         graphId: definition.graphId,
+        intentIndex: index,
         reason: "invalid-intent-shape",
       });
     }
-    const current = stateByNode.get(intent.nodeId);
+    const intentValue = intent as unknown as Record<string, unknown>;
+    if (
+      typeof intentValue.nodeId !== "string" ||
+      !isProgressionStatus(intentValue.from) ||
+      !isProgressionStatus(intentValue.to)
+    ) {
+      return invalid("progression-intent-invalid", {
+        commandId: input.commandId ?? "",
+        graphId: definition.graphId,
+        intentIndex: index,
+        reason: "invalid-intent-fields",
+      });
+    }
+    const nodeId = intentValue.nodeId;
+    const from = intentValue.from;
+    const to = intentValue.to;
+    const current = stateByNode.get(nodeId);
     if (
       current === undefined ||
-      intentNodes.has(intent.nodeId) ||
-      !isProgressionStatus(intent.from) ||
-      !isProgressionStatus(intent.to) ||
-      current !== intent.from ||
-      !isLegalProgressionTransition(intent.from, intent.to)
+      intentNodes.has(nodeId) ||
+      current !== from ||
+      !isLegalProgressionTransition(from, to)
     ) {
       return invalid("progression-intent-invalid", {
         commandId: input.commandId ?? "",
         current: current ?? null,
-        from: intent.from,
+        from,
         graphId: definition.graphId,
-        nodeId: intent.nodeId,
-        reason: intentNodes.has(intent.nodeId) ? "duplicate-intent" : "invalid-intent",
-        to: intent.to,
+        nodeId,
+        reason: intentNodes.has(nodeId) ? "duplicate-intent" : "invalid-intent",
+        to,
       });
     }
-    intentNodes.add(intent.nodeId);
+    intentNodes.add(nodeId);
   }
 
   return { kind: "valid" };

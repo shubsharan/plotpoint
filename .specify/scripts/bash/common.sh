@@ -70,8 +70,8 @@ get_features_dir() { resolve_content_dir "${1:-$(get_repo_root)}" feature_dir do
 get_epics_dir() { resolve_content_dir "${1:-$(get_repo_root)}" epic_dir docs/epics; }
 get_adr_dir() { resolve_content_dir "${1:-$(get_repo_root)}" adr_dir docs/adrs; }
 
-resolve_feature_name_for_slug() {
-    local repo_root="$1" slug="$2" features_dir highest=0 value dir
+find_feature_name_for_slug() {
+    local repo_root="$1" slug="$2" features_dir dir
     local matches=()
     features_dir=$(get_features_dir "$repo_root")
 
@@ -84,19 +84,85 @@ resolve_feature_name_for_slug() {
             return 1
         elif ((${#matches[@]} == 1)); then
             printf '%s\n' "${matches[0]}"
-            return 0
         fi
+    fi
+}
 
-        for dir in "$features_dir"/[0-9][0-9][0-9][0-9]-*; do
+_extract_highest_feature_number() {
+    local highest=0 name number
+    while IFS= read -r name; do
+        [[ -n "$name" ]] || continue
+        name="${name#feature/}"
+        [[ ! "$name" =~ ^[0-9]{8}-[0-9]{6}- ]] || continue
+        if [[ "$name" =~ ^([0-9]{3,})- ]]; then
+            number=$((10#${BASH_REMATCH[1]}))
+            ((number > highest)) && highest=$number
+        fi
+    done
+    printf '%s\n' "$highest"
+}
+
+get_highest_feature_number_from_artifacts() {
+    local repo_root="$1" features_dir dir
+    features_dir=$(get_features_dir "$repo_root")
+    if [[ -d "$features_dir" ]]; then
+        for dir in "$features_dir"/*; do
             [[ -d "$dir" ]] || continue
-            value="$(basename "$dir")"
-            value="${value%%-*}"
-            value=$((10#$value))
-            ((value > highest)) && highest=$value
-        done
+            basename "$dir"
+        done | _extract_highest_feature_number
+    else
+        printf '0\n'
+    fi
+}
+
+get_highest_feature_number_from_branches() {
+    local repo_root="$1"
+    git -C "$repo_root" branch -a 2>/dev/null |
+        sed 's/^[* ]*//; s|^remotes/[^/]*/||' |
+        _extract_highest_feature_number
+}
+
+get_highest_feature_number_from_remote_refs() {
+    local repo_root="$1" remote refs remote_highest highest=0
+    while IFS= read -r remote; do
+        [[ -n "$remote" ]] || continue
+        refs=$(GIT_TERMINAL_PROMPT=0 git -C "$repo_root" ls-remote --heads "$remote" 2>/dev/null || true)
+        remote_highest=$(printf '%s\n' "$refs" | sed 's|.*refs/heads/||' | _extract_highest_feature_number)
+        ((remote_highest > highest)) && highest=$remote_highest
+    done < <(git -C "$repo_root" remote 2>/dev/null)
+    printf '%s\n' "$highest"
+}
+
+next_feature_number() {
+    local repo_root="$1" dry_run="${2:-false}"
+    local highest_artifact highest_branch=0 highest_remote=0 highest
+    highest_artifact=$(get_highest_feature_number_from_artifacts "$repo_root")
+
+    if command -v git >/dev/null 2>&1 && [[ -e "$repo_root/.git" ]] && git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        if [[ "$dry_run" == true ]]; then
+            highest_remote=$(get_highest_feature_number_from_remote_refs "$repo_root")
+        else
+            git -C "$repo_root" fetch --all --prune >/dev/null 2>&1 || true
+        fi
+        highest_branch=$(get_highest_feature_number_from_branches "$repo_root")
     fi
 
-    printf '%04d-%s\n' "$((highest + 1))" "$slug"
+    highest=$highest_artifact
+    ((highest_branch > highest)) && highest=$highest_branch
+    ((highest_remote > highest)) && highest=$highest_remote
+    printf '%s\n' "$((highest + 1))"
+}
+
+resolve_feature_name_for_slug() {
+    local repo_root="$1" slug="$2" dry_run="${3:-false}" existing number
+    existing=$(find_feature_name_for_slug "$repo_root" "$slug") || return 1
+    if [[ -n "$existing" ]]; then
+        printf '%s\n' "$existing"
+        return 0
+    fi
+
+    number=$(next_feature_number "$repo_root" "$dry_run")
+    printf '%04d-%s\n' "$number" "$slug"
 }
 
 # Get current branch, with fallback for non-git repositories

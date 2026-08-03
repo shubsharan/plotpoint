@@ -43,7 +43,7 @@ if [[ -n "${GIT_BRANCH_NAME:-}" ]]; then
     BRANCH_NAME="$GIT_BRANCH_NAME"
 else
     slug=$(slugify "${SHORT_NAME:-$DESCRIPTION}")
-    feature_name=$(resolve_feature_name_for_slug "$REPO_ROOT" "$slug") || exit 1
+    feature_name=$(resolve_feature_name_for_slug "$REPO_ROOT" "$slug" "$DRY_RUN") || exit 1
     BRANCH_NAME="feature/$feature_name"
 fi
 check_feature_branch "$BRANCH_NAME" true

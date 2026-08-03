@@ -71,13 +71,16 @@ function resolvePolicy(policy: Partial<RuntimePolicy> | undefined): RuntimePolic
     "maxAutomaticTransitions",
   ] as const) {
     if (!Number.isSafeInteger(resolved[field]) || resolved[field] < 0) {
-      return createDiagnostic("runtime-policy-invalid", { field, value: resolved[field] });
+      return createDiagnostic("runtime-policy-invalid", {
+        field,
+        reason: "non-negative-safe-integer-required",
+      });
     }
   }
   if (resolved.contractVersion !== 1) {
     return createDiagnostic("runtime-policy-invalid", {
       field: "contractVersion",
-      value: resolved.contractVersion,
+      reason: "unsupported-contract-version",
     });
   }
   return Object.freeze(resolved as RuntimePolicy);
@@ -410,6 +413,17 @@ export function executeCommand<
   let progressionAfter = aggregateClone.progression;
   let progressionTrace: readonly ProgressionTransition[] = [];
   if (input.progression !== undefined && aggregateClone.progression !== undefined) {
+    if (input.progression.aggregateKind !== aggregateClone.kind) {
+      return invalidResult(recordContext, [
+        createDiagnostic("progression-graph-invalid", {
+          actualAggregateKind: input.progression.aggregateKind,
+          commandId: commandClone.id,
+          expectedAggregateKind: aggregateClone.kind,
+          graphId: input.progression.graphId,
+          reason: "aggregate-kind-mismatch",
+        }),
+      ]);
+    }
     const evaluation = evaluateProgression({
       definition: input.progression,
       progression: aggregateClone.progression,

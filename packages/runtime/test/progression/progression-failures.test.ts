@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canonicalizeValue,
   defineProgression,
   defineCommand,
   executeCommand,
@@ -170,6 +171,122 @@ describe("progression failures", () => {
     expect(result.diagnostics[0]?.code).toBe("progression-limit-overrun");
     expect(result.record.effectIntents).toBeUndefined();
     expect(result.record.domainEvents).toBeUndefined();
+  });
+
+  it("returns recorded invalidity for malformed progression identity", () => {
+    const aggregate: Aggregate<JsonObject, "player"> = {
+      kind: "player",
+      id: "p1",
+      schemaVersion: 1,
+      stateVersion: 0,
+      authority: "local",
+      state: {},
+      progression: { nodes: [] } as never,
+    };
+    const definition = defineCommand<"player", JsonObject, JsonObject, JsonObject>({
+      definitionId: "malformed-progression.v1",
+      commandType: "advance",
+      aggregateKind: "player",
+      handle: () => ({
+        kind: "accepted",
+        nextState: { changed: true },
+        outcome: {},
+        domainEvents: [],
+        effectIntents: [],
+        progressionIntents: [],
+      }),
+    });
+    const progression = defineProgression({
+      aggregateKind: "player",
+      graphId: "malformed-progression.v1",
+      graphVersion: 1,
+      nodes: [],
+      automaticRules: [],
+    });
+
+    expect(() =>
+      executeCommand({ definition, aggregate, command, observations: [], progression }),
+    ).not.toThrow();
+    const result = executeCommand({
+      definition,
+      aggregate,
+      command,
+      observations: [],
+      progression,
+    });
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid" || result.phase !== "execution") {
+      throw new Error("expected recorded invalid result");
+    }
+    expect(result.diagnostics[0]?.code).toBe("progression-state-invalid");
+    expect(canonicalizeValue(result.record).kind).toBe("valid");
+  });
+
+  it("rejects a progression definition for another aggregate kind before evaluation", () => {
+    let evaluated = false;
+    const aggregate: Aggregate<JsonObject, "player"> = {
+      kind: "player",
+      id: "p1",
+      schemaVersion: 1,
+      stateVersion: 0,
+      authority: "local",
+      state: {},
+      progression: {
+        graphId: "kind-mismatch.v1",
+        graphVersion: 1,
+        nodes: [{ nodeId: "node", status: "locked" }],
+      },
+    };
+    const definition = defineCommand<"player", JsonObject, JsonObject, JsonObject>({
+      definitionId: "kind-mismatch.v1",
+      commandType: "advance",
+      aggregateKind: "player",
+      handle: () => ({
+        kind: "accepted",
+        nextState: { changed: true },
+        outcome: {},
+        domainEvents: [],
+        effectIntents: [],
+        progressionIntents: [],
+      }),
+    });
+    const progression = defineProgression({
+      aggregateKind: "team",
+      graphId: "kind-mismatch.v1",
+      graphVersion: 1,
+      nodes: [{ nodeId: "node", initialStatus: "locked" }],
+      automaticRules: [
+        {
+          ruleId: "evaluate",
+          targetNodeId: "node",
+          from: ["locked"],
+          to: "available",
+          priority: 0,
+          when: () => {
+            evaluated = true;
+            return true;
+          },
+        },
+      ],
+    });
+
+    const result = executeCommand({
+      definition,
+      aggregate,
+      command,
+      observations: [],
+      progression: progression as never,
+    });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid" || result.phase !== "execution") {
+      throw new Error("expected recorded invalid result");
+    }
+    expect(result.diagnostics[0]).toMatchObject({
+      code: "progression-graph-invalid",
+      details: { reason: "aggregate-kind-mismatch" },
+    });
+    expect(evaluated).toBe(false);
   });
 
   it("rejects reverted progression instead of returning a traced no-op", () => {

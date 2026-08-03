@@ -262,6 +262,59 @@ describe("executeCommand", () => {
     }
   });
 
+  it.each([NaN, Infinity, -Infinity, -1, "many"])(
+    "returns canonical preflight invalidity for malformed policy value %s",
+    (maxCanonicalNodes) => {
+      const definition = defineCommand<"player", State, Payload, Outcome>({
+        definitionId: "policy.v1",
+        commandType: "increment",
+        aggregateKind: "player",
+        handle: () => ({ kind: "rejected", outcome: { result: "unused" } }),
+      });
+      const input = {
+        definition,
+        aggregate,
+        command,
+        observations: [],
+        policy: { maxCanonicalNodes },
+      } as never;
+
+      expect(() => executeCommand(input)).not.toThrow();
+      const result = executeCommand(input);
+      expect(result).toMatchObject({
+        kind: "invalid",
+        phase: "preflight",
+        diagnostics: [
+          {
+            code: "runtime-policy-invalid",
+            details: {
+              field: "maxCanonicalNodes",
+              reason: "non-negative-safe-integer-required",
+            },
+          },
+        ],
+      });
+      expect("record" in result).toBe(false);
+      expect("aggregate" in result).toBe(false);
+      expect(canonicalizeValue(result).kind).toBe("valid");
+    },
+  );
+
+  it.each(["definitionId", "commandType"] as const)(
+    "rejects a non-canonical static %s",
+    (field) => {
+      expect(() =>
+        defineCommand({
+          definitionId: "identity.v1",
+          commandType: "increment",
+          aggregateKind: "player",
+          handle: () => ({ kind: "rejected", outcome: { result: "unused" } }),
+          [field]: "invalid\ud800",
+        } as never),
+      ).toThrow("canonical non-empty string");
+    },
+  );
+
   it("does not impose the component node limit again on the assembled record", () => {
     const definition = defineCommand<"player", State, Payload, Outcome>({
       definitionId: "record-budget.v1",

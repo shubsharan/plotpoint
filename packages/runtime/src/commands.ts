@@ -1,5 +1,5 @@
 import { isAggregateKind, type Aggregate, type AggregateKind } from "./aggregates.js";
-import type { JsonObject } from "./canonical-json.js";
+import { canonicalizeValue, type JsonObject } from "./canonical-json.js";
 import type { TransitionContext } from "./observations.js";
 import type { ProgressionIntent } from "./progression/state.js";
 
@@ -40,6 +40,15 @@ export type HandlerDecision<State extends JsonObject, Outcome extends JsonObject
   | AcceptedDecision<State, Outcome>
   | RejectedDecision<Outcome>;
 
+function canonicalNonEmptyString(value: unknown): string | null {
+  const result = canonicalizeValue(value);
+  return result.kind === "valid" &&
+    typeof result.canonical.value === "string" &&
+    result.canonical.value.length > 0
+    ? result.canonical.value
+    : null;
+}
+
 export interface CommandDefinition<
   State extends JsonObject = JsonObject,
   Payload extends JsonObject = JsonObject,
@@ -74,11 +83,13 @@ export function defineCommand<
       throw new TypeError(`Command definition field ${field} must be a data property`);
     }
   }
-  if (typeof definition.definitionId !== "string" || definition.definitionId.length === 0) {
-    throw new TypeError("Command definition identity must be non-empty");
+  const definitionId = canonicalNonEmptyString(definition.definitionId);
+  if (definitionId === null) {
+    throw new TypeError("Command definition identity must be a canonical non-empty string");
   }
-  if (typeof definition.commandType !== "string" || definition.commandType.length === 0) {
-    throw new TypeError("Command type must be non-empty");
+  const commandType = canonicalNonEmptyString(definition.commandType);
+  if (commandType === null) {
+    throw new TypeError("Command type must be a canonical non-empty string");
   }
   if (!isAggregateKind(definition.aggregateKind)) {
     throw new TypeError("Command definition aggregate kind is invalid");
@@ -87,8 +98,8 @@ export function defineCommand<
     throw new TypeError("Command handler must be synchronous function data");
   }
   return Object.freeze({
-    definitionId: definition.definitionId,
-    commandType: definition.commandType,
+    definitionId,
+    commandType,
     aggregateKind: definition.aggregateKind,
     handle: definition.handle,
   });
