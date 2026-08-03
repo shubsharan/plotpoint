@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@plotpoint/typescript-config':
+        specifier: workspace:*
+        version: link:packages/typescript-config
       oxfmt:
         specifier: ^0.61.0
         version: 0.61.0
