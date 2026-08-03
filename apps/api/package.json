@@ -2,8 +2,18 @@
   "name": "@plotpoint/api",
   "version": "0.0.0",
   "private": true,
+  "description": "Plotpoint platform HTTP and synchronization APIs.",
   "type": "module",
-  "dependencies": {},
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@plotpoint/db": "workspace:*",
+    "@plotpoint/modules": "workspace:*",
+    "@plotpoint/protocol": "workspace:*",
+    "@plotpoint/runtime": "workspace:*"
+  },
   "devDependencies": {
     "@plotpoint/typescript-config": "workspace:*"
   }

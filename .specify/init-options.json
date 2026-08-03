@@ -1,6 +1,7 @@
 {
   "ai": "codex",
   "ai_skills": true,
+  "branch_numbering": "sequential",
   "feature_dir": "docs/features",
   "epic_dir": "docs/epics",
   "adr_dir": "docs/adrs",

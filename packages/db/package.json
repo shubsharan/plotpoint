@@ -1,0 +1,27 @@
+{
+  "name": "@plotpoint/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PostgreSQL schema, migrations, transactions, repositories, and durable outbox persistence.",
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@plotpoint/protocol": "workspace:*",
+    "@plotpoint/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@plotpoint/typescript-config": "workspace:*"
+  }
+}

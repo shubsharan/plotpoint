@@ -2,9 +2,28 @@
   "name": "@plotpoint/testkit",
   "version": "0.0.0",
   "private": true,
+  "description": "Deterministic Plotpoint fakes, fixtures, and runtime harnesses.",
+  "files": [
+    "dist"
+  ],
   "type": "module",
-  "dependencies": {},
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run --config ../../vitest.config.ts --project testkit",
+    "test:watch": "vitest --config ../../vitest.config.ts --project testkit"
+  },
+  "dependencies": {
+    "@plotpoint/runtime": "workspace:*"
+  },
   "devDependencies": {
-    "@plotpoint/typescript-config": "workspace:*"
+    "@plotpoint/typescript-config": "workspace:*",
+    "fast-check": "^4.3.0"
   }
 }

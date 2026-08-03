@@ -2,8 +2,24 @@
   "name": "@plotpoint/runtime",
   "version": "0.0.0",
   "private": true,
+  "description": "Deterministic Plotpoint commands, aggregates, progression, and module contracts.",
+  "files": [
+    "dist"
+  ],
   "type": "module",
-  "dependencies": {},
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "bench": "vitest bench --run --config ../../vitest.config.ts --project runtime",
+    "check-types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run --config ../../vitest.config.ts --project runtime",
+    "test:watch": "vitest --config ../../vitest.config.ts --project runtime"
+  },
   "devDependencies": {
     "@plotpoint/typescript-config": "workspace:*"
   }

@@ -18,7 +18,7 @@ trap 'rm -rf "$WORK"' EXIT
 DRIFT=0
 
 status_of() { awk 'NR==1 && $0=="---"{fm=1; next} fm && $0=="---"{exit} fm && /^status:[[:space:]]*/{sub(/^status:[[:space:]]*/, ""); print; exit}' "$1"; }
-title_of() { awk '/^# (Epic|Feature|ADR):[[:space:]]*/ { sub(/^# (Epic|Feature|ADR):[[:space:]]*/, ""); print; exit }' "$1"; }
+title_of() { awk '/^# (Epic|Feature|Feature Specification|ADR):[[:space:]]*/ { sub(/^# (Epic|Feature|Feature Specification|ADR):[[:space:]]*/, ""); print; exit }' "$1"; }
 
 set_status() {
     local file="$1" status="$2" tmp="$WORK/status"

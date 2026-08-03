@@ -2,8 +2,24 @@
   "name": "@plotpoint/modules",
   "version": "0.0.0",
   "private": true,
+  "description": "First-party Plotpoint mechanics and their runtime adapters.",
+  "files": [
+    "dist"
+  ],
   "type": "module",
-  "dependencies": {},
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@plotpoint/runtime": "workspace:*"
+  },
   "devDependencies": {
     "@plotpoint/typescript-config": "workspace:*"
   }

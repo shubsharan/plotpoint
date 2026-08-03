@@ -1,10 +1,56 @@
-id: workflow
-name: Minimal Spec Kit workflow
-version: 1.0.0
-commands:
-  - name: speckit.workflow.sync
-    file: commands/speckit.workflow.sync.md
-    description: Synchronize generated epic and ADR documentation
-  - name: speckit.workflow.check
-    file: commands/speckit.workflow.check.md
-    description: Validate feature, epic, ADR, branch, and status invariants
+schema_version: "1.0"
+
+extension:
+  id: workflow
+  name: "Plotpoint Epic and ADR Workflow"
+  version: "1.0.0"
+  description: "Adds epic grouping, ADR governance, generated documentation, and implementation readiness checks to the full Spec Kit cycle"
+  author: Plotpoint
+
+requires:
+  speckit_version: ">=0.8.8"
+
+provides:
+  commands:
+    - name: speckit.workflow.sync
+      file: commands/speckit.workflow.sync.md
+      description: "Synchronize generated epic, feature, and ADR documentation"
+    - name: speckit.workflow.check
+      file: commands/speckit.workflow.check.md
+      description: "Validate feature, epic, ADR, branch, status, and readiness invariants"
+
+hooks:
+  after_specify:
+    command: speckit.workflow.sync
+    optional: false
+    description: "Refresh the parent epic after feature creation"
+  after_plan:
+    command: speckit.workflow.sync
+    optional: false
+    description: "Refresh generated documentation after planning"
+  before_implement:
+    command: speckit.workflow.check
+    optional: false
+    description: "Require valid epic and Accepted governing ADR references before implementation"
+  after_implement:
+    command: speckit.workflow.sync
+    optional: false
+    description: "Synchronize feature and epic status without marking the feature Done"
+  after_analyze:
+    command: speckit.workflow.check
+    optional: false
+    description: "Validate Spec Kit references and generated documentation after analysis"
+  after_epic:
+    command: speckit.workflow.sync
+    optional: false
+    description: "Refresh the roadmap and epic feature list"
+  after_adr:
+    command: speckit.workflow.sync
+    optional: false
+    description: "Refresh the ADR index"
+
+tags:
+  - epic
+  - adr
+  - governance
+  - workflow

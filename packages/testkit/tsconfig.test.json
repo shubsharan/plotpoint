@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@plotpoint/runtime": ["../runtime/src/index.ts"],
+      "@plotpoint/testkit": ["./src/index.ts"]
+    },
+    "rootDir": "..",
+    "types": ["vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "../runtime/src/**/*.ts"],
+  "exclude": []
+}
