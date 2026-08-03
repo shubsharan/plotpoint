@@ -8,7 +8,7 @@ import {
   executeCommand,
   validateAggregate,
   validateProgressionGraph,
-} from "./index.js";
+} from "@plotpoint/runtime";
 
 describe("runtime public API", () => {
   it("exposes the Gate 1 values through the root", () => {

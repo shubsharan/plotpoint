@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canonicalizeValue } from "./canonical-json.js";
+import { canonicalizeValue } from "@plotpoint/runtime";
 
 const sparseArray: unknown[] = [];
 sparseArray.length = 2;

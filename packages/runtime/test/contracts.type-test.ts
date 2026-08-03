@@ -1,4 +1,10 @@
-import type { Aggregate, Command, HandlerDecision, JsonObject, JsonValue } from "./index.js";
+import type {
+  Aggregate,
+  Command,
+  HandlerDecision,
+  JsonObject,
+  JsonValue,
+} from "@plotpoint/runtime";
 
 const validValue: JsonValue = { nested: [null, true, 1, "value"] };
 void validValue;

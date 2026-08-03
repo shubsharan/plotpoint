@@ -4,7 +4,7 @@ import {
   validateProgressionGraph,
   type ProgressionDefinition,
   type ProgressionInstance,
-} from "../index.js";
+} from "@plotpoint/runtime";
 
 const instance: ProgressionInstance = {
   graphId: "graph.v1",

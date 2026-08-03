@@ -14,7 +14,7 @@ import {
   identifier,
   observation,
   random,
-} from "./index.js";
+} from "@plotpoint/testkit";
 
 describe("scripted observations", () => {
   it("constructs canonical clock, identifier, random, generic, and capability entries", () => {

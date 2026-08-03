@@ -77,7 +77,7 @@ packages/runtime/
 ├── package.json
 ├── tsconfig.json
 ├── tsconfig.test.json
-└── src/
+├── src/
     ├── index.ts
     ├── canonical-json.ts
     ├── aggregates.ts
@@ -86,24 +86,30 @@ packages/runtime/
     ├── observations.ts
     ├── execution-record.ts
     ├── execute-command.ts
-    ├── progression/
-    │   ├── graph.ts
-    │   ├── state.ts
-    │   ├── validate-graph.ts
-    │   └── evaluate-progression.ts
-    └── *.test.ts
+    └── progression/
+        ├── graph.ts
+        ├── state.ts
+        ├── validate-graph.ts
+        └── evaluate-progression.ts
+└── test/
+    ├── *.test.ts
+    ├── *.type-test.ts
+    ├── runtime.bench.ts
+    └── progression/
+        └── *.test.ts
 
 packages/testkit/
 ├── package.json
 ├── tsconfig.json
 ├── tsconfig.test.json
-└── src/
+├── src/
     ├── index.ts
     ├── scripted-observations.ts
     ├── aggregate-fixtures.ts
     ├── runtime-harness.ts
     ├── replay.ts
-    ├── assertions.ts
+    └── assertions.ts
+└── test/
     └── *.test.ts
 
 package.json                     # Root test and verify commands
@@ -111,7 +117,7 @@ turbo.json                       # Test task orchestration
 vitest.config.ts                 # Named runtime and testkit projects
 ```
 
-**Structure Decision**: Extend only the existing `@plotpoint/runtime` and `@plotpoint/testkit` boundaries. Runtime owns the production contract and pure evaluators with root-only named exports. Testkit consumes the public runtime API and, for Gate 1, removes premature dependencies on compiler, database, modules, and protocol packages. Tests remain colocated with the behavior they prove, are excluded from production emission through test-specific TypeScript configurations, and run as named projects from one root Vitest configuration. Package scripts select their named project so filtered and root Turbo runs exercise the same setup.
+**Structure Decision**: Extend only the existing `@plotpoint/runtime` and `@plotpoint/testkit` boundaries. Runtime owns the production contract and pure evaluators with root-only named exports. Testkit consumes the public runtime API and, for Gate 1, removes premature dependencies on compiler, database, modules, and protocol packages. Tests live in each package's dedicated `test/` directory, are excluded from production emission through test-specific TypeScript configurations, and run as named projects from one root Vitest configuration. Package scripts select their named project so filtered and root Turbo runs exercise the same setup.
 
 ## Phase 0: Research
 

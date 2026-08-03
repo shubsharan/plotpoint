@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { defineCommand, type Aggregate, type Command, type JsonObject } from "@plotpoint/runtime";
-import { clock, createRuntimeHarness } from "./index.js";
+import { clock, createRuntimeHarness } from "@plotpoint/testkit";
 
 type State = JsonObject & { readonly count: number };
 

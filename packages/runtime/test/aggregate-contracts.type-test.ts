@@ -1,4 +1,4 @@
-import type { Aggregate, Command, JsonObject } from "./index.js";
+import type { Aggregate, Command, JsonObject } from "@plotpoint/runtime";
 
 type State = JsonObject & { readonly value: number };
 

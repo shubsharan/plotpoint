@@ -7,7 +7,7 @@ import {
   type AggregateKind,
   type Command,
   type JsonObject,
-} from "./index.js";
+} from "@plotpoint/runtime";
 
 type State = JsonObject & { readonly nested: { readonly value: number } };
 type Outcome = JsonObject & { readonly result: string };

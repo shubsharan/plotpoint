@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { playerFixture, sessionFixture, teamFixture } from "./index.js";
+import { playerFixture, sessionFixture, teamFixture } from "@plotpoint/testkit";
 
 describe("aggregate fixtures", () => {
   it.each([

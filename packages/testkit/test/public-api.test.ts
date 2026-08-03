@@ -13,7 +13,7 @@ import {
   replayScenario,
   sessionFixture,
   teamFixture,
-} from "./index.js";
+} from "@plotpoint/testkit";
 
 describe("testkit public API", () => {
   it("exposes author helpers through the root", () => {

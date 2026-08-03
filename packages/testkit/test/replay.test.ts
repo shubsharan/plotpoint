@@ -7,7 +7,7 @@ import {
   type Command,
   type JsonObject,
 } from "@plotpoint/runtime";
-import { replayScenario } from "./index.js";
+import { replayScenario } from "@plotpoint/testkit";
 
 type State = JsonObject & { readonly value: number };
 

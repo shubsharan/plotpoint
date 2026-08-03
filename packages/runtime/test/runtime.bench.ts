@@ -7,7 +7,7 @@ import {
   type Command,
   type JsonObject,
   type ProgressionDefinition,
-} from "./index.js";
+} from "@plotpoint/runtime";
 
 type State = JsonObject & { readonly count: number };
 

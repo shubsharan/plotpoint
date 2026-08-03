@@ -6,7 +6,7 @@ import {
   type Aggregate,
   type Command,
   type JsonObject,
-} from "./index.js";
+} from "@plotpoint/runtime";
 
 type State = JsonObject & { readonly done: boolean };
 type Outcome = JsonObject & { readonly result: string };

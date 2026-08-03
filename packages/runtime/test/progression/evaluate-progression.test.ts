@@ -6,7 +6,7 @@ import {
   type JsonObject,
   type ProgressionDefinition,
   type ProgressionInstance,
-} from "../index.js";
+} from "@plotpoint/runtime";
 
 type State = JsonObject & { readonly unlocked: boolean };
 type Outcome = JsonObject & { readonly result: string };

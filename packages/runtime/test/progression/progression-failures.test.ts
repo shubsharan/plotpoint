@@ -9,7 +9,7 @@ import {
   type JsonObject,
   type ProgressionDefinition,
   type ProgressionInstance,
-} from "../index.js";
+} from "@plotpoint/runtime";
 
 const command: Command = {
   id: "c1",

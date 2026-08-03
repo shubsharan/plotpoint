@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { defineCommand, type Aggregate, type Command, type JsonObject } from "@plotpoint/runtime";
-import { createRuntimeHarness } from "./index.js";
+import { createRuntimeHarness } from "@plotpoint/testkit";
 
 const aggregate: Aggregate = {
   kind: "player",
