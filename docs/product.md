@@ -29,7 +29,7 @@ The platform has four principal parts:
 1. **Game project** — TypeScript logic, web UI, content, assets, configuration, and tests.
 2. **Compiler and release system** — validation, composition, bundling, manifests, and immutable artifacts.
 3. **Player** — a replaceable web runtime inside a stable native host.
-4. **Platform services** — releases, sessions, participants, authoritative commands, state, and synchronization.
+4. **Platform services** — releases, sessions, players, authoritative commands, state, and synchronization.
 
 ---
 
@@ -46,7 +46,7 @@ Immutable release artifact
   ▼                             ▼
 Player                         Platform services
   ├─ native host                ├─ release registry
-  ├─ local database             ├─ sessions and participants
+  ├─ local database             ├─ sessions and players
   ├─ capability adapters        ├─ authoritative command handling
   ├─ synchronization            ├─ aggregate state and journals
   └─ web runtime                └─ projections and event delivery
@@ -107,7 +107,7 @@ External values enter as explicit inputs, observations, or runtime context. This
 
 The initial domain model supports three gameplay aggregate types:
 
-- **participant** — personal progress, inventory, clues, health, and role state;
+- **player** — personal progress, inventory, clues, health, and role state;
 - **team** — shared objectives, discoveries, and team-owned resources;
 - **session** — shared world state and session-wide progression.
 
@@ -117,7 +117,7 @@ Each gameplay aggregate has an identity, schema version, state version, and auth
 
 ### 3.6 The server distributes projections, not universal state
 
-Clients receive participant-specific read models. Secret answers, hidden roles, anti-cheat data, and operator-only state remain on the server.
+Clients receive player-specific read models. Secret answers, hidden roles, anti-cheat data, and operator-only state remain on the server.
 
 A client-side gate can use only data present in its projection. Secret or trusted evaluation is exposed through an authoritative command outcome or a redacted eligibility result.
 
@@ -249,7 +249,7 @@ Functions, class instances, cyclic references, browser handles, and native handl
 
 ### 6.1 Web runtime
 
-The web runtime loads the installed release, maintains the current participant view, evaluates deterministic logic, and renders the game.
+The web runtime loads the installed release, maintains the current player view, evaluates deterministic logic, and renders the game.
 
 Selectors and UI functions remain inside the web runtime. Functions and closures do not cross the native bridge.
 
@@ -258,7 +258,7 @@ Selectors and UI functions remain inside the web runtime. Functions and closures
 The native host owns:
 
 - release installation and selection;
-- participant identity and credentials;
+- player identity and credentials;
 - SQLite persistence;
 - secure storage;
 - native capabilities;
@@ -290,7 +290,7 @@ The player stores:
 
 - installed release metadata and assets;
 - local device state;
-- participant, team, and session projections;
+- player, team, and session projections;
 - local snapshots and journals where applicable;
 - outgoing commands;
 - incoming authoritative events or projection updates;
@@ -324,7 +324,7 @@ Every production capability should have a deterministic fake or scripted adapter
 
 ## 8. Synchronization and Authority
 
-The player and backend exchange commands, acknowledgements, aggregate versions, and participant projections.
+The player and backend exchange commands, acknowledgements, aggregate versions, and player projections.
 
 ### 8.1 Required properties
 
@@ -371,11 +371,11 @@ Stores immutable artifacts, release records, channels, and compatibility metadat
 
 ### Sessions
 
-Creates sessions, pins releases, manages participants and teams, and applies join and role policies.
+Creates sessions, pins releases, manages players and teams, and applies join and role policies.
 
 ### Runtime
 
-Accepts commands, enforces idempotency and aggregate versions, executes trusted authoritative handlers, commits snapshots and journals, and produces participant projections.
+Accepts commands, enforces idempotency and aggregate versions, executes trusted authoritative handlers, commits snapshots and journals, and produces player projections.
 
 ### Delivery
 
@@ -500,12 +500,12 @@ The first complete platform should support:
 - web UI and deterministic game logic;
 - immutable release artifacts;
 - a WebView-hosted runtime in a native player;
-- participant and session aggregates;
+- player and session aggregates;
 - local persistence and offline recovery;
 - typed native capabilities;
 - command-based synchronization;
 - built-in server-authoritative mechanics;
-- participant-specific projections;
+- player-specific projections;
 - a small set of representative mechanics sufficient to prove the architecture.
 
 The following are deliberately outside the initial boundary:
@@ -528,7 +528,7 @@ The architecture intentionally leaves several implementation choices unresolved:
 
 1. **Web runtime isolation** — whether game logic and rendering share one WebView context or logic moves into a Web Worker.
 2. **Local transition persistence** — the final bridge contract between transition calculation in the web runtime and atomic persistence in the host.
-3. **Projection strategy** — whether participant projections are computed on read, transactionally materialized, or asynchronously updated.
+3. **Projection strategy** — whether player projections are computed on read, transactionally materialized, or asynchronously updated.
 4. **Session migration** — the product rules and technical process for explicitly moving an active session between releases.
 5. **Background execution** — which mechanics justify background location or other constrained operating-system work.
 6. **Custom authoritative extensions** — the isolation technology and SDK, only after built-in mechanics prove insufficient.
@@ -545,7 +545,7 @@ These are open design decisions, not hidden assumptions.
 3. Game logic and UI execute in the web runtime; durable storage and device capabilities belong to the native host.
 4. Durable gameplay state changes only through typed commands.
 5. Deterministic game logic performs no ambient I/O.
-6. Participant, team, and session state are separate versioned aggregates.
+6. Player, team, and session state are separate versioned aggregates.
 7. A command normally mutates one aggregate.
 8. Unauthorized clients never receive server-only state.
 9. Effects execute after a committed transition.
@@ -571,7 +571,7 @@ Game source
   → web runtime inside a stable native host
   → command-driven local state
   → domain-aware synchronization
-  → authoritative backend aggregates and participant projections
+  → authoritative backend aggregates and player projections
 ```
 
 The platform should remain opinionated about execution safety, persistence, authority, and compatibility while remaining flexible about game rules and presentation.

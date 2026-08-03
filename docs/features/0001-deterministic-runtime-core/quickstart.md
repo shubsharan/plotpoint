@@ -1,6 +1,6 @@
 # Quickstart: Deterministic Runtime Core
 
-This is the external-consumer acceptance path for the planned Gate 1 API. It becomes executable after implementation; it intentionally uses no player, database, network, clock, random source, or device.
+This is the executable external-consumer acceptance path for the Gate 1 API. It intentionally uses no player application, database, network, ambient clock, random source, or device.
 
 ## 1. Define Durable State and a Command
 
@@ -22,7 +22,7 @@ type RecordClueOutcome = JsonObject & {
 const recordClue = defineCommand<ClueState, RecordCluePayload, RecordClueOutcome>({
   definitionId: "example.record-clue.v1",
   commandType: "record-clue",
-  aggregateKind: "participant",
+  aggregateKind: "player",
   handle(aggregate, command, context) {
     if (aggregate.state.discovered.includes(command.payload.clueId)) {
       return {
@@ -31,7 +31,7 @@ const recordClue = defineCommand<ClueState, RecordCluePayload, RecordClueOutcome
       };
     }
 
-    const discoveredAt = context.take<string>("clock", "discovered-at");
+    const discoveredAt = context.take<string>("clock", "now");
 
     return {
       kind: "accepted",
@@ -86,10 +86,10 @@ Both unlock rules see the same pre-round state and apply as one batch. The stabl
 ## 3. Run a Strict Scenario
 
 ```ts
-import { clock, createRuntimeHarness, participantFixture } from "@plotpoint/testkit";
+import { assertAccepted, clock, createRuntimeHarness, playerFixture } from "@plotpoint/testkit";
 
-const aggregate = participantFixture<ClueState>({
-  id: "participant-1",
+const aggregate = playerFixture<ClueState>({
+  id: "player-1",
   schemaVersion: 1,
   stateVersion: 4,
   authority: "local",
@@ -118,7 +118,7 @@ const result = harness.run({
   command: {
     id: "command-1",
     type: "record-clue",
-    target: { kind: "participant", id: "participant-1" },
+    target: { kind: "player", id: "player-1" },
     expectedStateVersion: 4,
     payload: { clueId: "alpha" },
   },
@@ -126,6 +126,8 @@ const result = harness.run({
   progression,
   policy: { maxAutomaticTransitions: 2 },
 });
+
+assertAccepted(result);
 ```
 
 Expected evidence:

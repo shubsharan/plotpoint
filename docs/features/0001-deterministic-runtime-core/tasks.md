@@ -3,7 +3,7 @@
 **Input**: Design documents from `docs/features/0001-deterministic-runtime-core/`
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`
 **Tests**: Required by the feature specification and Gate 1 exit evidence; write each phase's tests first and confirm they fail before implementing that phase.
-**Implementation Gate**: [ADR 0001](../../adrs/0001-deterministic-runtime-contract.md) is Proposed. These tasks are planning-ready, but `/speckit-implement` MUST NOT begin until the user explicitly accepts the ADR and the workflow check passes.
+**Implementation Gate**: [ADR 0001](../../adrs/0001-deterministic-runtime-contract.md) is Accepted, and the workflow check passed before implementation began.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -15,11 +15,11 @@
 
 **Purpose**: Establish the Vitest, TypeScript-test, and Turbo execution surface used by every story.
 
-- [ ] T001 Add root Vitest 4.1, add `fast-check` to the testkit development dependencies, add package-scoped Vitest scripts, and update the resolved lockfile in `package.json`, `packages/runtime/package.json`, `packages/testkit/package.json`, and `pnpm-lock.yaml`
-- [ ] T002 Create named `runtime` and `testkit` projects with shared deterministic defaults, package-specific include patterns, and isolated ambient-authority tests in `vitest.config.ts`
-- [ ] T003 [P] Add test-only compiler coverage for Vitest and type-contract fixtures while preserving production exclusions in `packages/runtime/tsconfig.test.json` and `packages/runtime/tsconfig.json`
-- [ ] T004 [P] Add test-only compiler coverage for Vitest, `fast-check`, and runtime workspace imports while preserving production exclusions in `packages/testkit/tsconfig.test.json` and `packages/testkit/tsconfig.json`
-- [ ] T005 Add the Turbo `test` task, root `test` and `test:watch` orchestration, and test execution to the provider-free verification gate in `turbo.json` and `package.json`
+- [x] T001 Add root Vitest 4.1, add `fast-check` to the testkit development dependencies, add package-scoped Vitest scripts, and update the resolved lockfile in `package.json`, `packages/runtime/package.json`, `packages/testkit/package.json`, and `pnpm-lock.yaml`
+- [x] T002 Create named `runtime` and `testkit` projects with shared deterministic defaults, package-specific include patterns, and isolated ambient-authority tests in `vitest.config.ts`
+- [x] T003 [P] Add test-only compiler coverage for Vitest and type-contract fixtures while preserving production exclusions in `packages/runtime/tsconfig.test.json` and `packages/runtime/tsconfig.json`
+- [x] T004 [P] Add test-only compiler coverage for Vitest, `fast-check`, and runtime workspace imports while preserving production exclusions in `packages/testkit/tsconfig.test.json` and `packages/testkit/tsconfig.json`
+- [x] T005 Add the Turbo `test` task, root `test` and `test:watch` orchestration, and test execution to the provider-free verification gate in `turbo.json` and `package.json`
 
 **Checkpoint**: `pnpm test` discovers empty or failing named projects consistently from the root and package filters.
 
@@ -33,20 +33,20 @@
 
 ### Tests for the Foundation
 
-- [ ] T006 [P] Write failing Vitest tables for canonical ordering, negative-zero normalization, invalid descriptors and values, cycles, lone surrogates, depth/node limits, detached clones, and recursive freezing in `packages/runtime/src/canonical-json.test.ts`
-- [ ] T007 [P] Write failing Vitest contract tests for stable diagnostic codes, canonical detail objects, and prose-free durable diagnostics in `packages/runtime/src/diagnostics.test.ts`
-- [ ] T008 [P] Write failing compile-time fixtures for canonical values, aggregate/command generics, discriminated handler decisions, illegal field combinations, and readonly inputs in `packages/runtime/src/contracts.type-test.ts`
+- [x] T006 [P] Write failing Vitest tables for canonical ordering, negative-zero normalization, invalid descriptors and values, cycles, lone surrogates, depth/node limits, detached clones, and recursive freezing in `packages/runtime/src/canonical-json.test.ts`
+- [x] T007 [P] Write failing Vitest contract tests for stable diagnostic codes, canonical detail objects, and prose-free durable diagnostics in `packages/runtime/src/diagnostics.test.ts`
+- [x] T008 [P] Write failing compile-time fixtures for canonical values, aggregate/command generics, discriminated handler decisions, illegal field combinations, and readonly inputs in `packages/runtime/src/contracts.type-test.ts`
 
 ### Foundational Implementation
 
-- [ ] T009 Implement stable diagnostic codes, deterministic detail validation, and the `Diagnostic` contract in `packages/runtime/src/diagnostics.ts`
-- [ ] T010 Implement iterative descriptor-safe canonical validation, cloning, freezing, canonical text, default v1 limits, and JSON-pointer-like error paths in `packages/runtime/src/canonical-json.ts`
-- [ ] T011 [P] Define aggregate kinds, authority, identity/version primitives, and the generic aggregate envelope without transition behavior in `packages/runtime/src/aggregates.ts`
-- [ ] T012 [P] Define command envelopes, command definitions, accepted/rejected handler decisions, domain events, effect intents, and synchronous handler constraints in `packages/runtime/src/commands.ts`
-- [ ] T013 [P] Define observation entries, consumption trace entries, and explicit transition-context types without ambient providers in `packages/runtime/src/observations.ts`
-- [ ] T014 [P] Define progression lifecycle statuses and the aggregate-owned canonical progression-instance shape in `packages/runtime/src/progression/state.ts`
-- [ ] T015 [P] Define versioned execution-record inputs, terminal variants, resolved policies, traces, and committable versus attempted outputs in `packages/runtime/src/execution-record.ts`
-- [ ] T016 Export only the completed foundational named values and explicit type exports from `packages/runtime/src/index.ts`
+- [x] T009 Implement stable diagnostic codes, deterministic detail validation, and the `Diagnostic` contract in `packages/runtime/src/diagnostics.ts`
+- [x] T010 Implement iterative descriptor-safe canonical validation, cloning, freezing, canonical text, default v1 limits, and JSON-pointer-like error paths in `packages/runtime/src/canonical-json.ts`
+- [x] T011 [P] Define aggregate kinds, authority, identity/version primitives, and the generic aggregate envelope without transition behavior in `packages/runtime/src/aggregates.ts`
+- [x] T012 [P] Define command envelopes, command definitions, accepted/rejected handler decisions, domain events, effect intents, and synchronous handler constraints in `packages/runtime/src/commands.ts`
+- [x] T013 [P] Define observation entries, consumption trace entries, and explicit transition-context types without ambient providers in `packages/runtime/src/observations.ts`
+- [x] T014 [P] Define progression lifecycle statuses and the aggregate-owned canonical progression-instance shape in `packages/runtime/src/progression/state.ts`
+- [x] T015 [P] Define versioned execution-record inputs, terminal variants, resolved policies, traces, and committable versus attempted outputs in `packages/runtime/src/execution-record.ts`
+- [x] T016 Export only the completed foundational named values and explicit type exports from `packages/runtime/src/index.ts`
 
 **Checkpoint**: Canonical and diagnostic tests pass; type fixtures reject illegal contracts; runtime still has zero production dependencies.
 
@@ -60,17 +60,17 @@
 
 ### Tests for User Story 1
 
-- [ ] T017 [P] [US1] Write failing Vitest contract cases for accepted, rejected, no-op, invalid, handler-throw, promise-shaped, and 100-repeat deterministic command results in `packages/runtime/src/execute-command.test.ts`
-- [ ] T018 [P] [US1] Write failing Vitest cases for ordered observation success, exhaustion, identity mismatch, canonical consumption traces, and zero ambient fallback in `packages/runtime/src/observation-consumption.test.ts`
-- [ ] T019 [P] [US1] Write failing Vitest cases proving effect intents and domain events retain order, are returned only after an accepted state change, and are never invoked by runtime code in `packages/runtime/src/effect-boundary.test.ts`
+- [x] T017 [P] [US1] Write failing Vitest contract cases for accepted, rejected, no-op, invalid, handler-throw, promise-shaped, and 100-repeat deterministic command results in `packages/runtime/src/execute-command.test.ts`
+- [x] T018 [P] [US1] Write failing Vitest cases for ordered observation success, exhaustion, identity mismatch, canonical consumption traces, and zero ambient fallback in `packages/runtime/src/observation-consumption.test.ts`
+- [x] T019 [P] [US1] Write failing Vitest cases proving effect intents and domain events retain order, are returned only after an accepted state change, and are never invoked by runtime code in `packages/runtime/src/effect-boundary.test.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T020 [P] [US1] Implement the ordered observation cursor, exact `{kind,key}` matching, exhaustion/mismatch diagnostics, and deterministic consumption trace in `packages/runtime/src/observations.ts`
-- [ ] T021 [P] [US1] Implement `defineCommand` static validation and synchronous accepted/rejected decision validation in `packages/runtime/src/commands.ts`
-- [ ] T022 [US1] Implement the pre-progression `executeCommand` pipeline for policy resolution, canonical inputs, handler invocation, rejection, no-op checks, accepted state candidates, and stable exception diagnostics in `packages/runtime/src/execute-command.ts`
-- [ ] T023 [US1] Implement canonical execution-record construction without timestamps, durations, stacks, host prose, hashes, or generated record IDs in `packages/runtime/src/execution-record.ts`
-- [ ] T024 [US1] Export `defineCommand`, `executeCommand`, observation contracts, execution variants, outcomes, events, effects, policies, diagnostics, and record types from `packages/runtime/src/index.ts`
+- [x] T020 [P] [US1] Implement the ordered observation cursor, exact `{kind,key}` matching, exhaustion/mismatch diagnostics, and deterministic consumption trace in `packages/runtime/src/observations.ts`
+- [x] T021 [P] [US1] Implement `defineCommand` static validation and synchronous accepted/rejected decision validation in `packages/runtime/src/commands.ts`
+- [x] T022 [US1] Implement the pre-progression `executeCommand` pipeline for policy resolution, canonical inputs, handler invocation, rejection, no-op checks, accepted state candidates, and stable exception diagnostics in `packages/runtime/src/execute-command.ts`
+- [x] T023 [US1] Implement canonical execution-record construction without timestamps, durations, stacks, host prose, hashes, or generated record IDs in `packages/runtime/src/execution-record.ts`
+- [x] T024 [US1] Export `defineCommand`, `executeCommand`, observation contracts, execution variants, outcomes, events, effects, policies, diagnostics, and record types from `packages/runtime/src/index.ts`
 
 **Checkpoint**: User Story 1 passes independently through the `runtime` Vitest project and provides the minimum viable deterministic command kernel.
 
@@ -78,22 +78,22 @@
 
 ## Phase 4: User Story 2 - Protect Aggregate Boundaries (Priority: P2)
 
-**Goal**: Enforce participant, team, and session identities, versions, canonical state, caller isolation, and exactly-one-target mutation.
+**Goal**: Enforce player, team, and session identities, versions, canonical state, caller isolation, and exactly-one-target mutation.
 
 **Independent Test**: Run accepted, rejected, invalid, stale, target-mismatch, version-overflow, and shared-alias fixtures for all three aggregate kinds; only the accepted target advances once and all caller-owned/non-target values remain canonically unchanged.
 
 ### Tests for User Story 2
 
-- [ ] T025 [P] [US2] Write failing Vitest cases for all aggregate kinds, exact target matching, stale short-circuit before handler/observations, accepted version increment, no-op/rejection preservation, overflow, and shared-alias isolation in `packages/runtime/src/aggregate-isolation.test.ts`
-- [ ] T026 [P] [US2] Write failing Vitest cases for detached participant, team, and session fixture defaults and nested-reference isolation in `packages/testkit/src/aggregate-fixtures.test.ts`
-- [ ] T027 [P] [US2] Write failing compile-time fixtures for wrong aggregate-kind command definitions, invalid versions, mutable fixture inputs, and cross-kind result misuse in `packages/runtime/src/aggregate-contracts.type-test.ts`
+- [x] T025 [P] [US2] Write failing Vitest cases for all aggregate kinds, exact target matching, stale short-circuit before handler/observations, accepted version increment, no-op/rejection preservation, overflow, and shared-alias isolation in `packages/runtime/src/aggregate-isolation.test.ts`
+- [x] T026 [P] [US2] Write failing Vitest cases for detached player, team, and session fixture defaults and nested-reference isolation in `packages/testkit/src/aggregate-fixtures.test.ts`
+- [x] T027 [P] [US2] Write failing compile-time fixtures for wrong aggregate-kind command definitions, invalid versions, mutable fixture inputs, and cross-kind result misuse in `packages/runtime/src/aggregate-contracts.type-test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] Implement aggregate identity, kind, schema/state version, authority, canonical state, progression ownership, and overflow validation in `packages/runtime/src/aggregates.ts`
-- [ ] T029 [US2] Extend command execution with exact target checks, stale-version short-circuiting, detached target state, final canonical equality, and runtime-owned single version advancement in `packages/runtime/src/execute-command.ts`
-- [ ] T030 [US2] Implement detached participant, team, and session aggregate fixture builders with explicit stable defaults in `packages/testkit/src/aggregate-fixtures.ts`
-- [ ] T031 [US2] Export aggregate validators and all three fixture builders through the package roots in `packages/runtime/src/index.ts` and `packages/testkit/src/index.ts`
+- [x] T028 [US2] Implement aggregate identity, kind, schema/state version, authority, canonical state, progression ownership, and overflow validation in `packages/runtime/src/aggregates.ts`
+- [x] T029 [US2] Extend command execution with exact target checks, stale-version short-circuiting, detached target state, final canonical equality, and runtime-owned single version advancement in `packages/runtime/src/execute-command.ts`
+- [x] T030 [US2] Implement detached player, team, and session aggregate fixture builders with explicit stable defaults in `packages/testkit/src/aggregate-fixtures.ts`
+- [x] T031 [US2] Export aggregate validators and all three fixture builders through the package roots in `packages/runtime/src/index.ts` and `packages/testkit/src/index.ts`
 
 **Checkpoint**: User Story 2 passes independently for every aggregate kind without progression, replay, player, database, or network infrastructure.
 
@@ -107,19 +107,19 @@
 
 ### Tests for User Story 3
 
-- [ ] T032 [P] [US3] Write failing Vitest tables for duplicate/unknown IDs, graph-version mismatch, missing/extra node state, illegal lifecycle movement, terminal reopening, invalid priorities, same-state rules, and malformed command intents in `packages/runtime/src/progression/validate-graph.test.ts`
-- [ ] T033 [P] [US3] Write failing Vitest examples for branching, multiple available/active nodes, same-snapshot rule visibility, per-node priority, equal-priority conflicts, canonical batch ordering, completion, skipping, and stable-state detection in `packages/runtime/src/progression/evaluate-progression.test.ts`
-- [ ] T034 [P] [US3] Write failing Vitest cases for zero, exact, one-over, oversized parallel-batch limits and full-state cycle diagnostics with original-aggregate rollback in `packages/runtime/src/progression/progression-failures.test.ts`
-- [ ] T035 [P] [US3] Write failing `fast-check` model tests and exhaustive two-to-four-node comparisons against a structurally simpler reference model in `packages/testkit/src/progression.model.test.ts`
+- [x] T032 [P] [US3] Write failing Vitest tables for duplicate/unknown IDs, graph-version mismatch, missing/extra node state, illegal lifecycle movement, terminal reopening, invalid priorities, same-state rules, and malformed command intents in `packages/runtime/src/progression/validate-graph.test.ts`
+- [x] T033 [P] [US3] Write failing Vitest examples for branching, multiple available/active nodes, same-snapshot rule visibility, per-node priority, equal-priority conflicts, canonical batch ordering, completion, skipping, and stable-state detection in `packages/runtime/src/progression/evaluate-progression.test.ts`
+- [x] T034 [P] [US3] Write failing Vitest cases for zero, exact, one-over, oversized parallel-batch limits and full-state cycle diagnostics with original-aggregate rollback in `packages/runtime/src/progression/progression-failures.test.ts`
+- [x] T035 [P] [US3] Write failing `fast-check` model tests and exhaustive two-to-four-node comparisons against a structurally simpler reference model in `packages/testkit/src/progression.model.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T036 [P] [US3] Define immutable graph, node, automatic-rule, rule-input, and progression-definition contracts in `packages/runtime/src/progression/graph.ts`
-- [ ] T037 [P] [US3] Extend progression state with direct intents, round/batch transitions, canonical trace records, and terminal lifecycle guards in `packages/runtime/src/progression/state.ts`
-- [ ] T038 [US3] Implement graph-definition, progression-instance, reachability, rule, lifecycle, priority, and direct-intent validation in `packages/runtime/src/progression/validate-graph.ts`
-- [ ] T039 [US3] Implement simultaneous immutable rounds, per-node winner/conflict selection, canonical batch application, stable-state detection, batch-aware limits, complete-state cycle comparison, and attempted traces in `packages/runtime/src/progression/evaluate-progression.ts`
-- [ ] T040 [US3] Integrate direct intents and automatic progression into the atomic command candidate so any graph/rule/conflict/cycle/limit failure restores the original aggregate and suppresses committable candidate events/effects in `packages/runtime/src/execute-command.ts`
-- [ ] T041 [US3] Export graph validation/evaluation, lifecycle, intents, rule, trace, and progression diagnostic contracts from `packages/runtime/src/index.ts`
+- [x] T036 [P] [US3] Define immutable graph, node, automatic-rule, rule-input, and progression-definition contracts in `packages/runtime/src/progression/graph.ts`
+- [x] T037 [P] [US3] Extend progression state with direct intents, round/batch transitions, canonical trace records, and terminal lifecycle guards in `packages/runtime/src/progression/state.ts`
+- [x] T038 [US3] Implement graph-definition, progression-instance, reachability, rule, lifecycle, priority, and direct-intent validation in `packages/runtime/src/progression/validate-graph.ts`
+- [x] T039 [US3] Implement simultaneous immutable rounds, per-node winner/conflict selection, canonical batch application, stable-state detection, batch-aware limits, complete-state cycle comparison, and attempted traces in `packages/runtime/src/progression/evaluate-progression.ts`
+- [x] T040 [US3] Integrate direct intents and automatic progression into the atomic command candidate so any graph/rule/conflict/cycle/limit failure restores the original aggregate and suppresses committable candidate events/effects in `packages/runtime/src/execute-command.ts`
+- [x] T041 [US3] Export graph validation/evaluation, lifecycle, intents, rule, trace, and progression diagnostic contracts from `packages/runtime/src/index.ts`
 
 **Checkpoint**: User Story 3 passes independently from explicit command/aggregate fixtures and never returns a partially stabilized commit candidate.
 
@@ -133,19 +133,19 @@
 
 ### Tests for User Story 4
 
-- [ ] T042 [P] [US4] Write failing Vitest cases for clock, identifier, random, generic observation, and capability helpers plus missing, exhausted, out-of-order, unused, and non-canonical scripts in `packages/testkit/src/scripted-observations.test.ts`
-- [ ] T043 [P] [US4] Write failing Vitest cases for strict scenarios, 100-repeat comparison, first-path mismatch reporting, caller mutation detection, non-target isolation, and exact-consumption enforcement in `packages/testkit/src/runtime-harness.test.ts`
-- [ ] T044 [P] [US4] Write failing Vitest cases for matching and divergent record replay using the same command/progression definitions and resolved policy in `packages/testkit/src/replay.test.ts`
-- [ ] T045 [P] [US4] Write failing serial Vitest cases that audit clock, randomness, identifier, network, storage, and common capability globals and restore every patched global after success or failure in `packages/testkit/src/ambient-authority.test.ts`
-- [ ] T046 [P] [US4] Turn the documented parallel-unlock scenario into a failing external-consumer-style Vitest acceptance test using only package-root imports in `packages/testkit/src/quickstart.integration.test.ts`
+- [x] T042 [P] [US4] Write failing Vitest cases for clock, identifier, random, generic observation, and capability helpers plus missing, exhausted, out-of-order, unused, and non-canonical scripts in `packages/testkit/src/scripted-observations.test.ts`
+- [x] T043 [P] [US4] Write failing Vitest cases for strict scenarios, 100-repeat comparison, first-path mismatch reporting, caller mutation detection, non-target isolation, and exact-consumption enforcement in `packages/testkit/src/runtime-harness.test.ts`
+- [x] T044 [P] [US4] Write failing Vitest cases for matching and divergent record replay using the same command/progression definitions and resolved policy in `packages/testkit/src/replay.test.ts`
+- [x] T045 [P] [US4] Write failing serial Vitest cases that audit clock, randomness, identifier, network, storage, and common capability globals and restore every patched global after success or failure in `packages/testkit/src/ambient-authority.test.ts`
+- [x] T046 [P] [US4] Turn the documented parallel-unlock scenario into a failing external-consumer-style Vitest acceptance test using only package-root imports in `packages/testkit/src/quickstart.integration.test.ts`
 
 ### Implementation for User Story 4
 
-- [ ] T047 [P] [US4] Implement canonical clock, identifier, random, generic observation, and capability script helpers without ambient fallbacks in `packages/testkit/src/scripted-observations.ts`
-- [ ] T048 [P] [US4] Implement framework-neutral result, canonical-equality, mutation/isolation, observation, effect-as-data, progression, and diagnostic assertions in `packages/testkit/src/assertions.ts`
-- [ ] T049 [US4] Implement strict scenario execution, repeat comparison, snapshot preservation, unused-input enforcement, ambient audit scoping, and deterministic mismatch details in `packages/testkit/src/runtime-harness.ts`
-- [ ] T050 [US4] Implement record replay from canonical recorded inputs, resolved policy, stable definition identities, and first-material-path comparison in `packages/testkit/src/replay.ts`
-- [ ] T051 [US4] Export fixture, scripted-observation, harness, assertion, scenario, and replay contracts as explicit named package-root exports in `packages/testkit/src/index.ts`
+- [x] T047 [P] [US4] Implement canonical clock, identifier, random, generic observation, and capability script helpers without ambient fallbacks in `packages/testkit/src/scripted-observations.ts`
+- [x] T048 [P] [US4] Implement framework-neutral result, canonical-equality, mutation/isolation, observation, effect-as-data, progression, and diagnostic assertions in `packages/testkit/src/assertions.ts`
+- [x] T049 [US4] Implement strict scenario execution, repeat comparison, snapshot preservation, unused-input enforcement, ambient audit scoping, and deterministic mismatch details in `packages/testkit/src/runtime-harness.ts`
+- [x] T050 [US4] Implement record replay from canonical recorded inputs, resolved policy, stable definition identities, and first-material-path comparison in `packages/testkit/src/replay.ts`
+- [x] T051 [US4] Export fixture, scripted-observation, harness, assertion, scenario, and replay contracts as explicit named package-root exports in `packages/testkit/src/index.ts`
 
 **Checkpoint**: User Story 4 reproduces and explains complete runtime scenarios with no player, database, network service, clock source, random source, or physical device.
 
@@ -155,11 +155,11 @@
 
 **Purpose**: Close public-surface, performance-baseline, documentation, dependency, and complete Gate 1 evidence gaps.
 
-- [ ] T052 [P] Add package-root import and type-surface contract tests that reject unsupported deep-import assumptions in `packages/runtime/src/public-api.test.ts` and `packages/testkit/src/public-api.test.ts`
-- [ ] T053 [P] Add representative command and progression benchmark fixtures without pass/fail latency thresholds in `packages/runtime/src/runtime.bench.ts` and add the corresponding script in `packages/runtime/package.json`
-- [ ] T054 Audit and remove Gate 1-unneeded testkit dependencies while preserving zero runtime dependencies and root-only exports in `packages/runtime/package.json`, `packages/testkit/package.json`, and `pnpm-lock.yaml`
-- [ ] T055 Reconcile implemented API names and runnable Vitest commands with the external-consumer walkthrough in `docs/features/0001-deterministic-runtime-core/quickstart.md`
-- [ ] T056 Run formatting, lint, type checks, Vitest, builds, Spec Kit tests, documentation sync, and workflow validation after ADR acceptance, then record every success criterion and Gate 1 exit-evidence result in `docs/features/0001-deterministic-runtime-core/checklists/implementation.md`
+- [x] T052 [P] Add package-root import and type-surface contract tests that reject unsupported deep-import assumptions in `packages/runtime/src/public-api.test.ts` and `packages/testkit/src/public-api.test.ts`
+- [x] T053 [P] Add representative command and progression benchmark fixtures without pass/fail latency thresholds in `packages/runtime/src/runtime.bench.ts` and add the corresponding script in `packages/runtime/package.json`
+- [x] T054 Audit and remove Gate 1-unneeded testkit dependencies while preserving zero runtime dependencies and root-only exports in `packages/runtime/package.json`, `packages/testkit/package.json`, and `pnpm-lock.yaml`
+- [x] T055 Reconcile implemented API names and runnable Vitest commands with the external-consumer walkthrough in `docs/features/0001-deterministic-runtime-core/quickstart.md`
+- [x] T056 Run formatting, lint, type checks, Vitest, builds, Spec Kit tests, documentation sync, and workflow validation after ADR acceptance, then record every success criterion and Gate 1 exit-evidence result in `docs/features/0001-deterministic-runtime-core/checklists/implementation.md`
 
 **Checkpoint**: All feature success criteria and roadmap Gate 1 exit evidence are recorded; provider-free verification and the accepted-ADR workflow gate pass.
 

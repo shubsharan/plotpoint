@@ -1,5 +1,5 @@
 ---
-status: Pending
+status: Active
 ---
 
 # Feature Specification: Deterministic Runtime Core
@@ -31,15 +31,15 @@ A game author defines a command that changes durable game state. The author can 
 
 ### User Story 2 - Protect Aggregate Boundaries (Priority: P2)
 
-A game author models durable participant, team, and session state as separately identified and versioned aggregates. Each command targets one aggregate, rejects stale or invalid input explicitly, and cannot mutate another aggregate through a hidden shared reference.
+A game author models durable player, team, and session state as separately identified and versioned aggregates. Each command targets one aggregate, rejects stale or invalid input explicitly, and cannot mutate another aggregate through a hidden shared reference.
 
-**Why this priority**: Clear aggregate boundaries make offline and authoritative execution safe to add later. They also prevent invisible cross-participant or cross-session state corruption.
+**Why this priority**: Clear aggregate boundaries make offline and authoritative execution safe to add later. They also prevent invisible cross-player or cross-session state corruption.
 
 **Independent Test**: Run valid, stale, invalid, and aliasing fixtures for each aggregate type. This slice is complete when accepted commands advance only their target, rejected commands preserve the original canonical state, and non-target aggregates remain byte-for-byte unchanged.
 
 **Acceptance Scenarios**:
 
-1. **Given** participant, team, and session aggregate fixtures, **When** a valid command is applied to each target in isolation, **Then** only the target aggregate changes and its state version advances exactly once.
+1. **Given** player, team, and session aggregate fixtures, **When** a valid command is applied to each target in isolation, **Then** only the target aggregate changes and its state version advances exactly once.
 2. **Given** a command whose expected state version does not match the target aggregate, **When** execution is attempted, **Then** the command is rejected with a stale-version diagnostic and no result is committed.
 3. **Given** durable input or output containing a value outside the supported serializable state model, **When** it is validated, **Then** execution fails with a diagnostic identifying the invalid value location.
 4. **Given** two aggregates whose source fixtures share nested references, **When** one aggregate is processed, **Then** neither the other aggregate nor the caller's original input is mutated.
@@ -102,7 +102,7 @@ A game author can construct deterministic fixtures for clocks, identifiers, rand
 - **FR-007**: Rejected and invalid commands MUST leave the target aggregate unchanged and MUST NOT produce effect intents that depend on a commit.
 - **FR-008**: Durable aggregate state and every durable transition output MUST have a canonical JSON-compatible representation.
 - **FR-009**: Validation MUST reject unsupported durable values, including non-finite numbers, functions, class instances, cyclic references, and host-specific handles, with a diagnostic that locates the invalid value.
-- **FR-010**: The runtime MUST support separately identified participant, team, and session aggregates, each with an aggregate type, aggregate identity, schema version, state version, authority designation, and durable state.
+- **FR-010**: The runtime MUST support separately identified player, team, and session aggregates, each with an aggregate type, aggregate identity, schema version, state version, authority designation, and durable state.
 - **FR-011**: A command MUST target exactly one aggregate and MUST NOT mutate any non-target aggregate or any caller-owned input.
 - **FR-012**: An accepted state-changing command MUST advance the target aggregate's state version exactly once; a rejected or invalid command MUST NOT advance it.
 - **FR-013**: A command whose expected state version differs from the target aggregate's current state version MUST fail with an explicit stale-version diagnostic before mutation.
@@ -119,7 +119,7 @@ A game author can construct deterministic fixtures for clocks, identifiers, rand
 
 ### Key Entities
 
-- **Aggregate**: A separately identified participant, team, or session unit of durable gameplay state, including its schema version, state version, authority designation, and canonical state.
+- **Aggregate**: A separately identified player, team, or session unit of durable gameplay state, including its schema version, state version, authority designation, and canonical state.
 - **Command**: A typed game intent addressed to one aggregate, including its identity, payload, and expected aggregate state version.
 - **Observation and Runtime Context**: Explicit external values available to deterministic evaluation, such as time, generated identifiers, random selections, or capability results.
 - **Transition Result**: The complete result of command evaluation: next aggregate state, semantic outcome, domain events, post-commit effect intents, diagnostics, and any progression input.
@@ -138,7 +138,7 @@ A game author can construct deterministic fixtures for clocks, identifiers, rand
 - **SC-001**: Across the representative command suite, 100% of at least 100 repeated executions for each identical fixture produce identical canonical state, outcomes, events, effect intents, progression changes, and diagnostics.
 - **SC-002**: 100% of transition fixtures complete without reading an ambient clock, randomness source, identifier source, storage system, network, or device capability and without performing an external effect during evaluation.
 - **SC-003**: 100% of invalid-value, stale-version, and rule-rejection fixtures preserve the original aggregate and return a diagnostic that identifies the failure class and relevant location or version.
-- **SC-004**: Representative accepted and rejected fixtures for participant, team, and session aggregates demonstrate zero changes to every non-target aggregate and every caller-owned input.
+- **SC-004**: Representative accepted and rejected fixtures for player, team, and session aggregates demonstrate zero changes to every non-target aggregate and every caller-owned input.
 - **SC-005**: Model-based progression tests cover branching, simultaneous availability, activation, completion, skipping, cycles, and transition-bound overruns, with 100% of generated traversals either stabilizing within the configured bound or stopping with the expected explicit diagnostic.
 - **SC-006**: 100% of accepted fixtures that request external work return that work as post-commit effect intent data, and zero fixtures perform the work during transition evaluation.
 - **SC-007**: A game author can replay every recorded representative scenario without player or service infrastructure and obtain the same complete result and explanation as the original run.

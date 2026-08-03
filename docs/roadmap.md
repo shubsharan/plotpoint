@@ -16,7 +16,7 @@ Plotpoint is currently at the architecture and workspace-scaffolding stage. Gate
 
 <!-- speckit:generated:roadmap-epics START -->
 
-- [Deterministic Runtime Core](epics/0001-deterministic-runtime-core/epic.md) — Pending
+- [Deterministic Runtime Core](epics/0001-deterministic-runtime-core/epic.md) — Active
 
 <!-- speckit:generated:roadmap-epics END -->
 
@@ -28,7 +28,7 @@ The initial public compatibility surface remains limited to three independently 
 | ---------------- | ------------------------------------------------------------------------------------------------------- | --------------- |
 | Release format   | Packages and describes an installable immutable game release                                            | Gate 2          |
 | Host API         | Connects the web runtime to persistence, synchronization, diagnostics, and declared native capabilities | Gate 3          |
-| Aggregate schema | Identifies and evolves durable participant, team, and session state                                     | Gate 1          |
+| Aggregate schema | Identifies and evolves durable player, team, and session state                                          | Gate 1          |
 
 Command, transition, capability, projection, and synchronization contracts are required implementation outputs. Their exact API and wire shapes must be established by the vertical slices below rather than fixed speculatively in this roadmap.
 
@@ -41,7 +41,7 @@ Game logic can execute, explain, and test durable state transitions without ambi
 ### Deliverables
 
 - Typed commands, semantic outcomes, domain events, and post-commit effect intents.
-- Versioned participant, team, and session aggregate contracts with canonical JSON-compatible state.
+- Versioned player, team, and session aggregate contracts with canonical JSON-compatible state.
 - Deterministic transition execution with explicit external observations and runtime context.
 - Progression graphs that support multiple available or active nodes and bounded automatic transitions.
 - A test harness with deterministic clocks, identifiers, randomness, observations, and capability fakes.
@@ -55,7 +55,7 @@ None.
 - Repeated execution over identical inputs produces identical state, outcomes, events, and effect intents.
 - Tests prove reducers cannot perform side effects and that effects are returned as data for post-commit execution.
 - Invalid durable values, stale aggregate versions, progression cycles, and automatic-transition limit overruns fail with explicit diagnostics.
-- Fixtures exercise participant, team, and session transitions without hidden cross-aggregate mutation.
+- Fixtures exercise player, team, and session transitions without hidden cross-aggregate mutation.
 - Model-based graph tests cover branching, parallel availability, completion, skipping, and bounded automatic progression.
 
 ## Gate 2: Immutable Release Pipeline
@@ -88,7 +88,7 @@ Gate 1.
 
 ### Outcome
 
-A single participant can install and play a local-first game through the web runtime, lose the WebView or process, and resume accepted progress without network access.
+A single player can install and play a local-first game through the web runtime, lose the WebView or process, and resume accepted progress without network access.
 
 ### Deliverables
 
@@ -114,14 +114,14 @@ Gates 1 and 2.
 
 ### Outcome
 
-Multiple participants can join a release-pinned session and execute trusted authoritative mechanics while receiving only the state each participant is allowed to observe.
+Multiple players can join a release-pinned session and execute trusted authoritative mechanics while receiving only the state each player is allowed to observe.
 
 ### Deliverables
 
-- An ADR selecting the initial participant-projection materialization strategy.
-- Modular-monolith release, session, participant, team, runtime, delivery, and operations modules.
+- An ADR selecting the initial player-projection materialization strategy.
+- Modular-monolith release, session, player, team, runtime, delivery, and operations modules.
 - PostgreSQL transactions for idempotency receipts, aggregate snapshots and versions, command journals, domain events, and durable effect outboxes.
-- Participant-specific projections with schema-directed redaction of secrets and sensitive command data.
+- Player-specific projections with schema-directed redaction of secrets and sensitive command data.
 - A separate worker for idempotent post-commit effects using the PostgreSQL-backed outbox.
 - Built-in trusted authoritative handlers; no arbitrary game-authored code executes in the API or worker process.
 
@@ -134,7 +134,7 @@ Gates 1 and 2.
 - Duplicate authoritative commands return the original result without applying state or effects twice.
 - A forced failure at every transaction boundary leaves either the complete accepted transition or no accepted transition.
 - Concurrent commands enforce expected aggregate versions and cannot silently overwrite authoritative inventory, scores, rewards, or secrets.
-- Projection tests prove two participants can receive different views and that server-only fields never reach unauthorized clients or telemetry.
+- Projection tests prove two players can receive different views and that server-only fields never reach unauthorized clients or telemetry.
 - Effect delivery starts only after commit and remains safe across worker interruption and redelivery.
 - Advancing a release channel affects new sessions while existing sessions remain pinned to their original release.
 
@@ -162,7 +162,7 @@ Gates 3 and 4.
 - Optimistic rejection removes or corrects provisional state and explains the authoritative outcome to the game runtime.
 - Deferred and online-only commands cannot be presented as accepted while authoritative evaluation is unavailable.
 - Unrelated aggregates continue synchronizing when one aggregate is blocked or conflicted.
-- Cursor recovery reaches the same participant projection after missed push delivery, reordered messages, duplicate messages, and extended offline operation.
+- Cursor recovery reaches the same player projection after missed push delivery, reordered messages, duplicate messages, and extended offline operation.
 
 ## Gate 6: Capabilities and Representative Mechanics
 
@@ -198,8 +198,8 @@ Several materially different games validate that Plotpoint's contracts are reusa
 
 ### Deliverables
 
-- At least three external example games: an offline location-aware tour, a cooperative puzzle hunt, and a participant-specific secret or role-based experience.
-- Coverage across participant, team, and session aggregates; local and authoritative commands; foreground capabilities; projections; and offline recovery.
+- At least three external example games: an offline location-aware tour, a cooperative puzzle hunt, and a player-specific secret or role-based experience.
+- Coverage across player, team, and session aggregates; local and authoritative commands; foreground capabilities; projections; and offline recovery.
 - A compatibility matrix for supported release-format, host-API, and aggregate-schema versions.
 - Release publication, installation, channel advancement, rollback for new sessions, and diagnostics tied to release and command identity.
 - End-to-end interruption, duplicate-delivery, projection-redaction, progression-traversal, capability-simulation, and artifact-integrity suites.
@@ -213,7 +213,7 @@ Gates 1 through 6.
 - Each example compiles from an external project into an immutable artifact, installs in the player, and completes its representative play path.
 - Game-specific logic, progression, content, and presentation remain in the release; the native host and backend contain only platform contracts and trusted built-in mechanics.
 - Accepted local and authoritative progress survives the tested WebView, process, device, network, API, database-transaction, and worker interruptions.
-- Secret and operator-only state remains absent from participant projections, diagnostics, and analytics.
+- Secret and operator-only state remains absent from player projections, diagnostics, and analytics.
 - Compatibility failures are detected before play, while supported releases retain stable behavior across player and backend updates.
 - Operational records can trace a reported outcome through release identity, command receipt, aggregate versions, synchronization state, capability observations, and recovery events.
 
@@ -223,10 +223,10 @@ The initial platform is complete only when Gate 7 closes with all prior gate evi
 
 - external TypeScript games can own their logic, web UI, content, rules, and progression;
 - immutable releases can be installed and run through a stable native host;
-- participant, team, and session state changes only through deterministic typed commands;
+- player, team, and session state changes only through deterministic typed commands;
 - accepted local progress is durable offline and authoritative shared state converges after recovery;
 - native capabilities are typed, declared, simulated, and separated from trusted game decisions;
-- server-only state remains server-only while participants receive useful projections;
+- server-only state remains server-only while players receive useful projections;
 - built-in mechanics and platform services support materially different game structures without creating game-specific infrastructure.
 
 ## Outside the Initial Roadmap

@@ -13,7 +13,7 @@ export type JsonPrimitive = null | boolean | number | string;
 export type JsonObject = { readonly [key: string]: JsonValue };
 export type JsonValue = JsonPrimitive | JsonObject | readonly JsonValue[];
 
-export type AggregateKind = "participant" | "team" | "session";
+export type AggregateKind = "player" | "team" | "session";
 export type AggregateAuthority = "local" | "server";
 
 export interface ProgressionInstance {

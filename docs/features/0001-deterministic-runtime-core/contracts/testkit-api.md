@@ -19,7 +19,7 @@ Helpers construct ordinary canonical observation entries; they do not expose fal
 ## Aggregate Fixtures
 
 ```ts
-export function participantFixture<State extends JsonObject>(
+export function playerFixture<State extends JsonObject>(
   overrides: FixtureOverrides<State>,
 ): Aggregate<State>;
 export function teamFixture<State extends JsonObject>(

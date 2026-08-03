@@ -15,7 +15,10 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check-types": "tsc -p tsconfig.json --noEmit"
+    "bench": "vitest bench --run --config ../../vitest.config.ts --project runtime",
+    "check-types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run --config ../../vitest.config.ts --project runtime",
+    "test:watch": "vitest --config ../../vitest.config.ts --project runtime"
   },
   "devDependencies": {
     "@plotpoint/typescript-config": "workspace:*"

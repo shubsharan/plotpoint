@@ -17,7 +17,7 @@ Build Plotpoint's first author-facing runtime kernel in `@plotpoint/runtime`: a 
 **Project Type**: Monorepo library feature spanning the existing runtime and testkit packages
 **Performance Goals**: Correctness and bounded termination are the Gate 1 goals; record benchmark baselines for representative graphs but establish no speculative latency or throughput gate
 **Constraints**: No ambient I/O, no effect execution, canonical JSON-compatible durable values, one aggregate per command, exact state-version checks, deterministic output ordering, no platform or protocol dependency, and no partial result after progression failure
-**Scale/Scope**: Participant, team, and session aggregates; representative branching and parallel graphs; configurable validation and automatic-transition limits; no player, compiler, persistence, synchronization, backend, or physical capability integration
+**Scale/Scope**: Player, team, and session aggregates; representative branching and parallel graphs; configurable validation and automatic-transition limits; no player, compiler, persistence, synchronization, backend, or physical capability integration
 
 ## Constitution Check
 
@@ -29,7 +29,7 @@ The repository constitution is still an unratified placeholder, so it provides n
 
 - **PASS - Deterministic boundary**: Every external value is explicit; runtime code performs no I/O or effect execution.
 - **PASS - Durable command boundary**: One typed command evaluates one versioned aggregate and returns data for later commit.
-- **PASS - Aggregate isolation**: Participant, team, and session state remain separately identified and cannot share mutable transition state.
+- **PASS - Aggregate isolation**: Player, team, and session state remain separately identified and cannot share mutable transition state.
 - **PASS - Effects after commit**: The runtime emits effect intents only and has no effect adapter dependency.
 - **PASS - Minimal proven packages**: Existing `runtime` and `testkit` packages are sufficient; no new package or service is introduced.
 - **PASS - Scope**: Persistence, protocol encoding, compiler validation, player integration, synchronization, and authoritative execution remain later gates.
@@ -48,7 +48,7 @@ No gate violation requires a complexity exception.
 
 **Impact**: Major
 
-- [Deterministic Runtime Contract](../../adrs/0001-deterministic-runtime-contract.md) - **Proposed**. It governs the public aggregate and execution contract, canonical durable values, package ownership, explicit observations, command/progression atomicity, and the Gate 1 ambient-authority boundary. Implementation is blocked until the user explicitly accepts it.
+- [Deterministic Runtime Contract](../../adrs/0001-deterministic-runtime-contract.md) - **Accepted**. It governs the public aggregate and execution contract, canonical durable values, package ownership, explicit observations, command/progression atomicity, and the Gate 1 ambient-authority boundary.
 
 ## Project Structure
 

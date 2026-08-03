@@ -1,12 +1,12 @@
 ---
-status: Pending
+status: Active
 ---
 
 # Epic: Deterministic Runtime Core
 
 ## Outcome
 
-Game authors can define, execute, explain, and test durable state transitions and progression across participant, team, and session aggregates without ambient I/O or platform infrastructure.
+Game authors can define, execute, explain, and test durable state transitions and progression across player, team, and session aggregates without ambient I/O or platform infrastructure.
 
 ## Done When
 
@@ -16,6 +16,6 @@ Game authors can define, execute, explain, and test durable state transitions an
 
 <!-- speckit:generated:epic-features START -->
 
-- [Deterministic Runtime Core](../../features/0001-deterministic-runtime-core/spec.md) — Pending
+- [Deterministic Runtime Core](../../features/0001-deterministic-runtime-core/spec.md) — Active
 
 <!-- speckit:generated:epic-features END -->
