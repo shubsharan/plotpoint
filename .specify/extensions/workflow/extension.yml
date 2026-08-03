@@ -1,0 +1,10 @@
+id: workflow
+name: Minimal Spec Kit workflow
+version: 1.0.0
+commands:
+  - name: speckit.workflow.sync
+    file: commands/speckit.workflow.sync.md
+    description: Synchronize generated epic and ADR documentation
+  - name: speckit.workflow.check
+    file: commands/speckit.workflow.check.md
+    description: Validate feature, epic, ADR, branch, and status invariants

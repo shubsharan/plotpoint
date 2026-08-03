@@ -1,0 +1,54 @@
+schema_version: "1.0"
+workflow:
+  id: speckit
+  name: Minimal Feature Cycle
+  version: 2.0.0
+  author: Plotpoint
+  description: "Runs specify → plan → tasks → analyze → implement"
+
+requires:
+  speckit_version: ">=0.8.8"
+  integrations:
+    any: ["codex"]
+
+inputs:
+  feature:
+    type: string
+    required: true
+    prompt: "Describe the feature"
+  epic:
+    type: string
+    required: false
+    prompt: "Optional parent epic path"
+  integration:
+    type: string
+    default: codex
+
+steps:
+  - id: specify
+    command: speckit.specify
+    integration: "{{ inputs.integration }}"
+    input:
+      args: "{{ inputs.feature }} {{ inputs.epic }}"
+
+  - id: plan
+    command: speckit.plan
+    integration: "{{ inputs.integration }}"
+
+  - id: tasks
+    command: speckit.tasks
+    integration: "{{ inputs.integration }}"
+
+  - id: analyze
+    command: speckit.analyze
+    integration: "{{ inputs.integration }}"
+
+  - id: review
+    type: gate
+    message: "Review the feature, plan, tasks, and any required ADRs."
+    options: [approve, reject]
+    on_reject: abort
+
+  - id: implement
+    command: speckit.implement
+    integration: "{{ inputs.integration }}"
