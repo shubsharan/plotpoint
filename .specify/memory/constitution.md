@@ -1,50 +1,78 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+- Version change: template -> 1.0.0
+- Added principles: Complete Product Loops; Durable Contracts; Honest Boundaries; Evidence Before Abstraction; Local-First Privacy
+- Added sections: Delivery Gates; Development Workflow
+- Removed sections: all unresolved template placeholders
+- Templates: .specify/templates/plan-template.md compatible; spec-template.md compatible; tasks-template.md compatible
+- Follow-up TODOs: none
+-->
+# Plotpoint Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Complete Product Loops
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+Every active delivery feature MUST close a usable loop for a named audience. A package, protocol,
+service, or isolated demonstration is not sufficient evidence by itself. Each loop MUST identify the
+authoring input, playable outcome, learning return, and concrete exit evidence. Later infrastructure
+MUST be pulled by a demonstrated loop rather than scheduled only because it appears in the platform
+architecture.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. Durable Contracts Stay Small
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+Immutable releases, deterministic typed commands, explicit observations, versioned aggregates,
+atomic accepted transitions, and authorized projections are Plotpoint's durable invariants. Public,
+persisted, or cross-process contracts MUST be minimal, versioned independently, and changed only
+through an Accepted ADR. Repository packages and internal APIs MUST NOT be treated as product
+contracts without evidence that independent compatibility is required.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### III. Trust Boundaries Are Honest
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Specifications, diagnostics, and product claims MUST distinguish validation, trusted execution,
+isolation, authenticity, authorization, and durability. A closed import graph is not a sandbox;
+structural artifact integrity is not publisher authenticity; trusted release execution is not hostile
+code isolation. Stronger claims require direct evidence at the exact boundary where they are made.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### IV. Evidence Before Abstraction
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+New capability catalogs, module systems, services, recovery machinery, queues, and generalized
+conflict policies MUST be justified by a current product loop. The implementation MUST choose the
+fewest execution environments and code boundaries that can close that loop. Representative games,
+interruption tests, and external-consumer-style use are preferred evidence over interface sketches.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### V. Local-First Privacy and Recovery
+
+Accepted local progress MUST survive destruction of disposable views and temporary loss of
+connectivity. Durable acceptance MUST occur only after the owning transaction commits. Diagnostics
+and exported learning records MUST redact credentials, protected content, raw durable state,
+sensitive command fields, and precise sensor observations unless a separate explicit policy permits
+them.
+
+## Delivery Gates
+
+- Every feature MUST link one parent epic and every governing ADR.
+- Major architecture impact MUST have matching Accepted ADR links in the feature spec and plan before
+  implementation begins.
+- Specifications MUST define independently testable user journeys and measurable product evidence.
+- Plans MUST show how each new subsystem closes the active loop and which future platform concerns
+  remain deferred.
+- A loop is Done only when its exit evidence is recorded and its merged pull request is verified.
+
+## Development Workflow
+
+Work proceeds through specification, clarification when needed, accepted architecture decisions,
+planning, dependency-ordered tasks, implementation, and provider-free verification. Tests MUST cover
+contract boundaries, deterministic behavior, failure atomicity, interruption recovery, and redaction
+in proportion to the feature. Generated epic, roadmap, ADR, and active-plan references MUST remain in
+sync. Unrelated user-owned worktree changes MUST be preserved.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution governs Plotpoint specifications, plans, tasks, and implementation. Amendments
+require an explicit user-approved change, a semantic version bump, an updated Sync Impact Report,
+and propagation through affected templates and guidance. Compliance is reviewed during planning and
+again before implementation. Exceptions are not implicit; any necessary violation MUST be recorded
+in the plan's Complexity Tracking section with the rejected simpler alternative.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-08-03 | **Last Amended**: 2026-08-03

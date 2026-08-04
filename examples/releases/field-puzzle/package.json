@@ -1,0 +1,16 @@
+{
+  "name": "@plotpoint-example/field-puzzle",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@plotpoint/protocol": "workspace:*",
+    "@plotpoint/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@plotpoint/typescript-config": "workspace:*"
+  }
+}

@@ -2,6 +2,7 @@
 
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import QRCode from "qrcode";
 
 import {
   inspectRelease,
@@ -13,7 +14,7 @@ import {
   type VerifiedRelease,
 } from "@plotpoint/protocol";
 
-import { compileProject, validateProject } from "./index.js";
+import { compileProject, serveRelease, validateProject } from "./index.js";
 import { renderCompilerDiagnostics } from "./diagnostics/render.js";
 
 const USAGE = [
@@ -21,6 +22,7 @@ const USAGE = [
   "plotpoint compile --project <dir> --out <new.pprelease> [--config <file>] [--json]",
   "plotpoint inspect <release.pprelease> [--json]",
   "plotpoint verify <release.pprelease> [--expect sha256:<hex>] [--json]",
+  "plotpoint serve <release.pprelease> [--host <private-ip>] [--port <port>]",
 ].join("\n");
 
 interface ParsedProjectArguments {
@@ -44,10 +46,44 @@ interface ParsedVerifyArguments {
   readonly json: boolean;
 }
 
-type ParsedArguments = ParsedProjectArguments | ParsedInspectArguments | ParsedVerifyArguments;
+interface ParsedServeArguments {
+  readonly command: "serve";
+  readonly release: string;
+  readonly host?: string;
+  readonly port?: number;
+}
+
+type ParsedArguments =
+  | ParsedProjectArguments
+  | ParsedInspectArguments
+  | ParsedVerifyArguments
+  | ParsedServeArguments;
 
 function parseArguments(argv: readonly string[]): ParsedArguments | null {
   const [command, ...tokens] = argv;
+  if (command === "serve") {
+    const release = tokens[0];
+    if (release === undefined || release.startsWith("--")) return null;
+    let host: string | undefined;
+    let port: number | undefined;
+    for (let index = 1; index < tokens.length; index += 1) {
+      const token = tokens[index];
+      const value = tokens[index + 1];
+      if (value === undefined || value.startsWith("--")) return null;
+      if (token === "--host" && host === undefined) host = value;
+      else if (token === "--port" && port === undefined && /^\d+$/.test(value)) {
+        port = Number(value);
+        if (port < 0 || port > 65_535) return null;
+      } else return null;
+      index += 1;
+    }
+    return Object.freeze({
+      command,
+      release,
+      ...(host === undefined ? {} : { host }),
+      ...(port === undefined ? {} : { port }),
+    });
+  }
   if (command === "inspect") {
     if (tokens.length === 1 && tokens[0] !== undefined && !tokens[0].startsWith("--")) {
       return Object.freeze({ command, release: tokens[0], json: false });
@@ -202,6 +238,27 @@ export async function runCli(argv: readonly string[]): Promise<number> {
     });
     writeVerificationResult(result, parsed.json);
     return result.kind === "invalid" ? 2 : 0;
+  }
+  if (parsed.command === "serve") {
+    const server = await serveRelease({
+      releaseFile: parsed.release,
+      ...(parsed.host === undefined ? {} : { host: parsed.host }),
+      ...(parsed.port === undefined ? {} : { port: parsed.port }),
+    });
+    process.stdout.write(`${server.releaseId}\n${server.descriptorUrl}\n`);
+    process.stdout.write(
+      await QRCode.toString(server.descriptorUrl, { type: "terminal", small: true }),
+    );
+    await new Promise<void>((resolve) => {
+      const stop = () => {
+        process.off("SIGINT", stop);
+        process.off("SIGTERM", stop);
+        void server.close().finally(resolve);
+      };
+      process.once("SIGINT", stop);
+      process.once("SIGTERM", stop);
+    });
+    return 0;
   }
   const common = {
     projectRoot: parsed.project,

@@ -30,7 +30,17 @@ See [the product and architecture direction](docs/product.md) for the full platf
 
 ## Project Status
 
-Plotpoint is in its initial architecture and scaffolding phase. The workspace and package boundaries exist, but the player, services, compiler, and runtime are not yet usable products.
+Loop 0 is complete: deterministic runtime execution and immutable release compilation are implemented
+and verified. Loop 1 is active and is closing the first complete product loop with an internally
+authored location-aware puzzle on iOS and Android:
+
+```text
+edit -> validate -> compile -> QR install -> offline field play -> recover -> export -> revise
+```
+
+The mobile player is under active development. Hosted services, accounts, synchronization, external
+creator onboarding, and public distribution remain deferred until a concrete later loop requires
+them.
 
 ## Development
 
@@ -43,3 +53,7 @@ pnpm check-types
 pnpm lint
 pnpm speckit:test
 ```
+
+The first end-to-end product loop is documented in
+[the Loop 1 quickstart](docs/features/0003-durable-offline-player/quickstart.md). After building the
+compiler, use `pnpm plotpoint` to validate, compile, verify, and privately serve release artifacts.

@@ -39,3 +39,73 @@ export type {
   VerifyReleaseInput,
   VerifiedRelease,
 } from "./release/types.js";
+
+export {
+  INSTALL_DESCRIPTOR_VERSION,
+  MAX_RELEASE_BYTES,
+  RELEASE_DOWNLOAD_TIMEOUT_MS,
+  isEligibleInstallUrl,
+  parseInstallDescriptor,
+} from "./player/install.js";
+export type { InstallDescriptorResult, InstallDescriptorV1 } from "./player/install.js";
+export {
+  HOST_BRIDGE_VERSION,
+  createHostRuntimeClientV1,
+  parseHostBridgeEnvelope,
+} from "./player/bridge.js";
+export type {
+  AggregateTargetV1,
+  AnyHostBridgeEnvelope,
+  CapabilityRequestEnvelopeV1,
+  CapabilityRequestV1,
+  CapabilityResultEnvelopeV1,
+  CapabilityResultV1,
+  CapabilityVersionV1,
+  HostBridgeDirection,
+  HostBridgeEnvelope,
+  HostBridgeEnvelopeV1,
+  HostBridgeMessageType,
+  HostBridgeParseResult,
+  HostBridgeTransportV1,
+  HostCapabilityOutputValidator,
+  HostErrorEnvelopeV1,
+  HostErrorV1,
+  HostRuntimeClientV1,
+  HostToWebBridgeEnvelope,
+  HostToWebMessageType,
+  RuntimeBootstrapEnvelopeV1,
+  RuntimeBootstrapV1,
+  RuntimeReadyEnvelopeV1,
+  TransitionCandidateV1,
+  TransitionCommitEnvelopeV1,
+  TransitionResultEnvelopeV1,
+  TransitionResultV1,
+  WebToHostBridgeEnvelope,
+  WebToHostMessageType,
+} from "./player/bridge.js";
+export {
+  FOREGROUND_LOCATION_CAPABILITY,
+  LOCATION_REPORT_PROJECTION_VALIDATOR_V1,
+  accuracyBand,
+  isLocationReportProjectionV1,
+  isLocationObservationV1,
+  isLocationRequestInputV1,
+  isPlayReportV1,
+  projectLocationObservationV1,
+  recencyBand,
+} from "./player/report.js";
+export type {
+  AccuracyBand,
+  CapabilityReportProjectionValidator,
+  LocationAvailability,
+  LocationObservationV1,
+  LocationReportProjectionV1,
+  LocationRequestInputV1,
+  PlayReportCapabilityEventV1,
+  PlayReportCommandEventV1,
+  PlayReportDiagnosticEventV1,
+  PlayReportEventV1,
+  PlayReportLifecycleEventV1,
+  PlayReportV1,
+  RecencyBand,
+} from "./player/report.js";

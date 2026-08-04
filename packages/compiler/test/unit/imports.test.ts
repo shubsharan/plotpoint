@@ -99,7 +99,7 @@ describe("environment graph resolution", () => {
   it("allows deterministic first-party roots in logic and browser rendering in presentation", async () => {
     const captured = await snapshot(
       'import { defineCommand } from "@plotpoint/runtime"; export const logic = defineCommand;',
-      "export const presentation = document.createElement('main');",
+      'import { createHostRuntimeClientV1 } from "@plotpoint/protocol/player"; export const presentation = { createHostRuntimeClientV1, element: document.createElement("main") };',
     );
 
     const logic = resolveImportGraph(captured, captured.config.entries.logic, "logic");
@@ -113,9 +113,20 @@ describe("environment graph resolution", () => {
       );
       expect(logic.graph.edges.every(({ external }) => !external)).toBe(true);
     }
-    expect(
-      resolveImportGraph(captured, captured.config.entries.presentation, "presentation"),
-    ).toMatchObject({ kind: "resolved", graph: { environment: "presentation" } });
+    const presentation = resolveImportGraph(
+      captured,
+      captured.config.entries.presentation,
+      "presentation",
+    );
+    expect(presentation).toMatchObject({
+      kind: "resolved",
+      graph: { environment: "presentation" },
+    });
+    if (presentation.kind === "resolved") {
+      expect(presentation.graph.nodes.map(({ path }) => path)).toContain(
+        "vendor/@plotpoint/protocol/player/index.js",
+      );
+    }
   });
 
   it.each([

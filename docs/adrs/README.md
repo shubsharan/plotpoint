@@ -6,5 +6,7 @@ Create an ADR only for a major architectural decision. Accepted ADRs are immutab
 
 - [Deterministic Runtime Contract](0001-deterministic-runtime-contract.md) — Accepted
 - [Immutable Release Format](0002-immutable-release-format.md) — Accepted
+- [Trusted Single-WebView Runtime](0003-trusted-webview-runtime.md) — Accepted
+- [Host-Owned Atomic Player Persistence](0004-atomic-player-persistence.md) — Accepted
 
 <!-- speckit:generated:adr-index END -->

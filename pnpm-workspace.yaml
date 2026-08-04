@@ -1,7 +1,8 @@
 packages:
   - "apps/*"
   - "packages/*"
-  - "examples/*"
+  - "examples/releases/field-puzzle"
+  - "examples/releases/minimal-local-puzzle"
 minimumReleaseAgeExclude:
   - "@turbo/darwin-64@2.10.8"
   - "@turbo/darwin-arm64@2.10.8"
@@ -46,3 +47,8 @@ minimumReleaseAgeExclude:
   - "@rolldown/binding-win32-x64-msvc@1.2.2"
   - oxc-parser@0.143.0
   - rolldown@1.2.2
+  - "@expo/cli@57.0.12"
+  - "@expo/router-server@57.0.5"
+  - expo-constants@57.0.9
+  - expo-modules-core@57.0.9
+  - expo@57.0.10
