@@ -20,8 +20,35 @@
     "android": {
       "package": "com.plotpoint.player",
       "permissions": ["CAMERA", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
+      ],
       "usesCleartextTraffic": true
     },
-    "plugins": ["expo-camera", "expo-location", "expo-sqlite"]
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Scan a local Plotpoint release installation code.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "locationWhenInUsePermission": "Use your foreground location for field puzzle checkpoints.",
+          "motionUsagePermission": false,
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false,
+          "isAndroidMotionActivityEnabled": false
+        }
+      ],
+      "expo-sqlite"
+    ]
   }
 }

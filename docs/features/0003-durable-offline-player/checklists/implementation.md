@@ -5,18 +5,26 @@
 These checks describe the implementation before the reusable Host API V1 contract was revised. They
 remain provenance, not current acceptance evidence.
 
+| Recorded   | Command       | Result          | Acceptance meaning                                                         |
+| ---------- | ------------- | --------------- | -------------------------------------------------------------------------- |
+| 2026-08-03 | `pnpm verify` | PASS, 330 tests | Historical baseline only; does not accept the revised Host API V1 contract |
+
 - [x] Field project validated and compiled into a structurally verified release on 2026-08-03.
 - [x] Expo dependency compatibility and production bundle export passed for iOS and Android.
 - [x] The historical `pnpm verify` run passed 330 tests on 2026-08-03.
 
 ## Current Provider-Free Gate
 
-- [ ] Host API Core rejects unknown fields, versions, directions, malformed payloads, and incompatible releases.
-- [ ] Accepted, no-op, rejected, and recorded-invalid terminals preserve their exact durable semantics.
-- [ ] The field puzzle and minimal local puzzle pass one conformance harness without player branches.
-- [ ] Installation identity, compatibility, bounds, interruption, prior-preservation, and race fixtures pass.
-- [ ] Location outcomes, observation ownership, exactly-once transitions, recovery, and report redaction pass.
-- [ ] The revised full `pnpm verify` gate passes and its exact result is recorded.
+**Revised-contract acceptance record**: PASS on 2026-08-03. `pnpm verify` completed formatting and
+lint with no warnings, 14 of 14 typecheck tasks, 9 of 9 build tasks, 401 tests across 66 files, the
+Spec Kit workflow contract tests, and the documentation synchronization check.
+
+- [x] Host API Core rejects unknown fields, versions, directions, malformed payloads, and incompatible releases.
+- [x] Accepted, no-op, rejected, and recorded-invalid terminals preserve their exact durable semantics.
+- [x] The field puzzle and minimal local puzzle pass one conformance harness without player branches.
+- [x] Installation identity, compatibility, bounds, interruption, prior-preservation, and race fixtures pass.
+- [x] Location outcomes, observation ownership, exactly-once transitions, recovery, and report redaction pass.
+- [x] The revised full `pnpm verify` gate passes and its exact result is recorded.
 
 ## Early Physical iOS Smoke Loop
 
@@ -34,9 +42,9 @@ remain provenance, not current acceptance evidence.
 
 ## Final Reusable Contract Evidence
 
-- [ ] Both conformance releases install, bootstrap, execute, recover, and report without game-specific player changes.
-- [ ] A redacted field report produces a documented clue, location, radius, or accuracy revision.
-- [ ] The revised release starts a fresh run while the previous run remains intact.
+- [x] Both conformance releases install, bootstrap, execute, recover, and report without game-specific player changes.
+- [x] A redacted field report produces a documented clue, location, radius, or accuracy revision.
+- [x] The revised release starts a fresh run while the previous run remains intact.
 
 ## Final Physical iOS Loop
 
@@ -50,6 +58,10 @@ remain provenance, not current acceptance evidence.
 - [ ] Interrupt before and after every accepted durability boundary and recover exactly once.
 - [ ] Inspect final report redaction and fresh-run evidence without database or terminal intervention.
 
-Loop 1 remains Active until the current provider-free gate, two-game conformance, report-driven
-revision, and both final physical loops are complete. Historical checks cannot satisfy revised
-contract acceptance.
+## Reconciliation
+
+Host API conformance, the current provider-free gate, the report-driven revision, and fresh-run
+retention are complete. The early and final physical iOS and Android loops remain `NOT RUN` in
+`evidence/physical-devices.md`; no automated result is used as native-platform evidence. Loop 1
+therefore remains Active and the feature remains Pending until those external loops are recorded and
+the merged pull request is verified. Historical checks cannot satisfy revised contract acceptance.

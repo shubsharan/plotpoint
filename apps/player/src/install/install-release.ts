@@ -21,8 +21,8 @@ export interface FetchedBytes {
 }
 
 export interface InstallTransport {
-  fetchJson(url: string, timeoutMs: number): Promise<FetchedJson>;
-  fetchBytes(url: string, maximumBytes: number, timeoutMs: number): Promise<FetchedBytes>;
+  fetchJson(url: string, deadlineMs: number): Promise<FetchedJson>;
+  fetchBytes(url: string, maximumBytes: number, deadlineMs: number): Promise<FetchedBytes>;
 }
 
 export interface InstallationPublisher {
@@ -41,25 +41,26 @@ export async function installReleaseFromDescriptor(input: {
   readonly descriptorUrl: string;
   readonly transport: InstallTransport;
   readonly publisher: InstallationPublisher;
-  readonly support: HostReleaseSupport;
+  readonly support: HostReleaseSupport | ((manifest: ReleaseManifestV1) => HostReleaseSupport);
 }): Promise<InstallReleaseResult> {
   if (!isEligibleInstallUrl(input.descriptorUrl)) {
     return { kind: "invalid", code: "install-descriptor-url-ineligible" };
   }
-  const fetchedDescriptor = await input.transport.fetchJson(
-    input.descriptorUrl,
-    RELEASE_DOWNLOAD_TIMEOUT_MS,
-  );
+  const deadlineMs = Date.now() + RELEASE_DOWNLOAD_TIMEOUT_MS;
+  const fetchedDescriptor = await input.transport.fetchJson(input.descriptorUrl, deadlineMs);
   if (fetchedDescriptor.finalUrl !== input.descriptorUrl) {
     return { kind: "invalid", code: "install-descriptor-redirected" };
   }
   const parsed = parseInstallDescriptor(fetchedDescriptor.value);
   if (parsed.kind === "invalid") return { kind: "invalid", code: parsed.code };
+  if (new URL(parsed.descriptor.releaseUrl).origin !== new URL(input.descriptorUrl).origin) {
+    return { kind: "invalid", code: "install-release-origin-mismatch" };
+  }
 
   const fetchedRelease = await input.transport.fetchBytes(
     parsed.descriptor.releaseUrl,
     MAX_RELEASE_BYTES,
-    RELEASE_DOWNLOAD_TIMEOUT_MS,
+    deadlineMs,
   );
   if (fetchedRelease.finalUrl !== parsed.descriptor.releaseUrl) {
     return { kind: "invalid", code: "install-release-redirected" };
@@ -74,7 +75,9 @@ export async function installReleaseFromDescriptor(input: {
   if (verified.kind === "invalid") {
     return { kind: "invalid", code: verified.diagnostics[0]?.code ?? "install-release-invalid" };
   }
-  const compatibility = assessCompatibility(verified.manifest, input.support);
+  const support =
+    typeof input.support === "function" ? input.support(verified.manifest) : input.support;
+  const compatibility = assessCompatibility(verified.manifest, support);
   if (compatibility.kind === "incompatible") {
     return {
       kind: "invalid",

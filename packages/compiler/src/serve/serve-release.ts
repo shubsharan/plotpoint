@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
+import { isIPv4 } from "node:net";
 import { networkInterfaces } from "node:os";
 
 import {
@@ -24,10 +25,20 @@ export interface RunningReleaseServer {
   close(): Promise<void>;
 }
 
-export function privateIpv4Addresses(): readonly string[] {
+export interface NetworkInterfaceAddress {
+  readonly address: string;
+  readonly family: string;
+  readonly internal: boolean;
+}
+
+export function privateIpv4Addresses(
+  interfaces: Readonly<
+    Record<string, readonly NetworkInterfaceAddress[] | undefined>
+  > = networkInterfaces(),
+): readonly string[] {
   const addresses = new Set<string>();
-  for (const interfaces of Object.values(networkInterfaces())) {
-    for (const address of interfaces ?? []) {
+  for (const entries of Object.values(interfaces)) {
+    for (const address of entries ?? []) {
       if (address.family !== "IPv4" || address.internal) continue;
       if (isEligibleInstallUrl(`http://${address.address}/`)) addresses.add(address.address);
     }
@@ -37,7 +48,7 @@ export function privateIpv4Addresses(): readonly string[] {
 
 function chooseHost(explicit: string | undefined): string {
   if (explicit !== undefined) {
-    if (!isEligibleInstallUrl(`http://${explicit}/`)) {
+    if (!isIPv4(explicit) || !isEligibleInstallUrl(`http://${explicit}/`)) {
       throw new Error(`Install host must be a private IPv4 address: ${explicit}`);
     }
     return explicit;
@@ -66,7 +77,15 @@ function listen(server: Server, host: string, port: number): Promise<number> {
 }
 
 export async function serveRelease(input: ServeReleaseInput): Promise<RunningReleaseServer> {
-  const bytes = new Uint8Array(await readFile(input.releaseFile));
+  if (input.releaseFile.length === 0) throw new Error("Release file path must not be empty");
+  if (
+    input.port !== undefined &&
+    (!Number.isSafeInteger(input.port) || input.port < 0 || input.port > 65_535)
+  ) {
+    throw new Error(`Release server port must be an integer from 0 through 65535: ${input.port}`);
+  }
+
+  const bytes = Uint8Array.from(await readFile(input.releaseFile));
   if (bytes.byteLength > MAX_RELEASE_BYTES) {
     throw new Error(`Release exceeds ${MAX_RELEASE_BYTES} byte installation limit`);
   }
@@ -76,21 +95,20 @@ export async function serveRelease(input: ServeReleaseInput): Promise<RunningRel
   }
 
   const host = chooseHost(input.host);
-  let descriptor: InstallDescriptorV1 | undefined;
+  let descriptorBody: string | undefined;
   const server = createServer((request, response) => {
     if (request.method !== "GET") {
       response.writeHead(405, { Allow: "GET", "Content-Type": "text/plain; charset=utf-8" });
       response.end("Method not allowed\n");
       return;
     }
-    if (request.url === "/install.json" && descriptor !== undefined) {
-      const body = JSON.stringify(descriptor);
+    if (request.url === "/install.json" && descriptorBody !== undefined) {
       response.writeHead(200, {
         "Cache-Control": "no-store",
-        "Content-Length": Buffer.byteLength(body),
+        "Content-Length": Buffer.byteLength(descriptorBody),
         "Content-Type": "application/json; charset=utf-8",
       });
-      response.end(body);
+      response.end(descriptorBody);
       return;
     }
     if (request.url === "/release.pprelease") {
@@ -107,11 +125,12 @@ export async function serveRelease(input: ServeReleaseInput): Promise<RunningRel
   });
   const port = await listen(server, host, input.port ?? 0);
   const releaseUrl = `http://${host}:${port}/release.pprelease`;
-  descriptor = Object.freeze({
+  const descriptor: InstallDescriptorV1 = Object.freeze({
     version: 1,
     releaseUrl,
     expectedReleaseId: verified.releaseId,
   });
+  descriptorBody = JSON.stringify(descriptor);
   return Object.freeze({
     host,
     port,

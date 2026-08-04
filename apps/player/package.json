@@ -5,11 +5,11 @@
   "description": "Plotpoint Loop 1 mobile host and trusted web runtime.",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
-    "android": "expo run:android",
+    "android": "expo run:android --device",
     "build": "tsc -p tsconfig.json --noEmit",
     "check-types": "tsc -p tsconfig.json --noEmit",
     "dev": "expo start --dev-client",
-    "ios": "expo run:ios",
+    "ios": "expo run:ios --device",
     "test": "vitest run --passWithNoTests --config ../../vitest.config.ts --project player",
     "test:watch": "vitest --config ../../vitest.config.ts --project player"
   },

@@ -7,12 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
 
-import {
-  FOREGROUND_LOCATION_CAPABILITY,
-  openRelease,
-  type CanonicalJsonObject,
-  type HostReleaseSupport,
-} from "@plotpoint/protocol";
+import { openRelease, type ReleaseManifestV1 } from "@plotpoint/protocol";
 
 import { routeHostBridgeMessage } from "./src/bridge/host-bridge";
 import { installReleaseFromDescriptor } from "./src/install/install-release";
@@ -20,20 +15,13 @@ import {
   createNativeInstallationPublisher,
   createNativeInstallTransport,
 } from "./src/install/native-adapters";
-import { captureForegroundLocation } from "./src/location/foreground-location";
-import type { CandidateTransition, RunRecord } from "./src/model";
-import { commitCandidateTransition } from "./src/persistence/commit-transition";
 import { PlayerDatabase } from "./src/persistence/database";
 import { createPlayReport } from "./src/reports/create-play-report";
 import { allowRuntimeNavigation, buildRuntimeBootstrap } from "./src/runtime/bootstrap";
-import { recoverLatestRun, type RecoveryBootstrap } from "./src/runtime/recovery";
-
-const HOST_SUPPORT = Object.freeze({
-  releaseFormatVersions: [1],
-  hostApi: { major: 1, minor: 0 },
-  aggregateSchemas: [{ id: "field.player-state.v1", kind: "player", versions: [1] }],
-  capabilities: [FOREGROUND_LOCATION_CAPABILITY],
-} satisfies HostReleaseSupport);
+import { deriveHostSupportFromManifest } from "./src/runtime/host-support";
+import { createProductionHostBridgeHandlers } from "./src/runtime/production-handlers";
+import { recoverLatestRun, recoverRun, type RecoveryBootstrap } from "./src/runtime/recovery";
+import { playerRunLifecycleStore, selectReleaseRun } from "./src/runtime/run-lifecycle";
 
 interface ActiveRuntime {
   readonly recovery: RecoveryBootstrap;
@@ -43,8 +31,18 @@ interface ActiveRuntime {
   readonly validateAggregate: ValidateFunction;
 }
 
-function identifier(prefix: string): string {
-  return `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`;
+interface ReleaseDetails {
+  readonly releaseIdentity: string;
+  readonly releaseFormat: string;
+  readonly hostApi: string;
+  readonly aggregateSchemas: readonly string[];
+  readonly capabilities: readonly string[];
+  readonly publication: string;
+}
+
+interface InstallationFailure {
+  readonly code: string;
+  readonly action: string;
 }
 
 function base64ToBytes(value: string): Uint8Array {
@@ -54,45 +52,111 @@ function base64ToBytes(value: string): Uint8Array {
   return bytes;
 }
 
-function isCandidateTransition(value: unknown): value is CandidateTransition {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.commandId === "string" &&
-    typeof candidate.aggregateId === "string" &&
-    candidate.aggregateKind === "player" &&
-    typeof candidate.schemaId === "string" &&
-    Number.isSafeInteger(candidate.schemaVersion) &&
-    Number.isSafeInteger(candidate.expectedVersion) &&
-    (candidate.commandOutcome === "accepted" || candidate.commandOutcome === "rejected") &&
-    candidate.nextState !== null &&
-    typeof candidate.nextState === "object" &&
-    !Array.isArray(candidate.nextState) &&
-    candidate.outcome !== null &&
-    typeof candidate.outcome === "object" &&
-    !Array.isArray(candidate.outcome) &&
-    Array.isArray(candidate.progressionChanges) &&
-    candidate.progressionChanges.every((item) => typeof item === "string") &&
-    Array.isArray(candidate.observationIds) &&
-    candidate.observationIds.every((item) => typeof item === "string")
-  );
+async function readArtifactBytes(uri: string): Promise<Uint8Array> {
+  const encoded = await FileSystem.readAsStringAsync(uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  return base64ToBytes(encoded);
+}
+
+function describeRequirements(
+  releaseIdentity: string,
+  manifest: ReleaseManifestV1,
+  publication: string,
+): ReleaseDetails {
+  return {
+    releaseIdentity,
+    releaseFormat: `Version ${manifest.releaseFormatVersion}`,
+    hostApi: `Major ${manifest.hostApi.major}, minimum minor ${manifest.hostApi.minimumMinor}`,
+    aggregateSchemas: manifest.aggregateSchemas.map(
+      ({ id, kind, version }) => `${kind} · ${id} · version ${version}`,
+    ),
+    capabilities: manifest.capabilities.map(
+      ({ id, major, minimumMinor }) => `${id} · major ${major}, minimum minor ${minimumMinor}`,
+    ),
+    publication,
+  };
+}
+
+function installationFailure(error: unknown): InstallationFailure {
+  const code = error instanceof Error ? error.message : "installation-failed";
+  const normalized = code.toLowerCase();
+  if (normalized.includes("url-ineligible")) {
+    return {
+      code,
+      action: "Scan a fresh QR from a Plotpoint server on the same private network.",
+    };
+  }
+  if (normalized.includes("redirected")) {
+    return {
+      code,
+      action: "Serve the descriptor and release without redirects, then scan again.",
+    };
+  }
+  if (normalized.includes("too-large")) {
+    return {
+      code,
+      action: "Reduce the descriptor or release below the installation limit and recompile.",
+    };
+  }
+  if (
+    normalized.includes("identity") ||
+    normalized.includes("digest") ||
+    normalized.includes("integrity")
+  ) {
+    return {
+      code,
+      action: "Recompile and serve the exact artifact named by the descriptor, then scan again.",
+    };
+  }
+  if (normalized.includes("incompatible") || normalized.includes("unsupported")) {
+    return {
+      code,
+      action:
+        "Use a release whose Host API, schema, and capability requirements this player supports.",
+    };
+  }
+  if (normalized.includes("storage") || normalized.includes("publication")) {
+    return {
+      code,
+      action: "Check available device storage, then retry the installation.",
+    };
+  }
+  if (
+    normalized.includes("http") ||
+    normalized.includes("network") ||
+    normalized.includes("abort")
+  ) {
+    return {
+      code,
+      action: "Keep the device and server on the same private network, restart serving, and retry.",
+    };
+  }
+  return {
+    code,
+    action: "Restart the local release server and scan a newly generated QR code.",
+  };
 }
 
 export default function App() {
   const [database, setDatabase] = useState<PlayerDatabase | null>(null);
   const [runtime, setRuntime] = useState<ActiveRuntime | null>(null);
   const [status, setStatus] = useState("Opening local player…");
+  const [releaseDetails, setReleaseDetails] = useState<ReleaseDetails | null>(null);
+  const [installFailure, setInstallFailure] = useState<InstallationFailure | null>(null);
   const [scanning, setScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
   const webView = useRef<WebView>(null);
+  const installationInFlight = useRef(false);
 
-  const loadRun = async (db: PlayerDatabase, recovery: RecoveryBootstrap) => {
+  const loadRun = async (
+    db: PlayerDatabase,
+    recovery: RecoveryBootstrap,
+    publication = "Opened from a verified local publication.",
+  ) => {
     const installation = await db.installedRelease(recovery.releaseId);
     if (installation === null) throw new Error("recovery-installation-missing");
-    const encoded = await FileSystem.readAsStringAsync(installation.artifactUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    const opened = await openRelease(base64ToBytes(encoded));
+    const opened = await openRelease(await readArtifactBytes(installation.artifactUri));
     if (opened.kind === "invalid")
       throw new Error(opened.diagnostics[0]?.code ?? "release-open-failed");
     const logicPath = opened.manifest.entrypoints.logic;
@@ -110,9 +174,10 @@ export default function App() {
     );
     if (aggregateSchema === undefined) throw new Error("release-player-schema-entry-missing");
     const decoder = new TextDecoder();
-    const validateAggregate = new Ajv2020({ allErrors: true, strict: true }).compile(
-      JSON.parse(decoder.decode(aggregateSchema.bytes)) as object,
-    );
+    const validateAggregate = new Ajv2020({
+      allErrors: true,
+      strict: true,
+    }).compile(JSON.parse(decoder.decode(aggregateSchema.bytes)) as object);
     setRuntime({
       recovery,
       aggregateSchemaId: aggregateRequirement.id,
@@ -123,15 +188,20 @@ export default function App() {
         presentationSource: decoder.decode(presentation.bytes),
       }),
     });
-    setStatus(`Playing ${recovery.releaseId.slice(0, 20)}… offline`);
+    setReleaseDetails(describeRequirements(opened.releaseId, opened.manifest, publication));
+    setInstallFailure(null);
+    setStatus("Release ready for offline play.");
   };
 
   useEffect(() => {
     void PlayerDatabase.open()
       .then(async (db) => {
         setDatabase(db);
-        const recovered = await recoverLatestRun(db, { recordRestore: true });
-        if (recovered === null) setStatus("Scan a field-puzzle release to begin.");
+        const recovered = await recoverLatestRun(db, {
+          readArtifact: readArtifactBytes,
+          recordRestore: true,
+        });
+        if (recovered === null) setStatus("Scan a verified release to begin.");
         else await loadRun(db, recovered);
       })
       .catch((error: unknown) =>
@@ -140,27 +210,39 @@ export default function App() {
   }, []);
 
   const install = async (descriptorUrl: string) => {
-    if (database === null) return;
+    if (database === null || installationInFlight.current) return;
+    installationInFlight.current = true;
     setScanning(false);
+    setInstallFailure(null);
     setStatus("Verifying and installing release…");
     try {
       const result = await installReleaseFromDescriptor({
         descriptorUrl,
         transport: createNativeInstallTransport(),
         publisher: createNativeInstallationPublisher(database),
-        support: HOST_SUPPORT,
+        support: deriveHostSupportFromManifest,
       });
       if (result.kind === "invalid") throw new Error(result.code);
-      const run: RunRecord = {
-        runId: identifier("run"),
-        releaseId: result.descriptor.expectedReleaseId,
-        startedAt: new Date().toISOString(),
-        status: "active",
-      };
-      await database.createRun(run);
-      await loadRun(database, { ...run, aggregate: null });
+      const selected = await selectReleaseRun(
+        playerRunLifecycleStore(database),
+        result.descriptor.expectedReleaseId,
+      );
+      const recovered = await recoverRun(database, selected.run, {
+        readArtifact: readArtifactBytes,
+      });
+      if (recovered === null) throw new Error("release-run-unrecoverable");
+      await loadRun(
+        database,
+        recovered,
+        selected.kind === "created"
+          ? "Published locally; fresh run created."
+          : "Publication already installed; active run resumed.",
+      );
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Installation failed");
+      setStatus("Installation failed.");
+      setInstallFailure(installationFailure(error));
+    } finally {
+      installationInFlight.current = false;
     }
   };
 
@@ -172,52 +254,33 @@ export default function App() {
 
   const onBridgeMessage = async (event: WebViewMessageEvent) => {
     if (database === null || runtime === null) return;
-    const response = await routeHostBridgeMessage(event.nativeEvent.data, {
-      runtimeReady: async () =>
-        ({
-          runId: runtime.recovery.runId,
-          releaseId: runtime.recovery.releaseId,
-          aggregate: runtime.recovery.aggregate,
-        }) as CanonicalJsonObject,
-      commitTransition: async (payload) => {
-        if (!isCandidateTransition(payload.candidate))
-          throw new Error("transition-candidate-invalid");
-        if (
-          payload.candidate.aggregateId !== "field-player" ||
-          payload.candidate.schemaId !== runtime.aggregateSchemaId ||
-          payload.candidate.schemaVersion !== runtime.aggregateSchemaVersion
-        ) {
-          throw new Error("transition-aggregate-mismatch");
-        }
-        if (!runtime.validateAggregate(payload.candidate.nextState)) {
-          throw new Error("transition-state-schema-invalid");
-        }
-        const result = await commitCandidateTransition({
-          store: database,
-          runId: runtime.recovery.runId,
-          candidate: payload.candidate,
-        });
-        if (result.kind === "accepted" || result.kind === "duplicate") {
-          const recovered = await recoverLatestRun(database);
-          if (recovered !== null) setRuntime({ ...runtime, recovery: recovered });
-        }
-        return result as unknown as CanonicalJsonObject;
-      },
-      requestCapability: async (payload) => {
-        if (payload.capabilityId !== FOREGROUND_LOCATION_CAPABILITY.id) {
-          throw new Error("capability-unsupported");
-        }
-        const observation = await captureForegroundLocation({
+    const response = await routeHostBridgeMessage(
+      event.nativeEvent.data,
+      createProductionHostBridgeHandlers({
+        store: database,
+        runtime: {
+          bootstrap: {
+            runId: runtime.recovery.runId,
+            releaseId: runtime.recovery.releaseId,
+            aggregate: runtime.recovery.aggregate,
+          },
+          aggregateSchemaId: runtime.aggregateSchemaId,
+          aggregateSchemaVersion: runtime.aggregateSchemaVersion,
+          validateAggregate: runtime.validateAggregate,
+        },
+        location: {
           database,
           runId: runtime.recovery.runId,
           startedAt: runtime.recovery.startedAt,
-        });
-        return {
-          ...observation,
-          ageMs: Date.now() - Date.parse(observation.capturedAt),
-        } as unknown as CanonicalJsonObject;
-      },
-    });
+        },
+        onDurableResult: async () => {
+          const recovered = await recoverRun(database, runtime.recovery, {
+            readArtifact: readArtifactBytes,
+          });
+          if (recovered !== null) setRuntime({ ...runtime, recovery: recovered });
+        },
+      }),
+    );
     reply(response);
   };
 
@@ -241,6 +304,7 @@ export default function App() {
   };
 
   const beginScan = async () => {
+    setInstallFailure(null);
     const result = permission?.granted ? permission : await requestPermission();
     if (result.granted) setScanning(true);
     else setStatus("Camera permission is required to scan an installation code.");
@@ -261,6 +325,43 @@ export default function App() {
           )}
         </View>
       </View>
+      {installFailure === null ? null : (
+        <View style={styles.failurePanel}>
+          <Text style={styles.detailLabel}>INSTALLATION DIAGNOSTIC</Text>
+          <Text selectable style={styles.failureCode}>
+            {installFailure.code}
+          </Text>
+          <Text style={styles.failureAction}>{installFailure.action}</Text>
+        </View>
+      )}
+      {releaseDetails === null ? null : (
+        <View style={styles.releasePanel}>
+          <Text style={styles.detailLabel}>VERIFIED LOCAL RELEASE</Text>
+          <Text style={styles.publication}>{releaseDetails.publication}</Text>
+          <Text style={styles.requirementLabel}>Release identity</Text>
+          <Text selectable style={styles.releaseIdentity}>
+            {releaseDetails.releaseIdentity}
+          </Text>
+          <View style={styles.requirementGrid}>
+            <View style={styles.requirementCell}>
+              <Text style={styles.requirementLabel}>Release format</Text>
+              <Text style={styles.requirementValue}>{releaseDetails.releaseFormat}</Text>
+            </View>
+            <View style={styles.requirementCell}>
+              <Text style={styles.requirementLabel}>Host API</Text>
+              <Text style={styles.requirementValue}>{releaseDetails.hostApi}</Text>
+            </View>
+          </View>
+          <Text style={styles.requirementLabel}>Aggregate schemas</Text>
+          <Text style={styles.requirementValue}>
+            {releaseDetails.aggregateSchemas.join("\n") || "None"}
+          </Text>
+          <Text style={styles.requirementLabel}>Capabilities</Text>
+          <Text style={styles.requirementValue}>
+            {releaseDetails.capabilities.join("\n") || "None"}
+          </Text>
+        </View>
+      )}
       {scanning ? (
         <CameraView
           style={styles.camera}
@@ -269,7 +370,7 @@ export default function App() {
         />
       ) : runtime === null ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Field-ready, release-free.</Text>
+          <Text style={styles.emptyTitle}>Player ready, release-free.</Text>
           <Text>Serve a verified puzzle on your private network and scan its QR code.</Text>
         </View>
       ) : (
@@ -301,9 +402,48 @@ const styles = StyleSheet.create({
     borderBottomColor: "#183f3920",
     backgroundColor: "#fffdf8",
   },
-  eyebrow: { fontSize: 11, letterSpacing: 2, color: "#35635d", fontWeight: "700" },
+  eyebrow: {
+    fontSize: 11,
+    letterSpacing: 2,
+    color: "#35635d",
+    fontWeight: "700",
+  },
   status: { marginTop: 5, color: "#183f39" },
   actions: { flexDirection: "row", gap: 12 },
+  detailLabel: {
+    color: "#35635d",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1.5,
+  },
+  failurePanel: {
+    backgroundColor: "#fff1e8",
+    borderBottomColor: "#a34b2a40",
+    borderBottomWidth: 1,
+    gap: 5,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  failureCode: { color: "#7b2f18", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
+  failureAction: { color: "#542619" },
+  releasePanel: {
+    backgroundColor: "#e8f1ed",
+    borderBottomColor: "#183f3920",
+    borderBottomWidth: 1,
+    gap: 5,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  publication: { color: "#183f39", fontWeight: "600" },
+  releaseIdentity: {
+    color: "#183f39",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 11,
+  },
+  requirementGrid: { flexDirection: "row", gap: 24, marginTop: 4 },
+  requirementCell: { flex: 1 },
+  requirementLabel: { color: "#52716d", fontSize: 11, marginTop: 4 },
+  requirementValue: { color: "#183f39", fontSize: 12 },
   camera: { flex: 1 },
   empty: { flex: 1, justifyContent: "center", padding: 36, gap: 12 },
   emptyTitle: {

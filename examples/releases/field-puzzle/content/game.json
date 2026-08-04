@@ -5,7 +5,7 @@
     "latitude": 37.76942,
     "longitude": -122.48621,
     "radiusMeters": 45,
-    "maximumAccuracyMeters": 30
+    "maximumAccuracyMeters": 40
   },
   "puzzle": {
     "prompt": "I have cities but no houses, forests but no trees, and water but no fish. What am I?",
@@ -16,7 +16,7 @@
     "latitude": 37.76815,
     "longitude": -122.48372,
     "radiusMeters": 45,
-    "maximumAccuracyMeters": 30
+    "maximumAccuracyMeters": 40
   },
   "maximumObservationAgeMs": 15000
 }

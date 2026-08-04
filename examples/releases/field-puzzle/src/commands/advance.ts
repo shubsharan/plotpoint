@@ -14,6 +14,8 @@ export type AdvanceOutcome = JsonObject & {
     | "incorrect"
     | "permission-denied"
     | "unavailable"
+    | "failed"
+    | "future"
     | "stale"
     | "inaccurate"
     | "outside"
@@ -65,6 +67,8 @@ export const advanceCommand = defineCommand<"player", FieldState, AdvancePayload
     const location = context.take<LocationValue>("location.foreground", "current");
     if (location.availability === "permission-denied")
       return { kind: "rejected", outcome: { result: "permission-denied" } };
+    if (location.availability === "failed")
+      return { kind: "rejected", outcome: { result: "failed" } };
     if (
       location.availability !== "available" ||
       location.latitude === undefined ||
@@ -72,13 +76,10 @@ export const advanceCommand = defineCommand<"player", FieldState, AdvancePayload
     ) {
       return { kind: "rejected", outcome: { result: "unavailable" } };
     }
-    if (
-      location.ageMs === undefined ||
-      location.ageMs < 0 ||
-      location.ageMs > fieldGame.maximumObservationAgeMs
-    ) {
+    if (location.ageMs === undefined || location.ageMs > fieldGame.maximumObservationAgeMs) {
       return { kind: "rejected", outcome: { result: "stale" } };
     }
+    if (location.ageMs < 0) return { kind: "rejected", outcome: { result: "future" } };
     const checkpoint =
       target.state.phase === "first-checkpoint"
         ? fieldGame.firstCheckpoint
