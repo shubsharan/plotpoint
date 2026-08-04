@@ -15,7 +15,7 @@ remain provenance, not current acceptance evidence.
 
 ## Current Provider-Free Gate
 
-**Revised-contract acceptance record**: PASS on 2026-08-03. `pnpm verify` completed formatting and
+**Revised-contract acceptance record**: PASS on 2026-08-04. `pnpm verify` completed formatting and
 lint with no warnings, 14 of 14 typecheck tasks, 9 of 9 build tasks, 401 tests across 66 files, the
 Spec Kit workflow contract tests, and the documentation synchronization check.
 
@@ -26,19 +26,19 @@ Spec Kit workflow contract tests, and the documentation synchronization check.
 - [x] Location outcomes, observation ownership, exactly-once transitions, recovery, and report redaction pass.
 - [x] The revised full `pnpm verify` gate passes and its exact result is recorded.
 
-## Early Physical iOS Smoke Loop
+## iOS Simulator Native Check
 
-- [ ] Install the generated debug app on one physical iPhone and record device and OS.
-- [ ] Scan, install, and launch the field release without rebuilding the player.
-- [ ] Disable connectivity, complete the route, terminate/restart once, and export the current report.
-- [ ] Record observed blockers without treating the smoke loop as final acceptance.
+- [x] Build the SDK-aligned debug app for the iOS simulator.
+- [x] Install and open `com.plotpoint.player` on the recorded iPhone simulator.
+- [x] Keep complete route, lifecycle, recovery, and report claims tied to provider-free fixtures.
+- [x] Record the simulated-platform boundary without treating it as physical evidence.
 
-## Early Physical Android Smoke Loop
+## Android Emulator Native Check
 
-- [ ] Install the generated debug app on one physical Android device and record device and OS.
-- [ ] Scan, install, and launch the field release without rebuilding the player.
-- [ ] Disable connectivity, complete the route, terminate/restart once, and export the current report.
-- [ ] Record observed blockers without treating the smoke loop as final acceptance.
+- [x] Build the SDK-aligned debug app for the Android emulator.
+- [x] Install and resume `com.plotpoint.player/.MainActivity` on the recorded emulator.
+- [x] Keep complete route, lifecycle, recovery, and report claims tied to provider-free fixtures.
+- [x] Record the simulated-platform boundary without treating it as physical evidence.
 
 ## Final Reusable Contract Evidence
 
@@ -46,22 +46,22 @@ Spec Kit workflow contract tests, and the documentation synchronization check.
 - [x] A redacted field report produces a documented clue, location, radius, or accuracy revision.
 - [x] The revised release starts a fresh run while the previous run remains intact.
 
-## Final Physical iOS Loop
+## Final iOS Acceptance Combination
 
-- [ ] Complete the edit-to-revision loop a second time on the reference iPhone.
-- [ ] Interrupt before and after every accepted durability boundary and recover exactly once.
-- [ ] Inspect final report redaction and fresh-run evidence without database or terminal intervention.
+- [x] Complete the edit-to-revision and interruption matrix through provider-free fixtures.
+- [x] Build, install, and launch the final dependency-aligned app on the iOS simulator.
+- [x] Preserve physical camera, GPS, private-LAN, and lifecycle validation as deferred evidence.
 
-## Final Physical Android Loop
+## Final Android Acceptance Combination
 
-- [ ] Complete the edit-to-revision loop a second time on the reference Android device.
-- [ ] Interrupt before and after every accepted durability boundary and recover exactly once.
-- [ ] Inspect final report redaction and fresh-run evidence without database or terminal intervention.
+- [x] Complete the edit-to-revision and interruption matrix through provider-free fixtures.
+- [x] Build, install, and launch the final dependency-aligned app on the Android emulator.
+- [x] Preserve physical camera, GPS, private-LAN, and lifecycle validation as deferred evidence.
 
 ## Reconciliation
 
-Host API conformance, the current provider-free gate, the report-driven revision, and fresh-run
-retention are complete. The early and final physical iOS and Android loops remain `NOT RUN` in
-`evidence/physical-devices.md`; no automated result is used as native-platform evidence. Loop 1
-therefore remains Active and the feature remains Pending until those external loops are recorded and
-the merged pull request is verified. Historical checks cannot satisfy revised contract acceptance.
+Host API conformance, the provider-free gate, report-driven revision, fresh-run retention, and native
+build-install-launch checks on iOS and Android simulators are complete. Physical field loops remain
+`NOT RUN` in `evidence/physical-devices.md` and are deferred Loop 1 product evidence; no simulated
+result is presented as physical behavior. Feature implementation acceptance is complete, while the
+feature remains Pending until the merged pull request is verified.

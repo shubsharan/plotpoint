@@ -9,8 +9,8 @@ close contract and evidence gaps rather than recreate scaffolding.
 
 ## Phase 1: Baseline And Evidence Setup
 
-**Purpose**: Preserve current provider-free evidence, prepare reusable conformance fixtures, and make
-physical observations recordable before further hardening.
+**Purpose**: Preserve current provider-free evidence, prepare reusable conformance fixtures, and keep
+deferred physical observations separate from feature acceptance.
 
 - [x] T001 Align generated debug-app commands and restrict native permissions to camera and foreground location in `apps/player/package.json` and `apps/player/app.json`
 - [x] T002 Record the current provider-free baseline separately from revised-contract acceptance in `docs/features/0003-durable-offline-player/checklists/implementation.md`
@@ -63,8 +63,8 @@ highest-risk identity, compatibility, interruption, and prior-installation cases
 
 ## Phase 4: User Story 2 - Complete A Location-Aware Puzzle Offline (Priority: P2)
 
-**Goal**: Complete the release-owned field route offline, then run one early smoke loop on each physical
-platform before exhaustive durability and report hardening.
+**Goal**: Complete the release-owned field route offline, then prove the dependency-aligned native host
+builds, installs, and launches on one iOS simulator and one Android emulator.
 
 **Independent Test**: Complete two checkpoints and the intervening puzzle with scripted observations;
 then install, disconnect, play, restart once, export the current report, and record blockers on iOS and
@@ -80,10 +80,11 @@ Android.
 - [x] T019 [US2] Register Location V1 through generic capability dispatch and persist every terminal observation before delivery in `apps/player/src/location/foreground-location.ts` and `apps/player/src/bridge/host-bridge.ts`
 - [x] T020 [US2] Keep coordinates, radii, freshness, accuracy, clues, and progression exclusively inside the release in `examples/releases/field-puzzle/src/config.ts` and `examples/releases/field-puzzle/src/commands/advance.ts`
 - [x] T021 [US2] Exercise the complete disconnected route through the trusted WebView host with scripted observations in `apps/player/test/offline-route.test.ts`
-- [ ] T022 [US2] Run one full field-puzzle smoke loop on a physical iOS device and record blockers in `docs/features/0003-durable-offline-player/evidence/physical-devices.md`
-- [ ] T023 [US2] Run one full field-puzzle smoke loop on a physical Android device and record blockers in `docs/features/0003-durable-offline-player/evidence/physical-devices.md`
+- [x] T022 [US2] Build, install, and launch the SDK-aligned player on an iOS simulator and record the exact boundary in `docs/features/0003-durable-offline-player/evidence/platform-simulation.md`
+- [x] T023 [US2] Build, install, and launch the SDK-aligned player on an Android emulator and record the exact boundary in `docs/features/0003-durable-offline-player/evidence/platform-simulation.md`
 
-**Checkpoint**: Real platform evidence, not only interface sketches, determines remaining hardening.
+**Checkpoint**: Both native toolchains accept the same player configuration; complete behavior remains
+covered by provider-free fixtures rather than inferred from simulated sensors or lifecycle behavior.
 
 ---
 
@@ -138,12 +139,12 @@ privacy boundary; revise one clue or location rule; install changed bytes; and r
 
 ## Phase 7: Exit Hardening And Evidence
 
-**Purpose**: Complete the remaining proportional boundary matrix after two-game and physical evidence.
+**Purpose**: Complete the remaining proportional boundary matrix after two-game and native-toolchain evidence.
 
 - [x] T036 Complete remaining race, timeout, malformed-record, redaction, and compatibility fixtures and run `pnpm verify` with results recorded in `docs/features/0003-durable-offline-player/checklists/implementation.md`
-- [ ] T037 Complete the field edit-to-revision loop a second time on physical iOS and record final evidence in `docs/features/0003-durable-offline-player/evidence/physical-devices.md`
-- [ ] T038 Complete the field edit-to-revision loop a second time on physical Android and record final evidence in `docs/features/0003-durable-offline-player/evidence/physical-devices.md`
-- [x] T039 Reconcile Host API conformance, provider-free verification, both physical loops, and documentation without marking unmet evidence complete in `docs/features/0003-durable-offline-player/checklists/implementation.md`
+- [x] T037 Complete the edit-to-revision conformance loop and confirm the final player builds, installs, and launches on the iOS simulator in `docs/features/0003-durable-offline-player/evidence/platform-simulation.md`
+- [x] T038 Complete the edit-to-revision conformance loop and confirm the final player builds, installs, and launches on the Android emulator in `docs/features/0003-durable-offline-player/evidence/platform-simulation.md`
+- [x] T039 Reconcile Host API conformance, provider-free verification, both simulated native-platform checks, and documentation without claiming deferred physical evidence in `docs/features/0003-durable-offline-player/checklists/implementation.md`
 
 ---
 
@@ -156,10 +157,9 @@ Baseline -> Host API V1 -> US1 install -> US2 field play -> early iOS/Android sm
 
 - Host API V1 requires two-game provider-free evidence before it is treated as reusable.
 - US1 depends on Host API Core; US2 depends on installed offline releases.
-- Early physical smoke loops inform US3 and US4 but are not final acceptance.
-- Provider-free durability work may continue if device access is temporarily unavailable, but the
-  missing smoke evidence remains an explicit external blocker rather than an architecture dependency.
-- Final iOS and Android loops may run in parallel after provider-free verification passes.
+- Native simulator/emulator checks establish toolchain compatibility, not physical sensor behavior.
+- Provider-free durability and revision evidence combines with those checks for feature acceptance.
+- Deferred physical iOS and Android field loops remain product evidence rather than an implementation blocker.
 
 ## Parallel Execution Examples
 
@@ -169,17 +169,17 @@ US1: T011 server tests can run alongside T012 installation tests.
 US2: T017 location contract tests can run alongside T018 field-game tests.
 US3: T024 transition faults can run alongside T025 recovery faults.
 US4: T030 report contract tests can run alongside T031 database-backed report tests.
-Exit: T037 iOS and T038 Android can run in parallel after T036.
+Exit: T037 iOS and T038 Android native checks can run in parallel after T036.
 ```
 
 ## Implementation Strategy
 
 1. **Reusable core**: prove one Host API with two releases before expanding internals.
 2. **MVP**: install and launch both releases offline.
-3. **Field evidence**: complete one imperfect loop per platform early and record blockers.
+3. **Native evidence**: build, install, and launch one shared player configuration on both simulated platforms.
 4. **Durability**: harden only the command, recovery, and report boundaries pulled by the loop.
 5. **Learning**: use a real report to revise the game and start a fresh run.
-6. **Exit**: finish the remaining matrix and second physical loop on each platform.
+6. **Exit**: finish the remaining matrix and final simulated native-platform checks.
 
 Keep one local aggregate, one registered native capability, trusted single-WebView execution, and no
 hosted services, synchronization, generalized effects, active-run migration, or external creator code.

@@ -48,7 +48,9 @@
           "isAndroidMotionActivityEnabled": false
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-sharing",
+      "expo-status-bar"
     ]
   }
 }

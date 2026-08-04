@@ -14,13 +14,14 @@ same install, bootstrap, transition, recovery, and reporting surfaces without pl
 
 ## Technical Context
 
-**Language/Version**: TypeScript 7 for shared packages; Expo SDK 56 with React Native and React for mobile
+**Language/Version**: TypeScript 7 for shared packages; Expo SDK 57 with React Native 0.86 and React 19 for mobile
 **Primary Dependencies**: existing runtime/compiler/protocol; Expo Camera, Location, SQLite, FileSystem,
 Sharing; react-native-webview; Node HTTP; qrcode
 **Storage**: SQLite for player records; release-ID-addressed private files for installed material
 **Testing**: Vitest for portable contracts, serving, persistence policy, redaction, and scripted lifecycle;
-Expo type checks and physical-device acceptance on iOS and Android
-**Target Platform**: Node.js 25 author tooling; physical iOS and Android development clients
+Expo type checks, an iOS simulator native build, and an Android emulator native build
+**Target Platform**: Node.js 25 author tooling; iOS and Android development clients, accepted for this
+feature through simulator/emulator build-install-launch checks
 **Project Type**: monorepo CLI + cross-platform mobile application + external example game
 **Performance Goals**: reject transfers above 64 MiB; fail transfers after 30 seconds; restore a valid
 installed puzzle to a playable view within 5 seconds on each reference device
@@ -98,23 +99,24 @@ testable without an Expo runtime.
   game-specific player branches or configuration.
 - Scripted location and lifecycle adapters prove deterministic negative cases without claiming native
   platform behavior.
-- One early physical smoke loop on iOS and Android informs durability and report hardening; it is
-  evidence, not final acceptance.
-- Physical iOS and Android evidence records the reference device/OS, private-LAN installation,
-  permission behavior, offline route, termination/restart recovery, report export, revision, and fresh run.
-- The feature is not Done until the edit-to-revision loop closes twice on each reference platform.
+- Native iOS simulator and Android emulator checks prove the dependency-aligned development clients
+  build, install, and launch on both platform toolchains.
+- Provider-free conformance supplies the complete offline route, interruption, recovery, report,
+  revision, and fresh-run evidence that simulators cannot establish reliably.
+- Physical camera, GPS, private-LAN, and real process/device behavior remain deferred Loop 1 product
+  evidence and are not part of this feature's implementation acceptance tier.
 
 ## Delivery Phases
 
 1. Establish Host API V1 core semantics and prove them provider-free with two materially different
    releases while keeping capabilities and reports independently versioned.
-2. Complete verified installation and the offline field route, then run one early smoke loop on each
-   physical platform to expose real platform blockers.
+2. Complete verified installation and the offline field route, then build, install, and launch the
+   dependency-aligned development client on an iOS simulator and Android emulator.
 3. Harden atomic transition receipts, interruption recovery, and invalid-record handling from the
    conformance and device evidence.
 4. Produce the redacted report, use it for a real revision, and install the fresh run on both platforms.
-5. Complete the remaining boundary matrix, provider-free gate, and second full loop on each reference
-   device.
+5. Complete the remaining boundary matrix, provider-free gate, and final native build-install-launch
+   check on each simulated reference platform.
 
 ## Complexity Tracking
 

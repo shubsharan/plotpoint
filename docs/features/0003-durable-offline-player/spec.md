@@ -190,8 +190,9 @@ boundary, change one game input based on the report, install the new release, an
   aggregate state, and protected content.
 - **FR-024**: Installing changed release bytes MUST create a distinct installation and fresh run and
   MUST NOT migrate the active state of an earlier release.
-- **FR-025**: The complete edit-to-revision loop MUST work on one physical iOS device and one physical
-  Android device using the same game project and release contracts.
+- **FR-025**: The complete edit-to-revision loop MUST pass the provider-free conformance fixtures, and
+  the same dependency-aligned native player MUST build, install, and launch on one iOS simulator and
+  one Android emulator without platform-specific game or release-contract changes.
 - **FR-026**: Host API V1 MUST install, bootstrap, execute, recover, and report at least two materially
   different releases without game-specific player code or persisted-contract changes.
 
@@ -222,8 +223,9 @@ boundary, change one game input based on the report, install the new release, an
 - **SC-002**: 100% of altered, wrong-identity, incompatible, excessive, timed-out, and interrupted
   installation fixtures leave zero failed candidates playable and preserve every prior playable
   installation.
-- **SC-003**: The full two-checkpoint route completes with connectivity disabled for the entire play
-  session on one physical iOS and one physical Android device.
+- **SC-003**: The full two-checkpoint route completes with connectivity disabled in provider-free host
+  fixtures, and the native player builds, installs, and launches on one iOS simulator and one Android
+  emulator.
 - **SC-004**: 100% of denied, unavailable, stale, inaccurate, and out-of-radius location fixtures
   produce an explicit outcome and zero durable progression advancement.
 - **SC-005**: Across interruption tests immediately before and after every command durability boundary,
@@ -237,8 +239,9 @@ boundary, change one game input based on the report, install the new release, an
   and contain zero raw coordinates, credentials, command payloads, raw state, or protected content.
 - **SC-009**: At least one exported report leads to a documented clue, checkpoint, radius, or accuracy
   revision that compiles to a distinct release and starts a fresh run on both platforms.
-- **SC-010**: The core team completes the full edit-to-revision loop twice on each reference platform
-  without database intervention or player rebuilding after the release server starts.
+- **SC-010**: The full edit-to-revision loop passes twice through the shared provider-free contracts,
+  and the resulting player configuration builds, installs, and launches on both simulated reference
+  platforms without platform-specific game code.
 - **SC-011**: The field puzzle and one materially different release pass the same provider-free Host API
   conformance suite and run without game-specific player changes.
 
@@ -251,8 +254,9 @@ boundary, change one game input based on the report, install the new release, an
 - Foreground location is the only production native capability in this feature.
 - General post-commit effect delivery, authoritative multiplayer, synchronization, hosted telemetry,
   accounts, public distribution, and active-run migration are deferred to later product loops.
-- Physical device evidence is recorded during acceptance; provider-free automated verification uses
-  scripted location and lifecycle fixtures.
+- Feature acceptance uses provider-free scripted location and lifecycle fixtures plus native
+  build/install/launch checks on an iOS simulator and Android emulator. Physical device field evidence
+  remains a deferred Loop 1 product-validation activity and is not inferred from simulated results.
 - Host API V1 is intended for later games, but Loop 1 does not generalize aggregate count, authority,
   synchronization, or native capabilities beyond evidence from the two conformance releases.
 

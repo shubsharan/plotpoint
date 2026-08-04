@@ -2,9 +2,10 @@
 
 ## Expo mobile baseline
 
-**Decision**: Use one Expo SDK 56 application built with `expo run:ios` and `expo run:android`, with
-Expo Camera, Location, SQLite, FileSystem, and Sharing plus `react-native-webview`. Record the exact
-reference device and operating-system versions with physical acceptance evidence.
+**Decision**: Use one Expo SDK 57 application built with `expo run:ios` and `expo run:android`, with
+Expo Camera, Location, SQLite, FileSystem, and Sharing plus `react-native-webview`. Accept the feature
+with dependency-aligned simulator/emulator build-install-launch evidence and provider-free behavior
+fixtures; retain physical field validation as deferred Loop 1 product evidence.
 
 **Rationale**: The selected packages cover both target platforms behind one TypeScript application;
 SQLite persists across restarts and WebView supports Expo, iOS, and Android. Generated debug apps
@@ -12,12 +13,13 @@ allow private-LAN installation without committing to public distribution or addi
 
 **Alternatives considered**: separate native iOS and Android hosts duplicate the contract surface; a
 PWA would not prove host-owned native SQLite, location, or restart behavior; Expo Go does not represent
-the intended native configuration. An SDK upgrade is a separate compatibility change after Loop 1.
+the intended native configuration. Keeping SDK 56 modules under an SDK 57 host was rejected after the
+Android native build exposed a React Native JSI incompatibility.
 
-**Required evidence**: Automated checks prove package, contract, and scripted lifecycle behavior only.
-Private-LAN reachability, platform permission behavior, generated native configuration, and the full
-offline route require separate physical iOS and Android acceptance. Native permissions must remain
-limited to the camera and foreground location capabilities Loop 1 actually uses.
+**Required evidence**: Automated checks prove package, contract, and scripted lifecycle behavior;
+native simulator/emulator checks prove generated projects build, install, and launch. Private-LAN
+reachability, camera and foreground-location permission behavior, real sensor input, and real process
+or device restart behavior still require later physical iOS and Android validation.
 
 ## Trusted runtime boundary
 

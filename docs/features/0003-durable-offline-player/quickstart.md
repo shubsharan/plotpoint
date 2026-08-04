@@ -39,7 +39,15 @@ The provider-free gate includes one Host API conformance harness for the field p
 puzzle. Passing proves both releases use the same bootstrap and transition contract without player
 branches; it does not prove native platform behavior.
 
-Run one physical iOS and Android smoke loop as soon as installation and offline field play work, then
-use observed blockers to guide durability and report hardening. Final acceptance requires a second full
-edit-to-revision loop on each platform. Physical evidence is recorded separately because automated
-verification uses scripted location and lifecycle adapters.
+Run the native platform checks against available simulated devices:
+
+```sh
+pnpm --filter @plotpoint/player exec expo run:ios --device "iPhone 17 Pro" --no-bundler
+ANDROID_HOME="$HOME/Library/Android/sdk" pnpm --filter @plotpoint/player exec expo run:android --no-bundler
+```
+
+For feature acceptance, these commands prove the dependency-aligned native projects build, install,
+and launch; `pnpm verify` supplies complete scripted route, lifecycle, recovery, and revision evidence.
+They do not prove camera scanning, GPS behavior, private-LAN reachability, or real process/device
+recovery. Those observations remain explicitly `NOT RUN` in `evidence/physical-devices.md` until a
+later Loop 1 field-validation pass.
