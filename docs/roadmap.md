@@ -16,7 +16,7 @@ Plotpoint is currently at the architecture and workspace-scaffolding stage. Gate
 
 <!-- speckit:generated:roadmap-epics START -->
 
-- [Deterministic Runtime Core](epics/0001-deterministic-runtime-core/epic.md) — Active
+- [Deterministic Runtime Core](epics/0001-deterministic-runtime-core/epic.md) — Done
 
 <!-- speckit:generated:roadmap-epics END -->
 

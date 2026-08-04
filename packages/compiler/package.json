@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "description": "Plotpoint project validation, composition, bundling, and release manifests.",
+  "bin": {
+    "plotpoint": "./dist/cli.js"
+  },
   "files": [
     "dist"
   ],
@@ -15,14 +18,21 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check-types": "tsc -p tsconfig.json --noEmit"
+    "check-types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run --passWithNoTests --config ../../vitest.config.ts --project compiler",
+    "test:watch": "vitest --config ../../vitest.config.ts --project compiler"
   },
   "dependencies": {
     "@plotpoint/modules": "workspace:*",
     "@plotpoint/protocol": "workspace:*",
-    "@plotpoint/runtime": "workspace:*"
+    "@plotpoint/runtime": "workspace:*",
+    "ajv": "8.20.0",
+    "oxc-parser": "0.143.0",
+    "rolldown": "1.2.2"
   },
   "devDependencies": {
-    "@plotpoint/typescript-config": "workspace:*"
+    "@plotpoint/typescript-config": "workspace:*",
+    "@types/node": "^25.9.5",
+    "fast-check": "^4.3.0"
   }
 }

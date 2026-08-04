@@ -1,0 +1,35 @@
+{
+  "projectFormatVersion": 1,
+  "environment": "web",
+  "hostApi": {
+    "major": 1,
+    "minimumMinor": 0
+  },
+  "entries": {
+    "logic": {
+      "source": "src/logic.ts",
+      "export": "logic"
+    },
+    "presentation": {
+      "source": "src/presentation.ts",
+      "export": "presentation"
+    }
+  },
+  "commands": [],
+  "aggregateSchemas": [],
+  "schemas": [
+    {
+      "id": "duplicate.schema",
+      "path": "schemas/a.json"
+    },
+    {
+      "id": "duplicate.schema",
+      "path": "schemas/b.json"
+    }
+  ],
+  "progressions": [],
+  "components": [],
+  "content": [],
+  "assets": []
+}
+

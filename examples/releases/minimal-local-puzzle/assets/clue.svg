@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-labelledby="title description">
+  <title id="title">Echo clue</title>
+  <desc id="description">Concentric sound waves crossing an empty room.</desc>
+  <rect width="320" height="180" fill="#f2e8d5"/>
+  <path d="M48 90h72m24-32c22 16 22 48 0 64m32-88c38 28 38 84 0 112" fill="none" stroke="#234b47" stroke-linecap="round" stroke-width="10"/>
+  <circle cx="48" cy="90" r="12" fill="#d05a3a"/>
+</svg>

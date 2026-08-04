@@ -3,5 +3,5 @@
 Feature work lives in `docs/features/NNNN-name` on `feature/NNNN-name`. Read the active feature's
 `spec.md`, `plan.md`, `tasks.md`, and generated design artifacts. Features link their parent epic
 and every governing ADR. For technology, structure, and command context, read the current plan.
-Active plan: `docs/features/0001-deterministic-runtime-core/plan.md`.
+Active plan: `docs/features/0002-immutable-release-pipeline/plan.md`.
 <!-- SPECKIT END -->

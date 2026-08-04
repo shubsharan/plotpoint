@@ -1,0 +1,105 @@
+{
+  "projectFormatVersion": 1,
+  "environment": "web",
+  "hostApi": { "major": 1, "minimumMinor": 1 },
+  "entries": {
+    "logic": { "source": "src/logic.ts", "export": "logic" },
+    "presentation": { "source": "src/presentation.ts", "export": "presentation" }
+  },
+  "commands": [
+    {
+      "id": "tour.choose-scene.v1",
+      "type": "choose-scene",
+      "definition": { "source": "src/commands/choose-scene.ts", "export": "chooseSceneCommand" },
+      "aggregateSchema": "tour.player-state.v1",
+      "payloadSchema": "tour.choose-scene-payload.v1",
+      "outcomeSchema": "tour.choose-scene-outcome.v1"
+    },
+    {
+      "id": "tour.play-media.v1",
+      "type": "play-media",
+      "definition": { "source": "src/commands/play-media.ts", "export": "playMediaCommand" },
+      "aggregateSchema": "tour.player-state.v1",
+      "payloadSchema": "tour.play-media-payload.v1",
+      "outcomeSchema": "tour.play-media-outcome.v1"
+    }
+  ],
+  "aggregateSchemas": [
+    {
+      "id": "tour.player-state.v1",
+      "kind": "player",
+      "version": 1,
+      "path": "schemas/player-state.schema.json"
+    }
+  ],
+  "schemas": [
+    { "id": "tour.choose-scene-outcome.v1", "path": "schemas/choose-scene-outcome.schema.json" },
+    { "id": "tour.choose-scene-payload.v1", "path": "schemas/choose-scene-payload.schema.json" },
+    { "id": "tour.media-content.v1", "path": "schemas/media-content.schema.json" },
+    { "id": "tour.play-media-outcome.v1", "path": "schemas/play-media-outcome.schema.json" },
+    { "id": "tour.play-media-payload.v1", "path": "schemas/play-media-payload.schema.json" },
+    { "id": "tour.scene-content.v1", "path": "schemas/scene-content.schema.json" }
+  ],
+  "progressions": [
+    {
+      "id": "tour.branching-route.v1",
+      "version": 1,
+      "kind": "player",
+      "definition": { "source": "src/progression/route.ts", "export": "routeProgression" },
+      "aggregateSchema": "tour.player-state.v1",
+      "commands": ["tour.choose-scene.v1", "tour.play-media.v1"],
+      "content": ["tour.media.river.v1", "tour.scene.garden.v1", "tour.scene.harbor.v1"],
+      "components": ["tour.media-panel.v1", "tour.scene-navigator.v1"]
+    }
+  ],
+  "components": [
+    {
+      "id": "tour.media-panel.v1",
+      "implementation": { "source": "src/components/media-panel.ts", "export": "MediaPanel" },
+      "commands": ["tour.play-media.v1"],
+      "content": ["tour.media.river.v1"],
+      "assets": ["tour.audio.river.v1"],
+      "capabilities": [{ "id": "plotpoint.media.audio", "major": 1, "minimumMinor": 0 }]
+    },
+    {
+      "id": "tour.scene-navigator.v1",
+      "implementation": {
+        "source": "src/components/scene-navigator.ts",
+        "export": "SceneNavigator"
+      },
+      "commands": ["tour.choose-scene.v1"],
+      "content": ["tour.scene.garden.v1", "tour.scene.harbor.v1"],
+      "assets": ["tour.map.overview.v1"],
+      "capabilities": [{ "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 1 }]
+    }
+  ],
+  "content": [
+    {
+      "id": "tour.media.river.v1",
+      "path": "content/river-media.json",
+      "schema": "tour.media-content.v1"
+    },
+    {
+      "id": "tour.scene.garden.v1",
+      "path": "content/garden.json",
+      "schema": "tour.scene-content.v1"
+    },
+    {
+      "id": "tour.scene.harbor.v1",
+      "path": "content/harbor.json",
+      "schema": "tour.scene-content.v1"
+    }
+  ],
+  "assets": [
+    {
+      "id": "tour.audio.river.v1",
+      "path": "assets/river-audio.txt",
+      "releasePath": "assets/river-audio.txt"
+    },
+    {
+      "id": "tour.map.overview.v1",
+      "path": "assets/tour-map.svg",
+      "releasePath": "assets/tour-map.svg"
+    }
+  ]
+}

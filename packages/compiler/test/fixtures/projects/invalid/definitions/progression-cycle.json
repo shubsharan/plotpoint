@@ -1,0 +1,28 @@
+{
+  "commands": [],
+  "progressions": [
+    {
+      "registrationId": "main.v1",
+      "graphId": "main.v1",
+      "graphVersion": 1,
+      "aggregateKind": "player",
+      "nodes": [{ "nodeId": "stage", "initialStatus": "available" }],
+      "automaticRules": [
+        {
+          "ruleId": "activate",
+          "targetNodeId": "stage",
+          "from": ["available"],
+          "to": "active",
+          "priority": 0
+        },
+        {
+          "ruleId": "release",
+          "targetNodeId": "stage",
+          "from": ["active"],
+          "to": "available",
+          "priority": 1
+        }
+      ]
+    }
+  ]
+}

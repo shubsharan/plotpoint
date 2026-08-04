@@ -14,7 +14,9 @@ sorting weakened cross-runtime determinism. The original generic types and some 
 also claimed stronger guarantees than they enforced.
 
 The packages remain private, version `0.0.0`, and unreleased, so this ADR records the corrected Gate
-1 contract directly rather than preserving accidental pre-release behavior.
+1 contract directly rather than preserving accidental pre-release behavior. Gate 2 review also
+showed that syntax-pattern matching cannot prove that arbitrary JavaScript handlers lack ambient
+authority: aliases, closures, computed properties, and equivalent expressions bypass such checks.
 
 ## Decision
 
@@ -36,13 +38,21 @@ The packages remain private, version `0.0.0`, and unreleased, so this ADR record
 6. A no-op contains only the original aggregate and outcome. Events, effects, or any direct or
    automatic progression trace on an unchanged final aggregate are invalid. Cycle bookkeeping keeps
    command-intent trace offsets separate from automatic-transition counts.
-7. The runtime root exports author-facing constructors, execution functions, durable/result types,
+7. The supported runtime contract supplies handlers only detached canonical inputs and an explicit
+   observation context; Plotpoint runtime code performs no ambient I/O and never executes effect
+   intents. This API design makes external values visible and replayable, but it does not sandbox an
+   arbitrary JavaScript closure or prove that authored code cannot reach language or host globals.
+8. The runtime root exports author-facing constructors, execution functions, durable/result types,
    and diagnostics. The testkit retains fixtures, scripted observations, strict execution, replay,
-   honest variant/diagnostic assertions, and canonical record comparison. The harness owns mutation,
-   isolation, consumption, repetition, and known-ambient-API checks.
-8. Explicit observations, one-aggregate commands, semantic rejection, atomic command-plus-
-   progression stabilization, simultaneous rounds, effects as post-commit data, stable diagnostics,
-   and infrastructure-free replay remain the core semantics.
+   honest variant/diagnostic assertions, and canonical record comparison. Its known-ambient-API
+   sentinels are scoped test evidence, not a security boundary or a complete JavaScript classifier.
+9. The compiler enforces the closed import graph it can prove and does not represent ambient-global
+   syntax matching as runtime isolation. A future player must execute release bundles inside an
+   isolated realm with explicit host policy and capability bridging; Gate 3 requires a separate
+   accepted isolation decision before bundle execution.
+10. Explicit observations, one-aggregate commands, semantic rejection, atomic command-plus-
+    progression stabilization, simultaneous rounds, effects as post-commit data, stable diagnostics,
+    and infrastructure-free replay remain the core semantics.
 
 ## Consequences
 
@@ -54,8 +64,10 @@ The packages remain private, version `0.0.0`, and unreleased, so this ADR record
   construction for reserved keys.
 - Validating static graphs once reduces repeated work and public surface, while dynamic progression
   state and rule results remain runtime-validated.
-- The runtime remains a deterministic contract and testable authority boundary, not a hostile-code
-  sandbox. Compiler and player isolation remain later gates.
+- The runtime remains a deterministic supported contract, not a hostile-code sandbox. Compiler
+  import closure and player execution isolation are distinct later boundaries.
+- Direct, aliased, destructured, computed, or closure-based ambient access receives no false claim
+  of prevention from runtime types, test sentinels, or compiler syntax inspection.
 
 ## Supersession
 

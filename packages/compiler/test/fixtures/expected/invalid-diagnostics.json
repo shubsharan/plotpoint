@@ -1,0 +1,7 @@
+{
+  "unknown-config-field": ["configuration-unknown-field"],
+  "forbidden-node-import": ["import-forbidden"],
+  "missing-logic-definition-export": ["definition-export-missing"],
+  "missing-command-schemas": ["composition-reference-missing", "composition-reference-missing"],
+  "output-collision": ["output-collision"]
+}

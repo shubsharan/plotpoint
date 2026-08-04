@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@plotpoint/compiler": ["./src/index.ts"],
+      "@plotpoint/modules": ["../modules/src/index.ts"],
+      "@plotpoint/protocol": ["../protocol/src/index.ts"],
+      "@plotpoint/runtime": ["../runtime/src/index.ts"]
+    },
+    "rootDir": "..",
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.test.ts",
+    "test/**/*.type-test.ts",
+    "../protocol/src/**/*.ts"
+  ],
+  "exclude": []
+}

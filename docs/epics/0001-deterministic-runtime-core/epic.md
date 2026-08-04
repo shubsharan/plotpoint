@@ -1,5 +1,5 @@
 ---
-status: Active
+status: Done
 ---
 
 # Epic: Deterministic Runtime Core
@@ -16,6 +16,6 @@ Game authors can define, execute, explain, and test durable state transitions an
 
 <!-- speckit:generated:epic-features START -->
 
-- [Deterministic Runtime Core](../../features/0001-deterministic-runtime-core/spec.md) — Active
+- [Deterministic Runtime Core](../../features/0001-deterministic-runtime-core/spec.md) — Done
 
 <!-- speckit:generated:epic-features END -->

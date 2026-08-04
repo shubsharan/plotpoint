@@ -16,6 +16,44 @@ export default defineConfig({
       defineProject({
         resolve: {
           alias: {
+            "@plotpoint/compiler": new URL("./packages/compiler/src/index.ts", import.meta.url)
+              .pathname,
+            "@plotpoint/modules": new URL("./packages/modules/src/index.ts", import.meta.url)
+              .pathname,
+            "@plotpoint/protocol": new URL("./packages/protocol/src/index.ts", import.meta.url)
+              .pathname,
+            "@plotpoint/runtime": new URL("./packages/runtime/src/index.ts", import.meta.url)
+              .pathname,
+          },
+        },
+        test: {
+          ...sharedTestConfig,
+          name: "compiler",
+          passWithNoTests: true,
+          root: `${workspaceRoot}packages/compiler`,
+          include: ["test/**/*.test.ts"],
+        },
+      }),
+      defineProject({
+        resolve: {
+          alias: {
+            "@plotpoint/protocol": new URL("./packages/protocol/src/index.ts", import.meta.url)
+              .pathname,
+            "@plotpoint/runtime": new URL("./packages/runtime/src/index.ts", import.meta.url)
+              .pathname,
+          },
+        },
+        test: {
+          ...sharedTestConfig,
+          name: "protocol",
+          passWithNoTests: true,
+          root: `${workspaceRoot}packages/protocol`,
+          include: ["test/**/*.test.ts"],
+        },
+      }),
+      defineProject({
+        resolve: {
+          alias: {
             "@plotpoint/runtime": new URL("./packages/runtime/src/index.ts", import.meta.url)
               .pathname,
           },
