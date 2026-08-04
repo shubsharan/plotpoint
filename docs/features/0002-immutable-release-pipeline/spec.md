@@ -5,7 +5,7 @@ status: Pending
 # Feature Specification: Immutable Release Pipeline
 
 **Branch**: `feature/0002-immutable-release-pipeline`
-**Epic**: None
+**Epic**: [Plotpoint Core Platform](../../epics/0001-plotpoint-core-platform/epic.md)
 **PR**: Pending
 **Created**: 2026-08-03
 **Input**: Feature 2 from `docs/roadmap.md` and `docs/product.md`.

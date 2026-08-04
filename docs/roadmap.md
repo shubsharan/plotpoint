@@ -1,6 +1,6 @@
 # Plotpoint Product Roadmap
 
-- **Status:** Initial platform roadmap; no gate is complete
+- **Status:** Gate 1 complete; Gate 2 is the current delivery gate
 - **Authority:** [Plotpoint Core Platform](product.md)
 - **Delivery model:** Evidence-gated, not date-based
 
@@ -10,13 +10,13 @@ This roadmap sequences the smallest complete Plotpoint platform: an external Typ
 
 The product document defines the platform model, boundaries, and invariants. This roadmap defines delivery order and the evidence required to advance. A gate is complete only when its exit evidence exists and its dependencies are complete. Package creation, interface sketches, and isolated demonstrations do not satisfy a gate by themselves.
 
-Plotpoint is currently at the architecture and workspace-scaffolding stage. Gate 1 is the first unsatisfied gate.
+Plotpoint has completed the deterministic runtime core. Gate 2 is the first unsatisfied gate.
 
 ## Delivery Epics
 
 <!-- speckit:generated:roadmap-epics START -->
 
-- [Deterministic Runtime Core](epics/0001-deterministic-runtime-core/epic.md) — Done
+- [Plotpoint Core Platform](epics/0001-plotpoint-core-platform/epic.md) — Active
 
 <!-- speckit:generated:roadmap-epics END -->
 

@@ -5,7 +5,7 @@ status: Done
 # Feature Specification: Deterministic Runtime Core
 
 **Branch**: `feature/0001-deterministic-runtime-core`
-**Epic**: [Deterministic Runtime Core](../../epics/0001-deterministic-runtime-core/epic.md)
+**Epic**: [Plotpoint Core Platform](../../epics/0001-plotpoint-core-platform/epic.md)
 **PR**: [https://github.com/shubsharan/plotpoint/pull/1](https://github.com/shubsharan/plotpoint/pull/1)
 **Created**: 2026-08-03
 **Input**: Feature 0001 based on the Deterministic Runtime Core gate in `docs/roadmap.md` and the runtime direction in `docs/product.md`.
