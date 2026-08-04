@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tour.scene-content.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "mapAssetId", "summary", "title"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "mapAssetId": { "const": "tour.map.overview.v1" },
+    "summary": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 }
+  }
+}

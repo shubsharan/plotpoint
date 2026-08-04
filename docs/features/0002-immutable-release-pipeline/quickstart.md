@@ -5,7 +5,8 @@ and CLI surfaces from an external-consumer-style project.
 
 ## 1. Prepare a Project
 
-Start from a directory outside the Plotpoint workspace:
+Start from a directory outside the Plotpoint workspace and install the pinned `@plotpoint/compiler`
+package as a development dependency:
 
 ```text
 minimal-puzzle/
@@ -32,7 +33,8 @@ It does not contain project identity, release labels, channels, or timestamps.
 ## 2. Validate Without Emitting
 
 ```bash
-pnpm exec plotpoint validate --project /absolute/path/to/minimal-puzzle
+pnpm --dir /absolute/path/to/minimal-puzzle exec plotpoint validate \
+  --project /absolute/path/to/minimal-puzzle
 ```
 
 Expected result:
@@ -49,14 +51,15 @@ source location, logical reference, or asset path and has the expected stable ca
 ## 3. Compile to a New Output
 
 ```bash
-pnpm exec plotpoint compile \
+pnpm --dir /absolute/path/to/minimal-puzzle exec plotpoint compile \
   --project /absolute/path/to/minimal-puzzle \
   --out /absolute/path/to/output/minimal-puzzle.pprelease
 ```
 
-The output path must not name an unrelated existing file. A successful result prints the finalized
-path, `sha256:<hex>` release identity, and manifest summary only after the temporary artifact has
-passed the consumer verifier and been atomically published.
+The output path must not name an unrelated existing file. A successful human-readable result prints
+the `sha256:<hex>` release identity and finalized path only after the temporary artifact has passed
+the consumer verifier and been atomically published. Pass `--json` when the complete manifest is
+required in the success result.
 
 An invalid or interrupted build must leave no completed file at the requested path. Temporary
 remnants are not release files and cannot produce a success receipt.
@@ -64,7 +67,8 @@ remnants are not release files and cannot produce a success receipt.
 ## 4. Inspect Without Executing Game Code
 
 ```bash
-pnpm exec plotpoint inspect /absolute/path/to/output/minimal-puzzle.pprelease --json
+pnpm --dir /absolute/path/to/minimal-puzzle exec plotpoint inspect \
+  /absolute/path/to/output/minimal-puzzle.pprelease --json
 ```
 
 Confirm the response includes:
@@ -82,7 +86,7 @@ Inspection must not import, evaluate, or extract the logic or presentation bundl
 ## 5. Verify a Known Identity
 
 ```bash
-pnpm exec plotpoint verify \
+pnpm --dir /absolute/path/to/minimal-puzzle exec plotpoint verify \
   /absolute/path/to/output/minimal-puzzle.pprelease \
   --expect sha256:<identity-from-compile>
 ```

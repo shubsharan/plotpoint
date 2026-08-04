@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tour.play-media-outcome.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["queued"],
+  "properties": { "queued": { "type": "boolean" } }
+}

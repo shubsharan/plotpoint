@@ -17,7 +17,7 @@
     "speckit:sync": "bash .specify/scripts/bash/sync-workflow.sh",
     "speckit:check": "bash .specify/scripts/bash/check-workflow.sh",
     "speckit:test": "bash .specify/tests/workflow.sh",
-    "verify": "pnpm lint && pnpm check-types && pnpm test && pnpm speckit:test && pnpm speckit:check"
+    "verify": "pnpm format && pnpm lint && pnpm check-types && pnpm build && pnpm test && pnpm speckit:test && pnpm speckit:check"
   },
   "devDependencies": {
     "@plotpoint/typescript-config": "workspace:*",

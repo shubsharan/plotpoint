@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "minimal.puzzle-content.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["answerLabel", "clue", "clueAsset", "prompt", "title"],
+  "properties": {
+    "answerLabel": {
+      "type": "string",
+      "minLength": 1
+    },
+    "clue": {
+      "type": "string",
+      "minLength": 1
+    },
+    "clueAsset": {
+      "const": "minimal.clue-image.v1"
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

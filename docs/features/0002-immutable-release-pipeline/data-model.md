@@ -11,19 +11,19 @@ this model and must not enter artifact bytes.
 
 The strict data-only root document for one game project.
 
-| Field | Type | Rules |
-| --- | --- | --- |
-| `projectFormatVersion` | positive integer | Exactly `1` for Gate 2 |
-| `environment` | enum | Exactly `web` for v1 |
-| `hostApi` | Host API requirement | Exact major and non-negative minimum minor |
-| `entries` | Entry selection | Exactly one logic and one presentation source/export |
-| `commands` | Command registration array | Canonical unique IDs; ordinalized before use |
-| `aggregateSchemas` | Aggregate schema registration array | Unique schema identity/kind/version |
-| `schemas` | General schema registration array | Unique IDs for command payload, outcome, or content validation |
-| `progressions` | Progression registration array | Unique graph identity/version/kind |
-| `components` | Component registration array | Unique IDs and resolvable presentation exports |
-| `content` | Content registration array | Unique IDs and paths; optional schema reference |
-| `assets` | Asset registration array | Unique IDs and release destinations |
+| Field                  | Type                                | Rules                                                          |
+| ---------------------- | ----------------------------------- | -------------------------------------------------------------- |
+| `projectFormatVersion` | positive integer                    | Exactly `1` for Gate 2                                         |
+| `environment`          | enum                                | Exactly `web` for v1                                           |
+| `hostApi`              | Host API requirement                | Exact major and non-negative minimum minor                     |
+| `entries`              | Entry selection                     | Exactly one logic and one presentation source/export           |
+| `commands`             | Command registration array          | Canonical unique IDs; ordinalized before use                   |
+| `aggregateSchemas`     | Aggregate schema registration array | Unique schema identity/kind/version                            |
+| `schemas`              | General schema registration array   | Unique IDs for command payload, outcome, or content validation |
+| `progressions`         | Progression registration array      | Unique graph identity/version/kind                             |
+| `components`           | Component registration array        | Unique IDs and resolvable presentation exports                 |
+| `content`              | Content registration array          | Unique IDs and paths; optional schema reference                |
+| `assets`               | Asset registration array            | Unique IDs and release destinations                            |
 
 Unknown fields, implicit discovery, glob expressions, absolute paths, operational metadata, and
 duplicate logical identities are invalid.
@@ -32,10 +32,10 @@ duplicate logical identities are invalid.
 
 Identifies one statically selected ESM export.
 
-| Field | Type | Rules |
-| --- | --- | --- |
+| Field    | Type                  | Rules                                                                  |
+| -------- | --------------------- | ---------------------------------------------------------------------- |
 | `source` | project-relative path | Canonical forward-slash path; regular contained file; no symlink alias |
-| `export` | string | Canonical non-empty named export; default export is not implicit |
+| `export` | string                | Canonical non-empty named export; default export is not implicit       |
 
 The pair must resolve exactly once in the correct logic or presentation graph.
 
@@ -43,19 +43,19 @@ The pair must resolve exactly once in the correct logic or presentation graph.
 
 ### Host API Requirement
 
-| Field | Type | Rules |
-| --- | --- | --- |
-| `major` | positive integer | Host major must equal this value |
+| Field          | Type                 | Rules                                  |
+| -------------- | -------------------- | -------------------------------------- |
+| `major`        | positive integer     | Host major must equal this value       |
 | `minimumMinor` | non-negative integer | Host minor must be at least this value |
 
 ### Aggregate Schema Registration
 
-| Field | Type | Rules |
-| --- | --- | --- |
-| `id` | canonical ID | Unique schema identity |
-| `kind` | enum | `player`, `team`, or `session` |
-| `version` | positive integer | Unique with `id` and `kind` |
-| `path` | project-relative path | Strict JSON Schema 2020-12 document |
+| Field     | Type                  | Rules                               |
+| --------- | --------------------- | ----------------------------------- |
+| `id`      | canonical ID          | Unique schema identity              |
+| `kind`    | enum                  | `player`, `team`, or `session`      |
+| `version` | positive integer      | Unique with `id` and `kind`         |
+| `path`    | project-relative path | Strict JSON Schema 2020-12 document |
 
 ### General Schema Registration
 
@@ -97,39 +97,39 @@ cannot claim the same release path.
 
 The immutable input set used by all compiler phases.
 
-| Field | Type | Rules |
-| --- | --- | --- |
-| `projectRoot` | resolved path | Compiler-only; never emitted |
-| `config` | canonical project configuration | Detached and immutable |
-| `files` | ordinal map of logical path to bytes | One entry per selected source/data/asset/dependency |
-| `fingerprints` | file observations | Pre/post mutation detection only; never emitted |
-| `toolchain` | pinned versions and options | Receipt/test evidence only; never emitted |
+| Field          | Type                                 | Rules                                               |
+| -------------- | ------------------------------------ | --------------------------------------------------- |
+| `projectRoot`  | resolved path                        | Compiler-only; never emitted                        |
+| `config`       | canonical project configuration      | Detached and immutable                              |
+| `files`        | ordinal map of logical path to bytes | One entry per selected source/data/asset/dependency |
+| `fingerprints` | file observations                    | Pre/post mutation detection only; never emitted     |
+| `toolchain`    | pinned versions and options          | Receipt/test evidence only; never emitted           |
 
 All parsing, definition inspection, bundling, and entry creation consume snapshot bytes. A changed
 tracked input invalidates the snapshot and compilation.
 
 ## Import Graph
 
-| Field | Type | Rules |
-| --- | --- | --- |
-| `environment` | `logic` or `presentation` | Selects policy |
-| `nodes` | source module set | Every node belongs to the snapshot |
-| `edges` | static imports | Resolved, literal, and environment-allowed |
-| `entry` | source export reference | Exactly one generated root per graph |
+| Field         | Type                      | Rules                                      |
+| ------------- | ------------------------- | ------------------------------------------ |
+| `environment` | `logic` or `presentation` | Selects policy                             |
+| `nodes`       | source module set         | Every node belongs to the snapshot         |
+| `edges`       | static imports            | Resolved, literal, and environment-allowed |
+| `entry`       | source export reference   | Exactly one generated root per graph       |
 
 No graph may leave an unresolved/external import in an emitted bundle. Ordinary static ESM cycles
 may bundle; cycles in the declarative composition/reference graph are invalid.
 
 ## Compiler Diagnostic
 
-| Field | Type | Rules |
-| --- | --- | --- |
-| `category` | fixed enum | Configuration, import boundary, composition, command, schema, progression, component, content, asset, compatibility, or integrity |
-| `code` | canonical string | Stable machine-facing failure identity |
-| `severity` | literal | `error` in Gate 2 |
-| `location` | structured location | Config pointer, normalized source line/column, logical reference, or artifact path |
-| `details` | canonical object | Stable values only; no stack, clock, cwd, or host prose |
-| `related` | location array | Optional independently relevant locations |
+| Field      | Type                | Rules                                                                                                                             |
+| ---------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `category` | fixed enum          | Configuration, import boundary, composition, command, schema, progression, component, content, asset, compatibility, or integrity |
+| `code`     | canonical string    | Stable machine-facing failure identity                                                                                            |
+| `severity` | literal             | `error` in Gate 2                                                                                                                 |
+| `location` | structured location | Config pointer, normalized source line/column, logical reference, or artifact path                                                |
+| `details`  | canonical object    | Stable values only; no stack, clock, cwd, or host prose                                                                           |
+| `related`  | location array      | Optional independently relevant locations                                                                                         |
 
 Diagnostics sort by fixed category rank, normalized path, pointer or line/column, code, and canonical
 details. Human-readable messages are derived and are not compatibility data.
@@ -138,27 +138,27 @@ details. Human-readable messages are derived and are not compatibility data.
 
 One regular file inside the strict container.
 
-| Field | Type | Rules |
-| --- | --- | --- |
-| `path` | canonical ASCII archive path | Unique; relative; no empty, dot, parent, or case-equivalent segment |
-| `kind` | enum | Logic bundle, presentation bundle, content, progression, aggregate schema, component data, or asset |
-| `bytes` | byte sequence | Final immutable payload |
-| `byteLength` | non-negative integer | Exact payload length |
-| `digest` | SHA-256 digest | Digest of exact payload bytes |
+| Field        | Type                         | Rules                                                                                               |
+| ------------ | ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| `path`       | canonical ASCII archive path | Unique; relative; no empty, dot, parent, or case-equivalent segment                                 |
+| `kind`       | enum                         | Logic bundle, presentation bundle, content, progression, aggregate schema, component data, or asset |
+| `bytes`      | byte sequence                | Final immutable payload                                                                             |
+| `byteLength` | non-negative integer         | Exact payload length                                                                                |
+| `digest`     | SHA-256 digest               | Digest of exact payload bytes                                                                       |
 
 `manifest.json` is a required implicit container entry and is not a Release Entry in its own
 inventory, avoiding self-reference.
 
 ## Release Manifest V1
 
-| Field | Type | Rules |
-| --- | --- | --- |
-| `releaseFormatVersion` | integer | Exactly `1` |
-| `hostApi` | Host API requirement | Independently assessable |
-| `aggregateSchemas` | ordered declarations | Exact schema ID/kind/version/path |
-| `capabilities` | ordered requirements | Derived, namespaced, non-contradictory |
-| `entrypoints` | role-to-path object | Exactly logic and presentation bundle paths |
-| `inventory` | ordered Release Entry metadata | Exactly every non-manifest entry, once |
+| Field                  | Type                           | Rules                                       |
+| ---------------------- | ------------------------------ | ------------------------------------------- |
+| `releaseFormatVersion` | integer                        | Exactly `1`                                 |
+| `hostApi`              | Host API requirement           | Independently assessable                    |
+| `aggregateSchemas`     | ordered declarations           | Exact schema ID/kind/version/path           |
+| `capabilities`         | ordered requirements           | Derived, namespaced, non-contradictory      |
+| `entrypoints`          | role-to-path object            | Exactly logic and presentation bundle paths |
+| `inventory`            | ordered Release Entry metadata | Exactly every non-manifest entry, once      |
 
 The manifest is RFC 8785 canonical JSON. It contains no release identity, source path, build
 metadata, project identity, label, channel, or timestamp.
@@ -167,11 +167,11 @@ metadata, project identity, label, channel, or timestamp.
 
 The finalized strict v1 ZIP-compatible byte sequence.
 
-| Field | Type | Rules |
-| --- | --- | --- |
-| `bytes` | immutable bytes | Canonical store-only container |
-| `manifest` | Release Manifest V1 | Parsed from canonical `manifest.json` |
-| `releaseId` | qualified digest | SHA-256 over every artifact byte; external to bytes |
+| Field       | Type                | Rules                                               |
+| ----------- | ------------------- | --------------------------------------------------- |
+| `bytes`     | immutable bytes     | Canonical store-only container                      |
+| `manifest`  | Release Manifest V1 | Parsed from canonical `manifest.json`               |
+| `releaseId` | qualified digest    | SHA-256 over every artifact byte; external to bytes |
 
 ### Lifecycle
 

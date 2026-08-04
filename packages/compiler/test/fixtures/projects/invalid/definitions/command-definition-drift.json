@@ -1,0 +1,11 @@
+{
+  "commands": [
+    {
+      "registrationId": "solve.v1",
+      "definitionId": "solve.v2",
+      "commandType": "solve",
+      "aggregateKind": "player"
+    }
+  ],
+  "progressions": []
+}

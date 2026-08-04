@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "minimal.player-state.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["attempts", "solved"],
+  "properties": {
+    "attempts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "solved": {
+      "type": "boolean"
+    }
+  }
+}

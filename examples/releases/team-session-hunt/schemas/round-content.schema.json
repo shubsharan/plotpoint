@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hunt.round-content.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["audioAssetId", "rounds"],
+  "properties": {
+    "audioAssetId": { "const": "hunt.audio.round.v1" },
+    "rounds": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["durationMinutes", "round", "title"],
+        "properties": {
+          "durationMinutes": { "type": "integer", "minimum": 1 },
+          "round": { "type": "integer", "minimum": 1 },
+          "title": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

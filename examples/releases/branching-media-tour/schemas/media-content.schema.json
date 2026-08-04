@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tour.media-content.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assetId", "caption", "title"],
+  "properties": {
+    "assetId": { "const": "tour.audio.river.v1" },
+    "caption": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 }
+  }
+}

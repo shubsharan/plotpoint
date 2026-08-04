@@ -15,12 +15,16 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "check-types": "tsc -p tsconfig.json --noEmit"
+    "check-types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run --passWithNoTests --config ../../vitest.config.ts --project protocol",
+    "test:watch": "vitest --config ../../vitest.config.ts --project protocol"
   },
   "dependencies": {
+    "@noble/hashes": "2.2.0",
     "@plotpoint/runtime": "workspace:*"
   },
   "devDependencies": {
-    "@plotpoint/typescript-config": "workspace:*"
+    "@plotpoint/typescript-config": "workspace:*",
+    "fast-check": "^4.3.0"
   }
 }

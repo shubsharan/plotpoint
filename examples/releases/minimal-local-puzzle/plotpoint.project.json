@@ -1,0 +1,95 @@
+{
+  "projectFormatVersion": 1,
+  "environment": "web",
+  "hostApi": {
+    "major": 1,
+    "minimumMinor": 0
+  },
+  "entries": {
+    "logic": {
+      "source": "src/logic.ts",
+      "export": "logic"
+    },
+    "presentation": {
+      "source": "src/presentation.ts",
+      "export": "presentation"
+    }
+  },
+  "commands": [
+    {
+      "id": "minimal.solve.v1",
+      "type": "solve",
+      "definition": {
+        "source": "src/commands/solve.ts",
+        "export": "solveCommand"
+      },
+      "aggregateSchema": "minimal.player-state.v1",
+      "payloadSchema": "minimal.solve-payload.v1",
+      "outcomeSchema": "minimal.solve-outcome.v1"
+    }
+  ],
+  "aggregateSchemas": [
+    {
+      "id": "minimal.player-state.v1",
+      "kind": "player",
+      "version": 1,
+      "path": "schemas/player-state.schema.json"
+    }
+  ],
+  "schemas": [
+    {
+      "id": "minimal.puzzle-content.v1",
+      "path": "schemas/puzzle-content.schema.json"
+    },
+    {
+      "id": "minimal.solve-outcome.v1",
+      "path": "schemas/solve-outcome.schema.json"
+    },
+    {
+      "id": "minimal.solve-payload.v1",
+      "path": "schemas/solve-payload.schema.json"
+    }
+  ],
+  "progressions": [
+    {
+      "id": "minimal.puzzle.v1",
+      "version": 1,
+      "kind": "player",
+      "definition": {
+        "source": "src/progression/main.ts",
+        "export": "puzzleProgression"
+      },
+      "aggregateSchema": "minimal.player-state.v1",
+      "commands": ["minimal.solve.v1"],
+      "content": ["minimal.puzzle-content.v1"],
+      "components": ["minimal.puzzle-card.v1"]
+    }
+  ],
+  "components": [
+    {
+      "id": "minimal.puzzle-card.v1",
+      "implementation": {
+        "source": "src/components/puzzle.ts",
+        "export": "PuzzleCard"
+      },
+      "commands": ["minimal.solve.v1"],
+      "content": ["minimal.puzzle-content.v1"],
+      "assets": ["minimal.clue-image.v1"],
+      "capabilities": []
+    }
+  ],
+  "content": [
+    {
+      "id": "minimal.puzzle-content.v1",
+      "path": "content/puzzle.json",
+      "schema": "minimal.puzzle-content.v1"
+    }
+  ],
+  "assets": [
+    {
+      "id": "minimal.clue-image.v1",
+      "path": "assets/clue.svg",
+      "releasePath": "assets/clue.svg"
+    }
+  ]
+}

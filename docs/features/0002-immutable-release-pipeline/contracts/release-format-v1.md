@@ -10,16 +10,16 @@ The artifact can be inspected and verified without extracting entries or executi
 
 ## Strict Container Profile
 
-| Property | V1 rule |
-| --- | --- |
-| Entry type | Regular files only; no directory or symlink entries |
-| Compression | Stored/uncompressed only |
-| Encoding | UTF-8 flag set; canonical ASCII entry names |
-| Ordering | Local entries and central directory both sort by ordinal path |
-| Metadata | Fixed compiler-owned version, flags, DOS epoch timestamp, and regular-file mode |
-| Forbidden | Encryption, comments, extra fields, data descriptors, ZIP64, ownership, source permissions, absolute paths, trailing bytes |
-| Integrity | Standard CRC-32 plus manifest SHA-256 for every non-manifest payload |
-| Limits | Non-ZIP64 32-bit sizes/offsets and standard entry-count bound; verifier policy may impose lower operational limits |
+| Property    | V1 rule                                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Entry type  | Regular files only; no directory or symlink entries                                                                        |
+| Compression | Stored/uncompressed only                                                                                                   |
+| Encoding    | UTF-8 flag set; canonical ASCII entry names                                                                                |
+| Ordering    | Local entries and central directory both sort by ordinal path                                                              |
+| Metadata    | Fixed compiler-owned version, flags, DOS epoch timestamp, and regular-file mode                                            |
+| Forbidden   | Encryption, comments, extra fields, data descriptors, ZIP64, ownership, source permissions, absolute paths, trailing bytes |
+| Integrity   | Standard CRC-32 plus manifest SHA-256 for every non-manifest payload                                                       |
+| Limits      | Non-ZIP64 32-bit sizes/offsets and standard entry-count bound; verifier policy may impose lower operational limits         |
 
 Canonical archive paths:
 

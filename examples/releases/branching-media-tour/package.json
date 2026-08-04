@@ -1,0 +1,9 @@
+{
+  "name": "@plotpoint-example/branching-media-tour",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@plotpoint/runtime": "0.0.0"
+  }
+}

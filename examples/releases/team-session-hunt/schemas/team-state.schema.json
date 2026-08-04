@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hunt.team-state.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["score", "solvedClues"],
+  "properties": {
+    "score": { "type": "integer", "minimum": 0 },
+    "solvedClues": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  }
+}

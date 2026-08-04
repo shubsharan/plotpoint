@@ -1,0 +1,82 @@
+{
+  "releaseId": "sha256:7452db831df16698a8547b71c6e908633555790345e5865c45802924d8e95170",
+  "manifest": {
+    "releaseFormatVersion": 1,
+    "hostApi": { "major": 1, "minimumMinor": 0 },
+    "aggregateSchemas": [
+      {
+        "id": "minimal.player-state.v1",
+        "kind": "player",
+        "version": 1,
+        "path": "schemas/aggregate/minimal.player-state.v1.json"
+      }
+    ],
+    "capabilities": [],
+    "entrypoints": {
+      "logic": "bundles/logic.js",
+      "presentation": "bundles/presentation.js"
+    },
+    "inventory": [
+      {
+        "path": "assets/clue.svg",
+        "kind": "asset",
+        "byteLength": 475,
+        "digest": "sha256:f925b765dfcd660f45af93b852e1586714a0abb1440beb81a692f15d7f1a474a"
+      },
+      {
+        "path": "bundles/logic.js",
+        "kind": "logic-bundle",
+        "byteLength": 13916,
+        "digest": "sha256:9f27b6aafbc69ff293a3cc381824ffb665420154d8c4cfbe903e8a73a197b63e"
+      },
+      {
+        "path": "bundles/presentation.js",
+        "kind": "presentation-bundle",
+        "byteLength": 944,
+        "digest": "sha256:bdb3b9a11595aa05a414af6653dbfe142c4961c138893c2afe09a6b511971fb0"
+      },
+      {
+        "path": "components/minimal.puzzle-card.v1.json",
+        "kind": "component-data",
+        "byteLength": 178,
+        "digest": "sha256:2661eb5a71701cea0105b9ce13d3cf6bc380e192e5de28b5565201b62acc7996"
+      },
+      {
+        "path": "content/minimal.puzzle-content.v1.json",
+        "kind": "content",
+        "byteLength": 217,
+        "digest": "sha256:46c6b1415289e4751b95aea904efc887cff2825f9ad80dcffd7272ec70d2f228"
+      },
+      {
+        "path": "progressions/minimal.puzzle.v1.json",
+        "kind": "progression",
+        "byteLength": 345,
+        "digest": "sha256:4600975a09a15213df69be1c169532887b12d0aa7771b66149b5ba42822afdcf"
+      },
+      {
+        "path": "schemas/aggregate/minimal.player-state.v1.json",
+        "kind": "aggregate-schema",
+        "byteLength": 253,
+        "digest": "sha256:917253edd2833c5660bad3809870b23e20159422d5d6bbee8fa6eb3841708746"
+      },
+      {
+        "path": "schemas/general/minimal.puzzle-content.v1.json",
+        "kind": "command-schema",
+        "byteLength": 427,
+        "digest": "sha256:15b4bec7b34fbcc6aafb8f2e9b32a51bae03f8cdd6fdc9084cd654fc31886228"
+      },
+      {
+        "path": "schemas/general/minimal.solve-outcome.v1.json",
+        "kind": "command-schema",
+        "byteLength": 214,
+        "digest": "sha256:d79fccde33157113e272820889b7a8e87c18c878eed39b07535a02dd61f3d51f"
+      },
+      {
+        "path": "schemas/general/minimal.solve-payload.v1.json",
+        "kind": "command-schema",
+        "byteLength": 214,
+        "digest": "sha256:edd8790f365ec04bd8a40ed01b3586b885c2bb64b5fefcaf3495a7244604dc16"
+      }
+    ]
+  }
+}
