@@ -1,12 +1,12 @@
 ---
-status: Pending
+status: Done
 ---
 
 # Feature Specification: Immutable Release Pipeline
 
 **Branch**: `feature/0002-immutable-release-pipeline`
 **Epic**: [Plotpoint Core Platform](../../epics/0001-plotpoint-core-platform/epic.md)
-**PR**: Pending
+**PR**: [https://github.com/shubsharan/plotpoint/pull/2](https://github.com/shubsharan/plotpoint/pull/2)
 **Created**: 2026-08-03
 **Input**: Feature 2 from `docs/roadmap.md` and `docs/product.md`.
 

@@ -39,3 +39,29 @@ export type {
   VerifyReleaseInput,
   VerifiedRelease,
 } from "./release/types.js";
+
+export {
+  INSTALL_DESCRIPTOR_VERSION,
+  MAX_RELEASE_BYTES,
+  RELEASE_DOWNLOAD_TIMEOUT_MS,
+  isEligibleInstallUrl,
+  parseInstallDescriptor,
+} from "./player/install.js";
+export type { InstallDescriptorResult, InstallDescriptorV1 } from "./player/install.js";
+export { HOST_BRIDGE_VERSION, parseHostBridgeEnvelope } from "./player/bridge.js";
+export type {
+  HostBridgeEnvelope,
+  HostBridgeMessageType,
+  HostBridgeParseResult,
+  HostToWebMessageType,
+  WebToHostMessageType,
+} from "./player/bridge.js";
+export { FOREGROUND_LOCATION_CAPABILITY, accuracyBand } from "./player/report.js";
+export type {
+  AccuracyBand,
+  LocationAvailability,
+  LocationObservationV1,
+  PlayReportCommandV1,
+  PlayReportObservationV1,
+  PlayReportV1,
+} from "./player/report.js";

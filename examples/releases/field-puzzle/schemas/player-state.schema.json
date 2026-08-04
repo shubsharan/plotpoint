@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "field.player-state.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["attempts", "phase"],
+  "properties": {
+    "attempts": { "type": "integer", "minimum": 0 },
+    "phase": { "enum": ["first-checkpoint", "puzzle", "second-checkpoint", "complete"] }
+  }
+}

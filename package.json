@@ -14,6 +14,7 @@
     "quality:fix": "turbo run //#lint:fix //#format:fix",
     "test": "vitest run",
     "test:watch": "vitest",
+    "plotpoint": "node packages/compiler/dist/cli.js",
     "speckit:sync": "bash .specify/scripts/bash/sync-workflow.sh",
     "speckit:check": "bash .specify/scripts/bash/check-workflow.sh",
     "speckit:test": "bash .specify/tests/workflow.sh",

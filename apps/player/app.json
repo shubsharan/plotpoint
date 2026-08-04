@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Plotpoint",
+    "slug": "plotpoint-player",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "plotpoint",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "com.plotpoint.player",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scan a local Plotpoint release installation code.",
+        "NSLocationWhenInUseUsageDescription": "Use your foreground location for field puzzle checkpoints.",
+        "NSLocalNetworkUsageDescription": "Install a verified game release from the Plotpoint development server on your local network.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "package": "com.plotpoint.player",
+      "permissions": ["CAMERA", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "usesCleartextTraffic": true
+    },
+    "plugins": ["expo-camera", "expo-location", "expo-sqlite"]
+  }
+}

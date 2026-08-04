@@ -24,6 +24,20 @@ A game controls its own content, rules, progression, and presentation. Plotpoint
 
 Plotpoint is not defined by a fixed scene model, a visual rules language, or a catalog of templates. Its core product is a set of stable execution contracts that can support different game structures and mechanics.
 
+### 1.1 Product delivery loop
+
+Plotpoint is delivered through complete playable loops rather than platform layers. Each loop begins
+with a concrete game and closes the path from authoring through real play and back to an actionable
+learning record:
+
+```text
+edit -> validate -> compile -> install -> play -> recover -> learn -> revise
+```
+
+The active loop is an internally authored location-aware puzzle installed over a local development
+connection and then played offline on iOS and Android. Platform services, synchronization, broader
+capabilities, and external creator workflows enter the product only when a later game requires them.
+
 The platform has four principal parts:
 
 1. **Game project** — TypeScript logic, web UI, content, assets, configuration, and tests.
@@ -576,4 +590,6 @@ Game source
 
 The platform should remain opinionated about execution safety, persistence, authority, and compatibility while remaining flexible about game rules and presentation.
 
-The immediate goal is not to define every future package, API, or mechanic. It is to prove that these contracts can support several materially different games without forcing game-specific logic into the player host or backend infrastructure.
+The immediate goal is to ship one complete location-aware field-puzzle loop, learn from its field
+reports, and revise it without rebuilding the player. Later games must earn broader contracts without
+forcing game-specific logic into the player host or backend infrastructure.

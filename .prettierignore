@@ -6,3 +6,6 @@ build/
 coverage/
 packages/compiler/test/fixtures/projects/invalid/
 pnpm-lock.yaml
+.expo/
+apps/player/ios/
+apps/player/android/

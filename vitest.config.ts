@@ -16,6 +16,20 @@ export default defineConfig({
       defineProject({
         resolve: {
           alias: {
+            "@plotpoint/runtime": new URL("./packages/runtime/src/index.ts", import.meta.url)
+              .pathname,
+          },
+        },
+        test: {
+          ...sharedTestConfig,
+          name: "field-puzzle",
+          root: `${workspaceRoot}examples/releases/field-puzzle`,
+          include: ["test/**/*.test.ts"],
+        },
+      }),
+      defineProject({
+        resolve: {
+          alias: {
             "@plotpoint/compiler": new URL("./packages/compiler/src/index.ts", import.meta.url)
               .pathname,
             "@plotpoint/modules": new URL("./packages/modules/src/index.ts", import.meta.url)
@@ -31,6 +45,23 @@ export default defineConfig({
           name: "compiler",
           passWithNoTests: true,
           root: `${workspaceRoot}packages/compiler`,
+          include: ["test/**/*.test.ts"],
+        },
+      }),
+      defineProject({
+        resolve: {
+          alias: {
+            "@plotpoint/protocol": new URL("./packages/protocol/src/index.ts", import.meta.url)
+              .pathname,
+            "@plotpoint/runtime": new URL("./packages/runtime/src/index.ts", import.meta.url)
+              .pathname,
+          },
+        },
+        test: {
+          ...sharedTestConfig,
+          name: "player",
+          passWithNoTests: true,
+          root: `${workspaceRoot}apps/player`,
           include: ["test/**/*.test.ts"],
         },
       }),

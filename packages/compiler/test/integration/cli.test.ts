@@ -152,4 +152,14 @@ describe("compiler CLI", () => {
     await expect(runCli(["verify", outputFile, "--expect", "not-a-release-id"])).resolves.toBe(2);
     expect(stderr.join("")).toContain("plotpoint verify");
   });
+
+  it("rejects malformed serve ports before opening a server", async () => {
+    const stderr: string[] = [];
+    vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      stderr.push(String(chunk));
+      return true;
+    });
+    await expect(runCli(["serve", "release.pprelease", "--port", "not-a-port"])).resolves.toBe(2);
+    expect(stderr.join("")).toContain("plotpoint serve");
+  });
 });

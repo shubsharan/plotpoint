@@ -1,0 +1,9 @@
+{
+  "name": "@plotpoint-example/field-puzzle",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@plotpoint/runtime": "0.0.0"
+  }
+}

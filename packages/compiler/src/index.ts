@@ -217,3 +217,5 @@ export type {
   ValidatedProject,
 } from "./project/config.js";
 export type { CompilerDiagnosticCode } from "./diagnostics/codes.js";
+export { privateIpv4Addresses, serveRelease } from "./serve/serve-release.js";
+export type { RunningReleaseServer, ServeReleaseInput } from "./serve/serve-release.js";

@@ -39,3 +39,6 @@ Thumbs.db
 *.pem
 .cursor/
 node_modules
+.expo/
+apps/player/ios/
+apps/player/android/
