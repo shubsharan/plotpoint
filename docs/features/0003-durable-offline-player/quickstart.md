@@ -9,10 +9,10 @@ pnpm plotpoint compile --project examples/releases/field-puzzle --out /tmp/field
 pnpm plotpoint serve /tmp/field-puzzle.pprelease
 ```
 
-Open the internal Plotpoint development client, scan the displayed QR, confirm the expected release
-identity, and wait for installation to publish. Disconnect the device before play.
+Open the generated Plotpoint debug app, scan the displayed QR, wait for installation to publish, and
+confirm that the displayed release identity matches the server. Disconnect the device before play.
 
-The development client is intentionally configured for private-LAN HTTP during installation. Runtime
+The debug app is intentionally configured for private-LAN HTTP during installation. Runtime
 WebView navigation and network access remain disabled; the trusted game reaches native functionality
 only through Host Bridge 1.0. This is a core-team trust boundary, not hostile-code isolation.
 
@@ -35,5 +35,11 @@ fresh run.
 pnpm verify
 ```
 
-Physical iOS and Android field evidence is recorded separately because automated verification uses
-scripted location and lifecycle adapters.
+The provider-free gate includes one Host API conformance harness for the field puzzle and minimal local
+puzzle. Passing proves both releases use the same bootstrap and transition contract without player
+branches; it does not prove native platform behavior.
+
+Run one physical iOS and Android smoke loop as soon as installation and offline field play work, then
+use observed blockers to guide durability and report hardening. Final acceptance requires a second full
+edit-to-revision loop on each platform. Physical evidence is recorded separately because automated
+verification uses scripted location and lifecycle adapters.

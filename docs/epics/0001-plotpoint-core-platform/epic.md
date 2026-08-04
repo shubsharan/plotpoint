@@ -39,7 +39,8 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 ## Boundaries
 
 - **Active scope**: The internally authored Loop 1 field puzzle, private-LAN installation, trusted
-  mobile runtime, offline durability, foreground location, recovery, and redacted report export.
+  mobile runtime, offline durability, foreground location, recovery, redacted report export, and
+  provider-free Host API conformance with one second materially different release.
 - **Later loops**: Authoritative multiplayer, synchronization, player-specific projections, external
   creator usability, and stronger release-code isolation.
 - **Out of scope**: Marketplace, commerce, hosted telemetry, active-run migration, unrestricted

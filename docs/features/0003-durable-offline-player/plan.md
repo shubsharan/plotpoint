@@ -5,10 +5,12 @@
 
 ## Summary
 
-Close Plotpoint Loop 1 with one internally authored field puzzle that compiles into release-format v1,
+Close Plotpoint Loop 1 with an internally authored field puzzle that compiles into release-format v1,
 installs over a bounded private-LAN QR flow, runs offline in a trusted single WebView on Expo iOS and
 Android, commits local transitions atomically to host-owned SQLite, survives interruption, exports a
-redacted play report, and supports a revised fresh release without rebuilding the player.
+redacted play report, and supports a revised fresh release without rebuilding the player. Establish
+Host API V1 as a reusable player contract by running a second materially different release through the
+same install, bootstrap, transition, recovery, and reporting surfaces without player changes.
 
 ## Technical Context
 
@@ -25,16 +27,18 @@ installed puzzle to a playable view within 5 seconds on each reference device
 **Constraints**: release-format v1 and project-format v1 unchanged; no hosted services; private-network
 HTTP only during installation; offline play; trusted code with no hostile-code isolation claim; no
 active-run migration; exported reports omit sensitive values
-**Scale/Scope**: one core-team-authored game, one foreground capability, one local player aggregate,
-one reference device per mobile platform
+**Scale/Scope**: one complete core-team field game, one foreground capability, one local player
+aggregate per run, one second conformance release, and one reference device per mobile platform
 
 ## Constitution Check
 
 - **PASS — Complete Product Loop**: install, field play, recovery, report, and revision close one loop.
-- **PASS — Durable Contracts Stay Small**: host API 1.0 adds only installation, bridge, location, and
-  report contracts; release-format v1 remains unchanged.
+- **PASS — Durable Contracts Stay Small**: Host API V1 contains bootstrap, canonical transition,
+  capability-dispatch, and error semantics; installation, location, and reporting remain independently
+  versioned, and release-format v1 remains unchanged.
 - **PASS — Trust Boundaries Are Honest**: accepted ADR 0003 records trusted single-realm limits.
-- **PASS — Evidence Before Abstraction**: no backend, generalized effects, sync, or broad capability catalog.
+- **PASS — Evidence Before Abstraction**: the field puzzle and a second materially different release
+  prove Host API reuse; no backend, generalized effects, sync, or broad capability catalog is added.
 - **PASS — Local-First Privacy and Recovery**: accepted ADR 0004 owns atomic durability and redaction.
 
 Post-design re-check: PASS. Contracts and data entities are limited to the Loop 1 journey and every
@@ -79,19 +83,38 @@ apps/player/
 packages/protocol/src/player/   # portable installation, bridge, capability, report contracts
 packages/compiler/src/serve/    # verified private-LAN release server and QR rendering
 examples/releases/field-puzzle/ # two checkpoints and an intervening puzzle
+examples/releases/minimal-local-puzzle/ # second Host API conformance release
 ```
 
 **Structure Decision**: Extend the existing compiler binary and protocol package rather than creating
 new tooling packages. Keep native adapters in `apps/player`; portable validation and policy remain
 testable without an Expo runtime.
 
+## Acceptance Evidence
+
+- Provider-free tests cover closed contracts, exact served bytes, compatibility, transfer limits,
+  interruption boundaries, atomic commit, duplicate delivery, recovery validation, and report redaction.
+- The field puzzle and minimal local puzzle pass one Host API V1 conformance harness without
+  game-specific player branches or configuration.
+- Scripted location and lifecycle adapters prove deterministic negative cases without claiming native
+  platform behavior.
+- One early physical smoke loop on iOS and Android informs durability and report hardening; it is
+  evidence, not final acceptance.
+- Physical iOS and Android evidence records the reference device/OS, private-LAN installation,
+  permission behavior, offline route, termination/restart recovery, report export, revision, and fresh run.
+- The feature is not Done until the edit-to-revision loop closes twice on each reference platform.
+
 ## Delivery Phases
 
-1. Publish protocol contracts and portable validators, then add the verified LAN serve command.
-2. Establish the Expo player shell, SQLite migrations, installation publication, and recovery bootstrap.
-3. Connect the trusted WebView bridge and atomic transition commit path.
-4. Add foreground location, the field-puzzle release, redacted report export, and scripted evidence.
-5. Verify provider-free gates; record physical iOS and Android acceptance separately when performed.
+1. Establish Host API V1 core semantics and prove them provider-free with two materially different
+   releases while keeping capabilities and reports independently versioned.
+2. Complete verified installation and the offline field route, then run one early smoke loop on each
+   physical platform to expose real platform blockers.
+3. Harden atomic transition receipts, interruption recovery, and invalid-record handling from the
+   conformance and device evidence.
+4. Produce the redacted report, use it for a real revision, and install the fresh run on both platforms.
+5. Complete the remaining boundary matrix, provider-free gate, and second full loop on each reference
+   device.
 
 ## Complexity Tracking
 

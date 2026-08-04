@@ -9,7 +9,8 @@ status: Pending
 **PR**: Pending
 **Created**: 2026-08-03
 **Input**: Replace the platform-first player gate with Loop 1: edit, validate, compile, QR install,
-offline field play, recover, export a redacted report, revise, and reinstall.
+offline field play, recover, export a redacted report, revise, and reinstall while establishing the
+smallest reusable player contract for later games.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -37,6 +38,8 @@ requirements, an oversized transfer, a timeout, and interruption at every instal
    playable and any prior installation remains intact.
 3. **Given** a successfully installed release, **When** connectivity is removed before launch,
    **Then** the release starts without project source, author dependencies, or network access.
+4. **Given** two materially different compatible releases, **When** each is installed and launched,
+   **Then** both use the same Host API V1 without game-specific player changes.
 
 ---
 
@@ -189,6 +192,8 @@ boundary, change one game input based on the report, install the new release, an
   MUST NOT migrate the active state of an earlier release.
 - **FR-025**: The complete edit-to-revision loop MUST work on one physical iOS device and one physical
   Android device using the same game project and release contracts.
+- **FR-026**: Host API V1 MUST install, bootstrap, execute, recover, and report at least two materially
+  different releases without game-specific player code or persisted-contract changes.
 
 ### Key Entities
 
@@ -205,6 +210,8 @@ boundary, change one game input based on the report, install the new release, an
 - **Location Observation**: Host-recorded foreground sensor result with identity, time, coordinates,
   accuracy, and availability state.
 - **Play Report**: Versioned redacted learning record derived from host-owned run evidence.
+- **Host API V1**: Versioned release-to-player contract for bootstrap, canonical transition results,
+  capability dispatch, and explicit host-policy errors.
 
 ## Success Criteria _(mandatory)_
 
@@ -232,6 +239,8 @@ boundary, change one game input based on the report, install the new release, an
   revision that compiles to a distinct release and starts a fresh run on both platforms.
 - **SC-010**: The core team completes the full edit-to-revision loop twice on each reference platform
   without database intervention or player rebuilding after the release server starts.
+- **SC-011**: The field puzzle and one materially different release pass the same provider-free Host API
+  conformance suite and run without game-specific player changes.
 
 ## Assumptions
 
@@ -244,6 +253,8 @@ boundary, change one game input based on the report, install the new release, an
   accounts, public distribution, and active-run migration are deferred to later product loops.
 - Physical device evidence is recorded during acceptance; provider-free automated verification uses
   scripted location and lifecycle fixtures.
+- Host API V1 is intended for later games, but Loop 1 does not generalize aggregate count, authority,
+  synchronization, or native capabilities beyond evidence from the two conformance releases.
 
 ## Architecture Decisions
 
