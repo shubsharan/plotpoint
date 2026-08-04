@@ -6,12 +6,12 @@ import {
   type ReleaseMaterialEntry,
 } from "@plotpoint/protocol";
 
-import type { DefinitionInspectionMetadata } from "../composition/inspect-definitions.js";
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
 import type { CompilationSnapshot, CompilerDiagnostic } from "../project/config.js";
 import type { ValidatedAsset } from "../validation/assets.js";
 import type { ValidatedContent } from "../validation/content.js";
 import type { ValidatedSchema } from "../validation/schemas.js";
+import { generatedReleaseEntryPath } from "./entry-paths.js";
 
 export interface CompiledBundles {
   readonly logic: Uint8Array;
@@ -21,7 +21,6 @@ export interface CompiledBundles {
 export interface AssembleReleaseInput {
   readonly snapshot: CompilationSnapshot;
   readonly bundles: CompiledBundles;
-  readonly definitions: DefinitionInspectionMetadata;
   readonly aggregateSchemas: ReadonlyMap<string, ValidatedSchema>;
   readonly schemas: ReadonlyMap<string, ValidatedSchema>;
   readonly content: readonly ValidatedContent[];
@@ -70,7 +69,7 @@ function buildEntries(input: AssembleReleaseInput): readonly ReleaseMaterialEntr
     if (schema === undefined) return null;
     entries.push(
       Object.freeze({
-        path: `schemas/aggregate/${registration.id}.json`,
+        path: generatedReleaseEntryPath("aggregate-schema", registration.id),
         kind: "aggregate-schema",
         bytes: schema.canonicalBytes,
       }),
@@ -81,18 +80,26 @@ function buildEntries(input: AssembleReleaseInput): readonly ReleaseMaterialEntr
     if (schema === undefined) return null;
     entries.push(
       Object.freeze({
-        path: `schemas/general/${registration.id}.json`,
+        path: generatedReleaseEntryPath("schema", registration.id),
         kind: "command-schema",
         bytes: schema.canonicalBytes,
       }),
     );
   }
-  for (const progression of input.definitions.progressions) {
+  for (const progression of input.snapshot.registries.progressions) {
     pushDataEntry(
       entries,
-      `progressions/${progression.registrationId}.json`,
+      generatedReleaseEntryPath("progression", progression.id),
       "progression",
-      progression,
+      {
+        id: progression.id,
+        version: progression.version,
+        kind: progression.kind,
+        aggregateSchema: progression.aggregateSchema,
+        commands: progression.commands,
+        content: progression.content,
+        components: progression.components,
+      },
     );
   }
   for (const component of input.snapshot.registries.components) {
@@ -104,12 +111,17 @@ function buildEntries(input: AssembleReleaseInput): readonly ReleaseMaterialEntr
       assets: component.assets,
       capabilities: component.capabilities,
     };
-    pushDataEntry(entries, `components/${component.id}.json`, "component-data", descriptor);
+    pushDataEntry(
+      entries,
+      generatedReleaseEntryPath("component", component.id),
+      "component-data",
+      descriptor,
+    );
   }
   for (const content of input.content) {
     entries.push(
       Object.freeze({
-        path: `content/${content.id}.json`,
+        path: generatedReleaseEntryPath("content", content.id),
         kind: "content",
         bytes: content.canonicalBytes,
       }),
@@ -133,7 +145,7 @@ export async function assembleRelease(input: AssembleReleaseInput): Promise<Asse
           id: registration.id,
           kind: registration.kind,
           version: registration.version,
-          path: `schemas/aggregate/${registration.id}.json`,
+          path: generatedReleaseEntryPath("aggregate-schema", registration.id),
         }),
       ),
     ),

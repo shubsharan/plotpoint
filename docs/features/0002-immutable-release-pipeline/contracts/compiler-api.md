@@ -91,7 +91,8 @@ dependent work and cascading diagnostics.
 4. Build canonical registries and validate all cross-references.
 5. Validate schemas, content, components, assets, compatibility, and capabilities.
 6. Bundle and inspect selected Gate 1 definitions in a bounded subprocess; never call handlers or predicates.
-7. Generate deterministic logic and presentation roots and bundle both from snapshot bytes in memory.
+7. Generate deterministic logic and presentation roots, including canonical named registry maps, and
+   bundle both from snapshot bytes in memory.
 8. Pass normalized manifest metadata and material entries to the protocol release constructor.
 9. Receive the canonical, self-verified artifact from protocol.
 10. Publish atomically and return the release identity and manifest.
@@ -106,7 +107,9 @@ randomness, network, storage, DOM, and device globals is explicitly outside the 
 The subprocess receives only the validated inspection bundle and a bounded result channel. It has a
 time limit and output limit, runs outside the compiler process, and returns canonical static metadata.
 It never invokes command handlers or progression predicates. Timeout, abnormal exit, invalid output,
-or attempted forbidden import produces an invalid diagnostic.
+or attempted forbidden import produces an invalid diagnostic. Returned metadata is validation
+evidence only: release descriptors are assembled from canonical registrations, so observed ambient
+values cannot influence release bytes or identity.
 
 This boundary limits accidental process contamination; it is not a hostile-code sandbox. The local
 author controls the project and compiler. An API, worker, or hosted build service must not use this
@@ -129,7 +132,10 @@ path for untrusted code without a future accepted isolation ADR.
   return exactly the two expected entry chunks and no unplanned asset or shared chunk.
 - Rolldown warnings and failures are normalized into Plotpoint diagnostics; raw tool-specific prose,
   absolute paths, timings, and plugin object shapes are not public compiler results.
-- Generated registration roots order imports and exports ordinally and expose fixed release entry roles.
+- Generated registration roots order imports and map entries ordinally. The logic bundle retains its
+  existing default export and additionally exports frozen `commands` and `progressions` maps keyed by
+  registration ID. The presentation bundle retains its default export and additionally exports a
+  frozen `components` map keyed by registration ID.
 
 ## Atomic Output
 

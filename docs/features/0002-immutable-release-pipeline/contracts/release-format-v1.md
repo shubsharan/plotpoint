@@ -30,7 +30,9 @@ Canonical archive paths:
 - are globally unique; duplicate and case-equivalent alternatives are invalid.
 
 The compiler assigns generated bundle paths and validates author-selected asset destinations against
-this grammar. Source paths and filenames need not become archive paths.
+this grammar. Generated schema, progression, component, and content basenames are opaque lowercase
+hexadecimal encodings of the logical ID's UTF-8 bytes. Original IDs remain in descriptors and
+manifest declarations; source paths and filenames need not become archive paths.
 
 ## Manifest Encoding
 

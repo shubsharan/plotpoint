@@ -1,6 +1,6 @@
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
 import { orderCompilerDiagnostics } from "../diagnostics/order.js";
-import type { ImportGraph } from "../imports/resolve-graph.js";
+import { resolveGraphExport, type ImportGraph } from "../imports/resolve-graph.js";
 import type {
   CompilationSnapshot,
   CompilerDiagnostic,
@@ -31,9 +31,6 @@ export function validateComponents(
   const commandIds = ids(snapshot.registries.commands);
   const contentIds = ids(snapshot.registries.content);
   const assetIds = ids(snapshot.registries.assets);
-  const sourceExports = new Map(
-    presentationGraph.nodes.map((node) => [node.path, new Set(node.analysis.exports)]),
-  );
   const components: ValidatedComponent[] = [];
   const diagnostics: CompilerDiagnostic[] = [];
 
@@ -54,8 +51,12 @@ export function validateComponents(
   }
 
   for (const component of snapshot.registries.components) {
-    const exports = sourceExports.get(component.implementation.source);
-    if (exports === undefined || !exports.has(component.implementation.export)) {
+    const exportResolution = resolveGraphExport(
+      presentationGraph,
+      component.implementation.source,
+      component.implementation.export,
+    );
+    if (exportResolution !== "resolved") {
       diagnostics.push(
         createCompilerDiagnostic({
           code: "component-export-missing",
@@ -67,6 +68,7 @@ export function validateComponents(
           },
           details: {
             export: component.implementation.export,
+            reason: exportResolution,
             source: component.implementation.source,
           },
         }),

@@ -9,6 +9,7 @@ export interface SourceReference {
   readonly kind: SourceReferenceKind;
   readonly specifier?: string;
   readonly literal: boolean;
+  readonly exportAll: boolean;
   readonly start: number;
   readonly end: number;
   readonly line: number;
@@ -89,11 +90,13 @@ function sourceReference(
   end: number,
   specifier: string | undefined,
   literal: boolean,
+  exportAll = false,
 ): SourceReference {
   return Object.freeze({
     kind,
     ...(specifier === undefined ? {} : { specifier }),
     literal,
+    exportAll,
     start,
     end,
     ...position(source, start),
@@ -146,6 +149,7 @@ export function analyzeSource(path: string, source: string): AnalyzeSourceResult
             entry.moduleRequest.end,
             entry.moduleRequest.value,
             true,
+            entry.importName.kind === "AllButDefault" && entry.exportName.name === null,
           ),
         );
       }
@@ -213,7 +217,7 @@ export function analyzeSource(path: string, source: string): AnalyzeSourceResult
 
   const unique = new Map<string, SourceReference>();
   for (const reference of references) {
-    const key = `${reference.kind}\0${reference.start}\0${reference.end}\0${reference.specifier ?? ""}`;
+    const key = `${reference.kind}\0${reference.start}\0${reference.end}\0${reference.specifier ?? ""}\0${String(reference.exportAll)}`;
     unique.set(key, reference);
   }
   return Object.freeze({

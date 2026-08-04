@@ -74,7 +74,9 @@ definition IDs are globally unique; command types are unique within one aggregat
 
 Links a Gate 1 progression definition export to one aggregate schema and its referenced commands,
 content, and components. Configured graph ID, version, kind, and nodes must agree with the inspected
-definition. The declarative reference graph must be acyclic; Gate 1 owns lifecycle-rule validation.
+definition. Inspection is validation evidence only; the durable descriptor contains the canonical
+registration's ID, version, kind, aggregate schema, and command/content/component references. The
+declarative reference graph must be acyclic; Gate 1 owns lifecycle-rule validation.
 
 ### Component Registration
 
@@ -115,8 +117,10 @@ alter or invalidate the snapshot.
 | `edges`       | static imports            | Resolved, literal, and environment-allowed |
 | `entry`       | source export reference   | Exactly one generated root per graph       |
 
-No graph may leave an unresolved/external import in an emitted bundle. Ordinary static ESM cycles
-may bundle; cycles in the declarative composition/reference graph are invalid.
+No graph may leave an unresolved/external import in an emitted bundle. Named export resolution
+retains star-export relationships, honors explicit-export precedence, excludes `default` from star
+forwarding, terminates cycles, and rejects ambiguous providers. Ordinary static ESM cycles may
+bundle; cycles in the declarative composition/reference graph are invalid.
 
 ## Compiler Diagnostic
 
@@ -146,6 +150,9 @@ One regular file inside the strict container.
 
 `manifest.json` is a required implicit container entry and is not a Release Entry in its own
 inventory, avoiding self-reference.
+
+Compiler-generated schema, progression, component, and content entry basenames are lowercase
+hexadecimal encodings of UTF-8 logical IDs. Logical IDs remain unchanged in durable metadata.
 
 ## Release Manifest V1
 

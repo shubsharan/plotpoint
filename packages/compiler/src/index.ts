@@ -123,13 +123,16 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
   ];
   if (definitionDiagnostics.length > 0) return invalid(definitionDiagnostics);
 
-  const bundled = await bundleRelease({ logic: logic.graph, presentation: presentation.graph });
+  const bundled = await bundleRelease({
+    logic: logic.graph,
+    presentation: presentation.graph,
+    registries: snapshot.registries,
+  });
   if (bundled.kind === "invalid") return bundled;
 
   const assembled = await assembleRelease({
     snapshot,
     bundles: { logic: bundled.logic, presentation: bundled.presentation },
-    definitions: definitions.metadata,
     aggregateSchemas: schemas.aggregateSchemas,
     schemas: schemas.schemas,
     content: content.content,

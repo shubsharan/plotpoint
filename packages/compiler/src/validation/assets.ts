@@ -1,6 +1,7 @@
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
 import { orderCompilerDiagnostics } from "../diagnostics/order.js";
 import type { CompilationSnapshot, CompilerDiagnostic } from "../project/config.js";
+import { generatedReleaseEntryPath } from "../release/entry-paths.js";
 
 export interface ValidatedAsset {
   readonly id: string;
@@ -22,11 +23,15 @@ export function validateAssets(snapshot: CompilationSnapshot): ValidateAssetsRes
       "bundles/logic.js",
       "bundles/presentation.js",
       "manifest.json",
-      ...snapshot.registries.aggregateSchemas.map(({ id }) => `schemas/aggregate/${id}.json`),
-      ...snapshot.registries.schemas.map(({ id }) => `schemas/general/${id}.json`),
-      ...snapshot.registries.progressions.map(({ id }) => `progressions/${id}.json`),
-      ...snapshot.registries.components.map(({ id }) => `components/${id}.json`),
-      ...snapshot.registries.content.map(({ id }) => `content/${id}.json`),
+      ...snapshot.registries.aggregateSchemas.map(({ id }) =>
+        generatedReleaseEntryPath("aggregate-schema", id),
+      ),
+      ...snapshot.registries.schemas.map(({ id }) => generatedReleaseEntryPath("schema", id)),
+      ...snapshot.registries.progressions.map(({ id }) =>
+        generatedReleaseEntryPath("progression", id),
+      ),
+      ...snapshot.registries.components.map(({ id }) => generatedReleaseEntryPath("component", id)),
+      ...snapshot.registries.content.map(({ id }) => generatedReleaseEntryPath("content", id)),
     ].map((path) => path.toLowerCase()),
   );
   for (const registration of snapshot.registries.assets) {

@@ -58,17 +58,16 @@ describe("invalid project publication boundary", () => {
     await compileInvalid(root, "forbidden-node-import");
   });
 
-  it("rejects configured definitions that are absent from the logic graph", async () => {
+  it("rejects configured definition exports that do not exist", async () => {
     const root = await project();
     await writeFile(
-      join(root, "src/logic.ts"),
-      "export const logic = Object.freeze({ commands: [], progressions: [] });\n",
+      join(root, "src/commands/solve.ts"),
+      "export const notTheConfiguredCommand = Object.freeze({});\n",
     );
 
-    const result = await compileInvalid(root, "unreachable-logic-definitions");
+    const result = await compileInvalid(root, "missing-logic-definition-export");
     expect(result.diagnostics.map(({ location }) => location)).toEqual([
       expect.objectContaining({ registration: "commands", field: "definition" }),
-      expect.objectContaining({ registration: "progressions", field: "definition" }),
     ]);
   });
 

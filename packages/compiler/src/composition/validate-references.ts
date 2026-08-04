@@ -1,6 +1,6 @@
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
 import { orderCompilerDiagnostics } from "../diagnostics/order.js";
-import type { ImportGraph } from "../imports/resolve-graph.js";
+import { resolveGraphExport, type ImportGraph } from "../imports/resolve-graph.js";
 import type { CanonicalProjectRegistries, CompilerDiagnostic } from "../project/config.js";
 
 function ids(values: readonly { readonly id: string }[]): ReadonlySet<string> {
@@ -91,9 +91,6 @@ export function validateLogicDefinitionExports(
   registries: CanonicalProjectRegistries,
   logicGraph: ImportGraph,
 ): readonly CompilerDiagnostic[] {
-  const exportsBySource = new Map(
-    logicGraph.nodes.map((node) => [node.path, new Set(node.analysis.exports)] as const),
-  );
   const diagnostics: CompilerDiagnostic[] = [];
 
   for (const [registration, definitions] of [
@@ -101,15 +98,15 @@ export function validateLogicDefinitionExports(
     ["progressions", registries.progressions.map(({ id, definition }) => ({ id, definition }))],
   ] as const) {
     for (const { id, definition } of definitions) {
-      const sourceExports = exportsBySource.get(definition.source);
-      if (sourceExports?.has(definition.export)) continue;
+      const resolution = resolveGraphExport(logicGraph, definition.source, definition.export);
+      if (resolution === "resolved") continue;
       diagnostics.push(
         createCompilerDiagnostic({
           code: "definition-export-missing",
           location: { kind: "registration", registration, id, field: "definition" },
           details: {
             export: definition.export,
-            reason: sourceExports === undefined ? "source-not-reachable" : "export-missing",
+            reason: resolution === "ambiguous" ? "export-ambiguous" : "export-missing",
             source: definition.source,
           },
         }),

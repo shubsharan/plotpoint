@@ -116,7 +116,9 @@ manifest; selected source modules are the statically reachable graph from config
   project-boundary escapes are invalid.
 - Case-equivalent source identities and release destinations are rejected even on a case-sensitive
   checkout so artifacts remain portable.
-- Every referenced ID and source export resolves exactly once.
+- Every referenced ID and source export resolves exactly once. Named exports follow normal ESM
+  `export *` semantics: explicit exports shadow star providers, `default` is not forwarded, cycles
+  terminate, and conflicting star providers are ambiguous.
 
 ## Environment Policies
 
@@ -151,6 +153,10 @@ local subprocess without invoking handlers or predicates.
 - Definition identities are globally unique; command types are unique within an aggregate kind.
 - Component named exports must exist in the presentation graph.
 
+Inspected nodes and rules remain validation evidence only. The durable progression descriptor is
+derived from the canonical registration: ID, version, kind, aggregate schema, and ordinal command,
+content, and component references.
+
 ## Schemas, Content, and Assets
 
 - Schema files are strict JSON Schema 2020-12 and use Plotpoint's closed JSON-compatible durable
@@ -173,7 +179,9 @@ Every selected config, source, resolved dependency, schema, content file, and as
 captured before validation and bundling. All later phases consume captured bytes. A file that changes
 during its read invalidates capture; a later live edit cannot affect or invalidate the captured build.
 Source absolute paths, filesystem metadata, dependency cache paths, output paths, and tool telemetry
-never enter the artifact.
+never enter the artifact. Compiler-generated schema, progression, component, and content paths encode
+the original registration ID as lowercase hexadecimal UTF-8 bytes; descriptors and manifests retain
+the original logical ID.
 
 ## Deliberate Exclusions
 

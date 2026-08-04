@@ -3,13 +3,13 @@ import { describe, expect, it } from "vitest";
 import { inspectRelease } from "@plotpoint/protocol";
 
 import { buildCanonicalRegistries } from "../../src/composition/registries.js";
-import type { DefinitionInspectionMetadata } from "../../src/composition/inspect-definitions.js";
 import type {
   CompilationSnapshot,
   ProjectConfigurationV1,
   SnapshotFile,
 } from "../../src/project/config.js";
 import { assembleRelease } from "../../src/release/assemble.js";
+import { generatedReleaseEntryPath } from "../../src/release/entry-paths.js";
 import { validateAssets } from "../../src/validation/assets.js";
 import { validateContent } from "../../src/validation/content.js";
 import { validateSchemas } from "../../src/validation/schemas.js";
@@ -145,27 +145,6 @@ function createSnapshot(): CompilationSnapshot {
   };
 }
 
-const definitions: DefinitionInspectionMetadata = {
-  commands: [
-    {
-      registrationId: "solve.v1",
-      definitionId: "solve.v1",
-      commandType: "solve",
-      aggregateKind: "player",
-    },
-  ],
-  progressions: [
-    {
-      registrationId: "puzzle.v1",
-      graphId: "puzzle.v1",
-      graphVersion: 1,
-      aggregateKind: "player",
-      nodes: [{ nodeId: "solve", initialStatus: "active" }],
-      automaticRules: [],
-    },
-  ],
-};
-
 async function assembleFixture(snapshot = createSnapshot()) {
   const schemas = validateSchemas(snapshot);
   if (schemas.kind !== "valid") throw new Error("expected valid schemas");
@@ -180,7 +159,6 @@ async function assembleFixture(snapshot = createSnapshot()) {
       logic: encoder.encode("export const logic = true;"),
       presentation: encoder.encode("export const presentation = true;"),
     },
-    definitions,
     aggregateSchemas: schemas.aggregateSchemas,
     schemas: schemas.schemas,
     content: content.content,
@@ -199,13 +177,13 @@ describe("release assembly", () => {
       ["assets/clue.txt", "asset"],
       ["bundles/logic.js", "logic-bundle"],
       ["bundles/presentation.js", "presentation-bundle"],
-      ["components/puzzle-card.v1.json", "component-data"],
-      ["content/puzzle.v1.json", "content"],
-      ["progressions/puzzle.v1.json", "progression"],
-      ["schemas/aggregate/player-state.v1.json", "aggregate-schema"],
-      ["schemas/general/puzzle-content.v1.json", "command-schema"],
-      ["schemas/general/solve-outcome.v1.json", "command-schema"],
-      ["schemas/general/solve-payload.v1.json", "command-schema"],
+      [generatedReleaseEntryPath("component", "puzzle-card.v1"), "component-data"],
+      [generatedReleaseEntryPath("content", "puzzle.v1"), "content"],
+      [generatedReleaseEntryPath("progression", "puzzle.v1"), "progression"],
+      [generatedReleaseEntryPath("aggregate-schema", "player-state.v1"), "aggregate-schema"],
+      [generatedReleaseEntryPath("schema", "puzzle-content.v1"), "command-schema"],
+      [generatedReleaseEntryPath("schema", "solve-outcome.v1"), "command-schema"],
+      [generatedReleaseEntryPath("schema", "solve-payload.v1"), "command-schema"],
     ];
     expect(result.artifact.manifest.inventory.map(({ path, kind }) => [path, kind])).toEqual(
       expectedInventory,
@@ -228,6 +206,28 @@ describe("release assembly", () => {
       kind: "inspected",
       manifest: result.artifact.manifest,
       releaseId: result.artifact.releaseId,
+    });
+  });
+
+  it("emits config-derived progression descriptors without inspected ambient values", async () => {
+    const result = await assembleFixture();
+    expect(result.kind).toBe("assembled");
+    if (result.kind !== "assembled") return;
+    const parsed = parseStoredZip(result.artifact.bytes);
+    expect(parsed.kind).toBe("parsed");
+    if (parsed.kind !== "parsed") return;
+    const progression = parsed.entries.find(
+      ({ path }) => path === generatedReleaseEntryPath("progression", "puzzle.v1"),
+    );
+
+    expect(JSON.parse(decoder.decode(progression?.bytes))).toEqual({
+      id: "puzzle.v1",
+      version: 1,
+      kind: "player",
+      aggregateSchema: "player-state.v1",
+      commands: ["solve.v1"],
+      content: ["puzzle.v1"],
+      components: ["puzzle-card.v1"],
     });
   });
 
@@ -298,7 +298,9 @@ describe("release assembly", () => {
       parsed.entries.map((entry) => [entry.path, decoder.decode(entry.bytes)]),
     );
 
-    expect(entries.get(`schemas/aggregate/${sharedId}.json`)).toContain('"solved"');
-    expect(entries.get(`schemas/general/${sharedId}.json`)).toContain('"title"');
+    expect(entries.get(generatedReleaseEntryPath("aggregate-schema", sharedId))).toContain(
+      '"solved"',
+    );
+    expect(entries.get(generatedReleaseEntryPath("schema", sharedId))).toContain('"title"');
   });
 });

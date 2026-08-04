@@ -301,3 +301,27 @@ review.
 **Checkpoint**: The compiler makes only provable import-graph claims, the protocol exclusively owns
 release bytes and verified entry access, captured builds never reread live source, and all existing v1
 artifact identities remain unchanged.
+
+---
+
+## Phase 9: Review Finding Remediation
+
+**Purpose**: Keep ambient inspection evidence out of release identity, retain every registered runtime
+export, encode logical IDs safely, and implement complete ESM star-export resolution.
+
+- [x] T085 Add regressions for ambient progression metadata, named bundle registries, printable IDs,
+      and direct/chained/cyclic/shadowed/default/ambiguous star exports in `packages/compiler/test/`
+- [x] T086 Assemble progression descriptors solely from canonical registrations and encode generated
+      entry paths with lowercase hexadecimal UTF-8 IDs in `packages/compiler/src/release/`
+- [x] T087 Generate ordinal `commands`, `progressions`, and `components` bundle maps while retaining
+      default exports in `packages/compiler/src/bundle/bundle-release.ts`
+- [x] T088 Retain and transitively resolve star-export relationships with ESM precedence, cycle, and
+      ambiguity semantics in `packages/compiler/src/imports/`
+- [x] T089 Update compiler, project configuration, release-format, and data-model contracts plus golden
+      inventories for the remediated artifact contract
+- [x] T090 Run formatting, compiler tests, Spec Kit synchronization, and `pnpm verify`; record exact
+      evidence in `docs/features/0002-immutable-release-pipeline/checklists/implementation.md`
+
+**Checkpoint**: Release bytes depend on captured inputs and canonical configuration, every registered
+runtime export is retained, generated paths are opaque and portable, and ESM export resolution is
+complete and deterministic.

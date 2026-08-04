@@ -57,7 +57,11 @@ describe("source import analysis", () => {
 });
 
 describe("environment graph resolution", () => {
-  async function snapshot(logic: string, presentation: string) {
+  async function snapshot(
+    logic: string,
+    presentation: string,
+    extraSources: Readonly<Record<string, string>> = {},
+  ) {
     const root = await mkdtemp(join(tmpdir(), "plotpoint-imports-"));
     roots.push(root);
     await mkdir(join(root, "src"));
@@ -81,6 +85,9 @@ describe("environment graph resolution", () => {
       writeFile(join(root, "plotpoint.project.json"), JSON.stringify(config)),
       writeFile(join(root, "src/logic.ts"), logic),
       writeFile(join(root, "src/presentation.ts"), presentation),
+      ...Object.entries(extraSources).map(([path, source]) =>
+        writeFile(join(root, "src", path), source),
+      ),
     ]);
     const loaded = await loadProject({ projectRoot: root });
     if (loaded.kind !== "loaded") throw new Error("fixture did not load");
@@ -138,5 +145,69 @@ describe("environment graph resolution", () => {
     expect(
       resolveImportGraph(captured, captured.config.entries.presentation, "presentation"),
     ).toMatchObject({ kind: "resolved" });
+  });
+
+  it.each([
+    {
+      name: "single star",
+      logic: 'export * from "./a.js";',
+      sources: { "a.ts": "export const logic = {};" },
+      expected: "resolved",
+    },
+    {
+      name: "chained stars",
+      logic: 'export * from "./a.js";',
+      sources: { "a.ts": 'export * from "./b.js";', "b.ts": "export const logic = {};" },
+      expected: "resolved",
+    },
+    {
+      name: "cyclic stars with one concrete provider",
+      logic: 'export * from "./a.js";',
+      sources: {
+        "a.ts": 'export * from "./logic.js"; export const logic = {};',
+      },
+      expected: "resolved",
+    },
+    {
+      name: "an explicit export shadowing star providers",
+      logic: 'export * from "./a.js"; export * from "./b.js"; export const logic = {};',
+      sources: {
+        "a.ts": "export const logic = { source: 'a' };",
+        "b.ts": "export const logic = { source: 'b' };",
+      },
+      expected: "resolved",
+    },
+    {
+      name: "a default export hidden by export star",
+      logic: 'export * from "./a.js";',
+      sources: { "a.ts": "export default {};" },
+      expected: "invalid",
+      reason: "missing",
+    },
+    {
+      name: "ambiguous star providers",
+      logic: 'export * from "./a.js"; export * from "./b.js";',
+      sources: {
+        "a.ts": "export const logic = { source: 'a' };",
+        "b.ts": "export const logic = { source: 'b' };",
+      },
+      expected: "invalid",
+      reason: "ambiguous",
+    },
+  ])("resolves $name with ESM export semantics", async ({ logic, sources, expected, reason }) => {
+    const captured = await snapshot(
+      logic,
+      "export const presentation = {};",
+      Object.fromEntries(Object.entries(sources).filter((entry) => entry[1] !== undefined)),
+    );
+
+    const result = resolveImportGraph(captured, captured.config.entries.logic, "logic");
+    expect(result.kind).toBe(expected);
+    if (reason !== undefined) {
+      expect(result).toMatchObject({
+        kind: "invalid",
+        diagnostics: [{ code: "definition-export-missing", details: { reason } }],
+      });
+    }
   });
 });

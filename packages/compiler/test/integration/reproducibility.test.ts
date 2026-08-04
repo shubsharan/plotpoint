@@ -1,4 +1,4 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -29,6 +29,38 @@ interface BuildEvidence {
 }
 
 describe("golden release reproducibility", () => {
+  it("keeps ambient definition metadata out of release identity", async () => {
+    const externalProject = await createExternalProject("minimal-local-puzzle");
+    try {
+      const progressionPath = join(externalProject.root, "src/progression/main.ts");
+      const original = await readFile(progressionPath, "utf8");
+      const nondeterministic = original
+        .replace(
+          "export const puzzleProgression",
+          "const volatileNodeId = `celebrate-${Math.random()}`;\n\nexport const puzzleProgression",
+        )
+        .replace(
+          '{ nodeId: "celebrate", initialStatus: "locked" }',
+          '{ nodeId: volatileNodeId, initialStatus: "locked" }',
+        )
+        .replace('targetNodeId: "celebrate"', "targetNodeId: volatileNodeId");
+      expect(nondeterministic).not.toBe(original);
+      await writeFile(progressionPath, nondeterministic);
+
+      const outputs = ["ambient-a.pprelease", "ambient-b.pprelease"].map((name) =>
+        join(externalProject.sandbox, name),
+      );
+      const results = [];
+      for (const outputFile of outputs) {
+        results.push(await compileProject({ projectRoot: externalProject.root, outputFile }));
+      }
+      expect(results.every(({ kind }) => kind === "compiled")).toBe(true);
+      expect(await readFile(outputs[0]!)).toEqual(await readFile(outputs[1]!));
+    } finally {
+      await externalProject.cleanup();
+    }
+  });
+
   it.each(goldenProjects)(
     "retains identical byte and identity evidence for twenty %s builds",
     async (fixture) => {

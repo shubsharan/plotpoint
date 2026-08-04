@@ -13,6 +13,9 @@
 - [x] **SC-009 Verified entry access**: The protocol opens every inventoried release entry only after strict container, manifest, length, and digest validation and returns defensive byte copies.
 - [x] **SC-010 Honest authority boundary**: Direct, aliased, parenthesized, computed, and presentation-network examples receive no build-time runtime-isolation claim; closed import-graph violations remain compiler errors.
 - [x] **SC-011 Coherent capture**: Snapshot tests prove later live-file edits neither mutate captured bytes nor invalidate the captured build input.
+- [x] **SC-012 Review remediation**: Ambient inspection values do not enter release identity; named
+      registry maps retain unreferenced registrations; printable logical IDs compile to opaque portable
+      paths; and ESM star exports resolve with explicit precedence, cycle safety, and ambiguity rejection.
 
 ## Roadmap Gate 2 Exit Evidence
 
@@ -31,10 +34,10 @@
 - [x] `pnpm lint`
 - [x] `pnpm check-types` - 14 Turbo tasks passed across 10 workspace packages.
 - [x] `pnpm build` - 9 build tasks passed across the workspace.
-- [x] `pnpm test` - 50 files and 297 tests passed.
+- [x] `pnpm test` - 51 files and 312 tests passed.
 - [x] `pnpm --filter @plotpoint/protocol test` - 10 files and 100 tests passed.
-- [x] `pnpm --filter @plotpoint/compiler test` - 22 files and 105 tests passed.
-- [x] Quickstart validate, compile, inspect, and expected-identity verify commands passed against the built compiler CLI; the minimal release identity was `sha256:7452db831df16698a8547b71c6e908633555790345e5865c45802924d8e95170`.
+- [x] `pnpm --filter @plotpoint/compiler test` - 23 files and 120 tests passed.
+- [x] Quickstart validate, compile, inspect, and expected-identity verify commands passed against the built compiler CLI; after review remediation, the minimal release identity is `sha256:505d9e2435660c23301bf9ab935b27c8a8db3cfd5812f326e5cc1aa7bc8359ba`.
 - [x] `pnpm speckit:test`
 - [x] `pnpm speckit:sync`
 - [x] `pnpm speckit:check`

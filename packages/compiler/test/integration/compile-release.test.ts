@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,7 +6,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { compileProject, type CompiledProject } from "@plotpoint/compiler";
-import { inspectRelease } from "@plotpoint/protocol";
+import { inspectRelease, openRelease } from "@plotpoint/protocol";
+
+import { generatedReleaseEntryPath } from "../../src/release/entry-paths.js";
+import { createExternalProject } from "../helpers/external-project.js";
 
 const fixtureRoot = fileURLToPath(
   new URL("../../../../examples/releases/minimal-local-puzzle/", import.meta.url),
@@ -21,6 +24,98 @@ const expectedRelease = JSON.parse(
 ) as { readonly releaseId: string; readonly manifest: unknown };
 
 describe("complete immutable release acceptance", () => {
+  it("encodes printable registration IDs in generated paths while preserving logical IDs", async () => {
+    const externalProject = await createExternalProject("minimal-local-puzzle");
+    const replacements = new Map([
+      ["minimal.solve.v1", "Solve!?"],
+      ["minimal.player-state.v1", "Player/State"],
+      ["minimal.puzzle-content.v1", "chapter/one"],
+      ["minimal.solve-outcome.v1", "Outcome!Schema"],
+      ["minimal.solve-payload.v1", "Payload+Schema"],
+      ["minimal.puzzle.v1", "Progression.V1"],
+      ["minimal.puzzle-card.v1", "Card.V1"],
+      ["minimal.clue-image.v1", "Clue!?"],
+    ]);
+    const relativeFiles = [
+      "plotpoint.project.json",
+      "content/puzzle.json",
+      "schemas/player-state.schema.json",
+      "schemas/puzzle-content.schema.json",
+      "schemas/solve-outcome.schema.json",
+      "schemas/solve-payload.schema.json",
+      "src/commands/solve.ts",
+      "src/components/puzzle.ts",
+      "src/progression/main.ts",
+    ];
+
+    try {
+      await Promise.all([
+        ...relativeFiles.map(async (relativePath) => {
+          const path = join(externalProject.root, relativePath);
+          let source = await readFile(path, "utf8");
+          for (const [original, replacement] of replacements) {
+            source = source.replaceAll(original, replacement);
+          }
+          await writeFile(path, source);
+        }),
+        writeFile(
+          join(externalProject.root, "src/logic.ts"),
+          'export const logic = Object.freeze({ selected: "logic" });\n',
+        ),
+        writeFile(
+          join(externalProject.root, "src/presentation.ts"),
+          'export const presentation = Object.freeze({ selected: "presentation" });\n',
+        ),
+      ]);
+      const outputFile = join(externalProject.sandbox, "printable-ids.pprelease");
+      const result = await compileProject({ projectRoot: externalProject.root, outputFile });
+      if (result.kind !== "compiled") {
+        throw new Error(`printable IDs were rejected: ${JSON.stringify(result.diagnostics)}`);
+      }
+
+      const opened = await openRelease(await readFile(outputFile));
+      expect(opened.kind).toBe("opened");
+      if (opened.kind !== "opened") return;
+      const paths = opened.entries.map(({ path }) => path);
+      expect(paths).toEqual(
+        expect.arrayContaining([
+          generatedReleaseEntryPath("aggregate-schema", "Player/State"),
+          generatedReleaseEntryPath("schema", "chapter/one"),
+          generatedReleaseEntryPath("progression", "Progression.V1"),
+          generatedReleaseEntryPath("component", "Card.V1"),
+          generatedReleaseEntryPath("content", "chapter/one"),
+        ]),
+      );
+      expect(paths.every((path) => /^[a-z0-9./-]+$/.test(path))).toBe(true);
+      expect(opened.manifest.aggregateSchemas[0]?.id).toBe("Player/State");
+      const progression = opened.entries.find(
+        ({ path }) => path === generatedReleaseEntryPath("progression", "Progression.V1"),
+      );
+      expect(JSON.parse(new TextDecoder().decode(progression?.bytes))).toMatchObject({
+        id: "Progression.V1",
+        aggregateSchema: "Player/State",
+        commands: ["Solve!?"],
+        content: ["chapter/one"],
+        components: ["Card.V1"],
+      });
+      const logicBundle = opened.entries.find(({ kind }) => kind === "logic-bundle");
+      const presentationBundle = opened.entries.find(({ kind }) => kind === "presentation-bundle");
+      const logicModule = await import(
+        `data:text/javascript;base64,${Buffer.from(logicBundle?.bytes ?? []).toString("base64")}`
+      );
+      const presentationModule = await import(
+        `data:text/javascript;base64,${Buffer.from(presentationBundle?.bytes ?? []).toString("base64")}`
+      );
+      expect(logicModule.default).toEqual({ selected: "logic" });
+      expect(Object.keys(logicModule.commands)).toEqual(["Solve!?"]);
+      expect(Object.keys(logicModule.progressions)).toEqual(["Progression.V1"]);
+      expect(presentationModule.default).toEqual({ selected: "presentation" });
+      expect(Object.keys(presentationModule.components)).toEqual(["Card.V1"]);
+    } finally {
+      await externalProject.cleanup();
+    }
+  });
+
   it("emits identical source-independent bytes across twenty cwd and output contexts", async () => {
     const sandbox = await mkdtemp(join(tmpdir(), "plotpoint-release-acceptance-"));
     const originalCwd = process.cwd();

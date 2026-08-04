@@ -26,6 +26,7 @@ export interface ImportGraphNode {
 export interface ImportGraphEdge {
   readonly from: string;
   readonly to: string;
+  readonly specifier: string;
   readonly kind: "static" | "dynamic";
   readonly external: boolean;
 }
@@ -96,9 +97,43 @@ function resolveLocal(
 }
 
 function compareEdge(left: ImportGraphEdge, right: ImportGraphEdge): number {
-  const leftKey = `${left.from}\0${left.to}\0${left.kind}`;
-  const rightKey = `${right.from}\0${right.to}\0${right.kind}`;
+  const leftKey = `${left.from}\0${left.to}\0${left.specifier}\0${left.kind}`;
+  const rightKey = `${right.from}\0${right.to}\0${right.specifier}\0${right.kind}`;
   return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
+export type GraphExportResolution = "resolved" | "missing" | "ambiguous";
+
+export function resolveGraphExport(
+  graph: ImportGraph,
+  source: string,
+  exportName: string,
+): GraphExportResolution {
+  const nodes = new Map(graph.nodes.map((node) => [node.path, node] as const));
+  const targets = new Map<string, string>();
+  for (const edge of graph.edges) targets.set(`${edge.from}\0${edge.specifier}`, edge.to);
+
+  const visit = (path: string, name: string, active: ReadonlySet<string>): ReadonlySet<string> => {
+    const node = nodes.get(path);
+    if (node === undefined) return new Set();
+    if (node.analysis.exports.includes(name)) return new Set([`${path}\0${name}`]);
+    if (name === "default") return new Set();
+    const key = `${path}\0${name}`;
+    if (active.has(key)) return new Set();
+    const nextActive = new Set(active);
+    nextActive.add(key);
+    const origins = new Set<string>();
+    for (const reference of node.analysis.references) {
+      if (!reference.exportAll || reference.specifier === undefined) continue;
+      const target = targets.get(`${path}\0${reference.specifier}`);
+      if (target === undefined) continue;
+      for (const origin of visit(target, name, nextActive)) origins.add(origin);
+    }
+    return origins;
+  };
+
+  const origins = visit(source, exportName, new Set());
+  return origins.size === 1 ? "resolved" : origins.size === 0 ? "missing" : "ambiguous";
 }
 
 function packageEntry(snapshot: CompilationSnapshot, specifier: string): string | undefined {
@@ -114,7 +149,14 @@ export function resolveImportGraph(
   const diagnostics: CompilerDiagnostic[] = [];
   const nodes = new Map<string, ImportGraphNode>();
   const edges: ImportGraphEdge[] = [];
-  const pending = [entry.source];
+  const registeredSources =
+    environment === "logic"
+      ? [
+          ...snapshot.registries.commands.map(({ definition }) => definition.source),
+          ...snapshot.registries.progressions.map(({ definition }) => definition.source),
+        ]
+      : snapshot.registries.components.map(({ implementation }) => implementation.source);
+  const pending = [entry.source, ...registeredSources];
 
   while (pending.length > 0) {
     pending.sort();
@@ -153,7 +195,13 @@ export function resolveImportGraph(
           continue;
         }
         edges.push(
-          Object.freeze({ from: path, to: target, kind: reference.kind, external: false }),
+          Object.freeze({
+            from: path,
+            to: target,
+            specifier: reference.specifier,
+            kind: reference.kind,
+            external: false,
+          }),
         );
         pending.push(target);
       } else if (isAllowedPackageRoot(reference.specifier)) {
@@ -172,6 +220,7 @@ export function resolveImportGraph(
           Object.freeze({
             from: path,
             to: target,
+            specifier: reference.specifier,
             kind: reference.kind,
             external: false,
           }),
@@ -181,13 +230,21 @@ export function resolveImportGraph(
     }
   }
 
-  const entryAnalysis = nodes.get(entry.source)?.analysis;
-  if (entryAnalysis !== undefined && !entryAnalysis.exports.includes(entry.export)) {
+  const graph = Object.freeze({
+    environment,
+    entry,
+    nodes: Object.freeze(
+      [...nodes.values()].sort((left, right) => (left.path < right.path ? -1 : 1)),
+    ),
+    edges: Object.freeze(edges.sort(compareEdge)),
+  });
+  const entryResolution = resolveGraphExport(graph, entry.source, entry.export);
+  if (entryResolution !== "resolved") {
     diagnostics.push(
       createCompilerDiagnostic({
         code: "definition-export-missing",
         location: { kind: "source", path: entry.source, line: 1, column: 1 },
-        details: { export: entry.export },
+        details: { export: entry.export, reason: entryResolution },
       }),
     );
   }
@@ -196,13 +253,6 @@ export function resolveImportGraph(
   }
   return Object.freeze({
     kind: "resolved",
-    graph: Object.freeze({
-      environment,
-      entry,
-      nodes: Object.freeze(
-        [...nodes.values()].sort((left, right) => (left.path < right.path ? -1 : 1)),
-      ),
-      edges: Object.freeze(edges.sort(compareEdge)),
-    }),
+    graph,
   });
 }
