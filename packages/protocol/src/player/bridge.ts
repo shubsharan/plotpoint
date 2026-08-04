@@ -145,6 +145,23 @@ export type HostBridgeParseResult<Envelope extends AnyHostBridgeEnvelope = AnyHo
   | { readonly kind: "valid"; readonly envelope: Envelope }
   | { readonly kind: "invalid"; readonly code: string };
 
+export interface HostBridgeTransportV1 {
+  send(type: WebToHostMessageType, payload: CanonicalJsonObject): Promise<unknown>;
+}
+
+export type HostCapabilityOutputValidator<Output extends object> = (
+  value: unknown,
+) => value is Output;
+
+export interface HostRuntimeClientV1 {
+  commitTransition(candidate: TransitionCandidateV1): Promise<TransitionResultV1>;
+  requestCapability<Input extends CanonicalJsonObject, Output extends object>(
+    capability: CapabilityVersionV1,
+    input: Input,
+    validateOutput: HostCapabilityOutputValidator<Output>,
+  ): Promise<Output>;
+}
+
 const WEB_TO_HOST_TYPES: ReadonlySet<string> = new Set([
   "runtime.ready",
   "transition.commit",
@@ -288,7 +305,7 @@ function isRuntimeBootstrap(value: CanonicalJsonObject): boolean {
   );
 }
 
-function isTransitionResult(value: CanonicalJsonObject): boolean {
+function isTransitionResult(value: CanonicalJsonObject): value is TransitionResultV1 {
   const baseIsValid =
     isNonEmptyString(value.commandId) &&
     (value.disposition === "committed" || value.disposition === "duplicate") &&
@@ -341,12 +358,52 @@ function isCapabilityRequest(value: CanonicalJsonObject): boolean {
   );
 }
 
-function isCapabilityResult(value: CanonicalJsonObject): boolean {
+function isCapabilityResult(value: CanonicalJsonObject): value is CapabilityResultV1 {
   return (
     hasExactKeys(value, ["capability", "output"]) &&
     isCapabilityVersion(value.capability) &&
     isCanonicalObject(value.output)
   );
+}
+
+function sameCapability(left: CapabilityVersionV1, right: CapabilityVersionV1): boolean {
+  return left.id === right.id && left.major === right.major && left.minor === right.minor;
+}
+
+export function createHostRuntimeClientV1(transport: HostBridgeTransportV1): HostRuntimeClientV1 {
+  const client: HostRuntimeClientV1 = {
+    async commitTransition(candidate: TransitionCandidateV1) {
+      const raw = await transport.send("transition.commit", { candidate });
+      if (!isCanonicalObject(raw) || !isTransitionResult(raw)) {
+        throw new Error("host-transition-result-invalid");
+      }
+      if (raw.commandId !== candidate.commandId) {
+        throw new Error("host-transition-command-mismatch");
+      }
+      if (raw.terminal !== candidate.terminal) {
+        throw new Error("host-transition-terminal-mismatch");
+      }
+      return raw;
+    },
+    async requestCapability<Input extends CanonicalJsonObject, Output extends object>(
+      capability: CapabilityVersionV1,
+      input: Input,
+      validateOutput: HostCapabilityOutputValidator<Output>,
+    ): Promise<Output> {
+      const raw = await transport.send("capability.request", { capability, input });
+      if (!isCanonicalObject(raw) || !isCapabilityResult(raw)) {
+        throw new Error("host-capability-result-invalid");
+      }
+      if (!sameCapability(raw.capability, capability)) {
+        throw new Error("host-capability-identity-mismatch");
+      }
+      if (!validateOutput(raw.output)) {
+        throw new Error("host-capability-output-invalid");
+      }
+      return raw.output;
+    },
+  };
+  return Object.freeze(client);
 }
 
 function isHostError(value: CanonicalJsonObject): boolean {

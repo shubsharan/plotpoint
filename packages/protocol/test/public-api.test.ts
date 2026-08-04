@@ -36,10 +36,11 @@ describe("protocol public API", () => {
     >();
   });
 
-  it("publishes no supported compiler or deep-import surface", () => {
-    expect(Object.keys(packageJson.exports)).toEqual(["."]);
+  it("publishes only the root and explicit release-facing player surface", () => {
+    expect(Object.keys(packageJson.exports)).toEqual([".", "./player"]);
     expect(packageJson.files).toEqual(["dist"]);
     expect(JSON.stringify(packageJson.exports)).not.toContain("compiler");
+    expect(JSON.stringify(packageJson.exports)).not.toContain("*");
     expect(Object.keys(protocol)).not.toEqual(
       expect.arrayContaining([
         "crc32",

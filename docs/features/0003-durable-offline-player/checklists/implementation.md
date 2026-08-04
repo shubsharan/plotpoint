@@ -16,7 +16,7 @@ remain provenance, not current acceptance evidence.
 ## Current Provider-Free Gate
 
 **Revised-contract acceptance record**: PASS on 2026-08-04. `pnpm verify` completed formatting and
-lint with no warnings, 14 of 14 typecheck tasks, 9 of 9 build tasks, 401 tests across 66 files, the
+lint with no warnings, 16 of 16 typecheck tasks, 9 of 9 build tasks, 413 tests across 67 files, the
 Spec Kit workflow contract tests, and the documentation synchronization check.
 
 - [x] Host API Core rejects unknown fields, versions, directions, malformed payloads, and incompatible releases.
@@ -25,6 +25,13 @@ Spec Kit workflow contract tests, and the documentation synchronization check.
 - [x] Installation identity, compatibility, bounds, interruption, prior-preservation, and race fixtures pass.
 - [x] Location outcomes, observation ownership, exactly-once transitions, recovery, and report redaction pass.
 - [x] The revised full `pnpm verify` gate passes and its exact result is recorded.
+
+## Host API Review Remediation
+
+- [x] Release code uses the semantic Host Runtime client instead of reconstructing bridge payloads.
+- [x] Runtime terminals map exhaustively to exact Host API candidates and preflight failures remain local.
+- [x] The disconnected-route test exercises actual field logic and session code through the host router.
+- [x] Both conformance releases participate in workspace type checking and the full gate passes.
 
 ## iOS Simulator Native Check
 

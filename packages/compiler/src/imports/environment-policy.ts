@@ -4,7 +4,11 @@ import type { AnalyzedSource, SourceReference } from "./analyze-source.js";
 
 export type ImportEnvironment = "logic" | "presentation";
 
-const ALLOWED_PACKAGE_ROOTS = new Set(["@plotpoint/runtime", "@plotpoint/modules"]);
+const ALLOWED_PACKAGE_ROOTS = new Set([
+  "@plotpoint/runtime",
+  "@plotpoint/modules",
+  "@plotpoint/protocol/player",
+]);
 const NODE_BUILTINS = new Set([
   "assert",
   "buffer",

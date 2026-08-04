@@ -148,6 +148,19 @@ privacy boundary; revise one clue or location rule; install changed bytes; and r
 
 ---
 
+## Phase 8: Host API Review Remediation
+
+**Purpose**: Remove release-side wire-shape duplication and make real release execution, rather than
+synthetic candidates, prove Host API V1 conformance.
+
+- [x] T040 [P] Add semantic Host Runtime client contract and failure coverage in `packages/protocol/test/host-runtime-client.test.ts`
+- [x] T041 [P] Make both conformance releases participate in workspace type checking through `pnpm-workspace.yaml` and their package and TypeScript configurations
+- [x] T042 Implement the semantic Host Runtime client in `packages/protocol/src/player/bridge.ts`
+- [x] T043 Map runtime terminals exhaustively and route the field session through semantic client methods in `examples/releases/field-puzzle/src/logic.ts` and `examples/releases/field-puzzle/src/presentation.ts`
+- [x] T044 Replace synthetic route candidates with actual field release execution in `apps/player/test/offline-route.test.ts` and reconcile Host API documentation and evidence
+
+---
+
 ## Dependencies And Execution Order
 
 ```text

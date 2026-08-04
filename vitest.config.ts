@@ -16,6 +16,10 @@ export default defineConfig({
       defineProject({
         resolve: {
           alias: {
+            "@plotpoint/protocol/player": new URL(
+              "./packages/protocol/src/player.ts",
+              import.meta.url,
+            ).pathname,
             "@plotpoint/runtime": new URL("./packages/runtime/src/index.ts", import.meta.url)
               .pathname,
           },
@@ -51,6 +55,10 @@ export default defineConfig({
       defineProject({
         resolve: {
           alias: {
+            "@plotpoint/protocol/player": new URL(
+              "./packages/protocol/src/player.ts",
+              import.meta.url,
+            ).pathname,
             "@plotpoint/protocol": new URL("./packages/protocol/src/index.ts", import.meta.url)
               .pathname,
             "@plotpoint/runtime": new URL("./packages/runtime/src/index.ts", import.meta.url)

@@ -14,6 +14,29 @@ interface HostBridgeEnvelopeV1<Type extends string, Payload> {
 `requestId` correlates one transport exchange. It is not the durable idempotency identity; repeated
 delivery with a new request ID and the same command ID must return the original Command Receipt.
 
+## Release-Facing Client
+
+Release presentation code imports the narrow `@plotpoint/protocol/player` surface and creates one
+`HostRuntimeClientV1` from the bootstrap document's raw transport. The transport owns envelope
+serialization; game code uses semantic methods and does not reconstruct wire payloads:
+
+```ts
+interface HostRuntimeClientV1 {
+  commitTransition(candidate: TransitionCandidateV1): Promise<TransitionResultV1>;
+  requestCapability<Input extends object, Output extends object>(
+    capability: CapabilityVersionV1,
+    input: Input,
+    validateOutput: (value: unknown) => value is Output,
+  ): Promise<Output>;
+}
+```
+
+The client validates the closed transition-result shape, command and terminal correlation,
+capability-result shape and identity, and capability-owned output before returning. Raw `send(type,
+payload)` remains an internal WebView transport seam rather than the game-facing API. Runtime
+preflight failures are local non-committable results; only recorded execution terminals become
+`transition.commit` candidates.
+
 ## WebView To Host
 
 ### `runtime.ready`

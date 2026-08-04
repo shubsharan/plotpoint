@@ -3,10 +3,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   FOREGROUND_LOCATION_CAPABILITY,
   type CanonicalJsonObject,
+  type HostBridgeTransportV1,
   type RuntimeBootstrapV1,
-  type TransitionCommitEnvelopeV1,
-  type TransitionResultV1,
 } from "@plotpoint/protocol";
+
+import { fieldGame } from "../../../examples/releases/field-puzzle/src/config";
+import { logic } from "../../../examples/releases/field-puzzle/src/logic";
+import { createFieldPuzzleSession } from "../../../examples/releases/field-puzzle/src/presentation";
 
 import {
   createCapabilityDispatcher,
@@ -46,13 +49,23 @@ class ScriptedObservationStore implements ForegroundLocationPersistence {
   }
 }
 
-function capabilityRequest(requestId: string, input: CanonicalJsonObject = {}) {
-  return JSON.stringify({
-    version: 1,
-    requestId,
-    type: "capability.request",
-    payload: { capability: FOREGROUND_LOCATION_CAPABILITY, input },
-  });
+function transportFor(handlers: HostBridgeHandlers): HostBridgeTransportV1 {
+  let sequence = 0;
+  return {
+    async send(type, payload) {
+      const response = await routeHostBridgeMessage(
+        JSON.stringify({
+          version: 1,
+          requestId: `release-request-${++sequence}`,
+          type,
+          payload,
+        }),
+        handlers,
+      );
+      if (response.type === "host.error") throw response.payload;
+      return response.payload;
+    },
+  };
 }
 
 describe("foreground location capability", () => {
@@ -218,74 +231,113 @@ describe("disconnected trusted-host route", () => {
       },
     };
 
-    const ready = await routeHostBridgeMessage(
-      JSON.stringify({ version: 1, requestId: "ready", type: "runtime.ready", payload: {} }),
-      handlers,
-    );
-    expect(ready).toMatchObject({ type: "runtime.bootstrap", payload: { aggregate: { state } } });
-
-    async function observe(requestId: string) {
-      const response = await routeHostBridgeMessage(capabilityRequest(requestId), handlers);
-      expect(response.type).toBe("capability.result");
-      if (response.type !== "capability.result") throw new Error("route-location-failed");
-      return response.payload.output;
-    }
-
-    async function commit(input: {
-      commandId: string;
-      nextState: CanonicalJsonObject;
-      observationId?: string;
-    }): Promise<TransitionResultV1> {
-      const request: TransitionCommitEnvelopeV1 = {
-        version: 1,
-        requestId: `${input.commandId}-request`,
-        type: "transition.commit",
-        payload: {
-          candidate: {
-            commandId: input.commandId,
-            target: {
-              aggregateId: "field-player",
-              aggregateKind: "player",
-              schemaId: "field.player-state.v1",
-              schemaVersion: 1,
-            },
-            expectedVersion: stateVersion,
-            observationIds: input.observationId === undefined ? [] : [input.observationId],
-            terminal: "accepted",
-            nextState: input.nextState,
-            outcome: { result: "advanced" },
-            progressionChanges: [String(input.nextState.phase)],
-          },
-        },
-      };
-      const response = await routeHostBridgeMessage(JSON.stringify(request), handlers);
-      expect(response.type).toBe("transition.result");
-      if (response.type !== "transition.result") throw new Error("route-transition-failed");
-      return response.payload;
-    }
-
-    const first = await observe("first-checkpoint-location");
-    expect(store.events.at(-1)).toBe(`persisted:${String(first.observationId)}`);
-    await commit({
-      commandId: "reach-first-checkpoint",
-      nextState: { attempts: 0, phase: "puzzle" },
-      observationId: String(first.observationId),
+    const commandIds = ["reach-first-checkpoint", "solve-puzzle", "reach-second-checkpoint"];
+    const session = createFieldPuzzleSession({
+      logic,
+      host: transportFor(handlers),
+      bootstrap,
+      createCommandId: () => {
+        const next = commandIds.shift();
+        if (next === undefined) throw new Error("route-command-id-exhausted");
+        return next;
+      },
     });
-    await commit({
-      commandId: "solve-puzzle",
-      nextState: { attempts: 1, phase: "second-checkpoint" },
+
+    await session.checkIn();
+    expect(store.events.at(-1)).toBe("persisted:route-observation-1");
+    expect(session.snapshot()).toMatchObject({
+      state: { attempts: 0, phase: "puzzle" },
+      stateVersion: 1,
+      lastDisposition: "committed",
     });
-    const second = await observe("second-checkpoint-location");
-    expect(store.events.at(-1)).toBe(`persisted:${String(second.observationId)}`);
-    await commit({
-      commandId: "reach-second-checkpoint",
-      nextState: { attempts: 1, phase: "complete" },
-      observationId: String(second.observationId),
+    await session.solve(fieldGame.puzzle.answer);
+    expect(session.snapshot()).toMatchObject({
+      state: { attempts: 1, phase: "second-checkpoint" },
+      stateVersion: 2,
     });
+    await session.checkIn();
+    expect(store.events.at(-1)).toBe("persisted:route-observation-2");
 
     expect(state).toEqual({ attempts: 1, phase: "complete" });
     expect(stateVersion).toBe(3);
+    expect(session.snapshot()).toMatchObject({
+      state: { attempts: 1, phase: "complete" },
+      stateVersion: 3,
+      message: "advanced",
+    });
     expect(store.observations).toEqual(new Set(["route-observation-1", "route-observation-2"]));
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps state unchanged for rejected terminals and surfaces host errors", async () => {
+    const bootstrap: RuntimeBootstrapV1 = {
+      runId,
+      releaseId,
+      aggregate: {
+        aggregateId: "field-player",
+        aggregateKind: "player",
+        schemaId: "field.player-state.v1",
+        schemaVersion: 1,
+        stateVersion: 0,
+        state: { attempts: 0, phase: "first-checkpoint" },
+      },
+    };
+    const rejectedHost: HostBridgeTransportV1 = {
+      async send(type, payload) {
+        if (type === "capability.request") {
+          return {
+            capability: FOREGROUND_LOCATION_CAPABILITY,
+            output: {
+              version: 1,
+              observationId: "denied-observation",
+              recordedAt: "2030-01-01T00:00:00.000Z",
+              availability: "permission-denied",
+            },
+          };
+        }
+        if (type !== "transition.commit") throw new Error("unexpected-request");
+        const candidate = payload.candidate;
+        if (candidate === null || typeof candidate !== "object" || !("commandId" in candidate)) {
+          throw new Error("candidate-missing");
+        }
+        return {
+          commandId: candidate.commandId,
+          disposition: "committed",
+          terminal: "rejected",
+          resultingVersion: 99,
+          outcome: { result: "permission-denied" },
+        };
+      },
+    };
+    const rejected = createFieldPuzzleSession({
+      logic,
+      host: rejectedHost,
+      bootstrap,
+      createCommandId: () => "denied-command",
+    });
+
+    await rejected.checkIn();
+    expect(rejected.snapshot()).toMatchObject({
+      state: { attempts: 0, phase: "first-checkpoint" },
+      stateVersion: 0,
+      message: "permission-denied",
+      lastDisposition: "committed",
+    });
+
+    const failed = createFieldPuzzleSession({
+      logic,
+      bootstrap,
+      host: {
+        async send() {
+          throw { code: "capability-unsupported" };
+        },
+      },
+    });
+    await failed.checkIn();
+    expect(failed.snapshot()).toMatchObject({
+      state: { attempts: 0, phase: "first-checkpoint" },
+      stateVersion: 0,
+      message: "capability-unsupported",
+    });
   });
 });

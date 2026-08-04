@@ -48,7 +48,11 @@ export {
   parseInstallDescriptor,
 } from "./player/install.js";
 export type { InstallDescriptorResult, InstallDescriptorV1 } from "./player/install.js";
-export { HOST_BRIDGE_VERSION, parseHostBridgeEnvelope } from "./player/bridge.js";
+export {
+  HOST_BRIDGE_VERSION,
+  createHostRuntimeClientV1,
+  parseHostBridgeEnvelope,
+} from "./player/bridge.js";
 export type {
   AggregateTargetV1,
   AnyHostBridgeEnvelope,
@@ -62,8 +66,11 @@ export type {
   HostBridgeEnvelopeV1,
   HostBridgeMessageType,
   HostBridgeParseResult,
+  HostBridgeTransportV1,
+  HostCapabilityOutputValidator,
   HostErrorEnvelopeV1,
   HostErrorV1,
+  HostRuntimeClientV1,
   HostToWebBridgeEnvelope,
   HostToWebMessageType,
   RuntimeBootstrapEnvelopeV1,

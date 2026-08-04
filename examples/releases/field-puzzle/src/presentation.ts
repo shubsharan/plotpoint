@@ -1,30 +1,42 @@
+import {
+  FOREGROUND_LOCATION_CAPABILITY,
+  createHostRuntimeClientV1,
+  isLocationObservationV1,
+  type HostBridgeTransportV1,
+  type RuntimeBootstrapV1,
+  type TransitionResultV1,
+} from "@plotpoint/protocol/player";
+
+import type { AdvancePayload, FieldState } from "./commands/advance.js";
 import { fieldGame } from "./config.js";
+import type { FieldLogic } from "./logic.js";
 
 interface MountInput {
   readonly root: HTMLElement;
-  readonly logic: {
-    readonly initialState: { attempts: number; phase: string };
-    run(input: unknown): {
-      readonly kind: "candidate";
-      readonly candidate: {
-        readonly nextState: { readonly attempts: number; readonly phase: string };
-        readonly outcome: { readonly result?: string };
-      };
-    };
-  };
-  readonly host: {
-    send(
-      type: string,
-      payload: Record<string, unknown>,
-    ): Promise<{
-      readonly kind?: string;
-      readonly code?: string;
-      readonly resultingVersion?: number;
-    }>;
-  };
-  readonly bootstrap: {
-    aggregate: { state: { attempts: number; phase: string }; stateVersion: number } | null;
-  };
+  readonly logic: FieldLogic;
+  readonly host: HostBridgeTransportV1;
+  readonly bootstrap: RuntimeBootstrapV1;
+}
+
+export interface FieldPuzzleSessionSnapshot {
+  readonly state: FieldState;
+  readonly stateVersion: number;
+  readonly message: string;
+  readonly lastDisposition?: TransitionResultV1["disposition"];
+}
+
+export interface FieldPuzzleSession {
+  snapshot(): FieldPuzzleSessionSnapshot;
+  checkIn(): Promise<void>;
+  solve(answer: string): Promise<void>;
+}
+
+interface CreateFieldPuzzleSessionInput {
+  readonly logic: FieldLogic;
+  readonly host: HostBridgeTransportV1;
+  readonly bootstrap: RuntimeBootstrapV1;
+  readonly createCommandId?: () => string;
+  readonly onChange?: (snapshot: FieldPuzzleSessionSnapshot) => void;
 }
 
 export function FieldPuzzle(): HTMLElement {
@@ -37,35 +49,122 @@ function commandId(): string {
   return `field-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-async function mount({ root, logic, host, bootstrap }: MountInput): Promise<void> {
-  let state = bootstrap.aggregate?.state ?? logic.initialState;
-  let stateVersion = bootstrap.aggregate?.stateVersion ?? 0;
+function isFieldState(value: unknown): value is FieldState {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    Number.isSafeInteger(candidate.attempts) &&
+    (candidate.attempts as number) >= 0 &&
+    (candidate.phase === "first-checkpoint" ||
+      candidate.phase === "puzzle" ||
+      candidate.phase === "second-checkpoint" ||
+      candidate.phase === "complete")
+  );
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error !== null && typeof error === "object" && "code" in error) {
+    const code = (error as { readonly code?: unknown }).code;
+    if (typeof code === "string") return code;
+  }
+  return "host-operation-failed";
+}
+
+function outcomeMessage(outcome: Record<string, unknown>): string {
+  return typeof outcome.result === "string" ? outcome.result : "transition-recorded";
+}
+
+export function createFieldPuzzleSession(input: CreateFieldPuzzleSessionInput): FieldPuzzleSession {
+  const restoredState = input.bootstrap.aggregate?.state;
+  if (restoredState !== undefined && !isFieldState(restoredState)) {
+    throw new Error("field-bootstrap-state-invalid");
+  }
+  const client = createHostRuntimeClientV1(input.host);
+  let state = restoredState ?? input.logic.initialState;
+  let stateVersion = input.bootstrap.aggregate?.stateVersion ?? 0;
   let message = "Find the first marker to begin.";
+  let lastDisposition: TransitionResultV1["disposition"] | undefined;
+
+  const snapshot = (): FieldPuzzleSessionSnapshot => ({
+    state,
+    stateVersion,
+    message,
+    ...(lastDisposition === undefined ? {} : { lastDisposition }),
+  });
+  const notify = () => input.onChange?.(snapshot());
 
   const commit = async (
-    payload: Record<string, unknown>,
-    observation?: Record<string, unknown>,
+    payload: AdvancePayload,
+    observation?: Parameters<FieldLogic["run"]>[0]["observation"],
   ) => {
-    const result = logic.run({ commandId: commandId(), state, stateVersion, payload, observation });
-    const durable = await host.send("transition.commit", { candidate: result.candidate });
-    if (durable.kind === "accepted" || durable.kind === "duplicate") {
-      state = result.candidate.nextState;
-      stateVersion = durable.resultingVersion;
-      message = String(result.candidate.outcome.result);
-    } else message = String(durable.code ?? durable.kind);
-    render();
+    try {
+      const result = input.logic.run({
+        commandId: (input.createCommandId ?? commandId)(),
+        state,
+        stateVersion,
+        payload,
+        observation,
+      });
+      if (result.kind === "preflight-invalid") {
+        message = result.diagnosticCodes.join(", ") || "runtime-preflight-invalid";
+        notify();
+        return;
+      }
+      const durable = await client.commitTransition(result.candidate);
+      lastDisposition = durable.disposition;
+      if (durable.terminal === "accepted") {
+        if (result.candidate.terminal !== "accepted" || !isFieldState(result.candidate.nextState)) {
+          throw new Error("field-transition-state-invalid");
+        }
+        state = result.candidate.nextState;
+        stateVersion = durable.resultingVersion;
+        message = outcomeMessage(durable.outcome);
+      } else if (durable.terminal === "invalid") {
+        message = durable.diagnosticCodes.join(", ") || "runtime-execution-invalid";
+      } else {
+        message = outcomeMessage(durable.outcome);
+      }
+    } catch (error) {
+      message = errorMessage(error);
+    }
+    notify();
   };
 
   const checkIn = async () => {
     message = "Reading foreground location…";
-    render();
-    const observation = await host.send("capability.request", {
-      capabilityId: "plotpoint.location.foreground",
-    });
-    await commit({ action: "check-in" }, observation);
+    notify();
+    try {
+      const observation = await client.requestCapability(
+        FOREGROUND_LOCATION_CAPABILITY,
+        {},
+        isLocationObservationV1,
+      );
+      await commit({ action: "check-in" }, observation);
+    } catch (error) {
+      message = errorMessage(error);
+      notify();
+    }
   };
 
-  const render = () => {
+  return Object.freeze({
+    snapshot,
+    checkIn,
+    solve: (answer: string) => commit({ action: "solve", answer }),
+  });
+}
+
+async function mount({ root, logic, host, bootstrap }: MountInput): Promise<void> {
+  let render = () => undefined;
+  const session = createFieldPuzzleSession({
+    logic,
+    host,
+    bootstrap,
+    onChange: () => render(),
+  });
+
+  render = () => {
+    const { state, stateVersion, message } = session.snapshot();
     root.replaceChildren();
     const card = FieldPuzzle();
     card.innerHTML = `<style>
@@ -78,12 +177,12 @@ async function mount({ root, logic, host, bootstrap }: MountInput): Promise<void
       action.innerHTML = `<p>${fieldGame.puzzle.prompt}</p><input id="answer" autocomplete="off"><button id="solve">Submit answer</button>`;
       action.querySelector("#solve")!.addEventListener("click", () => {
         const answer = (action.querySelector("#answer") as HTMLInputElement).value;
-        void commit({ action: "solve", answer });
+        void session.solve(answer);
       });
     } else if (state.phase === "complete") action.innerHTML = "<strong>Route complete.</strong>";
     else {
       action.innerHTML = `<p>Walk to ${state.phase === "first-checkpoint" ? fieldGame.firstCheckpoint.name : fieldGame.secondCheckpoint.name}.</p><button id="check">Check my location</button>`;
-      action.querySelector("#check")!.addEventListener("click", () => void checkIn());
+      action.querySelector("#check")!.addEventListener("click", () => void session.checkIn());
     }
     root.append(card);
   };

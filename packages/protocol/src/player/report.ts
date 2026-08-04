@@ -9,7 +9,7 @@ export const FOREGROUND_LOCATION_CAPABILITY = Object.freeze({
 export type LocationAvailability = "available" | "permission-denied" | "unavailable" | "failed";
 export type LocationRequestInputV1 = Readonly<Record<string, never>>;
 
-interface LocationObservationBaseV1 {
+interface LocationObservationBaseV1 extends CanonicalJsonObject {
   readonly version: 1;
   readonly observationId: string;
   readonly recordedAt: string;

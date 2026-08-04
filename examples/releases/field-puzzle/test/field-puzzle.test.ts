@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { advanceCommand } from "../src/commands/advance.js";
 import { fieldGame } from "../src/config.js";
+import { logic } from "../src/logic.js";
 
 const target = {
   kind: "player" as const,
@@ -164,5 +165,98 @@ describe("field puzzle", () => {
       { take: () => ({}) },
     );
     expect(solved).toMatchObject({ kind: "accepted", nextState: { phase: "second-checkpoint" } });
+  });
+
+  it("maps accepted and rejected execution terminals to exact Host API candidates", () => {
+    const accepted = logic.run({
+      commandId: "candidate-accepted",
+      state: target.state,
+      stateVersion: 0,
+      payload: { action: "check-in" },
+      observation: {
+        version: 1,
+        observationId: "location-accepted",
+        recordedAt: "2030-01-01T00:00:00.000Z",
+        capturedAt: "2030-01-01T00:00:00.000Z",
+        availability: "available",
+        ageMs: 0,
+        latitude: fieldGame.firstCheckpoint.latitude,
+        longitude: fieldGame.firstCheckpoint.longitude,
+        horizontalAccuracy: 5,
+      },
+    });
+    expect(accepted).toMatchObject({
+      kind: "candidate",
+      candidate: {
+        commandId: "candidate-accepted",
+        target: {
+          aggregateId: "field-player",
+          aggregateKind: "player",
+          schemaId: "field.player-state.v1",
+          schemaVersion: 1,
+        },
+        expectedVersion: 0,
+        terminal: "accepted",
+        nextState: { attempts: 0, phase: "puzzle" },
+        outcome: { result: "advanced" },
+        observationIds: ["location-accepted"],
+      },
+    });
+
+    const rejected = logic.run({
+      commandId: "candidate-rejected",
+      state: target.state,
+      stateVersion: 0,
+      payload: { action: "check-in" },
+      observation: {
+        version: 1,
+        observationId: "location-denied",
+        recordedAt: "2030-01-01T00:00:00.000Z",
+        availability: "permission-denied",
+      },
+    });
+    expect(rejected).toEqual({
+      kind: "candidate",
+      candidate: {
+        commandId: "candidate-rejected",
+        target: {
+          aggregateId: "field-player",
+          aggregateKind: "player",
+          schemaId: "field.player-state.v1",
+          schemaVersion: 1,
+        },
+        expectedVersion: 0,
+        terminal: "rejected",
+        outcome: { result: "permission-denied" },
+        observationIds: ["location-denied"],
+      },
+    });
+  });
+
+  it("keeps preflight failures local and maps recorded execution failures to invalid candidates", () => {
+    expect(
+      logic.run({
+        commandId: "preflight-invalid",
+        state: target.state,
+        stateVersion: -1,
+        payload: { action: "solve", answer: "map" },
+      }),
+    ).toMatchObject({ kind: "preflight-invalid", diagnosticCodes: expect.any(Array) });
+
+    expect(
+      logic.run({
+        commandId: "execution-invalid",
+        state: target.state,
+        stateVersion: 0,
+        payload: { action: "check-in" },
+      }),
+    ).toMatchObject({
+      kind: "candidate",
+      candidate: {
+        commandId: "execution-invalid",
+        terminal: "invalid",
+        diagnosticCodes: expect.any(Array),
+      },
+    });
   });
 });
