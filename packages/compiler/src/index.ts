@@ -4,7 +4,10 @@ import type { ReleaseArtifact } from "@plotpoint/protocol";
 
 import { bundleDefinitionInspection, bundleRelease } from "./bundle/bundle-release.js";
 import { inspectDefinitionBundle } from "./composition/inspect-definitions.js";
-import { validateReferences } from "./composition/validate-references.js";
+import {
+  validateLogicDefinitionExports,
+  validateReferences,
+} from "./composition/validate-references.js";
 import { createCompilerDiagnostic } from "./diagnostics/create.js";
 import { orderCompilerDiagnostics } from "./diagnostics/order.js";
 import { resolveImportGraph } from "./imports/resolve-graph.js";
@@ -81,6 +84,9 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
     ]);
   }
 
+  const logicDefinitions = validateLogicDefinitionExports(snapshot.registries, logic.graph);
+  if (logicDefinitions.length > 0) return invalid(logicDefinitions);
+
   const components = validateComponents(snapshot, presentation.graph);
   const capabilities = validateCapabilities(snapshot);
   const compatibility = validateCompatibilityRequirements(snapshot);
@@ -126,6 +132,7 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
     snapshot,
     bundles: { logic: bundled.logic, presentation: bundled.presentation },
     definitions: definitions.metadata,
+    aggregateSchemas: schemas.aggregateSchemas,
     schemas: schemas.schemas,
     content: content.content,
     assets: assets.assets,

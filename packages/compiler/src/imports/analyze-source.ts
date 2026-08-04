@@ -195,7 +195,7 @@ export function analyzeSource(path: string, source: string): AnalyzeSourceResult
           ),
         );
       } else if (
-        ["fetch", "setTimeout", "setInterval", "queueMicrotask"].includes(calleeName ?? "")
+        ["Date", "fetch", "setTimeout", "setInterval", "queueMicrotask"].includes(calleeName ?? "")
       ) {
         references.push(
           sourceReference(

@@ -111,16 +111,28 @@ describe("environment graph resolution", () => {
     ).toMatchObject({ kind: "resolved", graph: { environment: "presentation" } });
   });
 
-  it("rejects ambient authority in logic and direct network authority in presentation", async () => {
+  it.each([
+    ["Date()", "Date"],
+    ["new Date()", "Date"],
+    ["Date.now()", "Date.now"],
+  ])("rejects ambient clock expression %s in logic", async (expression, authority) => {
     const captured = await snapshot(
-      "export const logic = Date.now();",
-      "export const presentation = fetch('/private');",
+      `export const logic = ${expression};`,
+      "export const presentation = {};",
     );
 
     expect(resolveImportGraph(captured, captured.config.entries.logic, "logic")).toMatchObject({
       kind: "invalid",
-      diagnostics: [{ code: "import-ambient-authority", details: { authority: "Date.now" } }],
+      diagnostics: [{ code: "import-ambient-authority", details: { authority } }],
     });
+  });
+
+  it("rejects direct network authority in presentation", async () => {
+    const captured = await snapshot(
+      "export const logic = {};",
+      "export const presentation = fetch('/private');",
+    );
+
     expect(
       resolveImportGraph(captured, captured.config.entries.presentation, "presentation"),
     ).toMatchObject({

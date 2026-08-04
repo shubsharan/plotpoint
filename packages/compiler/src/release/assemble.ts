@@ -28,6 +28,7 @@ export interface AssembleReleaseInput {
   readonly snapshot: CompilationSnapshot;
   readonly bundles: CompiledBundles;
   readonly definitions: DefinitionInspectionMetadata;
+  readonly aggregateSchemas: ReadonlyMap<string, ValidatedSchema>;
   readonly schemas: ReadonlyMap<string, ValidatedSchema>;
   readonly content: readonly ValidatedContent[];
   readonly assets: readonly ValidatedAsset[];
@@ -103,7 +104,7 @@ function buildEntries(input: AssembleReleaseInput): readonly MaterialEntry[] | n
   ];
 
   for (const registration of input.snapshot.registries.aggregateSchemas) {
-    const schema = input.schemas.get(registration.id);
+    const schema = input.aggregateSchemas.get(registration.id);
     if (schema === undefined) return null;
     entries.push(
       Object.freeze({

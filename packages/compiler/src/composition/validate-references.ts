@@ -1,5 +1,6 @@
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
 import { orderCompilerDiagnostics } from "../diagnostics/order.js";
+import type { ImportGraph } from "../imports/resolve-graph.js";
 import type { CanonicalProjectRegistries, CompilerDiagnostic } from "../project/config.js";
 
 function ids(values: readonly { readonly id: string }[]): ReadonlySet<string> {
@@ -83,5 +84,38 @@ export function validateReferences(
 
   // Keep the local set construction exhaustive as registries grow.
   void progressions;
+  return orderCompilerDiagnostics(diagnostics);
+}
+
+export function validateLogicDefinitionExports(
+  registries: CanonicalProjectRegistries,
+  logicGraph: ImportGraph,
+): readonly CompilerDiagnostic[] {
+  const exportsBySource = new Map(
+    logicGraph.nodes.map((node) => [node.path, new Set(node.analysis.exports)] as const),
+  );
+  const diagnostics: CompilerDiagnostic[] = [];
+
+  for (const [registration, definitions] of [
+    ["commands", registries.commands.map(({ id, definition }) => ({ id, definition }))],
+    ["progressions", registries.progressions.map(({ id, definition }) => ({ id, definition }))],
+  ] as const) {
+    for (const { id, definition } of definitions) {
+      const sourceExports = exportsBySource.get(definition.source);
+      if (sourceExports?.has(definition.export)) continue;
+      diagnostics.push(
+        createCompilerDiagnostic({
+          code: "definition-export-missing",
+          location: { kind: "registration", registration, id, field: "definition" },
+          details: {
+            export: definition.export,
+            reason: sourceExports === undefined ? "source-not-reachable" : "export-missing",
+            source: definition.source,
+          },
+        }),
+      );
+    }
+  }
+
   return orderCompilerDiagnostics(diagnostics);
 }

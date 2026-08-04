@@ -58,6 +58,20 @@ describe("invalid project publication boundary", () => {
     await compileInvalid(root, "forbidden-node-import");
   });
 
+  it("rejects configured definitions that are absent from the logic graph", async () => {
+    const root = await project();
+    await writeFile(
+      join(root, "src/logic.ts"),
+      "export const logic = Object.freeze({ commands: [], progressions: [] });\n",
+    );
+
+    const result = await compileInvalid(root, "unreachable-logic-definitions");
+    expect(result.diagnostics.map(({ location }) => location)).toEqual([
+      expect.objectContaining({ registration: "commands", field: "definition" }),
+      expect.objectContaining({ registration: "progressions", field: "definition" }),
+    ]);
+  });
+
   it("collects and orders independently discoverable reference failures", async () => {
     const root = await project();
     const configPath = join(root, "plotpoint.project.json");

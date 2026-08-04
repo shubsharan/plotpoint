@@ -174,8 +174,7 @@ const definitions: DefinitionInspectionMetadata = {
   ],
 };
 
-async function assembleFixture() {
-  const snapshot = createSnapshot();
+async function assembleFixture(snapshot = createSnapshot()) {
   const schemas = validateSchemas(snapshot);
   if (schemas.kind !== "valid") throw new Error("expected valid schemas");
   const content = validateContent(snapshot, schemas.schemas);
@@ -190,6 +189,7 @@ async function assembleFixture() {
       presentation: encoder.encode("export const presentation = true;"),
     },
     definitions,
+    aggregateSchemas: schemas.aggregateSchemas,
     schemas: schemas.schemas,
     content: content.content,
     assets: assets.assets,
@@ -266,5 +266,46 @@ describe("release assembly", () => {
         forbidden,
       );
     }
+  });
+
+  it("keeps equal aggregate and general schema IDs in separate release entries", async () => {
+    const baseline = createSnapshot();
+    const sharedId = baseline.config.aggregateSchemas[0]?.id;
+    if (sharedId === undefined) throw new Error("fixture aggregate schema missing");
+    const configuration = {
+      ...baseline.config,
+      schemas: baseline.config.schemas.map((schema, index) =>
+        index === 0 ? { ...schema, id: sharedId } : schema,
+      ),
+      content: baseline.config.content.map((content) => ({ ...content, schema: sharedId })),
+    };
+    const registries = buildCanonicalRegistries(configuration);
+    if (registries.kind !== "valid") throw new Error("expected colliding schema registries");
+    const snapshot: CompilationSnapshot = {
+      ...baseline,
+      config: configuration,
+      registries: registries.registries,
+    };
+
+    const validated = validateSchemas(snapshot);
+    expect(validated.kind).toBe("valid");
+    if (validated.kind !== "valid") return;
+    expect(validated.aggregateSchemas.get(sharedId)?.path).toBe(
+      "schemas/private-player-state.json",
+    );
+    expect(validated.schemas.get(sharedId)?.path).toBe("schemas/private-content.json");
+
+    const result = await assembleFixture(snapshot);
+    expect(result.kind).toBe("assembled");
+    if (result.kind !== "assembled") return;
+    const parsed = parseStoredZip(result.artifact.bytes);
+    expect(parsed.kind).toBe("parsed");
+    if (parsed.kind !== "parsed") return;
+    const entries = new Map(
+      parsed.entries.map((entry) => [entry.path, decoder.decode(entry.bytes)]),
+    );
+
+    expect(entries.get(`schemas/aggregate/${sharedId}.json`)).toContain('"solved"');
+    expect(entries.get(`schemas/general/${sharedId}.json`)).toContain('"title"');
   });
 });

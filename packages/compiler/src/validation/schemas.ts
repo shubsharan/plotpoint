@@ -65,7 +65,11 @@ export interface ValidatedSchema {
 }
 
 export type ValidateSchemasResult =
-  | { readonly kind: "valid"; readonly schemas: ReadonlyMap<string, ValidatedSchema> }
+  | {
+      readonly kind: "valid";
+      readonly aggregateSchemas: ReadonlyMap<string, ValidatedSchema>;
+      readonly schemas: ReadonlyMap<string, ValidatedSchema>;
+    }
   | { readonly kind: "invalid"; readonly diagnostics: readonly CompilerDiagnostic[] };
 
 function parseSchema(bytes: Uint8Array): unknown {
@@ -186,6 +190,7 @@ function closedSubsetDiagnostics(
 
 export function validateSchemas(snapshot: CompilationSnapshot): ValidateSchemasResult {
   const ajv = new Ajv2020({ allErrors: true, strict: true, validateSchema: true });
+  const aggregateSchemas = new Map<string, ValidatedSchema>();
   const schemas = new Map<string, ValidatedSchema>();
   const diagnostics: CompilerDiagnostic[] = [];
   const registrations = [
@@ -272,7 +277,9 @@ export function validateSchemas(snapshot: CompilationSnapshot): ValidateSchemasR
         continue;
       }
       const validate = ajv.compile(document);
-      schemas.set(
+      const destination =
+        registration.registration === "aggregateSchemas" ? aggregateSchemas : schemas;
+      destination.set(
         registration.id,
         Object.freeze({
           id: registration.id,
@@ -296,5 +303,5 @@ export function validateSchemas(snapshot: CompilationSnapshot): ValidateSchemasR
   if (diagnostics.length > 0) {
     return { kind: "invalid", diagnostics: orderCompilerDiagnostics(diagnostics) };
   }
-  return { kind: "valid", schemas };
+  return { kind: "valid", aggregateSchemas, schemas };
 }
