@@ -270,3 +270,34 @@ Converge trust cases in T059, then implement T060-T064
 - Do not execute handlers or progression predicates during compilation.
 - Do not place labels, channels, project identity, timestamps, source paths, output paths, or telemetry in artifact bytes.
 - Do not mark the feature implemented before T071 records complete evidence.
+
+---
+
+## Phase 8: Architecture Refinement
+
+**Purpose**: Correct the authority-boundary claim, consolidate release-format ownership, expose
+verified entry access, and remove post-capture and validation duplication found during implementation
+review.
+
+### Tests
+
+- [x] T072 [P] Add direct, aliased, destructured, computed, and shadowed ambient-global contract cases proving compilation enforces imports rather than claiming runtime isolation in `packages/compiler/test/unit/imports.test.ts` and `packages/compiler/test/unit/import-policy.test.ts`
+- [x] T073 [P] Add high-level construction, verified opening, immutable-entry-copy, malformed-artifact, and public-surface contract tests in `packages/protocol/test/release-format.test.ts`, `packages/protocol/test/inspection.test.ts`, `packages/protocol/test/public-api.test.ts`, and `packages/protocol/test/contracts.type-test.ts`
+- [x] T074 [P] Replace post-capture mutation rejection with coherent-capture and later-live-edit acceptance evidence in `packages/compiler/test/unit/snapshot.test.ts` and the golden compilation suite
+- [x] T075 [P] Update compiler assembly and public contract tests to consume only high-level protocol construction and opening APIs in `packages/compiler/test/integration/assemble-release.test.ts`, `packages/compiler/test/contract/public-api.test.ts`, and `packages/compiler/test/contracts.type-test.ts`
+
+### Implementation
+
+- [x] T076 Remove ambient-global syntax classification while retaining closed import enforcement in `packages/compiler/src/imports/analyze-source.ts` and `packages/compiler/src/imports/environment-policy.ts`
+- [x] T077 Remove stored fingerprints, unused snapshot receipt fields, post-capture rereads, and dependent orchestration in `packages/compiler/src/project/config.ts`, `packages/compiler/src/project/snapshot.ts`, and `packages/compiler/src/index.ts`
+- [x] T078 Implement protocol-owned release construction and shared validated reading in `packages/protocol/src/release/create.ts`, `packages/protocol/src/release/open.ts`, and `packages/protocol/src/release/inspect.ts`
+- [x] T079 Replace low-level protocol exports with construction/opening/inspection/verification contracts and immutable entry types in `packages/protocol/src/index.ts` and `packages/protocol/src/release/types.ts`
+- [x] T080 Pass normalized capabilities and material entries into the protocol constructor without recomputation in `packages/compiler/src/release/assemble.ts` and `packages/compiler/src/index.ts`
+- [x] T081 Consolidate prerequisite reference validation by removing unreachable duplicate missing-reference branches in `packages/compiler/src/validation/commands.ts` and `packages/compiler/src/validation/progression.ts`
+- [x] T082 Remove the unused runtime dependency and refresh exact workspace resolution in `packages/protocol/package.json` and `pnpm-lock.yaml`
+- [x] T083 Update public contracts, quickstart evidence, and implementation checklist for the refined boundary in `docs/features/0002-immutable-release-pipeline/contracts/`, `docs/features/0002-immutable-release-pipeline/quickstart.md`, and `docs/features/0002-immutable-release-pipeline/checklists/implementation.md`
+- [x] T084 Run formatting, lint, type checks, builds, compiler/protocol tests, complete workspace tests, Spec Kit sync/check, and `pnpm verify`; record exact evidence in `docs/features/0002-immutable-release-pipeline/checklists/implementation.md`
+
+**Checkpoint**: The compiler makes only provable import-graph claims, the protocol exclusively owns
+release bytes and verified entry access, captured builds never reread live source, and all existing v1
+artifact identities remain unchanged.

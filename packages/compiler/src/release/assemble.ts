@@ -1,15 +1,9 @@
 import {
-  compareOrdinal,
-  encodeCanonicalJson,
-  inspectRelease,
-  sha256Digest,
-  writeStoredZip,
+  createReleaseArtifact,
   type CapabilityRequirement,
   type ReleaseArtifact,
   type ReleaseEntryKind,
-  type ReleaseInventoryEntry,
-  type ReleaseManifestV1,
-  type StoredZipEntry,
+  type ReleaseMaterialEntry,
 } from "@plotpoint/protocol";
 
 import type { DefinitionInspectionMetadata } from "../composition/inspect-definitions.js";
@@ -32,15 +26,12 @@ export interface AssembleReleaseInput {
   readonly schemas: ReadonlyMap<string, ValidatedSchema>;
   readonly content: readonly ValidatedContent[];
   readonly assets: readonly ValidatedAsset[];
+  readonly capabilities: readonly CapabilityRequirement[];
 }
 
 export type AssembleReleaseResult =
   | { readonly kind: "assembled"; readonly artifact: ReleaseArtifact }
   | { readonly kind: "invalid"; readonly diagnostics: readonly CompilerDiagnostic[] };
-
-interface MaterialEntry extends StoredZipEntry {
-  readonly kind: ReleaseEntryKind;
-}
 
 function invalid(reason: string): AssembleReleaseResult {
   return {
@@ -55,46 +46,17 @@ function invalid(reason: string): AssembleReleaseResult {
   };
 }
 
-function encodeData(value: unknown): Uint8Array | null {
-  const encoded = encodeCanonicalJson(value);
-  return encoded.kind === "valid" ? encoded.document.bytes : null;
-}
-
-function deriveCapabilities(
-  snapshot: CompilationSnapshot,
-): readonly CapabilityRequirement[] | null {
-  const byId = new Map<string, CapabilityRequirement>();
-  for (const component of snapshot.registries.components) {
-    for (const requirement of component.capabilities) {
-      const previous = byId.get(requirement.id);
-      if (previous !== undefined && previous.major !== requirement.major) return null;
-      byId.set(
-        requirement.id,
-        Object.freeze({
-          id: requirement.id,
-          major: requirement.major,
-          minimumMinor: Math.max(previous?.minimumMinor ?? 0, requirement.minimumMinor),
-        }),
-      );
-    }
-  }
-  return Object.freeze([...byId.values()].sort((left, right) => compareOrdinal(left.id, right.id)));
-}
-
 function pushDataEntry(
-  entries: MaterialEntry[],
+  entries: ReleaseMaterialEntry[],
   path: string,
   kind: ReleaseEntryKind,
   value: unknown,
-): boolean {
-  const bytes = encodeData(value);
-  if (bytes === null) return false;
-  entries.push(Object.freeze({ path, kind, bytes }));
-  return true;
+): void {
+  entries.push(Object.freeze({ path, kind, value }));
 }
 
-function buildEntries(input: AssembleReleaseInput): readonly MaterialEntry[] | null {
-  const entries: MaterialEntry[] = [
+function buildEntries(input: AssembleReleaseInput): readonly ReleaseMaterialEntry[] | null {
+  const entries: ReleaseMaterialEntry[] = [
     Object.freeze({ path: "bundles/logic.js", kind: "logic-bundle", bytes: input.bundles.logic }),
     Object.freeze({
       path: "bundles/presentation.js",
@@ -126,16 +88,12 @@ function buildEntries(input: AssembleReleaseInput): readonly MaterialEntry[] | n
     );
   }
   for (const progression of input.definitions.progressions) {
-    if (
-      !pushDataEntry(
-        entries,
-        `progressions/${progression.registrationId}.json`,
-        "progression",
-        progression,
-      )
-    ) {
-      return null;
-    }
+    pushDataEntry(
+      entries,
+      `progressions/${progression.registrationId}.json`,
+      "progression",
+      progression,
+    );
   }
   for (const component of input.snapshot.registries.components) {
     const descriptor = {
@@ -146,9 +104,7 @@ function buildEntries(input: AssembleReleaseInput): readonly MaterialEntry[] | n
       assets: component.assets,
       capabilities: component.capabilities,
     };
-    if (!pushDataEntry(entries, `components/${component.id}.json`, "component-data", descriptor)) {
-      return null;
-    }
+    pushDataEntry(entries, `components/${component.id}.json`, "component-data", descriptor);
   }
   for (const content of input.content) {
     entries.push(
@@ -162,31 +118,14 @@ function buildEntries(input: AssembleReleaseInput): readonly MaterialEntry[] | n
   for (const asset of input.assets) {
     entries.push(Object.freeze({ path: asset.releasePath, kind: "asset", bytes: asset.bytes }));
   }
-  entries.sort((left, right) => compareOrdinal(left.path, right.path));
+  entries.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
   return Object.freeze(entries);
-}
-
-function inventory(entries: readonly MaterialEntry[]): readonly ReleaseInventoryEntry[] {
-  return Object.freeze(
-    entries.map((entry) =>
-      Object.freeze({
-        path: entry.path,
-        kind: entry.kind,
-        byteLength: entry.bytes.byteLength,
-        digest: sha256Digest(entry.bytes),
-      }),
-    ),
-  );
 }
 
 export async function assembleRelease(input: AssembleReleaseInput): Promise<AssembleReleaseResult> {
   const entries = buildEntries(input);
   if (entries === null) return invalid("material-encoding-failed");
-  const capabilities = deriveCapabilities(input.snapshot);
-  if (capabilities === null) return invalid("capability-major-conflict");
-
-  const manifest: ReleaseManifestV1 = {
-    releaseFormatVersion: 1,
+  const artifact = await createReleaseArtifact({
     hostApi: input.snapshot.config.hostApi,
     aggregateSchemas: Object.freeze(
       input.snapshot.registries.aggregateSchemas.map((registration) =>
@@ -198,39 +137,27 @@ export async function assembleRelease(input: AssembleReleaseInput): Promise<Asse
         }),
       ),
     ),
-    capabilities,
+    capabilities: input.capabilities,
     entrypoints: Object.freeze({
       logic: "bundles/logic.js",
       presentation: "bundles/presentation.js",
     }),
-    inventory: inventory(entries),
-  };
-  const encodedManifest = encodeCanonicalJson(manifest);
-  if (encodedManifest.kind === "invalid") return invalid("manifest-encoding-failed");
-  const written = writeStoredZip([
-    ...entries.map(({ path, bytes }) => ({ path, bytes })),
-    { path: "manifest.json", bytes: encodedManifest.document.bytes },
-  ]);
-  if (written.kind === "invalid") return invalid("container-write-failed");
-  const inspected = await inspectRelease(written.bytes);
-  if (inspected.kind === "invalid") {
+    entries,
+  });
+  if ("diagnostics" in artifact) {
     return {
       kind: "invalid",
       diagnostics: Object.freeze([
         createCompilerDiagnostic({
           code: "release-self-verification-failed",
           location: { kind: "artifact", path: "manifest.json" },
-          details: { reason: inspected.diagnostics[0]?.code ?? "invalid-release" },
+          details: { reason: artifact.diagnostics[0]?.code ?? "invalid-release" },
         }),
       ]),
     };
   }
   return {
     kind: "assembled",
-    artifact: Object.freeze({
-      bytes: written.bytes,
-      manifest: inspected.manifest,
-      releaseId: inspected.releaseId,
-    }),
+    artifact,
   };
 }

@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 describe("source import analysis", () => {
-  it("collects static, dynamic, CommonJS, URL, and ambient-authority references", () => {
+  it("collects only references that define the closed import graph", () => {
     const result = analyzeSource(
       "src/logic.tsx",
       [
@@ -42,9 +42,9 @@ describe("source import analysis", () => {
         { kind: "dynamic", specifier: undefined, literal: false },
         { kind: "commonjs", specifier: "legacy", literal: true },
         { kind: "url", specifier: "https://example.test/a.js", literal: true },
-        { kind: "ambient", specifier: "Date.now", literal: true },
       ]),
     );
+    expect(result.references).toHaveLength(6);
     expect(result.references.every(({ line, column }) => line > 0 && column > 0)).toBe(true);
   });
 
@@ -112,22 +112,24 @@ describe("environment graph resolution", () => {
   });
 
   it.each([
-    ["Date()", "Date"],
-    ["new Date()", "Date"],
-    ["Date.now()", "Date.now"],
-  ])("rejects ambient clock expression %s in logic", async (expression, authority) => {
+    "Date()",
+    "new Date()",
+    "Date.now()",
+    "new (Date)()",
+    "new (globalThis['Date'])()",
+    "(() => { const Clock = Date; return new Clock(); })()",
+  ])("does not claim runtime authority enforcement for %s", async (expression) => {
     const captured = await snapshot(
       `export const logic = ${expression};`,
       "export const presentation = {};",
     );
 
     expect(resolveImportGraph(captured, captured.config.entries.logic, "logic")).toMatchObject({
-      kind: "invalid",
-      diagnostics: [{ code: "import-ambient-authority", details: { authority } }],
+      kind: "resolved",
     });
   });
 
-  it("rejects direct network authority in presentation", async () => {
+  it("leaves network authority enforcement to the isolated runtime", async () => {
     const captured = await snapshot(
       "export const logic = {};",
       "export const presentation = fetch('/private');",
@@ -135,9 +137,6 @@ describe("environment graph resolution", () => {
 
     expect(
       resolveImportGraph(captured, captured.config.entries.presentation, "presentation"),
-    ).toMatchObject({
-      kind: "invalid",
-      diagnostics: [{ code: "import-ambient-authority", details: { authority: "fetch" } }],
-    });
+    ).toMatchObject({ kind: "resolved" });
   });
 });

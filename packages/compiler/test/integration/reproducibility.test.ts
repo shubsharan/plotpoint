@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { compileProject } from "@plotpoint/compiler";
-import { computeReleaseId, sha256Digest } from "@plotpoint/protocol";
+import { computeReleaseId } from "@plotpoint/protocol";
 
 import { createExternalProject } from "../helpers/external-project.js";
 
@@ -75,7 +75,7 @@ describe("golden release reproducibility", () => {
           }
 
           const bytes = await readFile(outputFile);
-          const byteDigest = sha256Digest(bytes);
+          const byteDigest = computeReleaseId(bytes);
           expect(computeReleaseId(bytes)).toBe(result.releaseId);
 
           if (baselineBytes === undefined) {

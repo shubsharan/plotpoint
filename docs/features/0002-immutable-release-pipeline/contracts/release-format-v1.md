@@ -139,6 +139,33 @@ interface InvalidRelease {
   readonly diagnostics: readonly ReleaseDiagnostic[];
 }
 
+interface ReleaseBinaryMaterialEntry {
+  readonly path: string;
+  readonly kind: ReleaseEntryKind;
+  readonly bytes: Uint8Array;
+}
+
+interface ReleaseJsonMaterialEntry {
+  readonly path: string;
+  readonly kind: ReleaseEntryKind;
+  readonly value: unknown; // validated and canonicalized by the protocol constructor
+}
+
+type ReleaseMaterialEntry = ReleaseBinaryMaterialEntry | ReleaseJsonMaterialEntry;
+
+interface OpenedRelease {
+  readonly kind: "opened";
+  readonly releaseId: ReleaseId;
+  readonly manifest: ReleaseManifestV1;
+  readonly entries: readonly ReleaseEntry[];
+}
+
+export function createReleaseArtifact(
+  input: ReleaseConstructionInput,
+): Promise<ReleaseArtifact | InvalidRelease>;
+
+export function openRelease(bytes: Uint8Array): Promise<OpenedRelease | InvalidRelease>;
+
 export function inspectRelease(bytes: Uint8Array): Promise<InspectedRelease | InvalidRelease>;
 
 export function verifyRelease(input: {
@@ -152,10 +179,15 @@ export function assessCompatibility(
 ): CompatibilityAssessment;
 ```
 
-`inspectRelease` parses bounded structure, validates canonical manifest and exact inventory, computes
-digests and release ID, and never runs an entry. `verifyRelease` performs the same work and records
-whether an expected identity was supplied and matched. Implementations may stream internally, but
-must not extract entries to a filesystem as a prerequisite.
+`createReleaseArtifact` derives inventory metadata and owns canonical manifest/container emission.
+`openRelease` parses bounded structure, validates canonical manifest and exact inventory, computes
+digests and release ID, and returns immutable copies of entries without running them. `inspectRelease`
+returns the same validated metadata without entry bytes. `verifyRelease` records whether an expected
+identity was supplied and matched. Implementations may stream internally, but must not extract entries
+to a filesystem as a prerequisite.
+
+Raw archive writers/parsers, CRC-32, canonical JSON, archive path, manifest validator, and payload
+digest helpers are internal format machinery and are not package-root exports.
 
 ## Trust Semantics
 

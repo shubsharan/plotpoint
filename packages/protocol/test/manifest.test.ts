@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { sha256Digest, validateReleaseManifest, type ReleaseManifestV1 } from "@plotpoint/protocol";
+import type { ReleaseManifestV1 } from "@plotpoint/protocol";
+
+import { sha256Digest } from "../src/release/identity.js";
+import { validateReleaseManifest } from "../src/release/manifest.js";
 
 const utf8 = new TextEncoder();
 

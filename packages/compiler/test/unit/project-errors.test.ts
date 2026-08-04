@@ -1,4 +1,4 @@
-import { cp, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { loadProject } from "../../src/project/load-project.js";
-import { captureProjectSnapshot, verifySnapshotUnchanged } from "../../src/project/snapshot.js";
+import { captureProjectSnapshot } from "../../src/project/snapshot.js";
 
 const fixtureRoot = fileURLToPath(
   new URL("../fixtures/projects/invalid/configuration/", import.meta.url),
@@ -81,26 +81,5 @@ describe("invalid project configuration fixtures", () => {
       kind: "invalid",
       diagnostics: [{ code: "project-file-missing", location: { path: "src/logic.ts" } }],
     });
-  });
-
-  it("detects a tracked input mutation with stable location and no host metadata", async () => {
-    const root = await fixture("input-mutation");
-    const loaded = await loadProject({ projectRoot: root });
-    if (loaded.kind !== "loaded") throw new Error("mutation fixture configuration did not load");
-    const captured = await captureProjectSnapshot(loaded);
-    if (captured.kind !== "captured") throw new Error("mutation fixture did not capture");
-    const logicPath = join(root, "src", "logic.ts");
-    await writeFile(
-      logicPath,
-      `${await readFile(logicPath, "utf8")}\nexport const changed = true;\n`,
-    );
-
-    await expect(verifySnapshotUnchanged(captured.snapshot)).resolves.toMatchObject([
-      {
-        code: "project-input-changed",
-        location: { kind: "configuration", path: "src/logic.ts", pointer: "" },
-        details: { path: "src/logic.ts" },
-      },
-    ]);
   });
 });

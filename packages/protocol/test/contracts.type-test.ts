@@ -4,6 +4,8 @@ import type {
   HostReleaseSupport,
   IncompatibleRelease,
   InspectedRelease,
+  OpenedRelease,
+  ReleaseConstructionInput,
   ReleaseManifestV1,
   VerifiedRelease,
 } from "@plotpoint/protocol";
@@ -37,6 +39,26 @@ const invalidInspection: InspectedRelease = {
   manifest,
 };
 void invalidInspection;
+
+const construction: ReleaseConstructionInput = {
+  hostApi: { major: 1, minimumMinor: 0 },
+  aggregateSchemas: [],
+  capabilities: [],
+  entrypoints: { logic: "logic.js", presentation: "presentation.js" },
+  entries: [
+    { path: "logic.js", kind: "logic-bundle", bytes: new Uint8Array() },
+    { path: "content.json", kind: "content", value: { stable: true } },
+  ],
+};
+void construction;
+
+const opened: OpenedRelease = {
+  kind: "opened",
+  releaseId: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  manifest,
+  entries: [],
+};
+void opened;
 
 const invalidVerification: VerifiedRelease = {
   kind: "verified",

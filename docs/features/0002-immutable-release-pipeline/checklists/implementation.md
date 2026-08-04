@@ -10,15 +10,20 @@
 - [x] **SC-006 Operational metadata invariance**: Label, channel, project ID, and timestamp sidecars change without changing artifact bytes, manifests, or release identities for all three golden projects.
 - [x] **SC-007 First-diagnostic usability**: Every seeded configuration, import, reference, schema, progression, component, content, asset, capability, and compatibility failure has a stable first diagnostic with a structured config pointer, source location, logical relationship, or artifact path.
 - [x] **SC-008 Fixture breadth**: The suite contains three materially different valid external projects plus isolated fixtures for every FR-021 validation category and path-boundary class.
+- [x] **SC-009 Verified entry access**: The protocol opens every inventoried release entry only after strict container, manifest, length, and digest validation and returns defensive byte copies.
+- [x] **SC-010 Honest authority boundary**: Direct, aliased, parenthesized, computed, and presentation-network examples receive no build-time runtime-isolation claim; closed import-graph violations remain compiler errors.
+- [x] **SC-011 Coherent capture**: Snapshot tests prove later live-file edits neither mutate captured bytes nor invalidate the captured build input.
 
 ## Roadmap Gate 2 Exit Evidence
 
 - [x] Releases are deterministic store-only v1 containers with canonical manifests, exact inventories, fixed entry roles, SHA-256 entry digests, and whole-artifact identities.
-- [x] The compiler snapshots selected inputs once, enforces separate logic/presentation import policies, validates static composition, and emits no source paths or operational metadata.
+- [x] The compiler snapshots selected inputs once, enforces the closed logic/presentation import graph it can prove, validates static composition, and emits no source paths or operational metadata.
 - [x] Validation and compilation expose stable programmatic and CLI results; publication is atomic, non-overwriting, and failure-safe.
 - [x] Inspection, compatibility assessment, and verification are public protocol operations that do not execute release entries.
 - [x] Verification distinguishes internal structural validity from equality to a caller-supplied trusted identity and makes no publisher-authenticity claim.
 - [x] Seeded property tests cover parser bounds, malformed containers, path limits, and deterministic diagnostic ordering with replayable seeds.
+- [x] Protocol construction and verified opening are the only supported release byte boundary; ZIP, CRC, canonical JSON, manifest validation, path, and payload-digest helpers remain internal.
+- [x] Validated capabilities flow into construction once, prerequisite references have one diagnostic authority, and the protocol has no runtime dependency.
 
 ## Verification
 
@@ -26,9 +31,9 @@
 - [x] `pnpm lint`
 - [x] `pnpm check-types` - 14 Turbo tasks passed across 10 workspace packages.
 - [x] `pnpm build` - 9 build tasks passed across the workspace.
-- [x] `pnpm test` - 50 files and 290 tests passed.
-- [x] `pnpm --filter @plotpoint/protocol test` - 10 files and 99 tests passed.
-- [x] `pnpm --filter @plotpoint/compiler test` - 22 files and 99 tests passed.
+- [x] `pnpm test` - 50 files and 297 tests passed.
+- [x] `pnpm --filter @plotpoint/protocol test` - 10 files and 100 tests passed.
+- [x] `pnpm --filter @plotpoint/compiler test` - 22 files and 105 tests passed.
 - [x] Quickstart validate, compile, inspect, and expected-identity verify commands passed against the built compiler CLI; the minimal release identity was `sha256:7452db831df16698a8547b71c6e908633555790345e5865c45802924d8e95170`.
 - [x] `pnpm speckit:test`
 - [x] `pnpm speckit:sync`

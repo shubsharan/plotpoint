@@ -11,7 +11,6 @@ import { orderCompilerDiagnostics } from "../diagnostics/order.js";
 import type {
   CompilationSnapshot,
   CompilerDiagnostic,
-  FileFingerprint,
   InvalidProject,
   SnapshotFile,
   SnapshotFileKind,
@@ -67,10 +66,15 @@ class ImmutableMap<Key, Value> implements ReadonlyMap<Key, Value> {
   }
 }
 
-function fingerprint(projectPath: string, absolutePath: string, metadata: Stats): FileFingerprint {
+interface FileState {
+  readonly byteLength: number;
+  readonly modifiedTimeMs: number;
+  readonly device: number;
+  readonly inode: number;
+}
+
+function fileState(metadata: Stats): FileState {
   return Object.freeze({
-    projectPath,
-    absolutePath,
     byteLength: metadata.size,
     modifiedTimeMs: metadata.mtimeMs,
     device: metadata.dev,
@@ -78,21 +82,13 @@ function fingerprint(projectPath: string, absolutePath: string, metadata: Stats)
   });
 }
 
-function sameFingerprint(left: FileFingerprint, right: FileFingerprint): boolean {
+function sameFileState(left: FileState, right: FileState): boolean {
   return (
     left.byteLength === right.byteLength &&
     left.modifiedTimeMs === right.modifiedTimeMs &&
     left.device === right.device &&
     left.inode === right.inode
   );
-}
-
-function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
-  if (left.byteLength !== right.byteLength) return false;
-  for (let index = 0; index < left.byteLength; index += 1) {
-    if (left[index] !== right[index]) return false;
-  }
-  return true;
 }
 
 function changedDiagnostic(projectPath: string): CompilerDiagnostic {
@@ -148,29 +144,16 @@ async function captureFile(
   project: LoadedProject,
   projectPath: string,
   kind: SnapshotFileKind,
-): Promise<
-  { readonly file: SnapshotFile; readonly fingerprint: FileFingerprint } | CompilerDiagnostic
-> {
+): Promise<SnapshotFile | CompilerDiagnostic> {
   try {
     const resolved = await resolveProjectFile(project.root, projectPath);
-    const before = fingerprint(
-      projectPath,
-      resolved.absolutePath,
-      await stat(resolved.absolutePath),
-    );
+    const before = fileState(await stat(resolved.absolutePath));
     const bytes = new Uint8Array(await readFile(resolved.absolutePath));
-    const after = fingerprint(
-      projectPath,
-      resolved.absolutePath,
-      await stat(resolved.absolutePath),
-    );
-    if (!sameFingerprint(before, after) || before.byteLength !== bytes.byteLength) {
+    const after = fileState(await stat(resolved.absolutePath));
+    if (!sameFileState(before, after) || before.byteLength !== bytes.byteLength) {
       return changedDiagnostic(projectPath);
     }
-    return Object.freeze({
-      file: immutableSnapshotFile(kind, projectPath, bytes),
-      fingerprint: after,
-    });
+    return immutableSnapshotFile(kind, projectPath, bytes);
   } catch (error) {
     const diagnostic = projectFileDiagnostic(projectPath, error);
     if (diagnostic !== null) return diagnostic;
@@ -182,19 +165,14 @@ async function captureAbsoluteFile(
   projectPath: string,
   absolutePath: string,
   kind: SnapshotFileKind,
-): Promise<
-  { readonly file: SnapshotFile; readonly fingerprint: FileFingerprint } | CompilerDiagnostic
-> {
-  const before = fingerprint(projectPath, absolutePath, await stat(absolutePath));
+): Promise<SnapshotFile | CompilerDiagnostic> {
+  const before = fileState(await stat(absolutePath));
   const bytes = new Uint8Array(await readFile(absolutePath));
-  const after = fingerprint(projectPath, absolutePath, await stat(absolutePath));
-  if (!sameFingerprint(before, after) || before.byteLength !== bytes.byteLength) {
+  const after = fileState(await stat(absolutePath));
+  if (!sameFileState(before, after) || before.byteLength !== bytes.byteLength) {
     return changedDiagnostic(projectPath);
   }
-  return Object.freeze({
-    file: immutableSnapshotFile(kind, projectPath, bytes),
-    fingerprint: after,
-  });
+  return immutableSnapshotFile(kind, projectPath, bytes);
 }
 
 function sourceCandidates(from: string, specifier: string): readonly string[] {
@@ -258,7 +236,6 @@ export async function captureProjectSnapshot(
 ): Promise<CaptureProjectSnapshotResult> {
   const pending = new Map(explicitFiles(project));
   const files = new Map<string, SnapshotFile>();
-  const fingerprints = new Map<string, FileFingerprint>();
   const diagnostics: CompilerDiagnostic[] = [];
   const packageEntries = new Map<string, string>();
   const pendingPackages = new Set<string>();
@@ -275,11 +252,10 @@ export async function captureProjectSnapshot(
       diagnostics.push(captured);
       continue;
     }
-    files.set(projectPath, captured.file);
-    fingerprints.set(projectPath, captured.fingerprint);
+    files.set(projectPath, captured);
 
     if (kind !== "source") continue;
-    const analysis = analyzeSource(projectPath, new TextDecoder().decode(captured.file.bytes));
+    const analysis = analyzeSource(projectPath, new TextDecoder().decode(captured.bytes));
     if (analysis.kind === "invalid") {
       diagnostics.push(...analysis.diagnostics);
       continue;
@@ -383,11 +359,10 @@ export async function captureProjectSnapshot(
       diagnostics.push(captured);
       continue;
     }
-    files.set(dependency.virtualPath, captured.file);
-    fingerprints.set(dependency.virtualPath, captured.fingerprint);
+    files.set(dependency.virtualPath, captured);
     const analysis = analyzeSource(
       dependency.virtualPath,
-      new TextDecoder().decode(captured.file.bytes),
+      new TextDecoder().decode(captured.bytes),
     );
     if (analysis.kind === "invalid") {
       diagnostics.push(...analysis.diagnostics);
@@ -454,56 +429,12 @@ export async function captureProjectSnapshot(
   const fileEntries = [...files.entries()].sort(([left], [right]) =>
     left < right ? -1 : left > right ? 1 : 0,
   );
-  const fingerprintEntries = [...fingerprints.entries()].sort(([left], [right]) =>
-    left < right ? -1 : left > right ? 1 : 0,
-  );
   return Object.freeze({
     kind: "captured",
     snapshot: Object.freeze({
-      projectRoot: project.root.realPath,
       config: project.config,
       registries: project.registries,
       files: new ImmutableMap(fileEntries),
-      fingerprints: new ImmutableMap(fingerprintEntries),
-      toolchain: Object.freeze({
-        node: process.versions.node,
-        rolldown: "1.2.2",
-        oxcParser: "0.143.0",
-        ajv: "8.20.0",
-      }),
     }),
   });
-}
-
-export async function verifySnapshotUnchanged(
-  snapshot: CompilationSnapshot,
-): Promise<readonly CompilerDiagnostic[]> {
-  const diagnostics: CompilerDiagnostic[] = [];
-  for (const [projectPath, expected] of snapshot.fingerprints) {
-    try {
-      const metadata = fingerprint(
-        projectPath,
-        expected.absolutePath,
-        await stat(expected.absolutePath),
-      );
-      const currentBytes = new Uint8Array(await readFile(expected.absolutePath));
-      const capturedBytes = snapshot.files.get(projectPath)?.bytes;
-      if (
-        !sameFingerprint(expected, metadata) ||
-        capturedBytes === undefined ||
-        !sameBytes(capturedBytes, currentBytes)
-      ) {
-        diagnostics.push(changedDiagnostic(projectPath));
-      }
-    } catch (error) {
-      if (
-        (error as NodeJS.ErrnoException).code !== "ENOENT" &&
-        !(error instanceof ProjectPathPolicyError)
-      ) {
-        throw error;
-      }
-      diagnostics.push(changedDiagnostic(projectPath));
-    }
-  }
-  return orderCompilerDiagnostics(diagnostics);
 }

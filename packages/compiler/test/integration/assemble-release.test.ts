@@ -139,17 +139,9 @@ function createSnapshot(): CompilationSnapshot {
   ]);
 
   return {
-    projectRoot: "/OPERATIONAL_SOURCE_ROOT",
     config: configuration,
     registries: registries.registries,
     files,
-    fingerprints: new Map(),
-    toolchain: {
-      node: "OPERATIONAL_BUILD_HOST",
-      rolldown: "1.2.2",
-      oxcParser: "0.143.0",
-      ajv: "8.20.0",
-    },
   };
 }
 
@@ -193,6 +185,7 @@ async function assembleFixture(snapshot = createSnapshot()) {
     schemas: schemas.schemas,
     content: content.content,
     assets: assets.assets,
+    capabilities: [{ id: "plotpoint.haptics", major: 1, minimumMinor: 2 }],
   });
 }
 

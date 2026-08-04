@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { loadProject } from "../../src/project/load-project.js";
-import { captureProjectSnapshot, verifySnapshotUnchanged } from "../../src/project/snapshot.js";
+import { captureProjectSnapshot } from "../../src/project/snapshot.js";
 
 const roots: string[] = [];
 
@@ -81,20 +81,16 @@ describe("project snapshot", () => {
     );
   });
 
-  it("detects any tracked input changed after capture", async () => {
+  it("keeps captured input stable when the source file changes later", async () => {
     const root = await fixture();
     const loaded = await loadProject({ projectRoot: root });
     if (loaded.kind !== "loaded") throw new Error("fixture did not load");
     const captured = await captureProjectSnapshot(loaded);
     if (captured.kind !== "captured") throw new Error("fixture was not captured");
 
+    const capturedBytes = captured.snapshot.files.get("content/story.json")?.bytes;
     await writeFile(join(root, "content/story.json"), '{"title":"Changed"}');
-    const diagnostics = await verifySnapshotUnchanged(captured.snapshot);
-    expect(diagnostics).toMatchObject([
-      {
-        code: "project-input-changed",
-        location: { kind: "configuration", path: "content/story.json" },
-      },
-    ]);
+    expect(captured.snapshot.files.get("content/story.json")?.bytes).toEqual(capturedBytes);
+    expect(new TextDecoder().decode(capturedBytes)).toBe('{"title":"Frozen"}');
   });
 });

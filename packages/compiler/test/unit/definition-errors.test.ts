@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { inspectDefinitionBundle } from "../../src/composition/inspect-definitions.js";
 import type { DefinitionInspectionMetadata } from "../../src/composition/inspect-definitions.js";
 import { buildCanonicalRegistries } from "../../src/composition/registries.js";
+import { validateReferences } from "../../src/composition/validate-references.js";
 import type {
   CanonicalProjectRegistries,
   CompilationSnapshot,
@@ -99,7 +100,6 @@ function snapshot(schemaDocument: unknown): CompilationSnapshot {
     bytes: encoder.encode(JSON.stringify(schemaDocument)),
   });
   return {
-    projectRoot: "/fixture",
     config,
     registries: registries(config),
     files: new Map([
@@ -107,8 +107,6 @@ function snapshot(schemaDocument: unknown): CompilationSnapshot {
       ["schemas/payload.json", schema("schemas/payload.json")],
       ["schemas/outcome.json", schema("schemas/outcome.json")],
     ]),
-    fingerprints: new Map(),
-    toolchain: { node: "test", rolldown: "test", oxcParser: "test", ajv: "test" },
   };
 }
 
@@ -154,14 +152,14 @@ describe("command definition validation", () => {
     ).toContain("command-type-duplicate");
   });
 
-  it("reports missing payload/outcome schemas with command-specific diagnostics", () => {
+  it("reports missing payload/outcome schemas through composition validation", () => {
     const config = configuration();
     const broken = {
       ...config,
       commands: [{ ...config.commands[0]!, payloadSchema: "missing.payload" }],
     };
-    expect(validateCommands(registries(broken), metadata())).toMatchObject([
-      { code: "command-schema-missing", location: { field: "payloadSchema" } },
+    expect(validateReferences(registries(broken))).toMatchObject([
+      { code: "composition-reference-missing", location: { field: "payloadSchema" } },
     ]);
   });
 });
@@ -271,10 +269,10 @@ describe("progression definition validation", () => {
         },
       ],
     };
-    expect(validateProgressions(registries(broken), metadata()).map(({ code }) => code)).toEqual([
-      "progression-reference-missing",
-      "progression-reference-missing",
-      "progression-reference-missing",
+    expect(validateReferences(registries(broken)).map(({ code }) => code)).toEqual([
+      "composition-reference-missing",
+      "composition-reference-missing",
+      "composition-reference-missing",
     ]);
   });
 });

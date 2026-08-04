@@ -89,7 +89,6 @@ describe("snapshot release bundling", () => {
 
   it("bundles definition inspection without executing it in the compiler process", async () => {
     const snapshot: CompilationSnapshot = Object.freeze({
-      projectRoot: "/external/project",
       config: {} as CompilationSnapshot["config"],
       registries: Object.freeze({
         commands: Object.freeze([]),
@@ -101,8 +100,6 @@ describe("snapshot release bundling", () => {
         assets: Object.freeze([]),
       }),
       files: new Map(),
-      fingerprints: new Map(),
-      toolchain: { node: "test", rolldown: "1.2.2", oxcParser: "test", ajv: "test" },
     });
 
     const bundled = await bundleDefinitionInspection(snapshot);

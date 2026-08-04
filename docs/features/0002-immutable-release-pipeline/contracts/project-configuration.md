@@ -123,16 +123,17 @@ manifest; selected source modules are the statically reachable graph from config
 ### Logic Graph
 
 The logic graph may import project-local ESM, `@plotpoint/runtime`, and explicitly supported
-first-party deterministic roots. It must not import or reference Node built-ins, browser/DOM APIs,
-timers, network, storage, ambient clock/random/identifier APIs, CommonJS loading, URL modules,
-workers, native addons, non-literal dynamic imports, or unresolved/external packages.
+first-party deterministic roots. It must not import Node built-ins, external packages, CommonJS
+modules, URL modules, native addons, or non-literal dynamic imports. The compiler closes the import
+graph; the future runtime host removes ambient clock, randomness, network, storage, DOM, and device
+authority from the logic execution realm.
 
 ### Presentation Graph
 
-The presentation graph may use supported browser rendering APIs. It must not use Node built-ins,
-direct network, storage, or device authority, CommonJS loading, URL modules, native addons,
-non-literal dynamic imports, or unresolved/external packages. Future host and capability access must
-use the declared host contract; Gate 2 only preserves its version and capability requirements.
+The presentation graph may use browser rendering APIs. It must not import Node built-ins, external
+packages, CommonJS modules, URL modules, native addons, or non-literal dynamic imports. Future host
+policy restricts network, storage, and device authority and exposes declared capabilities through the
+host contract; Gate 2 preserves distinct entry roles, host version, and capability requirements.
 
 The compiler analyzes every reachable source before bundling and rejects any external import left in
 final output. Static ESM cycles may bundle; the declarative registration/reference graph must be
@@ -168,10 +169,11 @@ capability catalog in Gate 2.
 
 ## Frozen Input Set
 
-Every selected config, source, resolved dependency, schema, content file, and asset is captured before
-validation and bundling. All later phases consume captured bytes. A file that changes during capture
-or before success invalidates the build. Source absolute paths, filesystem metadata, dependency cache
-paths, output paths, and tool telemetry never enter the artifact.
+Every selected config, source, resolved dependency, schema, content file, and asset is coherently
+captured before validation and bundling. All later phases consume captured bytes. A file that changes
+during its read invalidates capture; a later live edit cannot affect or invalidate the captured build.
+Source absolute paths, filesystem metadata, dependency cache paths, output paths, and tool telemetry
+never enter the artifact.
 
 ## Deliberate Exclusions
 

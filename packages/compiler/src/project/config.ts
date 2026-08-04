@@ -110,29 +110,10 @@ export interface SnapshotFile {
   readonly bytes: Uint8Array;
 }
 
-export interface FileFingerprint {
-  readonly projectPath: string;
-  readonly absolutePath: string;
-  readonly byteLength: number;
-  readonly modifiedTimeMs: number;
-  readonly device: number;
-  readonly inode: number;
-}
-
-export interface CompilerToolchain {
-  readonly node: string;
-  readonly rolldown: string;
-  readonly oxcParser: string;
-  readonly ajv: string;
-}
-
 export interface CompilationSnapshot {
-  readonly projectRoot: string;
   readonly config: ProjectConfigurationV1;
   readonly registries: CanonicalProjectRegistries;
   readonly files: ReadonlyMap<string, SnapshotFile>;
-  readonly fingerprints: ReadonlyMap<string, FileFingerprint>;
-  readonly toolchain: CompilerToolchain;
 }
 
 export interface ValidateProjectInput {

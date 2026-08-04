@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
 
+import { computeReleaseId, isReleaseId } from "@plotpoint/protocol";
+
+import { decodeCanonicalJson, encodeCanonicalJson } from "../src/release/canonical-json.js";
+import { crc32, sha256Digest } from "../src/release/identity.js";
 import {
   compareOrdinal,
-  computeReleaseId,
-  crc32,
-  decodeCanonicalJson,
-  encodeCanonicalJson,
   isCanonicalArchivePath,
-  isReleaseId,
-  sha256Digest,
   validateArchivePath,
-} from "@plotpoint/protocol";
+} from "../src/release/paths.js";
 
 const utf8 = new TextEncoder();
 

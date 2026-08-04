@@ -45,7 +45,6 @@ function forbidden(
     | "import-dynamic-nonliteral"
     | "import-commonjs-forbidden"
     | "import-url-forbidden"
-    | "import-ambient-authority"
     | "import-native-addon"
     | "import-unresolved",
   details: Record<string, string | boolean>,
@@ -76,43 +75,9 @@ function staticPolicy(path: string, reference: SourceReference): CompilerDiagnos
   return forbidden(path, reference, "import-unresolved", { specifier });
 }
 
-function ambientAllowed(environment: ImportEnvironment, authority: string): boolean {
-  if (environment === "logic") {
-    return authority.startsWith("Math.") && authority !== "Math.random";
-  }
-  if (authority === "document" || authority.startsWith("document.")) {
-    return authority !== "document.cookie";
-  }
-  if (authority === "window" || authority.startsWith("window.")) {
-    return ![
-      "window.fetch",
-      "window.XMLHttpRequest",
-      "window.WebSocket",
-      "window.EventSource",
-      "window.Worker",
-      "window.localStorage",
-      "window.sessionStorage",
-      "window.indexedDB",
-      "window.navigator",
-    ].some((prefix) => authority === prefix || authority.startsWith(`${prefix}.`));
-  }
-  if (["setTimeout", "setInterval", "queueMicrotask"].includes(authority)) return true;
-  return ![
-    "fetch",
-    "XMLHttpRequest",
-    "WebSocket",
-    "EventSource",
-    "Worker",
-    "localStorage",
-    "sessionStorage",
-    "indexedDB",
-    "navigator",
-  ].some((prefix) => authority === prefix || authority.startsWith(`${prefix}.`));
-}
-
 export function validateEnvironmentPolicy(
   analysis: AnalyzedSource,
-  environment: ImportEnvironment,
+  _environment: ImportEnvironment,
 ): readonly CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
   for (const reference of analysis.references) {
@@ -147,12 +112,6 @@ export function validateEnvironmentPolicy(
         }),
       );
       continue;
-    }
-    const authority = reference.specifier ?? "unknown";
-    if (!ambientAllowed(environment, authority)) {
-      diagnostics.push(
-        forbidden(analysis.path, reference, "import-ambient-authority", { authority, environment }),
-      );
     }
   }
   return Object.freeze(diagnostics);

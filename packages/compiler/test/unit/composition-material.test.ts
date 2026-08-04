@@ -118,12 +118,9 @@ function snapshot(config = configuration()): CompilationSnapshot {
   const registries = buildCanonicalRegistries(config);
   if (registries.kind !== "valid") throw new Error("expected registries");
   return {
-    projectRoot: "/fixture",
     config,
     registries: registries.registries,
     files,
-    fingerprints: new Map(),
-    toolchain: { node: "test", rolldown: "test", oxcParser: "test", ajv: "test" },
   };
 }
 

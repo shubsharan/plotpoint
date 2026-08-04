@@ -17,7 +17,6 @@ export function validateCommands(
   inspection: DefinitionInspectionMetadata,
 ): readonly CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const schemas = new Set(registries.schemas.map(({ id }) => id));
   const aggregateSchemas = new Map(
     registries.aggregateSchemas.map((registration) => [registration.id, registration] as const),
   );
@@ -54,30 +53,6 @@ export function validateCommands(
   for (const registration of registries.commands) {
     const inspected = metadata.get(registration.id);
     const aggregate = aggregateSchemas.get(registration.aggregateSchema);
-    if (aggregate === undefined) {
-      diagnostics.push(
-        createCompilerDiagnostic({
-          code: "command-schema-missing",
-          location: commandLocation(registration.id, "aggregateSchema"),
-          details: { schema: registration.aggregateSchema, role: "aggregate" },
-        }),
-      );
-    }
-    for (const [field, schema] of [
-      ["payloadSchema", registration.payloadSchema],
-      ["outcomeSchema", registration.outcomeSchema],
-    ] as const) {
-      if (!schemas.has(schema)) {
-        diagnostics.push(
-          createCompilerDiagnostic({
-            code: "command-schema-missing",
-            location: commandLocation(registration.id, field),
-            details: { schema, role: field === "payloadSchema" ? "payload" : "outcome" },
-          }),
-        );
-      }
-    }
-
     if (inspected === undefined) {
       diagnostics.push(
         createCompilerDiagnostic({

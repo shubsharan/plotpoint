@@ -6,13 +6,14 @@
 ## Summary
 
 Implement the Gate 2 authoring boundary in the existing compiler and protocol packages. A strict
-data-only project descriptor selects code and data; the compiler snapshots its complete input graph,
-enforces separate deterministic-logic and browser-presentation policies, validates Gate 1
+data-only project descriptor selects code and data; the compiler snapshots its complete input graph
+once, enforces separate closed deterministic-logic and browser-presentation import policies, validates Gate 1
 definitions and cross-references, generates two self-contained browser ESM bundles through pinned
 Rolldown's stable `rolldown()` and `bundle.generate()` APIs, and atomically publishes one deterministic
-`.pprelease` artifact. The portable protocol package owns the strict release-format v1 container,
-canonical manifest, exact-byte SHA-256 identity, non-executing inspection, integrity verification,
-and compatibility assessment.
+`.pprelease` artifact. The portable protocol package owns high-level release construction, the strict
+release-format v1 container, canonical manifest, exact-byte SHA-256 identity, immutable verified entry
+access, non-executing inspection, integrity verification, and compatibility assessment. Ambient
+authority is enforced by the future runtime host rather than overclaimed through syntax matching.
 
 ## Technical Context
 
@@ -29,7 +30,7 @@ and compatibility assessment.
 **Target Platform**: Node.js authoring/compiler CLI; portable ES2022 protocol library; emitted browser ESM bundles for the future web runtime
 **Project Type**: Monorepo compiler, portable protocol library, CLI, and external example fixtures
 **Performance Goals**: Correctness, bounded parsing, and byte determinism are the Gate 2 goals; record build and verification baselines without creating a speculative latency gate
-**Constraints**: Data-only configuration; no runtime package discovery; no author Rolldown plugins or config files; use `rolldown()` plus in-memory `bundle.generate()` rather than experimental `build()` or filesystem `write()`; no final external imports; no ambient authority in deterministic logic; no game handler or rule execution during compilation; exact ordinal ordering; source changes fail the build; store-only non-ZIP64 release format; no operational metadata in artifact bytes; atomic non-overwriting output; expected identity required for a tamper claim
+**Constraints**: Data-only configuration; no runtime package discovery; no author Rolldown plugins or config files; use `rolldown()` plus in-memory `bundle.generate()` rather than experimental `build()` or filesystem `write()`; no final external imports; compiler guarantees only the closed import graph while Gate 3 owns ambient-authority isolation; no game handler or rule execution during compilation; exact ordinal ordering; coherent capture defines the build input; store-only non-ZIP64 release format; no operational metadata in artifact bytes; atomic non-overwriting output; expected identity required for a tamper claim
 **Scale/Scope**: At least three materially different valid external projects plus one isolated fixture for every diagnostic category; two emitted code bundles and explicit content/schema/component/asset entries; player installation, registry publication, signing, compression, active-session migration, and hosted untrusted compilation are excluded
 
 ## Constitution Check
@@ -43,11 +44,11 @@ ADR therefore provide the planning gates.
 ### Pre-Research Gate
 
 - **PASS - Immutable handoff**: One finalized artifact contains all play-time game material and needs no source discovery.
-- **PASS - Deterministic runtime boundary**: Logic imports are analyzed separately and selected Gate 1 definitions remain the source of command and progression semantics.
+- **PASS - Honest runtime boundary**: Logic imports are closed and analyzed separately, while absence of ambient authority is reserved for a future isolated execution host rather than inferred from syntax spellings.
 - **PASS - Build-time composition**: Commands, schemas, progression, components, content, and assets resolve before artifact publication; no mutable runtime registry is introduced.
 - **PASS - Independent compatibility**: Release format, host API, and aggregate schema versions remain separate manifest fields.
 - **PASS - Security honesty**: Local definition inspection is bounded process isolation, not a claim of hostile-code sandboxing or safe hosted compilation.
-- **PASS - Minimal ownership**: Existing compiler and protocol packages are sufficient; no service, datastore, queue, or new workspace package is introduced.
+- **PASS - Minimal ownership**: Existing compiler and protocol packages are sufficient; protocol owns one high-level release constructor and verified reader without a new package, service, datastore, or queue.
 
 ### Post-Design Gate
 
@@ -65,7 +66,7 @@ No gate violation requires a complexity exception.
 **Impact**: Major
 
 - [Deterministic Runtime Contract](../../adrs/0001-deterministic-runtime-contract.md) - **Accepted**. Governs the command, aggregate, progression, canonical-value, and ambient-authority definitions that compilation validates and bundles.
-- [Immutable Release Format](../../adrs/0002-immutable-release-format.md) - **Accepted**. Governs project composition, compiler isolation, release-format v1 bytes, manifest and identity semantics, compatibility, verification, package ownership, and atomic publication.
+- [Immutable Release Format](../../adrs/0002-immutable-release-format.md) - **Accepted**. Governs project composition, closed-import enforcement, future runtime authority isolation, release-format v1 bytes, high-level construction and entry access, manifest and identity semantics, compatibility, verification, package ownership, and atomic publication.
 
 <!-- Use `Impact: Major` and link every governing ADR here and in spec.md. -->
 
@@ -109,6 +110,8 @@ packages/protocol/
 │       ├── zip-profile.ts
 │       ├── manifest.ts
 │       ├── identity.ts
+│       ├── create.ts
+│       ├── open.ts
 │       ├── inspect.ts
 │       ├── verify.ts
 │       └── compatibility.ts
@@ -147,18 +150,19 @@ turbo.json
 ```
 
 **Structure Decision**: Extend the existing `@plotpoint/protocol` package with the portable persisted
-format and verifier, and the existing `@plotpoint/compiler` package with the Node authoring pipeline
-and CLI. Runtime remains dependency-free and unchanged except for a genuinely missing public type.
+format, high-level constructor, verified reader, and verifier, and the existing `@plotpoint/compiler`
+package with the Node authoring pipeline and CLI. Raw container/canonicalization primitives remain
+private. Runtime remains unchanged; protocol removes its unused runtime dependency.
 Modules remain first-party source material rather than becoming a runtime registry. Golden examples
 are copied outside the workspace for acceptance tests so public exports and source independence are
 proven rather than assumed.
 
 ## Phase 0: Research
 
-Research is complete in [research.md](research.md). It resolves configuration, import analysis,
+Research is complete in [research.md](research.md). It resolves configuration, closed import analysis,
 definition inspection, schema dialect, deterministic bundling, container encoding, identity,
-manifest, verification, compatibility, diagnostics, atomic output, package ownership, and golden
-evidence without remaining clarification markers.
+manifest construction and entry access, verification, compatibility, diagnostics, atomic output,
+snapshot semantics, package ownership, and golden evidence without remaining clarification markers.
 
 ## Phase 1: Design & Contracts
 

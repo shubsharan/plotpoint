@@ -1,5 +1,46 @@
 # Research: Immutable Release Pipeline
 
+## Refinement: Authority Enforcement Boundary
+
+**Decision**: The compiler soundly enforces a closed import graph but does not treat syntactic matching
+of ambient globals as proof of runtime isolation. Direct, aliased, destructured, and computed global
+access are all runtime concerns. Gate 3 must provide an isolated execution realm, host policy, and
+capability bridge before release bundles execute.
+
+**Rationale**: JavaScript source spellings are not a security boundary. A pattern blacklist creates
+both false confidence and inconsistent behavior for semantically equivalent code, while the compiler's
+snapshot-backed resolver can soundly prove that every bundled import belongs to the captured graph.
+
+**Alternatives considered**: Expand the blacklist with alias tracking, computed-property handling, and
+scope analysis. Rejected because it remains incomplete for a dynamic language and duplicates the
+runtime boundary that must exist regardless.
+
+## Refinement: Portable Construction and Entry Access
+
+**Decision**: Protocol owns one high-level release constructor and one verified release reader. Raw
+ZIP, CRC, canonical JSON, manifest validation, path, and payload digest primitives remain internal.
+
+**Rationale**: The package that defines persisted bytes should construct and read them through the same
+invariants. A future player needs verified entry bytes, not a public archive writer. This also removes
+the compiler's format self-round-trip and shrinks the public compatibility surface.
+
+**Alternatives considered**: Keep construction in compiler and export the ZIP parser. Rejected because
+it exposes encoding internals, splits ownership, and encourages callers to bypass full verification.
+
+## Refinement: Snapshot and Validation Flow
+
+**Decision**: Coherent capture is the immutable build boundary. The compiler performs before/read/after
+checks during capture, then uses captured bytes without rereading live files. Normalized capabilities
+and prerequisite reference validation flow forward rather than being recomputed by assembly or
+specialized validators.
+
+**Rationale**: Later live edits cannot alter captured bytes. Post-capture rereads add filesystem work,
+create false failures, and weaken the snapshot abstraction. Passing validated outputs forward removes
+duplicate logic and impossible defensive branches.
+
+**Alternatives considered**: Retain fingerprints and revalidate at each phase. Rejected because it
+checks mutable workspace state rather than artifact coherence.
+
 ## Declarative Project Configuration
 
 **Decision**: Use one strict, versioned, data-only `plotpoint.project.json` with explicit code exports and explicit schema, progression, component, content, and asset registrations. Reject unknown keys, globs, package discovery, executable configuration, project-boundary escapes, aliases, symlinks, and case-equivalent duplicate destinations. Derive capability requirements from selected registrations.
@@ -10,7 +51,7 @@
 
 ## Input Snapshot
 
-**Decision**: Resolve the explicit project graph, capture every material byte with pre/post file checks, and make all later analysis and bundling read the immutable snapshot through compiler-controlled loaders. Recheck tracked inputs before publication and fail if any changed.
+**Decision**: Resolve the explicit project graph, capture every material byte with pre/post file checks, and make all later analysis and bundling read the immutable snapshot through compiler-controlled loaders. Coherent capture is the final read of live project state.
 
 **Rationale**: A build that rereads a live tree can mix versions even when its start and end revisions appear frozen. Snapshot ownership makes the pinned-input reproducibility claim testable and removes cwd, temporary path, clock, locale, and discovery order from output.
 
@@ -18,11 +59,11 @@
 
 ## Import Graphs and Environment Policy
 
-**Decision**: Analyze deterministic logic and browser presentation as separate graphs with a direct Oxc parser and Rolldown's resolver hooks. Logic permits project-local ESM plus supported Plotpoint deterministic roots and rejects browser or Node ambient APIs, CommonJS, URL imports, non-literal dynamic imports, native addons, unresolved imports, and externalized output. Presentation permits browser rendering APIs but still rejects direct network, storage, device, Node, CommonJS, URL, unresolved, and non-literal dynamic authority. Use fixed browser/import/default resolution conditions.
+**Decision**: Analyze deterministic logic and browser presentation as separate closed import graphs with a direct Oxc parser and Rolldown's resolver hooks. Both permit project-local ESM plus supported Plotpoint roots and reject Node/package imports outside that allowlist, CommonJS, URL imports, non-literal dynamic imports, native addons, unresolved imports, and externalized output. Ambient browser and language globals are not treated as a compiler-enforced authority boundary. Use fixed browser/import/default resolution conditions.
 
-**Rationale**: AST analysis catches syntax that a bundler intentionally preserves, while the bundler's resolver matches actual package exports. Separate policies preserve Gate 1 semantics without pretending the UI is deterministic logic.
+**Rationale**: AST analysis and the snapshot resolver soundly close the module graph. Separate entry roles preserve Gate 1 semantics and allow the future host to apply different runtime isolation without pretending syntax matching proves authority absence.
 
-**Alternatives considered**: Rolldown hooks alone were rejected because explicit AST policy must also catch ambient references and non-literal imports. The TypeScript compiler API was rejected because the installed TypeScript 7 API is not the stable bundler-resolution surface. Banning all ESM cycles was rejected as broader than the roadmap requires.
+**Alternatives considered**: Rolldown hooks alone were rejected because explicit AST policy must also catch CommonJS, URL imports, native addons, and non-literal dynamic imports. The TypeScript compiler API was rejected because the installed TypeScript 7 API is not the stable bundler-resolution surface. Banning all ESM cycles was rejected as broader than the roadmap requires.
 
 ## Gate 1 Definition Inspection
 

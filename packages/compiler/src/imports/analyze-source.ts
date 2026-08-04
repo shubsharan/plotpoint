@@ -3,7 +3,7 @@ import { parseSync } from "oxc-parser";
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
 import type { CompilerDiagnostic } from "../project/config.js";
 
-export type SourceReferenceKind = "static" | "dynamic" | "commonjs" | "url" | "ambient";
+export type SourceReferenceKind = "static" | "dynamic" | "commonjs" | "url";
 
 export interface SourceReference {
   readonly kind: SourceReferenceKind;
@@ -48,11 +48,6 @@ function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
-}
-
-function nodeType(value: unknown): string | null {
-  const valueRecord = record(value);
-  return typeof valueRecord?.type === "string" ? valueRecord.type : null;
 }
 
 function identifierName(value: unknown): string | null {
@@ -194,19 +189,6 @@ export function analyzeSource(path: string, source: string): AnalyzeSourceResult
             specifier !== undefined,
           ),
         );
-      } else if (
-        ["Date", "fetch", "setTimeout", "setInterval", "queueMicrotask"].includes(calleeName ?? "")
-      ) {
-        references.push(
-          sourceReference(
-            source,
-            "ambient",
-            nodeOffset(callee, "start"),
-            nodeOffset(callee, "end"),
-            calleeName ?? undefined,
-            true,
-          ),
-        );
       }
     }
 
@@ -225,66 +207,7 @@ export function analyzeSource(path: string, source: string): AnalyzeSourceResult
             specifier !== undefined,
           ),
         );
-      } else if (
-        ["Date", "XMLHttpRequest", "WebSocket", "EventSource", "Worker"].includes(name ?? "")
-      ) {
-        references.push(
-          sourceReference(
-            source,
-            "ambient",
-            nodeOffset(node, "start"),
-            nodeOffset(node, "end"),
-            name ?? undefined,
-            true,
-          ),
-        );
       }
-    }
-
-    if (node.type === "MemberExpression") {
-      const objectName = identifierName(node.object);
-      const propertyName = identifierName(node.property);
-      if (
-        objectName !== null &&
-        [
-          "Date",
-          "Math",
-          "crypto",
-          "performance",
-          "window",
-          "document",
-          "localStorage",
-          "sessionStorage",
-          "indexedDB",
-          "navigator",
-          "globalThis",
-        ].includes(objectName)
-      ) {
-        const authority = propertyName === null ? objectName : `${objectName}.${propertyName}`;
-        references.push(
-          sourceReference(
-            source,
-            "ambient",
-            nodeOffset(node, "start"),
-            nodeOffset(node, "end"),
-            authority,
-            true,
-          ),
-        );
-      }
-    }
-
-    if (nodeType(node) === "MetaProperty") {
-      references.push(
-        sourceReference(
-          source,
-          "ambient",
-          nodeOffset(node, "start"),
-          nodeOffset(node, "end"),
-          "import.meta",
-          true,
-        ),
-      );
     }
   });
 

@@ -86,17 +86,20 @@ dependent work and cascading diagnostics.
 ## Pipeline Order
 
 1. Resolve and parse the project file without execution.
-2. Resolve explicit paths and capture the immutable input snapshot.
-3. Parse and validate logic and presentation import graphs.
+2. Resolve explicit paths and coherently capture the immutable input snapshot once.
+3. Parse and validate closed logic and presentation import graphs without claiming ambient-authority isolation.
 4. Build canonical registries and validate all cross-references.
 5. Validate schemas, content, components, assets, compatibility, and capabilities.
 6. Bundle and inspect selected Gate 1 definitions in a bounded subprocess; never call handlers or predicates.
 7. Generate deterministic logic and presentation roots and bundle both from snapshot bytes in memory.
-8. Construct release entries, canonical manifest, and strict container bytes.
-9. Run the portable release verifier over the assembled bytes.
+8. Pass normalized manifest metadata and material entries to the protocol release constructor.
+9. Receive the canonical, self-verified artifact from protocol.
 10. Publish atomically and return the release identity and manifest.
 
 Any invalid result ends before later dependent phases and writes no completed release.
+
+After coherent capture, the compiler never rereads live project inputs. Runtime isolation of clock,
+randomness, network, storage, DOM, and device globals is explicitly outside the compiler contract.
 
 ## Definition Subprocess
 
@@ -161,6 +164,6 @@ accordingly. With `--expect`, it additionally proves equality to the trusted exp
 ## Public Export Discipline
 
 The compiler root exports input/result/diagnostic types plus `validateProject` and `compileProject`.
-Release manifest, identity, inspection, verification, and compatibility types come from
-`@plotpoint/protocol` rather than being duplicated. Internal parser, bundler, Ajv, subprocess, ZIP,
-and filesystem types are not public compatibility surfaces.
+Release construction, opening, manifest, identity, inspection, verification, and compatibility types
+come from `@plotpoint/protocol` rather than being duplicated. Internal parser, bundler, Ajv,
+subprocess, ZIP, canonicalization, digest, and filesystem types are not public compatibility surfaces.

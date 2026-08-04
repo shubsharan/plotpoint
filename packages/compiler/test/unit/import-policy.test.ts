@@ -34,7 +34,6 @@ function snapshot(name: string, text: string): CompilationSnapshot {
     bytes: new TextEncoder().encode(text),
   });
   return {
-    projectRoot: "/fixture",
     config: {
       projectFormatVersion: 1,
       environment: "web",
@@ -61,8 +60,6 @@ function snapshot(name: string, text: string): CompilationSnapshot {
       assets: [],
     },
     files: new Map([[path, file]]),
-    fingerprints: new Map(),
-    toolchain: { node: "test", rolldown: "1.2.2", oxcParser: "test", ajv: "test" },
   };
 }
 
@@ -71,16 +68,13 @@ describe("invalid import-boundary fixtures", () => {
     ["logic-forbidden-import.ts", "logic", "import-forbidden"],
     ["dynamic-import.ts", "logic", "import-dynamic-nonliteral"],
     ["native-addon.ts", "logic", "import-native-addon"],
-    ["presentation-network.ts", "presentation", "import-ambient-authority"],
   ] as const)("rejects %s in %s with %s", async (name, environment, code) => {
     expect(await policy(name, environment)).toMatchObject([{ code }]);
   });
 
-  it("finds both clock and identifier ambient authority in deterministic logic", async () => {
-    expect(await policy("logic-ambient-global.ts", "logic")).toMatchObject([
-      { code: "import-ambient-authority", details: { authority: "Date" } },
-      { code: "import-ambient-authority", details: { authority: "crypto.randomUUID" } },
-    ]);
+  it("does not apply a bypassable ambient-authority syntax blacklist", async () => {
+    expect(await policy("logic-ambient-global.ts", "logic")).toEqual([]);
+    expect(await policy("presentation-network.ts", "presentation")).toEqual([]);
   });
 
   it.each([

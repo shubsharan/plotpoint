@@ -121,9 +121,6 @@ export function validateProgressions(
   inspection: DefinitionInspectionMetadata,
 ): readonly CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const commands = new Set(registries.commands.map(({ id }) => id));
-  const content = new Set(registries.content.map(({ id }) => id));
-  const components = new Set(registries.components.map(({ id }) => id));
   const aggregates = new Map(
     registries.aggregateSchemas.map((registration) => [registration.id, registration] as const),
   );
@@ -161,32 +158,6 @@ export function validateProgressions(
   for (const registration of registries.progressions) {
     const progression = metadata.get(registration.id);
     const aggregate = aggregates.get(registration.aggregateSchema);
-    if (aggregate === undefined) {
-      diagnostics.push(
-        createCompilerDiagnostic({
-          code: "progression-reference-missing",
-          location: progressionLocation(registration.id, "aggregateSchema"),
-          details: { target: registration.aggregateSchema, targetKind: "aggregateSchema" },
-        }),
-      );
-    }
-    for (const [field, targets, existing, targetKind] of [
-      ["commands", registration.commands, commands, "command"],
-      ["content", registration.content, content, "content"],
-      ["components", registration.components, components, "component"],
-    ] as const) {
-      for (const target of targets) {
-        if (!existing.has(target)) {
-          diagnostics.push(
-            createCompilerDiagnostic({
-              code: "progression-reference-missing",
-              location: progressionLocation(registration.id, field),
-              details: { target, targetKind },
-            }),
-          );
-        }
-      }
-    }
     if (progression === undefined) {
       diagnostics.push(
         createCompilerDiagnostic({

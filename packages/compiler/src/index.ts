@@ -21,7 +21,7 @@ import type {
 } from "./project/config.js";
 import { loadProject } from "./project/load-project.js";
 import { ProjectPathPolicyError, validateReleaseOutputPath } from "./project/path-policy.js";
-import { captureProjectSnapshot, verifySnapshotUnchanged } from "./project/snapshot.js";
+import { captureProjectSnapshot } from "./project/snapshot.js";
 import { assembleRelease } from "./release/assemble.js";
 import {
   OutputCollisionError,
@@ -125,8 +125,6 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
 
   const bundled = await bundleRelease({ logic: logic.graph, presentation: presentation.graph });
   if (bundled.kind === "invalid") return bundled;
-  const changedBeforeAssembly = await verifySnapshotUnchanged(snapshot);
-  if (changedBeforeAssembly.length > 0) return invalid(changedBeforeAssembly);
 
   const assembled = await assembleRelease({
     snapshot,
@@ -136,10 +134,9 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
     schemas: schemas.schemas,
     content: content.content,
     assets: assets.assets,
+    capabilities: capabilities.capabilities,
   });
   if (assembled.kind === "invalid") return assembled;
-  const changedBeforeSuccess = await verifySnapshotUnchanged(snapshot);
-  if (changedBeforeSuccess.length > 0) return invalid(changedBeforeSuccess);
   return Object.freeze({ kind: "prepared", artifact: assembled.artifact });
 }
 

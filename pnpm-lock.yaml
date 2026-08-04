@@ -143,9 +143,6 @@ importers:
       '@noble/hashes':
         specifier: 2.2.0
         version: 2.2.0
-      '@plotpoint/runtime':
-        specifier: workspace:*
-        version: link:../runtime
     devDependencies:
       '@plotpoint/typescript-config':
         specifier: workspace:*

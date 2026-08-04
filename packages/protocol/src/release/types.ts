@@ -54,6 +54,30 @@ export interface ReleaseEntry extends ReleaseInventoryEntry {
   readonly bytes: Uint8Array;
 }
 
+export interface ReleaseBinaryMaterialEntry {
+  readonly path: string;
+  readonly kind: ReleaseEntryKind;
+  readonly bytes: Uint8Array;
+  readonly value?: never;
+}
+
+export interface ReleaseJsonMaterialEntry {
+  readonly path: string;
+  readonly kind: ReleaseEntryKind;
+  readonly value: unknown;
+  readonly bytes?: never;
+}
+
+export type ReleaseMaterialEntry = ReleaseBinaryMaterialEntry | ReleaseJsonMaterialEntry;
+
+export interface ReleaseConstructionInput {
+  readonly hostApi: HostApiRequirement;
+  readonly aggregateSchemas: readonly AggregateSchemaRequirement[];
+  readonly capabilities: readonly CapabilityRequirement[];
+  readonly entrypoints: ReleaseManifestV1["entrypoints"];
+  readonly entries: readonly ReleaseMaterialEntry[];
+}
+
 export interface ReleaseArtifact {
   readonly bytes: Uint8Array;
   readonly manifest: ReleaseManifestV1;
@@ -87,6 +111,13 @@ export interface InspectedRelease {
   readonly kind: "inspected";
   readonly releaseId: ReleaseId;
   readonly manifest: ReleaseManifestV1;
+}
+
+export interface OpenedRelease {
+  readonly kind: "opened";
+  readonly releaseId: ReleaseId;
+  readonly manifest: ReleaseManifestV1;
+  readonly entries: readonly ReleaseEntry[];
 }
 
 export interface InvalidRelease {

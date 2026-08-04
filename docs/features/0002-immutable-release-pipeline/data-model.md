@@ -97,16 +97,14 @@ cannot claim the same release path.
 
 The immutable input set used by all compiler phases.
 
-| Field          | Type                                 | Rules                                               |
-| -------------- | ------------------------------------ | --------------------------------------------------- |
-| `projectRoot`  | resolved path                        | Compiler-only; never emitted                        |
-| `config`       | canonical project configuration      | Detached and immutable                              |
-| `files`        | ordinal map of logical path to bytes | One entry per selected source/data/asset/dependency |
-| `fingerprints` | file observations                    | Pre/post mutation detection only; never emitted     |
-| `toolchain`    | pinned versions and options          | Receipt/test evidence only; never emitted           |
+| Field    | Type                                 | Rules                                               |
+| -------- | ------------------------------------ | --------------------------------------------------- |
+| `config` | canonical project configuration      | Detached and immutable                              |
+| `files`  | ordinal map of logical path to bytes | One entry per selected source/data/asset/dependency |
 
-All parsing, definition inspection, bundling, and entry creation consume snapshot bytes. A changed
-tracked input invalidates the snapshot and compilation.
+All parsing, definition inspection, bundling, and entry creation consume snapshot bytes. Pre/read/post
+checks reject a torn individual capture; changes to live project files after coherent capture do not
+alter or invalidate the snapshot.
 
 ## Import Graph
 
@@ -173,6 +171,27 @@ The finalized strict v1 ZIP-compatible byte sequence.
 | `manifest`  | Release Manifest V1 | Parsed from canonical `manifest.json`               |
 | `releaseId` | qualified digest    | SHA-256 over every artifact byte; external to bytes |
 
+## Release Construction Input
+
+Protocol-owned input containing validated manifest metadata and material entries before inventory
+digests and container bytes exist.
+
+- Fields: host API requirement, aggregate schema requirements, normalized capabilities, fixed logic
+  and presentation entrypoints, and material entries with path, kind, and immutable bytes.
+- The protocol constructor validates roles and paths, derives inventory length/digest fields, emits the
+  canonical manifest and strict container, and returns one self-verified Release Artifact.
+- Raw container and canonicalization helpers are not public entities.
+
+## Opened Release
+
+A completely validated, non-executing view of a Release Artifact for installers and future players.
+
+- Fields: computed release identity, validated manifest, and immutable copies of every inventory entry.
+- Entry order equals manifest inventory order; no missing or additional entry can be exposed.
+- Opening validates the same bounded container, canonical manifest, inventory, CRC, length, and digest
+  rules as inspection and verification before returning bytes.
+- Mutating bytes returned by one read cannot mutate the artifact or a later read.
+
 ### Lifecycle
 
 ```text
@@ -181,9 +200,8 @@ project discovered
   -> snapshot captured
   -> graphs and registries valid
   -> definitions inspected
-  -> bundles and entries produced
-  -> manifest canonicalized
-  -> temporary artifact assembled
+  -> bundles and material entries produced
+  -> protocol manifest and artifact constructed
   -> artifact self-verified
   -> final path atomically published
 ```
@@ -191,6 +209,9 @@ project discovered
 Any failure before publication returns an invalid result and no release identity. Temporary remnants
 remain non-release files. An existing destination is reused only when it independently verifies as
 the exact expected release; otherwise it is not overwritten.
+
+Runtime ambient-authority isolation is not a compilation lifecycle state. It is a Gate 3 installation
+and execution prerequisite applied to the distinct logic and presentation entry roles.
 
 ## Release Identity and Trust
 

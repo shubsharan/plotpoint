@@ -1,15 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  encodeCanonicalJson,
-  inspectRelease,
-  sha256Digest,
-  writeStoredZip,
-  type ReleaseManifestV1,
-  type StoredZipEntry,
-} from "@plotpoint/protocol";
+import { inspectRelease, type ReleaseManifestV1 } from "@plotpoint/protocol";
 
-import { parseStoredZip } from "../src/release/zip-profile.js";
+import { encodeCanonicalJson } from "../src/release/canonical-json.js";
+import { sha256Digest } from "../src/release/identity.js";
+import { parseStoredZip, writeStoredZip, type StoredZipEntry } from "../src/release/zip-profile.js";
 
 const utf8 = new TextEncoder();
 const a = utf8.encode("export const a = 1;");

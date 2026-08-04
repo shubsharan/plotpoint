@@ -40,10 +40,14 @@ pnpm --dir /absolute/path/to/minimal-puzzle exec plotpoint validate \
 Expected result:
 
 - configuration and referenced files are captured once;
-- logic and presentation graphs pass their distinct import policies;
+- logic and presentation graphs pass their distinct closed import policies;
 - command and progression exports agree with registrations;
 - schemas, content, components, assets, capabilities, and references resolve;
 - no `.pprelease` output exists.
+
+Validation does not claim that JavaScript syntax inspection proves absence of ambient clock,
+randomness, network, storage, DOM, or device authority. The future runtime host enforces those
+boundaries when it executes the distinct logic and presentation bundles.
 
 Seed one defect at a time to confirm the first diagnostic points to the relevant config pointer,
 source location, logical reference, or asset path and has the expected stable category.
@@ -95,24 +99,41 @@ This proves strict container structure, canonical manifest, exact inventory, ent
 to the trusted expected release. Running verification without `--expect` proves internal consistency
 but must not claim publisher authenticity or equality to a previously known release.
 
-## 6. Prove Source Independence
+## 6. Open Verified Entries
+
+Use the public protocol reader rather than archive internals:
+
+```ts
+import { openRelease } from "@plotpoint/protocol";
+
+const opened = await openRelease(releaseBytes);
+if (opened.kind === "invalid") throw new Error("release rejected");
+
+for (const entry of opened.entries) {
+  console.log(entry.path, entry.kind, entry.bytes.byteLength);
+}
+```
+
+Opening validates the complete artifact before returning immutable entry copies and never executes
+logic or presentation code.
+
+## 7. Prove Source Independence
 
 Copy the release to a clean directory, remove access to the project source, author dependencies, and
-workspace aliases, then repeat inspection and verification. A downstream reader must be able to load
-every inventoried entry from the artifact alone. No package discovery or dependency resolution may
-occur.
+workspace aliases, then repeat opening, inspection, and verification. A downstream reader must load
+every inventoried entry from the artifact alone. No package discovery or dependency resolution may occur.
 
-## 7. Prove Byte Reproducibility
+## 8. Prove Byte Reproducibility
 
 Compile each valid golden project 20 times from the same frozen inputs and pinned toolchain into 20
 distinct new output paths. Vary cwd, output basename, temp basename, wall clock, and registry-only
 label/channel/project/timestamp values outside the project file.
 
 For every run, compare the complete file bytes and computed release identity. All 20 artifacts for a
-fixture must be byte-identical. A source mutation during a build must fail rather than produce mixed
-bytes.
+fixture must be byte-identical. A mutation during an individual file read must fail rather than
+produce mixed bytes; a later edit cannot alter or invalidate the already captured build.
 
-## 8. Prove Tamper Detection
+## 9. Prove Tamper Detection
 
 Work only on disposable copies. Test one mutation at a time:
 
@@ -125,7 +146,7 @@ Structural or entry mutations must fail internal verification with the affected 
 A coordinated payload-plus-manifest rewrite may be internally consistent but must fail against the
 original expected release identity.
 
-## 9. Acceptance Matrix
+## 10. Acceptance Matrix
 
 Run the flow for at least:
 

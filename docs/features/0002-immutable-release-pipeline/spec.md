@@ -25,6 +25,7 @@ A game author can submit a frozen external game project for validation and compi
 1. **Given** a valid frozen game project and a pinned build environment, **When** the author compiles it repeatedly, **Then** each run emits byte-identical release content with the same content-derived identity.
 2. **Given** a successfully compiled release, **When** the project source, package discovery, and dependency resolution are unavailable, **Then** the release remains complete and inspectable for later installation and play.
 3. **Given** a project that selects game modules, presentation components, content, schemas, and assets, **When** compilation succeeds, **Then** every selected item is resolved into the release rather than deferred to play time.
+4. **Given** a coherent project snapshot, **When** the author edits live source after capture, **Then** the build completes from captured bytes without mixing or rereading the later edits.
 
 ---
 
@@ -42,6 +43,7 @@ A game author receives explicit validation failures before an invalid project ca
 2. **Given** a project with an invalid command registration or aggregate schema, **When** validation runs, **Then** the project is rejected before any release is eligible for publication.
 3. **Given** missing content, an unknown progression target, an unresolved presentation component, or a missing asset, **When** compilation runs, **Then** it fails with diagnostics that identify every independently discoverable blocking reference.
 4. **Given** a failed validation or compilation, **When** outputs are inspected, **Then** no output is presented as a valid content-addressed release.
+5. **Given** equivalent direct, aliased, destructured, or computed access to an ambient browser or language global, **When** compilation runs, **Then** the compiler does not claim that syntax inspection proves runtime authority isolation.
 
 ---
 
@@ -58,6 +60,7 @@ A release operator or downstream player can inspect a release before installatio
 1. **Given** a valid compiled release, **When** its manifest is inspected, **Then** it declares the release format, required host API, aggregate schema versions, required native capabilities, and integrity information for all protected release content.
 2. **Given** a project that requires an undeclared capability or an unsupported compatibility requirement, **When** compilation runs, **Then** it fails before producing a publishable release.
 3. **Given** two releases with identical emitted content but different registry labels, channels, project identity, or creation timestamps, **When** their content identities are compared, **Then** those operational values do not change the content identity.
+4. **Given** a structurally valid release, **When** a downstream consumer opens it, **Then** every inventoried entry is available as immutable bytes without executing game code or using compiler internals.
 
 ---
 
@@ -81,6 +84,7 @@ A release operator or downstream player can verify that a release is internally 
 - Two selected modules, commands, schemas, components, content items, or assets claim the same release identity or destination.
 - A valid source reference resolves outside the permitted project boundary or resolves differently through an alias, symbolic link, or case variation.
 - The import graph contains a cycle, a dynamically unresolved dependency, or a dependency allowed for authoring but forbidden in the target runtime environment.
+- Game code aliases, destructures, or computes access to ambient clock, randomness, network, storage, or device globals that syntax-pattern matching cannot soundly classify.
 - A command registration references an unknown aggregate schema version, or two registrations conflict for the same command identity.
 - A progression graph references missing content or components, contains invalid node references, or conflicts with the deterministic runtime contract.
 - An asset is empty, unreadable, changes during compilation, or is referenced under multiple equivalent paths.
@@ -94,7 +98,7 @@ A release operator or downstream player can verify that a release is internally 
 
 - **FR-001**: The pipeline MUST accept a game project configuration that identifies the target execution environment and the game logic, presentation, content, modules, schemas, and assets selected for the release.
 - **FR-002**: The pipeline MUST validate the project configuration before treating any compilation output as a release.
-- **FR-003**: The pipeline MUST enforce import boundaries for the declared execution environment and reject imports that would require unavailable or forbidden runtime authority.
+- **FR-003**: The pipeline MUST enforce a closed import graph for the declared execution environment and reject unresolved imports, forbidden package roots, native addons, URL imports, CommonJS loading, and non-literal dynamic imports.
 - **FR-004**: The pipeline MUST resolve all selected modules, presentation components, content, schemas, progression definitions, and assets at build time.
 - **FR-005**: The pipeline MUST reject unresolved, ambiguous, duplicate, conflicting, or out-of-bound project references with diagnostics that identify the relevant configuration field or source reference.
 - **FR-006**: The pipeline MUST validate command registrations against the deterministic runtime contract, including command identity, target aggregate kind, expected schema, and referenced outcomes.
@@ -116,6 +120,10 @@ A release operator or downstream player can verify that a release is internally 
 - **FR-022**: The pipeline MUST support golden fixtures that consume the author-facing project surface from outside the platform workspace and exercise complete valid releases and each required failure class.
 - **FR-023**: A release operator or downstream installer MUST be able to inspect manifest, compatibility, capability, inventory, identity, and integrity information without executing bundled game code.
 - **FR-024**: The release format MUST be versioned independently from the host API and aggregate schema contracts so each compatibility requirement can be evaluated explicitly.
+- **FR-025**: A downstream installer MUST be able to read every verified inventoried entry through the portable release interface without compiler internals or filesystem extraction.
+- **FR-026**: Compilation MUST NOT represent syntax-pattern inspection as proof that bundled JavaScript lacks ambient authority; runtime authority isolation belongs to the execution host.
+- **FR-027**: Once a coherent compilation snapshot is captured, subsequent compilation MUST use only captured bytes and MUST NOT fail solely because live project files later change.
+- **FR-028**: Release construction, entry access, inspection, verification, identity, and compatibility MUST share one portable format authority so callers cannot produce or consume release bytes through divergent rules.
 
 ### Key Entities
 
@@ -124,6 +132,7 @@ A release operator or downstream player can verify that a release is internally 
 - **Release Artifact**: The complete immutable unit prepared for publication and later installation, containing all game-specific runtime material and integrity information.
 - **Release Manifest**: The versioned, inspectable inventory of protected release entries and their compatibility, capability, schema, and integrity declarations.
 - **Release Entry**: A material bundle, content item, progression definition, schema, component, or asset included in and protected by the release.
+- **Opened Release**: A completely validated release view that exposes immutable copies of every inventoried entry without executing them.
 - **Content Identity**: The identity derived from the emitted bytes governed by the release format; it excludes mutable registry and operational metadata.
 - **Compatibility Requirement**: An independently versioned release-format, host-API, or aggregate-schema requirement that a downstream installer can evaluate before play.
 - **Capability Declaration**: The set of native host capabilities the compiled game requires, expressed for inspection before installation.
@@ -142,6 +151,9 @@ A release operator or downstream player can verify that a release is internally 
 - **SC-006**: Changing only a release label, channel, project identity, or creation timestamp changes zero content-derived release identities across the golden fixture suite.
 - **SC-007**: In author usability validation, at least 90% of seeded configuration, import, reference, schema, progression, component, and asset defects are located from the first reported diagnostic without inspecting compiler internals.
 - **SC-008**: The golden fixture suite includes at least three materially different valid external projects and at least one isolated failure fixture for every validation category named in FR-021.
+- **SC-009**: 100% of verified inventory entries in every golden release can be read through the portable release interface after project source and authoring dependencies are removed.
+- **SC-010**: Direct, aliased, destructured, and computed ambient-global examples receive no false claim of runtime isolation from compilation alone.
+- **SC-011**: A live-source mutation after coherent capture changes zero bytes in the in-progress artifact and does not invalidate that captured build.
 
 ## Assumptions
 
@@ -152,6 +164,7 @@ A release operator or downstream player can verify that a release is internally 
 - Release content is trusted only after integrity verification. Authenticating the publisher or establishing a signing trust chain is outside this feature.
 - Module and component composition is static. Runtime package discovery, third-party module distribution, and a component marketplace are outside this feature.
 - The pipeline validates game-authored material but does not execute arbitrary game-authored code inside platform service processes.
+- Runtime enforcement of deterministic-logic and presentation authority is a Gate 3 host responsibility governed by a future accepted isolation ADR; Gate 2 enforces only the closed import graph it can prove.
 - Active-session release migration is outside this feature; mutable registry labels and channels do not alter an existing artifact or its content identity.
 
 ## Architecture Decisions
