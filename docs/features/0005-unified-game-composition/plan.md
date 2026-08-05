@@ -14,8 +14,10 @@ trusted-mechanic binding for target discovery, repair the player outbox/snapshot
 remove game-specific player routing, and prove both games from validation through durable action,
 recovery, report-driven configuration revision, and a fresh release/session. The co-op reference keeps
 only its product-proven target-discovery behavior; unused round/clue commands and server progressions are
-removed rather than generalized. Because the app is pre-release, no compatibility reader, alias, or
-migration is part of the work.
+removed rather than generalized. Boundary-owned project/release, Host API/capability, and `/v1`
+compatibility markers remain, while the universal contract-version catalog and unsupported body/report/
+schema counters are removed. Because the app is pre-release, no compatibility reader, alias, or migration
+is part of the work.
 
 ## Technical Context
 
@@ -55,8 +57,9 @@ _GATE: Evaluated before Phase 0 research and again after Phase 1 design._
   two-release co-op validate/compile/install/mount/complete/recover/report/revise journey, not isolated
   framework APIs.
 - **PASS - Small durable contracts**: Interfaces, schemas, and logical IDs use plain stable names;
-  Release Format, Host API/capability metadata, state versions, and the `/v1` HTTP route remain the
-  centralized compatibility or concurrency boundaries already responsible for them.
+  project/release format, Host API/capability metadata, state versions, and the `/v1` HTTP route remain
+  the centralized compatibility or concurrency boundaries already responsible for them. Each
+  compatibility marker stays with its owner; there is no universal contract-version catalog.
 - **PASS - Honest trust**: Compiler reference validation, one trusted WebView, allowlisted platform
   mechanics, authenticated HTTPS, and physical-device evidence remain distinct claims.
 - **PASS - Evidence before abstraction**: Existing packages, one player, and one modular API remain.
@@ -160,9 +163,9 @@ packages/compiler/
 packages/protocol/
 ├── src/
 │   ├── player/                      # Game application/client types, Bootstrap/Transition
-│   ├── report/                      # Generic Game Play Report
+│   │   └── report.ts                # Sole generic Game Play Report and capability evidence contract
 │   ├── release/                     # Open/verify plus Game Composition validation
-│   └── shared/                      # Existing Shared Play/Sync with uniqueness validation
+│   └── shared/                      # Shared Play/Sync only; no game-specific report contract
 └── test/
 
 packages/modules/
@@ -216,16 +219,18 @@ and recreated from source, while discarded configurations remain only as explici
 
 ### 1. Contract-First Runtime and Composition
 
-After the co-op rename, write failing vertical fixtures for both installed-player games, the four-example
-compiler matrix, the complete target-discovery journey, and its report-driven second release before
-settling shared contracts. Then write failing type/behavior fixtures for explicit no-op,
+After verifying the existing co-op rename, write failing vertical fixtures for both installed-player
+games, the four-example compiler matrix, the complete target-discovery journey, and its report-driven
+second release before settling shared contracts. Then write failing type/behavior fixtures for explicit no-op,
 event/effect-only acceptance, canonical model
 initialization, local preflight versus recorded execution invalidity, heterogeneous-command progression,
 payload/state schema-narrowing wrappers, duplicate command type within one model, generated
 catalog/registry agreement, malformed application lifecycle, mount-scope rollback and cleanup, scoped
 components including throw/invalid-element cleanup, executable schema validators, unchanged Release
-Format, composition-aware public inspection output, and plain unsuffixed public names. Evolve the runtime and progression
-APIs in place; correct Project Configuration; and implement definition inspection, the resource
+Format, composition-aware public inspection output, plain unsuffixed public names, and stable
+`initializer-threw` containment without partial persistence. Evolve the runtime and progression APIs in
+place; correct Project Configuration; remove the universal contract-version catalog in favor of
+boundary-owned project/release and Host API constants; and implement definition inspection, the resource
 catalog, generated local roots, and `plotpoint inspect` catalog reporting. Commands and progressions
 own their aggregate-model references; models do not repeat those relationships. The trusted-mechanic
 binding alone selects its model and commands. Catalog descriptors omit per-item export names, Host API,
@@ -236,7 +241,10 @@ and release-wide capabilities that have another authority.
 Correct Host API Bootstrap/Transition in place and add the compiler-generated local model adapter
 without changing the existing message names or introducing a new Host API minor. Extend the player
 snapshot/journal/receipt transaction to store progression, typed events/effects, and accepted state-version
-semantics without effect delivery. Mount only the generated application, expose scoped component
+semantics without effect delivery. Update the player model, database validation, transition commit, and
+recovery reader together so exact model/schema identity, progression, events/effects, complete records,
+and state versions survive recreation for state-, progression-, event-, effect-only, and no-op results.
+Mount only the generated application, expose scoped component
 contexts, require cleanup before shared-session remount or disposal, preserve correlated errors, and
 derive local/shared shell state from verified composition. Replace game-selected report builders with
 one host-owned Game Play Report path keyed only by run and optional shared binding. Bootstrap state
@@ -246,7 +254,7 @@ factories, and state reads/subscriptions exist only in scoped component contexts
 ### 3. Trusted Mechanic and Generic Shared Service
 
 Add the closed platform registry and move target discovery into its first adapter. Release
-registration consumes Game Composition 's data-only server contracts and safe configuration rather
+registration consumes Game Composition's data-only server contracts and safe configuration rather
 than executable release source or hard-coded logical paths. The adapter owns the complete resolved
 server model and digest-bound validators, must match those contracts, and supplies no undeclared server
 progression. Give every adapter call a closed result: validation returns canonical configuration plus
@@ -254,7 +262,7 @@ initializer input or a diagnostic; authorization returns a runtime command with 
 or a rejected/invalid terminal; projection returns a complete validated `SharedProjection` or a
 diagnostic. Preserve Sync state-version fields directly. Trusted outcomes use an exact stable-code
 shape so their Sync mapping loses no semantic fields. Rename public participant routing to
-`/shared-sessions`, dispatch declared commands through that platform model, and preserve ADR 0005
+`/v1/shared-sessions`, dispatch declared commands through that platform model, and preserve ADR 0005
 transaction, projection, authorization, and privacy semantics.
 
 The co-op reference owns one local/player shell and selects one server/team target-discovery model. Remove
@@ -267,7 +275,10 @@ Implement finite atomic batch claiming, a stable per-app keyed single-flight coo
 reads, honest durable sync status, compare-or-insert terminal reconciliation, duplicate collection
 rejection, durable pending-join provenance before network submission, immutable SQLite binding guards,
 one pending-or-bound session per run, release equality on join/pull, atomic local revocation, and
-request-ID preservation. Test parallel joins plus every join/claim/submit/pull/commit interruption and
+request-ID preservation. The coordinator exposes one per-session drain promise that includes the active
+or trailing pass covering each trigger. Immutable binding guards include the credential key, and
+membership transitions only from active to revoked; stale active retries and snapshots fail without
+reactivation. Test parallel joins plus every join/claim/submit/pull/commit interruption and
 corrective repeat, 100 queued-action response-loss retries with one immutable terminal each, and 100
 repeated local preflight-invalid attempts with no durable mutation. Cover both authenticated revocation
 errors and revoked snapshots with the same atomic blocked-outbox result.
@@ -303,27 +314,29 @@ Game Play Report export, plain public naming, and the clean rejection of obsolet
 - [game-play-report.md](contracts/game-play-report.md) defines one privacy-safe local/shared
   evidence export with no game-specific player selection.
 - [runtime-model.md](contracts/runtime-model.md) defines model-owned command execution, explicit
-  decisions, state-version behavior, progression nodes/transitions, and replay using plain
-  TypeScript APIs.
+  decisions, initializer exception containment, state-version behavior, progression nodes/transitions,
+  and replay using plain TypeScript APIs.
 - [host-application.md](contracts/host-application.md) defines Host API bootstrap, generated
   adapters, scoped component context, Local Transition, and composition-driven shared UI.
 - [trusted-mechanic.md](contracts/trusted-mechanic.md) defines the allowlisted platform adapter
   boundary and target discovery.
-- [shared-session-api.md](contracts/shared-session-api.md) defines generic routes, release-pinned
+- [shared-session-api.md](contracts/shared-session-api.md) defines generic release-pinned `/v1` routes,
   join, and mechanic dispatch.
 - [shared-recovery.md](contracts/shared-recovery.md) defines finite batches, keyed single-flight,
-  durable pending join, atomic revocation, immutable binding, idempotent snapshots, clean database
-  rejection, and correlated bridge errors.
+  per-trigger drain promises, durable pending join, atomic terminal revocation, credential-key-inclusive
+  immutable binding, idempotent snapshots, clean database rejection, and correlated bridge errors.
 - [quickstart.md](quickstart.md) exercises both games as an external author/operator/player would.
 - The Spec Kit block in `AGENTS.md` points to this plan.
 
 ## Phase 2: Implementation Planning
 
 Accepted ADR 0001 satisfies the architecture gate and dependency-ordered `tasks.md` is present. Execution
-starts with the rename and failing vertical acceptance fixtures, then establishes runtime/composition
-contracts, migrates all four valid examples, closes the field lifecycle and co-op first-action checkpoint,
-repairs shared recovery and release pinning, and finally closes the full two-release learning loop plus
-provider-free and native simulation evidence.
+starts by verifying the already-renamed co-op baseline and writing failing vertical acceptance fixtures,
+then establishes runtime/composition contracts, migrates all four valid examples, closes the field
+lifecycle and co-op first-action checkpoint, repairs shared recovery and release pinning, and finally
+closes the full two-release learning loop plus provider-free and native simulation evidence. Existing
+files are extended or replaced in place; no task asks to recreate a rename already present at the
+reconciled baseline.
 
 ## Complexity Tracking
 
@@ -331,5 +344,6 @@ No constitution violation. The plan adds no package, service, worker, plugin loa
 event store, effect dispatcher, background sync process, delta protocol, or active-session migration.
 No new schema generation is introduced. Incompatible pre-release shapes are replaced in place and
 rejected at their boundary rather than supported by compatibility code. Per-interface and per-schema
-generation suffixes are removed; future evolution is intentionally deferred to one centralized
-compatibility mechanism rather than distributed naming conventions.
+generation suffixes and the speculative universal contract-version catalog are removed; allowed
+compatibility markers remain boundary-owned, and future evolution is intentionally deferred to an
+Accepted centralized compatibility policy rather than distributed naming conventions.

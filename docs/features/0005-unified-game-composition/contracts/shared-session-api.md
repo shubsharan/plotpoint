@@ -8,23 +8,23 @@ stays bounded at 256 KiB and release upload at 64 MiB.
 
 ## Routes
 
-- `POST /releases`: operator uploads Release Format bytes and supplies the expected release ID in
+- `POST /v1/releases`: operator uploads Release Format bytes and supplies the expected release ID in
   the existing trusted header. The API verifies Game Composition and its optional trusted mechanic,
   matches any data-only server contracts and schema digests to the platform adapter without importing
   bundle exports, stores the immutable registration, and discards bytes.
-- `POST /shared-sessions`: operator supplies `creationId`, `releaseId`, and `teamLabel`.
+- `POST /v1/shared-sessions`: operator supplies `creationId`, `releaseId`, and `teamLabel`.
   The release must contain one trusted mechanic; its platform adapter initializes the session's
   aggregate only from validated release configuration. `teamLabel` remains operator metadata and never
   becomes an implicit mechanic input. Exact retry returns the original session/team/release binding.
-- `POST /shared-sessions/{sessionId}/invitations`: operator supplies `invitationId` and
+- `POST /v1/shared-sessions/{sessionId}/invitations`: operator supplies `invitationId` and
   `expiresAt`; one raw one-use invitation is returned once and only its keyed digest persists.
-- `POST /shared-sessions/{sessionId}/participants`: unauthenticated join supplies
+- `POST /v1/shared-sessions/{sessionId}/participants`: unauthenticated join supplies
   `joinRequestId`, `expectedReleaseId`, invitation, and native-generated participant credential.
-- `POST /shared-sessions/{sessionId}/participants/{participantId}/revoke`: operator supplies an
+- `POST /v1/shared-sessions/{sessionId}/participants/{participantId}/revoke`: operator supplies an
   idempotent operation ID; revocation remains terminal.
-- `POST /shared-sessions/{sessionId}/commands`: authenticated participant submits one Sync Command
+- `POST /v1/shared-sessions/{sessionId}/commands`: authenticated participant submits one Sync Command
   to a command allowed by the release's trusted-mechanic binding.
-- `GET /shared-sessions/{sessionId}/sync?after=<cursor>`: authenticated participant receives one
+- `GET /v1/shared-sessions/{sessionId}/sync?after=<cursor>`: authenticated participant receives one
   complete Sync Pull.
 
 No player route, request, or response contains target, clue, or other example-game vocabulary.
@@ -103,6 +103,6 @@ does not weaken participant projection authorization.
 ## Clean Break
 
 The repository is pre-release: the operator client, player HTTP adapter, provider-free fixtures, and
-existing example replace `/hunt-sessions` with `/shared-sessions` together. No compatibility alias
+existing example replace `/v1/hunt-sessions` with `/v1/shared-sessions` together. No compatibility alias
 or alternate public route remains. Existing PostgreSQL table names may stay implementation-owned when
 renaming them adds no product value; public route names and code-facing service ports must be generic.

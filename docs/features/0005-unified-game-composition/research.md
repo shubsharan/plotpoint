@@ -24,7 +24,9 @@ Repository interfaces, schema IDs, command/component/mechanic IDs, catalog paths
 use stable plain names. Per-interface `version` fields and embedded generation suffixes are removed.
 Existing top-level project/release format metadata, Host API and capability
 negotiation, state versions, and the `/v1` HTTP route remain because they are already centralized
-compatibility or concurrency boundaries. This feature does not invent a future schema migration system.
+compatibility or concurrency boundaries. Their constants live with those owning boundaries rather than
+in a universal contract-version catalog. This feature removes that catalog and does not invent a future
+schema migration system.
 
 **Rationale**: The strict JSON input already provides deterministic ordering, frozen input capture,
 portable paths, and inspectability. The missing seam is not a more expressive authoring language; it
@@ -93,6 +95,11 @@ State-specific resolved models enter heterogeneous player or platform registries
 `ExecutableAggregateModel`, a constructed wrapper that validates erased persisted JSON with the exact
 state schema before invoking the closed typed initializer, command, or progression code. No registry
 casts a state-specific function to a broad JSON function.
+
+The typed model exposes a raw `initializeState` function. The executable wrapper owns exception
+containment: invalid input, a thrown initializer, invalid returned state, and invalid initial progression
+become distinct stable diagnostics. None returns a partial aggregate or crosses into persistence as an
+exception-shaped success.
 
 Handlers explicitly return `accepted`, `no-op`, or `rejected`; `invalid` remains runtime-produced.
 An accepted result must commit at least one of state, progression, event, or effect and advances the
@@ -232,7 +239,8 @@ abstractions before a game needs them.
 
 ## Shared Synchronization and Recovery
 
-**Decision**: Preserve Host API 1.1 Shared Play and Sync wire shapes. Use the existing
+**Decision**: Preserve Host API 1.1 Shared Play and Sync semantics through their corrected plain
+pre-release shapes. Use the existing
 `queued | submitting | blocked-revoked` SQLite statuses as an explicit durable state machine. One
 atomic `beginSubmissionBatch(sessionId)` recovers interrupted submissions, captures all rows eligible
 at pass start in `(enqueued_at, command_id)` order, marks that finite set submitting, and records
@@ -241,9 +249,11 @@ Failure requeues pass-owned rows and records degraded status; exact server recei
 safe after response loss.
 
 A long-lived coordinator owns a keyed single-flight scheduler. Overlapping triggers for one session
-share the active promise and request at most one following serialized pass. A durable view read never
-starts network work; enqueue, foreground/reconnect, and explicit retry do. Notifications follow
-durable state changes.
+share one per-session drain promise and request at most one following serialized pass. A caller whose
+trigger arrives after the active batch claim observes the drain through that trailing pass, so awaiting
+`request()` never resolves before the pass covering the caller's trigger. A durable view read never
+starts network work; enqueue, foreground/reconnect, and explicit retry do. Notifications follow durable
+state changes.
 
 **Rationale**: The server protocol already supports command idempotency and complete snapshots. The
 failure is orchestration: the current loop never changes the selected row and every message creates a
@@ -276,12 +286,14 @@ pending-or-bound invariant makes parallel changed joins conflict before network 
 exact reuse resumes the same keys and request. Restart can therefore resend the same request after
 response loss; a successful immutable session/snapshot commit deletes the pending row atomically,
 while a mismatch retains the full attempt. Join and every later pull require equality among active run
-release, response release, snapshot release, session, participant, team, and canonical service origin
-before exposing state. Fresh insert owns immutable identity columns; exact retry updates only recovery
-state. SQLite guards those columns against later mutation and treats multiple sessions for one run as
-corruption. An authenticated revocation error atomically marks the membership revoked and all
-queued/submitting rows blocked before credential removal; an authenticated revoked snapshot performs
-the same blocked-outbox transition inside snapshot application. A two-stage shared bridge parser
+release, response release, snapshot release, session, participant, team, credential key, and canonical
+service origin before exposing state. Fresh insert owns immutable identity columns; exact retry updates
+only recovery state. SQLite guards those columns against later mutation and treats multiple sessions
+for one run as corruption. Membership is monotonic from active to revoked: an active candidate applied
+to an already revoked binding fails without changing the binding or blocked outbox. An authenticated
+revocation error atomically marks the membership revoked and all queued/submitting rows blocked before
+credential removal; an authenticated revoked snapshot performs the same blocked-outbox transition
+inside snapshot application. A two-stage shared bridge parser
 preserves every safely decoded request ID on semantic errors; only invalid JSON or an invalid ID uses
 `unknown`.
 

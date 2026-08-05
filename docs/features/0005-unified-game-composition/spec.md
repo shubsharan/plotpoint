@@ -139,7 +139,8 @@ and convergence after every restart point.
    than once, **Then** projection replacement, result preservation, outbox reconciliation, and cursor
    advancement remain idempotent and atomic.
 4. **Given** overlapping requests to synchronize one session, **When** they execute, **Then** one
-   bounded synchronization run owns the session and all callers observe its eventual result.
+   bounded synchronization run owns the session and each caller's promise resolves only after the
+   active or coalesced trailing pass that covers that caller's trigger finishes.
 5. **Given** a revoked participant with queued actions, **When** synchronization is attempted, **Then**
    the actions remain as blocked evidence and no further authoritative submission occurs.
 
@@ -155,7 +156,8 @@ attach a session to a different game fail without changing the prior playable st
 configuration, and recovery. A mismatch can present one game's UI over another game's shared state.
 
 **Independent Test**: Attempt fresh, duplicate, response-lost, wrong-release, wrong-session, wrong-team,
-changed-service, and changed-run joins and verify that only exact or safely recoverable bindings persist.
+changed-service, changed-credential, changed-run, and revoked-to-active joins and pulls; verify that only
+exact or safely recoverable bindings persist and that revocation never reverses.
 
 **Acceptance Scenarios**:
 
@@ -165,9 +167,12 @@ changed-service, and changed-run joins and verify that only exact or safely reco
    operation fails before projections, credentials, or session bindings become usable by the game.
 3. **Given** an existing shared-session binding, **When** an exact join response is replayed, **Then**
    it returns the original binding without rewriting immutable identity fields.
-4. **Given** an existing binding and changed run, release, session, participant, team, or service identity,
-   **When** a conflicting response is processed, **Then** the prior binding remains unchanged and an
-   explicit conflict is reported.
+4. **Given** an existing binding and changed run, release, session, participant, team, service, or
+   credential-key identity, **When** a conflicting response is processed, **Then** the prior binding
+   remains unchanged and an explicit conflict is reported.
+5. **Given** a locally revoked binding, **When** an exact retry or stale authenticated snapshot reports
+   active membership, **Then** the prior revoked binding and blocked actions remain unchanged and an
+   explicit reactivation conflict is reported.
 
 ### Edge Cases
 
@@ -186,8 +191,8 @@ changed-service, and changed-run joins and verify that only exact or safely reco
 - A corrective pull repeats retained terminal results whose original outbox rows are already gone.
 - Several UI actions request synchronization concurrently, including while the device changes between
   offline, degraded, and online states.
-- A join response or later snapshot changes release, run, session, participant, team, membership, or
-  service binding unexpectedly.
+- A join response or later snapshot changes release, run, session, participant, team, credential key,
+  membership, or service binding unexpectedly, including an attempt to reactivate revoked membership.
 - A local-only release, shared release, and future player-specific release are installed in succession
   without rebuilding the player.
 - A project declares a server model, trusted command, or server progression that is not selected by the
@@ -236,6 +241,8 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   and optional progression MUST reference exactly one compatible aggregate model; models MUST NOT
   repeat those relationships. Command type MUST be unique within each derived model command set, and
   heterogeneous registries MUST invoke typed logic only after state- and payload-specific schema narrowing.
+  The executable wrapper MUST convert initializer exceptions into a stable `initializer-threw` invalid
+  result and MUST NOT expose or persist a partial aggregate.
 - **FR-010**: Command handling MUST distinguish accepted, rejected, no-op, and invalid decisions
   explicitly. Local recorded terminals MUST retain their full schema-validated outcome. Shared recorded
   terminals MUST preserve the exact Sync participant-visible result through a lossless trusted-outcome
@@ -256,15 +263,19 @@ changed-service, and changed-run joins and verify that only exact or safely reco
 - **FR-016**: Shared commands MUST move through an explicit durable lifecycle that prevents the same
   queued row from being selected indefinitely while preserving safe exact retry after interruption.
 - **FR-017**: At most one synchronization run per shared session MUST submit queued work and apply a
-  pull at a time.
+  pull at a time. Each synchronization request MUST return a stable per-session drain promise that
+  resolves only after the pass covering that request's trigger has finished.
 - **FR-018**: One synchronization pass MUST select each command eligible when the pass starts at most
   once in stable order, perform at most one pull, terminate, and persist honest transport and recovery
-  status visible to the game; later enqueues MUST request a subsequent pass.
+  status visible to the game. A trigger arriving after the active pass claims its batch MUST request one
+  coalesced trailing pass, and the triggering caller MUST await that trailing pass.
 - **FR-019**: Corrective and repeated snapshots MUST be idempotent even when retained terminal results
   no longer have corresponding outbox rows.
 - **FR-020**: Snapshot replacement, result reconciliation, outbox reconciliation, cursor advancement,
   and membership changes MUST remain atomic. An authenticated revocation MUST atomically mark local
   membership revoked and every queued or submitting action blocked before credential removal.
+  Membership MAY transition from active to revoked but MUST NOT transition from revoked to active for
+  the same binding and credential.
 - **FR-021**: Every shared projection MUST match the release-declared schema ID and digest and
   pass payload validation before persistence or component exposure.
 - **FR-022**: The player MUST reserve at most one pending-or-bound shared session per run and make the
@@ -273,7 +284,7 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   among the installed run release, join response release, authorized snapshot release, and persisted
   shared-session release before exposing the view.
 - **FR-023**: Exact join retries MUST preserve the original immutable run, release, session, participant,
-  team, and service binding; changed reuse MUST fail without partially updating it.
+  team, service, and credential-key binding; changed reuse MUST fail without partially updating it.
 - **FR-024**: Shared bridge errors for a well-formed request MUST preserve its request identity so the
   caller always reaches a terminal response.
 - **FR-025**: Local-only releases MUST remain playable without shared-session controls or shared
@@ -323,8 +334,8 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   facts and represented once in durable aggregate state.
 - **Trusted Mechanic Binding**: Declaration connecting a release to one supported
   platform-owned authoritative mechanic and its configuration, aggregate, commands, and projection.
-- **Shared Session Binding**: Immutable relationship among one game run, release, service session,
-  participant, team, service location, membership, and recovery cursor.
+- **Shared Session Binding**: Relationship among one game run, release, service session, participant,
+  team, credential-key reference, service location, monotonic membership, and recovery cursor.
 - **Shared Action**: One durable game intent with stable identity, target, expected state version,
   observations, lifecycle status, and eventual exact terminal.
 - **Authorized Snapshot**: Complete current shared view plus participant terminal results and recovery

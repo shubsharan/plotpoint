@@ -72,10 +72,10 @@ runtime plugins, microservices, or generic conflict merging. Those patterns add 
 improving the game loops the platform is designed to support.
 
 Contract names and semantic IDs do not carry generation suffixes. TypeScript symbols, schema IDs,
-command IDs, filenames, and catalog paths describe what they mean. Numeric compatibility metadata is
-reserved for serialized boundaries and owned centrally by
-[`CONTRACT_VERSIONS`](../packages/protocol/src/contract-versions.ts); `stateVersion` remains an
-aggregate concurrency counter rather than a contract generation.
+command IDs, filenames, and catalog paths describe what they mean. Compatibility metadata exists only
+at the project-format, release-format, Host API/capability-negotiation, and `/v1` HTTP boundaries and is
+owned beside each boundary. Plotpoint has no universal contract-version catalog or per-contract
+counter; `stateVersion` remains an aggregate concurrency counter rather than a contract generation.
 
 ## Core Data Models
 
@@ -125,7 +125,7 @@ flowchart LR
 | Game Play Report              | Redacted evidence derived from committed local and shared records                                                                |
 
 Identity and schema travel with durable data. A human-readable ID selects a model or command;
-`schemaId`, `schemaVersion`, and the digest of the exact schema bytes authorize its shape;
+`schemaId` plus the digest of the exact release-inventoried schema bytes authorize its shape;
 `stateVersion` is the sole aggregate concurrency and commit counter.
 
 ## Game Composition
@@ -284,15 +284,15 @@ Aggregate Model
 
 An aggregate instance contains:
 
-| Field                        | Meaning                                        |
-| ---------------------------- | ---------------------------------------------- |
-| `aggregateId`                | Identity of this player/team/session aggregate |
-| `modelId`                    | Model that validates and executes it           |
-| `aggregateKind`              | `player`, `team`, or `session`                 |
-| `schemaId` / `schemaVersion` | Durable state schema identity                  |
-| `stateVersion`               | Sole concurrency and commit counter            |
-| `state`                      | Canonical JSON-compatible durable state        |
-| `progression`                | Optional canonical progression instance        |
+| Field           | Meaning                                        |
+| --------------- | ---------------------------------------------- |
+| `aggregateId`   | Identity of this player/team/session aggregate |
+| `modelId`       | Model that validates and executes it           |
+| `aggregateKind` | `player`, `team`, or `session`                 |
+| `schemaId`      | Stable durable state schema identity           |
+| `stateVersion`  | Sole concurrency and commit counter            |
+| `state`         | Canonical JSON-compatible durable state        |
+| `progression`   | Optional canonical progression instance        |
 
 Local models are `authority: local, kind: player`. Server models are `authority: server, kind: team |
 session`. State is plain canonical data—never functions, class instances, storage handles, or browser
@@ -474,7 +474,7 @@ intent offline, but only the authoritative service finalizes `team` or `session`
 
 A release can declare one trusted-mechanic binding containing only data:
 
-- mechanic ID and version;
+- stable mechanic ID;
 - selected server aggregate model and commands;
 - schema-validated configuration content;
 - shared projection schema; and
@@ -538,12 +538,14 @@ One foreground synchronization pass:
 6. atomically reconciles results, projections, outbox rows, cursor, membership, and status.
 
 Commands enqueued after the claim belong to another pass. A process-local keyed single-flight
-coordinator permits one active pass and at most one coalesced trailing pass per session. Durable rows,
-not in-memory promises, provide restart recovery.
+coordinator permits one active pass and at most one coalesced trailing pass per session. A caller awaits
+the per-session drain through the active or trailing pass covering its trigger. Durable rows, not
+in-memory promises, provide restart recovery.
 
 Terminal results are immutable compare-or-insert facts. Reapplying the same normal, corrective, or
 revoked snapshot is byte-equivalent. A conflicting repeat rolls back without exposing candidate
-projections. Revocation atomically blocks queued work before the host removes the credential.
+projections. Revocation atomically blocks queued work before the host removes the credential and is
+terminal for that credential key; stale active snapshots cannot reactivate the binding.
 
 The platform uses complete authorized snapshots rather than deltas, WebSockets, participant projection
 stores, or background workers. This intentionally trades small repeated payloads for failure-atomic

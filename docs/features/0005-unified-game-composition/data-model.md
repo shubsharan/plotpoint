@@ -105,7 +105,9 @@ casts are not part of the contract.
 
 Initialization returns either an initialized aggregate or stable invalid diagnostics. It validates the
 explicit input, validates returned state, constructs `stateVersion: 0`, and derives the sole canonical
-initial progression. It never returns partial state or relies on caller-supplied progression.
+initial progression. The executable wrapper catches a raw initializer exception and returns the stable
+`initializer-threw` diagnostic. It never returns or persists partial state and never relies on
+caller-supplied progression.
 
 ### Aggregate
 
@@ -190,6 +192,12 @@ Transition candidates use `expectedStateVersion`; committed/duplicate results us
 and terminal rules and commits receipt, state/progression, events/effects, and journal evidence in one
 SQLite transaction. Preflight invalidity remains local and does not cross the bridge.
 
+The durable snapshot and recovery reader retain aggregate/model/schema identity, canonical state,
+optional progression, and exact `stateVersion`. Recovery validates those fields against the installed
+release before replaying complete receipts and journal records. Accepted state-, progression-, event-,
+and effect-only records survive recreation; no-op and other unchanged terminals do not synthesize a
+state-version advance.
+
 ## Trusted Authoritative Mechanic
 
 ### Trusted Mechanic Binding
@@ -234,6 +242,16 @@ key. Mutable recovery fields are membership, transport, synchronization status, 
 projections, results, and redacted sync events. Exact retry updates recovery fields only; changed
 identity is a conflict.
 
+Membership has one monotonic transition:
+
+```text
+active -> revoked
+revoked -> active  (invalid reactivation conflict)
+```
+
+An exact retry must match the stored credential key. Once the binding is revoked, a stale active join
+response or snapshot cannot reactivate it or make blocked actions eligible.
+
 Before join commit or pull application:
 
 ```text
@@ -262,8 +280,9 @@ queued | submitting --revocation--> blocked-revoked
 One transaction recovers interrupted submissions, captures the finite start-eligible batch in stable
 order, marks it submitting, and records syncing status. One pass submits each captured row at most once,
 performs at most one pull, and terminates. Later enqueues belong to another pass. A process-local keyed
-single-flight coordinator serializes and coalesces triggers per session; durable rows provide restart
-recovery.
+single-flight coordinator serializes and coalesces triggers per session. Each caller receives the
+per-session drain promise that includes the active or trailing pass covering its trigger; durable rows
+provide restart recovery.
 
 ### Authorized Snapshot and Reconciliation
 
@@ -275,7 +294,9 @@ One exclusive transaction validates identities and schemas, compares or inserts 
 replaces the complete projection set, removes only terminal-matched outbox rows, handles revocation or
 requeues interrupted rows, updates status/cursor/time, and commits once. Reapplying an identical normal,
 corrective, or revoked pull is byte-equivalent. A changed repeated terminal or missing both terminal and
-outbox provenance fails without exposing candidate changes.
+outbox provenance fails without exposing candidate changes. If the stored binding is already revoked,
+an active candidate fails as a reactivation conflict and leaves the revoked binding, projections, and
+blocked outbox byte-equivalent.
 
 ## Game Play Report
 

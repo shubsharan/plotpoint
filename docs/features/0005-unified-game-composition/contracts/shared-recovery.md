@@ -1,7 +1,7 @@
 # Contract: Shared Recovery State Machine
 
 This contract fixes player-owned persistence and foreground orchestration while preserving Host API
-1.1 Shared Play and Sync wire shapes.
+1.1 Shared Play and Sync semantics through their corrected plain pre-release shapes.
 
 ## Durable Outbox
 
@@ -72,10 +72,12 @@ interface SharedSyncScheduler {
 }
 ```
 
-For one session, only one pass may submit or apply a pull. Overlapping callers observe the promise for
-the pass covering their trigger. A trigger during an active pass requests at most one following pass;
-further triggers coalesce. Different sessions may run independently. Process restart loses promises
-but not the durable submitting rows recovered by the next claim.
+For one session, only one pass may submit or apply a pull. `request()` returns one stable per-session
+drain promise that resolves only after the pass covering that caller's trigger finishes. A trigger that
+arrives after the active pass claims its batch requests at most one following pass and observes the drain
+through that pass; further triggers coalesce into the same trailing pass. Different sessions may run
+independently. Process restart loses promises but not the durable submitting rows recovered by the next
+claim.
 
 `shared.view.get` is a pure durable read and never schedules synchronization. Enqueue schedules only
 after its SQLite transaction commits. After the host durably observes an offline-to-reachable network
@@ -137,14 +139,17 @@ origin, complete join response, and initial pull. Before any write it requires:
 - active run release = expected release = response release = snapshot release;
 - route session = response scope = snapshot session;
 - response participant/team = snapshot participant/team;
-- existing binding, when present, has the exact same run/release/session/participant/team/origin; and
+- pending credential key = inserted binding credential key;
+- existing binding, when present, has the exact same
+  run/release/session/participant/team/origin/credential key; and
 - there is no second session binding for the run.
 
 Fresh binding insertion and pending-row deletion occur in the same transaction. Exact retry updates
-only membership, transport/sync
-status, cursor, confirmed time, projections, and results. Changed reuse throws a stable binding conflict
-and rolls back. An idempotent SQLite trigger rejects updates to run, release, session, participant,
-team, and service origin. Every later pull repeats the same checks before projection deletion.
+only membership, transport/sync status, cursor, confirmed time, projections, and results. Changed reuse
+throws a stable binding conflict and rolls back. An idempotent SQLite trigger rejects updates to run,
+release, session, participant, team, service origin, and credential key. Membership may move only from
+`active` to `revoked`; an exact retry cannot update `revoked` back to `active`. Every later pull repeats
+the same checks before projection deletion.
 
 A response-side mismatch retains the pending SQLite request plus its SecureStore invitation and
 credential because the server may have committed an exact participant before response processing; the
@@ -166,7 +171,8 @@ pass that validator before persistence or component exposure. One exclusive tran
 6. removes only outbox rows matched by identical terminal results;
 7. if the authenticated snapshot membership is revoked, changes every remaining queued/submitting row
    to `blocked-revoked` and selects revoked/degraded status; otherwise requeues remaining submitting rows
-   and selects `recovery-required` or `current`;
+   and selects `recovery-required` or `current`, unless the stored binding is already revoked, in which
+   case the active candidate fails with `membership-reactivation-conflict`;
 8. applies membership, transport, cursor, and confirmed time consistently with that branch; and
 9. commits all changes together.
 
@@ -174,6 +180,10 @@ Applying one normal, corrective, or revoked pull repeatedly produces byte-equiva
 projections, results, outbox state, cursor, membership, and status. A conflicting repeat exposes none
 of its candidate changes. After a revoked pull commits, the coordinator removes the SecureStore
 credential; it never removes it before the blocked-outbox transaction succeeds.
+
+Revocation is terminal for the stored credential key. Replaying the same revoked join or pull is
+idempotent; replaying an older active join response or snapshot after revocation preserves the revoked
+binding and blocked rows and returns `membership-reactivation-conflict`.
 
 ## Bridge Correlation
 

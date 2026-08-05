@@ -45,7 +45,7 @@ command, optional progression, one component, and no trusted mechanic:
     {
       "id": "field.route",
       "aggregateModel": "field.player",
-      "definition": { "source": "src/progression.ts", "export": "fieldRoute" }
+      "definition": { "source": "src/progression/route.ts", "export": "fieldRoute" }
     }
   ],
   "components": [
@@ -233,22 +233,22 @@ projection.
 
 ## 6. Compile and Inspect
 
-After implementation, all four projects must succeed through the public CLI:
+After implementation, all four projects must succeed through the public CLI. Compile each project
+twice into a fresh temporary directory so verification and byte reproduction are explicit:
 
 ```bash
 pnpm build
-pnpm plotpoint validate --project examples/releases/field-puzzle
-pnpm plotpoint compile --project examples/releases/field-puzzle --out /tmp/field-puzzle.pprelease
-pnpm plotpoint inspect /tmp/field-puzzle.pprelease --json
-pnpm plotpoint validate --project examples/releases/minimal-local-puzzle
-pnpm plotpoint compile --project examples/releases/minimal-local-puzzle --out /tmp/minimal-local-puzzle.pprelease
-pnpm plotpoint inspect /tmp/minimal-local-puzzle.pprelease --json
-pnpm plotpoint validate --project examples/releases/branching-media-tour
-pnpm plotpoint compile --project examples/releases/branching-media-tour --out /tmp/branching-media-tour.pprelease
-pnpm plotpoint inspect /tmp/branching-media-tour.pprelease --json
-pnpm plotpoint validate --project examples/releases/co-op-game
-pnpm plotpoint compile --project examples/releases/co-op-game --out /tmp/co-op-game.pprelease
-pnpm plotpoint inspect /tmp/co-op-game.pprelease --json
+PLOTPOINT_ARTIFACT_DIR="$(mktemp -d)"
+for game in field-puzzle minimal-local-puzzle branching-media-tour co-op-game; do
+  first="$PLOTPOINT_ARTIFACT_DIR/$game-a.pprelease"
+  second="$PLOTPOINT_ARTIFACT_DIR/$game-b.pprelease"
+  pnpm plotpoint validate --project "examples/releases/$game"
+  pnpm plotpoint compile --project "examples/releases/$game" --out "$first"
+  pnpm plotpoint inspect "$first" --json
+  pnpm plotpoint verify "$first"
+  pnpm plotpoint compile --project "examples/releases/$game" --out "$second"
+  cmp "$first" "$second"
+done
 ```
 
 All four projects validate, compile, inspect, verify, and reproduce under the corrected shape. Inspection
@@ -289,8 +289,10 @@ The co-op game acceptance is one report-driven two-release journey:
 5. claims one finite batch, submits each captured command once, and pulls once;
 6. interrupts at every join/claim/submit/pull/commit boundary and retries exactly;
 7. repeats response-loss recovery and normal/corrective/revoked pulls 100 times;
-8. overlaps enqueue/foreground/reconnect/retry triggers and observes one active plus at most one trailing pass;
-9. handles authenticated revocation atomically and retains blocked outbox evidence;
+8. overlaps enqueue/foreground/reconnect/retry triggers, observes one active plus at most one trailing
+   pass, and awaits the trailing pass from a trigger issued after the active batch claim;
+9. handles authenticated revocation atomically, retains blocked outbox evidence, and rejects stale
+   active snapshots or changed credential keys without reactivation;
 10. reaches a completed confirmed team view after every configured target is discovered;
 11. exports Game Play Report containing only generic rejected command and expired capability evidence,
     with no target, coordinate, payload, outcome code, configuration value, or service identity;
@@ -298,7 +300,8 @@ The co-op game acceptance is one report-driven two-release journey:
     fresh run/session without active-session migration; and
 13. completes every configured target in the revised session.
 
-Wrong release, run, session, participant, team, or origin leaves prior binding/projection unchanged.
+Wrong release, run, session, participant, team, credential key, membership transition, or origin leaves
+the prior binding/projection unchanged.
 Invalid trusted outcome shapes are rejected rather than truncated. Every well-formed bridge failure
 echoes its request ID.
 

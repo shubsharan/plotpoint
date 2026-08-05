@@ -342,6 +342,7 @@ JavaScript lacks ambient access inside the single WebView.
 
 Repository interfaces, schema IDs, command IDs, component IDs, mechanic IDs, generated exports, and
 catalog paths use stable plain names without embedded generation suffixes. The existing top-level
-project format and Host API requirement remain the centralized
-compatibility boundary for this pre-release format. If Plotpoint later needs schema or interface
-evolution, it will add one centralized compatibility mechanism instead of renaming every symbol.
+project format, Release Format, and Host API/capability requirements remain owned by their centralized
+boundaries. They are not collected in a universal contract-version catalog. If Plotpoint later needs
+schema or interface evolution, an Accepted ADR will add one centralized compatibility mechanism instead
+of renaming every symbol.

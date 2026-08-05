@@ -75,7 +75,7 @@ interface ResolvedAggregateModel<Kind extends AggregateKind, State extends JsonO
   readonly authority: AggregateAuthority;
   readonly stateSchema: RuntimeSchema<State>;
   readonly initializationSchema: RuntimeSchema<JsonObject>;
-  initialize(input: JsonObject): State;
+  initializeState(input: JsonObject): State;
   readonly commandsByType: Readonly<Record<string, ResolvedCommandBinding<State, Kind>>>;
   readonly eventSchemas: Readonly<Record<string, RuntimeSchema<JsonObject>>>;
   readonly effectSchemas: Readonly<Record<string, RuntimeSchema<JsonObject>>>;
@@ -124,10 +124,13 @@ exposes an erased evaluator only after payload narrowing. `bindExecutableAggrega
 only erased model-registry wrapper; it first validates aggregate identity and state, then delegates to
 that command binding. Neither boundary casts or widens a state- or payload-specific function.
 
-Initialization validates canonical input through `initializationSchema`, calls the initializer,
+Initialization validates canonical input through `initializationSchema`, calls `initializeState`,
 validates the returned state, constructs `stateVersion: 0`, and attaches the sole canonical initial
-progression instance. Failure returns `kind: "invalid"` with stable diagnostics; it never returns a
-partially initialized aggregate or throws schema prose across the boundary.
+progression instance. Invalid input uses `initialization-input-invalid`; an initializer exception uses
+`initializer-threw`; an invalid returned state uses `initialized-state-invalid`; and an invalid initial
+progression uses `initial-progression-invalid`. Each failure returns `kind: "invalid"` with stable
+diagnostics. `ExecutableAggregateModel.initialize` never throws a raw initializer exception, returns a
+partially initialized aggregate, or permits persistence before the complete result is valid.
 
 Project Configuration permits only local/player and server/team-or-session combinations. Generated
 local registries contain local/player models. The platform mechanic registry contains server/team or
@@ -226,4 +229,5 @@ The implementation edits the existing runtime and progression APIs in place. It 
 private assembly helpers and version-suffixed experimental types. There are no adapters between old and
 corrected shapes. Type fixtures must reject duplicated schema identity, authority/kind mismatches,
 unsafe erased registries, payload/outcome generic inversion, caller-supplied initial progression, and
-parallel `revision` fields.
+parallel `revision` fields. Behavior fixtures must prove initializer exceptions become
+`initializer-threw` without an aggregate, receipt, session, or persistence mutation.

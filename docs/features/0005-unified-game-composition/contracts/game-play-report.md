@@ -4,6 +4,9 @@ Game Play Report is the only report produced by the corrected pre-release player
 local and game-specific report builders in place; there are no historical readers, compatibility
 aliases, or report migrations. Report selection uses only the installed run and its optional immutable
 shared-session binding and never checks a game, mechanic, command, component, or schema-specific ID.
+`packages/protocol/src/player/report.ts` is the sole protocol owner; the prior
+`packages/protocol/src/shared/report.ts` contract and its public exports are deleted rather than retained
+as a shared-only alternative.
 
 ```ts
 interface GamePlayReport {
