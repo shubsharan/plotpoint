@@ -22,7 +22,7 @@ const descriptorUrl = "http://127.0.0.1:4000/install.json";
 const releaseUrl = "http://127.0.0.1:4000/release.pprelease";
 const support: HostReleaseSupport = {
   releaseFormatVersions: [1],
-  hostApi: { major: 1, minor: 0 },
+  hostApi: { major: 1, minor: 1 },
   aggregateSchemas: [],
   capabilities: [],
 };

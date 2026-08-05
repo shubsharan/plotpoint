@@ -94,6 +94,36 @@ export {
   projectLocationObservationV1,
   recencyBand,
 } from "./player/report.js";
+export { createSharedPlayClientV1 } from "./shared/client.js";
+export {
+  isAuthorizedSnapshotV1,
+  isSharedAggregateTargetV1,
+  isSharedCommandIntentV1,
+  isSharedCommandStatusV1,
+  isSharedPlayViewV1,
+  isSharedProjectionV1,
+  isSyncCommandResultV1,
+  isSyncCommandV1,
+  isSyncPullV1,
+} from "./shared/validation.js";
+export { isSharedHuntReportV1 } from "./shared/report.js";
+export type {
+  AuthorizedSnapshotV1,
+  SharedActionTerminalV1,
+  SharedAggregateKindV1,
+  SharedAggregateTargetV1,
+  SharedCommandIntentV1,
+  SharedCommandStatusV1,
+  SharedPlayClientV1,
+  SharedPlayTransportV1,
+  SharedPlayViewV1,
+  SharedProjectionV1,
+  SharedTerminalV1,
+  SyncCommandResultV1,
+  SyncCommandV1,
+  SyncPullV1,
+} from "./shared/types.js";
+export type { SharedHuntReportEventV1, SharedHuntReportV1 } from "./shared/report.js";
 export type {
   AccuracyBand,
   CapabilityReportProjectionValidator,

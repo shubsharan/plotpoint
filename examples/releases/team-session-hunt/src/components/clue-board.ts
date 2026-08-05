@@ -4,6 +4,44 @@ export interface ClueSummary {
   readonly zone: string;
 }
 
+interface SharedHuntClient {
+  getView(): Promise<{
+    readonly projections: readonly {
+      readonly aggregateId: string;
+      readonly schemaId: string;
+      readonly stateVersion: number;
+      readonly value: object;
+    }[];
+  }>;
+  enqueueCommand(
+    command: object,
+  ): Promise<{ readonly terminal: string; readonly outcomeCode?: string }>;
+}
+
+export async function discoverTarget(
+  client: SharedHuntClient,
+  targetId: string,
+  observationId: string,
+  commandId: string,
+): Promise<{ readonly terminal: string; readonly outcomeCode?: string }> {
+  const view = await client.getView();
+  const team = view.projections.find(({ schemaId }) => schemaId === "plotpoint.hunt.team-state.v1");
+  if (team === undefined) throw new Error("hunt-team-projection-missing");
+  return client.enqueueCommand({
+    commandId,
+    target: {
+      aggregateKind: "team",
+      aggregateId: team.aggregateId,
+      schemaId: team.schemaId,
+      schemaVersion: 1,
+    },
+    expectedStateVersion: team.stateVersion,
+    type: "plotpoint.hunt.target-discovery.v1",
+    payload: { targetId },
+    observationIds: [observationId],
+  });
+}
+
 export function ClueBoard(clues: readonly ClueSummary[]): HTMLElement {
   const board = document.createElement("section");
   board.dataset.component = "hunt.clue-board.v1";

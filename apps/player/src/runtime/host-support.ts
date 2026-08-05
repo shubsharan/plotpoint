@@ -63,7 +63,7 @@ function requiredCapabilitySupport(
 export function deriveHostSupportFromManifest(manifest: ReleaseManifestV1): HostReleaseSupport {
   return Object.freeze({
     releaseFormatVersions: Object.freeze([1]),
-    hostApi: Object.freeze({ major: 1, minor: 0 }),
+    hostApi: Object.freeze({ major: 1, minor: 1 }),
     aggregateSchemas: aggregateSchemaSupport(manifest),
     capabilities: requiredCapabilitySupport(manifest),
   });

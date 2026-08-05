@@ -8,6 +8,7 @@ import type {
   SnapshotRecord,
 } from "../model";
 import type { TransitionStore, TransitionTransaction } from "./commit-transition";
+import { migrateSharedDatabase } from "../shared/database";
 
 const BASE_MIGRATION = `
 PRAGMA journal_mode = WAL;
@@ -186,6 +187,7 @@ export class PlayerDatabase implements TransitionStore {
   static async open(): Promise<PlayerDatabase> {
     const database = await SQLite.openDatabaseAsync("plotpoint.db");
     await migratePlayerDatabase(database);
+    await migrateSharedDatabase(database);
     return new PlayerDatabase(database);
   }
 

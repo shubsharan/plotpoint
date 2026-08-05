@@ -70,5 +70,6 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 - [Deterministic Runtime Core](../../features/0001-deterministic-runtime-core/spec.md) — Done
 - [Immutable Release Pipeline](../../features/0002-immutable-release-pipeline/spec.md) — Done
 - [Durable Offline Field Puzzle](../../features/0003-durable-offline-player/spec.md) — Pending
+- [Cooperative Hunt Loop](../../features/0004-cooperative-hunt-loop/spec.md) — Pending
 
 <!-- speckit:generated:epic-features END -->

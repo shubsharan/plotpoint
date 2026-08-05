@@ -1,6 +1,6 @@
 # Plotpoint Product Loop Roadmap
 
-- **Status:** Loop 0 complete; Loop 1 active
+- **Status:** Loop 0 complete; Loops 1 and 2 active
 - **Authority:** [Plotpoint Core Platform](product.md)
 - **Delivery model:** Complete product loops with recorded exit evidence
 
@@ -83,13 +83,31 @@ puzzle. The same compiled release runs in an Expo mobile player on physical iOS 
   durable state, credentials, and protected content.
 - The revised release installs as a distinct release and begins a fresh run.
 
-## Loop 2: Cooperative Hunt — Planned
+## Loop 2: Cooperative Hunt — Active
 
 A real cooperative hunt pulls the minimum authoritative platform services and synchronization needed
 for multiple players to join one release-pinned session, submit trusted shared commands, receive only
 authorized projections, disconnect, reconnect, and converge without duplicate accepted work. The
 game, not a generic backend checklist, determines the first authoritative mechanics and conflict
 rules.
+
+### Product boundary
+
+- One release-pinned session, one embedded team identity, and one team aggregate.
+- One-use invitations, idempotent join, terminal operator revocation, and native credential custody.
+- Generic Host API 1.1 shared commands/views and an internal complete-snapshot Sync V1 contract.
+- One trusted target-discovery server mechanic using persisted foreground-location observations.
+- No WebSockets, deltas, participant projection stores, delivery workers, generic effects, accounts,
+  device attestation, or release-authored server execution.
+
+### Current evidence boundary
+
+- Provider-free tests cover three-player lifecycle, concurrent target discovery, complete snapshot
+  convergence, revocation, rollback, interruption safety, and redacted reporting.
+- Native player build-install-launch passes on the reference iOS simulator and Android emulator.
+- Physical-device location and network behavior remains explicitly deferred; simulated evidence does
+  not establish it.
+- [Feature 0004 implementation evidence](features/0004-cooperative-hunt-loop/evidence/implementation.md)
 
 ## Loop 3: Creator and Multi-Game Proof — Planned
 

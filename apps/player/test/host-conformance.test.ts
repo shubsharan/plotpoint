@@ -196,6 +196,15 @@ describe("Host API V1 release conformance", () => {
     });
   });
 
+  it("advertises the game-neutral Host API 1.1 shared-play extension", () => {
+    const fixture = fixtures[0];
+    if (fixture === undefined) throw new Error("field-conformance-fixture-missing");
+    const manifest = { ...fixture.release.manifest, hostApi: { major: 1, minimumMinor: 1 } };
+    expect(assessCompatibility(manifest, deriveHostSupportFromManifest(manifest))).toEqual({
+      kind: "compatible",
+    });
+  });
+
   it.each(hostFaultFixtures)("returns the declared error for $name", async ({ raw, code }) => {
     const fixture = fixtures[0];
     if (fixture === undefined) throw new Error("field-conformance-fixture-missing");

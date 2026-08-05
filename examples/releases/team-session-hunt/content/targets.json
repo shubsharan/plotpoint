@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "targets": [
+    {
+      "targetId": "ferry-building",
+      "prompt": "Find the clock tower at the foot of Market Street.",
+      "zone": "Ferry Building",
+      "latitude": 37.7955,
+      "longitude": -122.3937,
+      "radiusMeters": 55,
+      "maximumAgeMs": 15000,
+      "maximumAccuracyMeters": 30
+    },
+    {
+      "targetId": "rincon-park",
+      "prompt": "Stand near the bow drawn from the bay.",
+      "zone": "Rincon Park",
+      "latitude": 37.7916,
+      "longitude": -122.3907,
+      "radiusMeters": 55,
+      "maximumAgeMs": 15000,
+      "maximumAccuracyMeters": 30
+    },
+    {
+      "targetId": "south-park",
+      "prompt": "Reach the oval green at the center of the neighborhood.",
+      "zone": "South Park",
+      "latitude": 37.7816,
+      "longitude": -122.3939,
+      "radiusMeters": 55,
+      "maximumAgeMs": 15000,
+      "maximumAccuracyMeters": 30
+    }
+  ]
+}

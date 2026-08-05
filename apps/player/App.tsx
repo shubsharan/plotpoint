@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Platform, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { Button, Platform, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -17,11 +17,17 @@ import {
 } from "./src/install/native-adapters";
 import { PlayerDatabase } from "./src/persistence/database";
 import { createPlayReport } from "./src/reports/create-play-report";
+import { createSharedHuntReport } from "./src/reports/create-shared-hunt-report";
 import { allowRuntimeNavigation, buildRuntimeBootstrap } from "./src/runtime/bootstrap";
 import { deriveHostSupportFromManifest } from "./src/runtime/host-support";
 import { createProductionHostBridgeHandlers } from "./src/runtime/production-handlers";
 import { recoverLatestRun, recoverRun, type RecoveryBootstrap } from "./src/runtime/recovery";
 import { playerRunLifecycleStore, selectReleaseRun } from "./src/runtime/run-lifecycle";
+import { SharedSyncStore } from "./src/shared/database";
+import { routeSharedBridgeMessage } from "./src/shared/host-bridge";
+import { createParticipantCredentialStore } from "./src/shared/credentials";
+import { SharedSyncCoordinator } from "./src/shared/sync-coordinator";
+import { SharedSessionController } from "./src/shared/session-controller";
 
 interface ActiveRuntime {
   readonly recovery: RecoveryBootstrap;
@@ -141,6 +147,10 @@ function installationFailure(error: unknown): InstallationFailure {
 export default function App() {
   const [database, setDatabase] = useState<PlayerDatabase | null>(null);
   const [runtime, setRuntime] = useState<ActiveRuntime | null>(null);
+  const [sharedSessionId, setSharedSessionId] = useState<string | null>(null);
+  const [serviceUrl, setServiceUrl] = useState("");
+  const [sessionCode, setSessionCode] = useState("");
+  const [invitation, setInvitation] = useState("");
   const [status, setStatus] = useState("Opening local player…");
   const [releaseDetails, setReleaseDetails] = useState<ReleaseDetails | null>(null);
   const [installFailure, setInstallFailure] = useState<InstallationFailure | null>(null);
@@ -188,6 +198,7 @@ export default function App() {
         presentationSource: decoder.decode(presentation.bytes),
       }),
     });
+    setSharedSessionId(await new SharedSyncStore(db.raw()).sessionForRun(recovery.runId));
     setReleaseDetails(describeRequirements(opened.releaseId, opened.manifest, publication));
     setInstallFailure(null);
     setStatus("Release ready for offline play.");
@@ -254,6 +265,49 @@ export default function App() {
 
   const onBridgeMessage = async (event: WebViewMessageEvent) => {
     if (database === null || runtime === null) return;
+    let decodedType: unknown;
+    try {
+      decodedType = (JSON.parse(event.nativeEvent.data) as { readonly type?: unknown }).type;
+    } catch {
+      decodedType = undefined;
+    }
+    if (typeof decodedType === "string" && decodedType.startsWith("shared.")) {
+      if (sharedSessionId === null) {
+        reply({
+          version: 1,
+          requestId: "unknown",
+          type: "host.error",
+          payload: { code: "shared-session-missing" },
+        });
+        return;
+      }
+      const store = new SharedSyncStore(database.raw());
+      const response = await routeSharedBridgeMessage(event.nativeEvent.data, {
+        getView: () => store.view(sharedSessionId),
+        enqueue: (command) => store.enqueue(sharedSessionId, command, new Date().toISOString()),
+      });
+      reply(response);
+      void new SharedSyncCoordinator(store, createParticipantCredentialStore())
+        .synchronize(sharedSessionId)
+        .then(() =>
+          reply({
+            version: 1,
+            requestId: "notification",
+            type: "shared.sync.changed",
+            payload: {},
+          }),
+        )
+        .catch((error: unknown) => {
+          setStatus(error instanceof Error ? error.message : "Shared synchronization failed");
+          reply({
+            version: 1,
+            requestId: "notification",
+            type: "shared.sync.changed",
+            payload: {},
+          });
+        });
+      return;
+    }
     const response = await routeHostBridgeMessage(
       event.nativeEvent.data,
       createProductionHostBridgeHandlers({
@@ -287,11 +341,11 @@ export default function App() {
   const exportReport = async () => {
     if (database === null || runtime === null || FileSystem.cacheDirectory === null) return;
     try {
-      const report = await createPlayReport(
-        database,
-        runtime.recovery.runId,
-        Platform.OS === "android" ? "android" : "ios",
-      );
+      const platform = Platform.OS === "android" ? "android" : "ios";
+      const report =
+        sharedSessionId === null
+          ? await createPlayReport(database, runtime.recovery.runId, platform)
+          : await createSharedHuntReport(database, sharedSessionId, platform);
       const uri = `${FileSystem.cacheDirectory}plotpoint-${runtime.recovery.runId}.report.json`;
       await FileSystem.writeAsStringAsync(uri, `${JSON.stringify(report, null, 2)}\n`);
       await Sharing.shareAsync(uri, {
@@ -300,6 +354,25 @@ export default function App() {
       });
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Report export failed");
+    }
+  };
+
+  const joinSharedHunt = async () => {
+    if (database === null || runtime === null) return;
+    setStatus("Joining shared hunt…");
+    try {
+      const store = new SharedSyncStore(database.raw());
+      await new SharedSessionController(store, createParticipantCredentialStore()).join({
+        serviceUrl,
+        sessionId: sessionCode,
+        runId: runtime.recovery.runId,
+        invitation,
+      });
+      setInvitation("");
+      setSharedSessionId(sessionCode);
+      setStatus("Shared hunt joined and synchronized.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Shared hunt join failed");
     }
   };
 
@@ -334,6 +407,43 @@ export default function App() {
           <Text style={styles.failureAction}>{installFailure.action}</Text>
         </View>
       )}
+      {runtime !== null && sharedSessionId === null ? (
+        <View style={styles.joinPanel}>
+          <Text style={styles.detailLabel}>JOIN COOPERATIVE HUNT</Text>
+          <TextInput
+            value={serviceUrl}
+            onChangeText={setServiceUrl}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="https://service.example"
+            style={styles.input}
+          />
+          <TextInput
+            value={sessionCode}
+            onChangeText={setSessionCode}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Session ID"
+            style={styles.input}
+          />
+          <TextInput
+            value={invitation}
+            onChangeText={setInvitation}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+            placeholder="One-use invitation"
+            style={styles.input}
+          />
+          <Button
+            title="Join hunt"
+            disabled={
+              serviceUrl.length === 0 || sessionCode.length === 0 || invitation.length === 0
+            }
+            onPress={() => void joinSharedHunt()}
+          />
+        </View>
+      ) : null}
       {releaseDetails === null ? null : (
         <View style={styles.releasePanel}>
           <Text style={styles.detailLabel}>VERIFIED LOCAL RELEASE</Text>
@@ -423,6 +533,22 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 18,
     paddingVertical: 12,
+  },
+  joinPanel: {
+    gap: 8,
+    padding: 14,
+    backgroundColor: "#e8f1ed",
+    borderBottomWidth: 1,
+    borderBottomColor: "#183f3920",
+  },
+  input: {
+    backgroundColor: "#fffdf8",
+    borderWidth: 1,
+    borderColor: "#35635d55",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: "#183f39",
   },
   failureCode: { color: "#7b2f18", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
   failureAction: { color: "#542619" },

@@ -34,9 +34,12 @@ learning record:
 edit -> validate -> compile -> install -> play -> recover -> learn -> revise
 ```
 
-The active loop is an internally authored location-aware puzzle installed over a local development
-connection and then played offline on iOS and Android. Platform services, synchronization, broader
-capabilities, and external creator workflows enter the product only when a later game requires them.
+Loop 1 is an internally authored location-aware puzzle installed over a local development connection
+and then played offline on iOS and Android. Its simulator/emulator implementation gate is accepted;
+physical-device field evidence remains deferred behind the recorded blocker. Loop 2 is now the active
+implementation loop: one concrete three-player cooperative hunt pulls only the authoritative service,
+snapshot synchronization, invitation, revocation, and location-validation contracts that game needs.
+Broader capabilities and external creator workflows enter only when a later game requires them.
 
 The platform has four principal parts:
 

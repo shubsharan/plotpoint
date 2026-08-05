@@ -48,6 +48,7 @@
           "isAndroidMotionActivityEnabled": false
         }
       ],
+      "expo-secure-store",
       "expo-sqlite",
       "expo-sharing",
       "expo-status-bar"

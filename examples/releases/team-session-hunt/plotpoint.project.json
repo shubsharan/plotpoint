@@ -1,7 +1,7 @@
 {
   "projectFormatVersion": 1,
   "environment": "web",
-  "hostApi": { "major": 1, "minimumMinor": 2 },
+  "hostApi": { "major": 1, "minimumMinor": 1 },
   "entries": {
     "logic": { "source": "src/logic.ts", "export": "logic" },
     "presentation": { "source": "src/presentation.ts", "export": "presentation" }
@@ -26,6 +26,12 @@
   ],
   "aggregateSchemas": [
     {
+      "id": "plotpoint.hunt.player-shell.v1",
+      "kind": "player",
+      "version": 1,
+      "path": "schemas/player-shell.schema.json"
+    },
+    {
       "id": "hunt.session-state.v1",
       "kind": "session",
       "version": 1,
@@ -43,6 +49,7 @@
     { "id": "hunt.advance-round-payload.v1", "path": "schemas/advance-round-payload.schema.json" },
     { "id": "hunt.clue-content.v1", "path": "schemas/clue-content.schema.json" },
     { "id": "hunt.round-content.v1", "path": "schemas/round-content.schema.json" },
+    { "id": "plotpoint.hunt.target-config.v1", "path": "schemas/target-config.schema.json" },
     { "id": "hunt.solve-clue-outcome.v1", "path": "schemas/solve-clue-outcome.schema.json" },
     { "id": "hunt.solve-clue-payload.v1", "path": "schemas/solve-clue-payload.schema.json" }
   ],
@@ -78,10 +85,7 @@
       "commands": ["hunt.solve-clue.v1"],
       "content": ["hunt.clue-pack.v1"],
       "assets": ["hunt.map.city.v1"],
-      "capabilities": [
-        { "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 2 },
-        { "id": "plotpoint.session.presence", "major": 1, "minimumMinor": 0 }
-      ]
+      "capabilities": [{ "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 0 }]
     },
     {
       "id": "hunt.session-console.v1",
@@ -92,14 +96,16 @@
       "commands": ["hunt.advance-round.v1"],
       "content": ["hunt.round-rules.v1"],
       "assets": ["hunt.audio.round.v1"],
-      "capabilities": [
-        { "id": "plotpoint.media.audio", "major": 1, "minimumMinor": 0 },
-        { "id": "plotpoint.session.presence", "major": 1, "minimumMinor": 1 }
-      ]
+      "capabilities": []
     }
   ],
   "content": [
     { "id": "hunt.clue-pack.v1", "path": "content/clues.json", "schema": "hunt.clue-content.v1" },
+    {
+      "id": "plotpoint.hunt.targets.v1",
+      "path": "content/targets.json",
+      "schema": "plotpoint.hunt.target-config.v1"
+    },
     {
       "id": "hunt.round-rules.v1",
       "path": "content/rounds.json",

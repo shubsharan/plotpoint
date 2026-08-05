@@ -16,6 +16,47 @@ export default defineConfig({
       defineProject({
         resolve: {
           alias: {
+            "@plotpoint/db": new URL("./packages/db/src/index.ts", import.meta.url).pathname,
+            "@plotpoint/modules": new URL("./packages/modules/src/index.ts", import.meta.url)
+              .pathname,
+            "@plotpoint/protocol": new URL("./packages/protocol/src/index.ts", import.meta.url)
+              .pathname,
+          },
+        },
+        test: {
+          ...sharedTestConfig,
+          name: "api",
+          root: `${workspaceRoot}apps/api`,
+          include: ["test/**/*.test.ts"],
+        },
+      }),
+      defineProject({
+        test: {
+          ...sharedTestConfig,
+          name: "db",
+          root: `${workspaceRoot}packages/db`,
+          include: ["test/**/*.test.ts"],
+        },
+      }),
+      defineProject({
+        resolve: {
+          alias: {
+            "@plotpoint/protocol": new URL("./packages/protocol/src/index.ts", import.meta.url)
+              .pathname,
+            "@plotpoint/runtime": new URL("./packages/runtime/src/index.ts", import.meta.url)
+              .pathname,
+          },
+        },
+        test: {
+          ...sharedTestConfig,
+          name: "modules",
+          root: `${workspaceRoot}packages/modules`,
+          include: ["test/**/*.test.ts"],
+        },
+      }),
+      defineProject({
+        resolve: {
+          alias: {
             "@plotpoint/protocol/player": new URL(
               "./packages/protocol/src/player.ts",
               import.meta.url,

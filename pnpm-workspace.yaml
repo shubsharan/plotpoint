@@ -3,6 +3,10 @@ packages:
   - "packages/*"
   - "examples/releases/field-puzzle"
   - "examples/releases/minimal-local-puzzle"
+allowBuilds:
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
 minimumReleaseAgeExclude:
   - "@turbo/darwin-64@2.10.8"
   - "@turbo/darwin-arm64@2.10.8"

@@ -15,3 +15,18 @@ export {
   isLocationRequestInputV1,
 } from "./player/report.js";
 export type { LocationObservationV1, LocationRequestInputV1 } from "./player/report.js";
+export { createSharedPlayClientV1 } from "./shared/client.js";
+export {
+  isSharedCommandIntentV1,
+  isSharedCommandStatusV1,
+  isSharedPlayViewV1,
+  isSharedProjectionV1,
+} from "./shared/validation.js";
+export type {
+  SharedCommandIntentV1,
+  SharedCommandStatusV1,
+  SharedPlayClientV1,
+  SharedPlayTransportV1,
+  SharedPlayViewV1,
+  SharedProjectionV1,
+} from "./shared/types.js";
