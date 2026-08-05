@@ -52,7 +52,9 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 2. **Immutable Release Pipeline** _(Done)_ — complete inspectable content-addressed releases.
 3. **Durable Offline Player** _(Active)_ — the complete Loop 1 field-puzzle product loop.
 4. **Cooperative Hunt Loop** _(Planned)_ — authoritative shared play and recovery-driven sync.
-5. **Creator and Multi-Game Proof** _(Planned)_ — external authoring and secret-role projections.
+5. **Game Runtime Integration** _(Planned)_ — one runnable composition and recovery path across the
+   field puzzle and cooperative hunt.
+6. **Creator and Multi-Game Proof** _(Planned)_ — external authoring and secret-role projections.
 
 ## Risks and Open Questions
 
@@ -71,5 +73,6 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 - [Immutable Release Pipeline](../../features/0002-immutable-release-pipeline/spec.md) — Done
 - [Durable Offline Field Puzzle](../../features/0003-durable-offline-player/spec.md) — Pending
 - [Cooperative Hunt Loop](../../features/0004-cooperative-hunt-loop/spec.md) — Pending
+- [Game Runtime Integration](../../features/0005-game-runtime-integration/spec.md) — Pending
 
 <!-- speckit:generated:epic-features END -->

@@ -90,4 +90,4 @@ report, and prove credentials, invitations, coordinates, payload/state, and reus
 - [ADR-0002: Immutable Release Format](../../adrs/0002-immutable-release-format.md)
 - [ADR-0003: Trusted Single-WebView Runtime](../../adrs/0003-trusted-webview-runtime.md)
 - [ADR-0004: Host-Owned Atomic Player Persistence](../../adrs/0004-atomic-player-persistence.md)
-- [ADR-0005: Simplified Cooperative Hunt Authority and Snapshot Recovery](../../adrs/0005-authoritative-hunt-sync.md)
+- [ADR-0005: Authoritative Shared Sessions and Snapshot Recovery](../../adrs/0005-authoritative-shared-session-sync.md)

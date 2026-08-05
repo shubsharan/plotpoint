@@ -23,7 +23,7 @@ participant projection store, or arbitrary server execution.
 - [Immutable Release Format](../../adrs/0002-immutable-release-format.md) - **Accepted**
 - [Trusted Single-WebView Runtime](../../adrs/0003-trusted-webview-runtime.md) - **Accepted**
 - [Host-Owned Atomic Player Persistence](../../adrs/0004-atomic-player-persistence.md) - **Accepted**
-- [Simplified Cooperative Hunt Authority and Snapshot Recovery](../../adrs/0005-authoritative-hunt-sync.md) - **Accepted**
+- [Authoritative Shared Sessions and Snapshot Recovery](../../adrs/0005-authoritative-shared-session-sync.md) - **Accepted**
 
 ## Implementation
 

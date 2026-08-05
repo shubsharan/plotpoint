@@ -1,0 +1,109 @@
+# Contract: Shared Session HTTP API V1
+
+Shared Session API V1 replaces hunt-specific participant routing with a game-neutral transport. The
+existing Node modular monolith, PostgreSQL authority, credential handling, command receipts, and Sync
+V1 envelopes remain. HTTPS is required outside loopback tests. JSON stays bounded at 256 KiB and
+release upload at 64 MiB.
+
+## Routes
+
+- `POST /v1/releases`: operator uploads Release Format V1 bytes and supplies the expected release ID in
+  the existing trusted header. The API verifies Game Composition V1 and its optional trusted mechanic,
+  matches any data-only server contracts and schema digests to the platform adapter without importing
+  bundle exports, stores the immutable registration, and discards bytes.
+- `POST /v1/shared-sessions`: operator supplies `version`, `creationId`, `releaseId`, and `teamLabel`.
+  The release must contain one trusted mechanic; its platform adapter initializes the session's
+  aggregate only from validated release configuration. `teamLabel` remains operator metadata and never
+  becomes an implicit mechanic input. Exact retry returns the original session/team/release binding.
+- `POST /v1/shared-sessions/{sessionId}/invitations`: operator supplies `version`, `invitationId`, and
+  `expiresAt`; one raw one-use invitation is returned once and only its keyed digest persists.
+- `POST /v1/shared-sessions/{sessionId}/participants`: unauthenticated join supplies `version`,
+  `joinRequestId`, `expectedReleaseId`, invitation, and native-generated participant credential.
+- `POST /v1/shared-sessions/{sessionId}/participants/{participantId}/revoke`: operator supplies
+  `version` and idempotent operation ID; revocation remains terminal.
+- `POST /v1/shared-sessions/{sessionId}/commands`: authenticated participant submits one Sync Command
+  V1 to a command allowed by the release's trusted-mechanic binding.
+- `GET /v1/shared-sessions/{sessionId}/sync?after=<cursor>`: authenticated participant receives one
+  complete Sync Pull V1.
+
+No player route, request, or response contains hunt, target, clue, or other game vocabulary.
+
+## Join
+
+```ts
+interface SharedJoinRequestV1 {
+  readonly version: 1;
+  readonly joinRequestId: string;
+  readonly expectedReleaseId: `sha256:${string}`;
+  readonly invitation: string;
+  readonly participantCredential: string;
+}
+
+interface SharedJoinResponseV1 {
+  readonly version: 1;
+  readonly participantId: string;
+  readonly teamId: string;
+  readonly releaseId: `sha256:${string}`;
+  readonly disposition: "joined" | "duplicate";
+  readonly sync: SyncPullV1;
+}
+```
+
+The server compares `expectedReleaseId` with the immutable session release before consuming an
+invitation or creating a participant. A mismatch returns `session-release-mismatch`. The exact join
+request digest includes expected release, invitation binding, generated credential digest, and session
+scope. Before sending, the player durably stores the exact pending request provenance in SQLite and its
+invitation/credential secrets in SecureStore as defined by Shared Recovery V1. Response-loss retry with
+the same request returns the original response; changed reuse fails.
+
+The response must agree internally:
+
+```text
+response.releaseId = response.sync.snapshot.releaseId
+response participant/team = snapshot participant/team
+route session = snapshot session
+```
+
+The player independently compares these values with its active run and existing binding before local
+commit. Server success alone never authorizes a mismatched local view.
+
+## Command Dispatch
+
+After authentication and membership locking, the service resolves the registered release's one trusted
+mechanic, its platform-owned resolved aggregate model, and command type. Undeclared command type, wrong
+aggregate model or schema, incompatible observation, or unauthorized target returns an explicit stable
+terminal or the minimum transport error defined by its layer. The service never dispatches on a
+compiler-private path or executes release code.
+
+Command receipt identity, canonical request digest, domain-aware stale policy, transaction locking,
+unique constraints, no-op behavior, and participant result visibility remain governed by Sync V1 and
+ADR 0005.
+
+Trusted Mechanic V1 makes the Sync V1 result mapping lossless at its public boundary: trusted semantic
+outcomes are exact `{ code }` objects copied to `outcomeCode`; execution invalidity uses the executor's
+deterministic primary diagnostic while the full diagnostics stay in the authoritative record. The API
+never serializes or silently drops additional trusted outcome fields because such a schema is rejected at
+release registration.
+
+Before a projection enters Sync Pull V1, the adapter validates its payload with the release-matched
+projection validator and stamps the declared schema ID/version. The player independently repeats
+ID/version and payload validation before persistence or component exposure.
+
+## Errors and Privacy
+
+Transport/policy failures use a closed `{ version: 1, code, requestId }` object. Unknown, expired,
+consumed, or wrong-session invitations collapse to `join-not-authorized`. A known revoked credential
+returns `participant-revoked` without disclosing session state; Shared Recovery V1 requires the player
+to atomically mark membership/actions revoked before removing the credential. Every response carries a
+new server request ID for operator correlation; credentials never enter bodies except the one join
+request, logs, diagnostics, WebView messages, or reports.
+
+Raw location and protected game configuration obey the existing redaction boundary. The generic route
+does not weaken participant projection authorization.
+
+## Migration
+
+The repository is pre-release: the operator client, player HTTP adapter, provider-free fixtures, and
+reference hunt migrate together from `/v1/hunt-sessions` to `/v1/shared-sessions`. No compatibility
+alias remains in the player. Existing PostgreSQL table names may stay implementation-owned when
+renaming them adds no product value; public route names and code-facing service ports must be generic.

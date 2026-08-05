@@ -8,10 +8,10 @@ feature specs and plans must link every ADR they rely on.
 
 <!-- speckit:generated:adr-index START -->
 
-- [Deterministic Runtime Contract](0001-deterministic-runtime-contract.md) — Accepted
+- [Integrated Deterministic Runtime Contract](0001-deterministic-runtime-contract.md) — Accepted
 - [Immutable Release Format](0002-immutable-release-format.md) — Accepted
 - [Trusted Single-WebView Runtime](0003-trusted-webview-runtime.md) — Accepted
 - [Host-Owned Atomic Player Persistence](0004-atomic-player-persistence.md) — Accepted
-- [Simplified Cooperative Hunt Authority and Snapshot Recovery](0005-authoritative-hunt-sync.md) — Accepted
+- [Authoritative Shared Sessions and Snapshot Recovery](0005-authoritative-shared-session-sync.md) — Accepted
 
 <!-- speckit:generated:adr-index END -->
