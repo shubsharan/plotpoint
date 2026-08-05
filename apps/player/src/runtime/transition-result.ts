@@ -1,8 +1,8 @@
-import type { TransitionResultV1 } from "@plotpoint/protocol";
+import type { TransitionResult } from "@plotpoint/protocol";
 
 import type { DurableTransitionResult } from "../model";
 
-export function transitionResultFromDurable(result: DurableTransitionResult): TransitionResultV1 {
+export function transitionResultFromDurable(result: DurableTransitionResult): TransitionResult {
   if (
     (result.kind !== "accepted" && result.kind !== "duplicate") ||
     result.commandOutcome === undefined ||

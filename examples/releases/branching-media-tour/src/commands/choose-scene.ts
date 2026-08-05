@@ -17,7 +17,7 @@ export const chooseSceneCommand = defineCommand<
   ChooseScenePayload,
   ChooseSceneOutcome
 >({
-  definitionId: "tour.choose-scene.v1",
+  definitionId: "tour.choose-scene",
   commandType: "choose-scene",
   aggregateKind: "player",
   handle(target, command) {

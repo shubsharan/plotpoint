@@ -99,7 +99,7 @@ describe("environment graph resolution", () => {
   it("allows deterministic first-party roots in logic and browser rendering in presentation", async () => {
     const captured = await snapshot(
       'import { defineCommand } from "@plotpoint/runtime"; export const logic = defineCommand;',
-      'import { createHostRuntimeClientV1 } from "@plotpoint/protocol/player"; export const presentation = { createHostRuntimeClientV1, element: document.createElement("main") };',
+      'import { createHostRuntimeClient } from "@plotpoint/protocol/player"; export const presentation = { createHostRuntimeClient, element: document.createElement("main") };',
     );
 
     const logic = resolveImportGraph(captured, captured.config.entries.logic, "logic");

@@ -1,11 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "plotpoint.hunt.target-config.v1",
+  "$id": "plotpoint.hunt.target-config",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "targets"],
+  "required": ["targets"],
   "properties": {
-    "version": { "const": 1 },
     "targets": {
       "type": "array",
       "minItems": 1,

@@ -6,17 +6,17 @@ import type {
   InspectedRelease,
   OpenedRelease,
   ReleaseConstructionInput,
-  ReleaseManifestV1,
+  ReleaseManifest,
   VerifiedRelease,
 } from "@plotpoint/protocol";
 
 // @ts-expect-error protocol deep imports are not a supported package surface
-import type { ReleaseManifestV1 as DeepReleaseManifest } from "@plotpoint/protocol/release/types";
+import type { ReleaseManifest as DeepReleaseManifest } from "@plotpoint/protocol/release/types";
 
 type DeepImportMustRemainUnavailable = DeepReleaseManifest;
 void (undefined as unknown as DeepImportMustRemainUnavailable);
 
-const manifest: ReleaseManifestV1 = {
+const manifest: ReleaseManifest = {
   releaseFormatVersion: 1,
   hostApi: { major: 1, minimumMinor: 0 },
   aggregateSchemas: [],
@@ -25,7 +25,7 @@ const manifest: ReleaseManifestV1 = {
   inventory: [],
 };
 
-const invalidManifestVersion: ReleaseManifestV1 = {
+const invalidManifestVersion: ReleaseManifest = {
   ...manifest,
   // @ts-expect-error release-format versions are exact discriminants
   releaseFormatVersion: 2,

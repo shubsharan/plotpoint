@@ -1,13 +1,14 @@
 import {
-  isLocationObservationV1,
-  isSharedCommandIntentV1,
-  isSyncPullV1,
-  type LocationObservationV1,
-  type SharedCommandIntentV1,
-  type SharedCommandStatusV1,
-  type SharedPlayViewV1,
-  type SharedProjectionV1,
-  type SyncPullV1,
+  CONTRACT_VERSIONS,
+  isLocationObservation,
+  isSharedCommandIntent,
+  isSyncPull,
+  type LocationObservation,
+  type SharedCommandIntent,
+  type SharedCommandStatus,
+  type SharedPlayView,
+  type SharedProjection,
+  type SyncPull,
 } from "@plotpoint/protocol";
 
 export const SHARED_MIGRATION = `
@@ -88,8 +89,8 @@ export async function migrateSharedDatabase(database: SharedSqlDatabase): Promis
 export class SharedSyncStore {
   constructor(private readonly database: SharedSqlDatabase) {}
 
-  async saveJoinedSession(record: SharedSessionRecord, pull: SyncPullV1): Promise<void> {
-    if (!isSyncPullV1(pull) || pull.snapshot.sessionId !== record.sessionId)
+  async saveJoinedSession(record: SharedSessionRecord, pull: SyncPull): Promise<void> {
+    if (!isSyncPull(pull) || pull.snapshot.sessionId !== record.sessionId)
       throw new Error("shared-join-snapshot-invalid");
     await this.database.withExclusiveTransactionAsync(async (tx) => {
       await tx.runAsync(
@@ -115,14 +116,14 @@ export class SharedSyncStore {
 
   async enqueue(
     sessionId: string,
-    command: SharedCommandIntentV1,
+    command: SharedCommandIntent,
     enqueuedAt: string,
-  ): Promise<SharedCommandStatusV1> {
-    if (!isSharedCommandIntentV1(command)) throw new Error("shared-command-invalid");
-    let output: SharedCommandStatusV1 | undefined;
+  ): Promise<SharedCommandStatus> {
+    if (!isSharedCommandIntent(command)) throw new Error("shared-command-invalid");
+    let output: SharedCommandStatus | undefined;
     await this.database.withExclusiveTransactionAsync(async (tx) => {
       const result = await tx.getFirstAsync<{
-        terminal: SharedCommandStatusV1["terminal"];
+        terminal: SharedCommandStatus["terminal"];
         outcome_code: string;
         resulting_state_version: number;
       }>(
@@ -196,7 +197,7 @@ export class SharedSyncStore {
     return output;
   }
 
-  async nextQueued(sessionId: string): Promise<SharedCommandIntentV1 | null> {
+  async nextQueued(sessionId: string): Promise<SharedCommandIntent | null> {
     const row = await this.database.getFirstAsync<{
       command_id: string;
       target_json: string;
@@ -217,15 +218,15 @@ export class SharedSyncStore {
       payload: JSON.parse(row.payload_json),
       observationIds: JSON.parse(row.observation_ids_json),
     };
-    if (!isSharedCommandIntentV1(command)) throw new Error("shared-outbox-corrupt");
+    if (!isSharedCommandIntent(command)) throw new Error("shared-outbox-corrupt");
     return command;
   }
 
   async observations(
     runId: string,
     ids: readonly string[],
-  ): Promise<readonly LocationObservationV1[]> {
-    const output: LocationObservationV1[] = [];
+  ): Promise<readonly LocationObservation[]> {
+    const output: LocationObservation[] = [];
     for (const id of ids) {
       const row = await this.database.getFirstAsync<{
         observation_id: string;
@@ -244,7 +245,7 @@ export class SharedSyncStore {
       );
       if (row === null) throw new Error("shared-observation-missing");
       const base = {
-        version: 1 as const,
+        version: CONTRACT_VERSIONS.sharedSync,
         observationId: row.observation_id,
         recordedAt: row.recorded_at,
       };
@@ -262,14 +263,14 @@ export class SharedSyncStore {
           : row.availability === "failed"
             ? { ...base, availability: "failed", diagnosticCode: row.diagnostic_code }
             : { ...base, availability: row.availability };
-      if (!isLocationObservationV1(observation)) throw new Error("shared-observation-corrupt");
+      if (!isLocationObservation(observation)) throw new Error("shared-observation-corrupt");
       output.push(observation);
     }
     return output;
   }
 
-  async applyPull(sessionId: string, pull: SyncPullV1): Promise<void> {
-    if (!isSyncPullV1(pull) || pull.snapshot.sessionId !== sessionId)
+  async applyPull(sessionId: string, pull: SyncPull): Promise<void> {
+    if (!isSyncPull(pull) || pull.snapshot.sessionId !== sessionId)
       throw new Error("shared-pull-invalid");
     await this.database.withExclusiveTransactionAsync((tx) =>
       this.replaceSnapshot(tx, sessionId, pull),
@@ -279,7 +280,7 @@ export class SharedSyncStore {
   private async replaceSnapshot(
     tx: SharedSqlDatabase,
     sessionId: string,
-    pull: SyncPullV1,
+    pull: SyncPull,
   ): Promise<void> {
     await tx.runAsync("DELETE FROM shared_projections WHERE session_id=?", sessionId);
     for (const item of pull.snapshot.projections)
@@ -417,18 +418,18 @@ export class SharedSyncStore {
     return row?.session_id ?? null;
   }
 
-  async view(sessionId: string): Promise<SharedPlayViewV1> {
+  async view(sessionId: string): Promise<SharedPlayView> {
     const session = await this.database.getFirstAsync<{
       release_id: `sha256:${string}`;
       team_id: string;
       membership_status: "active" | "revoked";
-      transport_status: SharedPlayViewV1["transport"];
-      sync_status: SharedPlayViewV1["synchronization"];
+      transport_status: SharedPlayView["transport"];
+      sync_status: SharedPlayView["synchronization"];
       confirmed_at: string | null;
     }>("SELECT * FROM shared_sessions WHERE session_id=?", sessionId);
     if (session === null) throw new Error("shared-session-missing");
     const projections = await this.database.getAllAsync<{
-      aggregate_kind: SharedProjectionV1["aggregateKind"];
+      aggregate_kind: SharedProjection["aggregateKind"];
       aggregate_id: string;
       schema_id: string;
       schema_version: number;
@@ -440,7 +441,7 @@ export class SharedSyncStore {
     );
     const results = await this.database.getAllAsync<{
       command_id: string;
-      terminal: SharedCommandStatusV1["terminal"];
+      terminal: SharedCommandStatus["terminal"];
       outcome_code: string;
       resulting_state_version: number;
     }>(

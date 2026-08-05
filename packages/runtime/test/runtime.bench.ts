@@ -19,7 +19,7 @@ const aggregate: Aggregate<State, "player"> = {
   authority: "local",
   state: { count: 0 },
   progression: {
-    graphId: "benchmark.v1",
+    graphId: "benchmark",
     graphVersion: 1,
     nodes: Array.from({ length: 20 }, (_value, index) => ({
       nodeId: `node-${index}`,
@@ -35,7 +35,7 @@ const command: Command<JsonObject, "player"> = {
   payload: {},
 };
 const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-  definitionId: "benchmark.increment.v1",
+  definitionId: "benchmark.increment",
   commandType: "increment",
   aggregateKind: "player",
   handle(target) {
@@ -51,7 +51,7 @@ const definition = defineCommand<"player", State, JsonObject, JsonObject>({
 });
 const progression = defineProgression<"player", State, JsonObject, JsonObject>({
   aggregateKind: "player",
-  graphId: "benchmark.v1",
+  graphId: "benchmark",
   graphVersion: 1,
   nodes: Array.from({ length: 20 }, (_value, index) => ({
     nodeId: `node-${index}`,

@@ -1,18 +1,18 @@
-# Contract: Foreground Location Capability V1
+# Contract: Foreground Location Capability
 
 Capability identity: `plotpoint.location.foreground`, major 1, minor 0.
 
-Capability input is exactly `{}`. Capability output is `LocationObservationV1`.
+Capability input is exactly `{}`. Capability output is `LocationObservation`.
 
 ```ts
-interface LocationObservationBaseV1 {
-  readonly version: 1;
+interface LocationObservationBase {
+  readonly version: typeof CONTRACT_VERSIONS.capabilityObservation;
   readonly observationId: string;
   readonly recordedAt: string;
 }
 
-type LocationObservationV1 =
-  | (LocationObservationBaseV1 & {
+type LocationObservation =
+  | (LocationObservationBase & {
       readonly availability: "available";
       readonly capturedAt: string;
       readonly ageMs: number;
@@ -20,10 +20,10 @@ type LocationObservationV1 =
       readonly longitude: number;
       readonly horizontalAccuracy: number;
     })
-  | (LocationObservationBaseV1 & {
+  | (LocationObservationBase & {
       readonly availability: "permission-denied" | "unavailable";
     })
-  | (LocationObservationBaseV1 & {
+  | (LocationObservationBase & {
       readonly availability: "failed";
       readonly diagnosticCode: string;
     });
@@ -39,14 +39,14 @@ consumes, and the host confirms same-run ownership before accepting a transition
 
 The host does not decide checkpoint membership. Release logic applies coordinates, radius, maximum
 accuracy, freshness, clues, and progression rules to the explicit observation value. Background
-location and continuous tracking are outside V1.
+location and continuous tracking are outside.
 
 ## Report Projection
 
-Location V1 contributes this closed redacted projection to a Play Report capability event:
+Location contributes this closed redacted projection to a Play Report capability event:
 
 ```ts
-interface LocationReportProjectionV1 {
+interface LocationReportProjection {
   readonly availability: "available" | "permission-denied" | "unavailable" | "failed";
   readonly recencyBand: "fresh" | "stale" | "future" | "unknown";
   readonly accuracyBand: "excellent" | "good" | "degraded" | "unknown";

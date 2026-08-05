@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { generateDefinitionInspectionEntry } from "../../src/composition/generated-entries.js";
 import { inspectDefinitionBundle } from "../../src/composition/inspect-definitions.js";
 import { buildCanonicalRegistries } from "../../src/composition/registries.js";
-import type { ProjectConfigurationV1 } from "../../src/project/config.js";
+import type { ProjectConfiguration } from "../../src/project/config.js";
 
 function registries() {
-  const config: ProjectConfigurationV1 = {
+  const config: ProjectConfiguration = {
     projectFormatVersion: 1,
     environment: "web",
     hostApi: { major: 1, minimumMinor: 0 },
@@ -16,29 +16,27 @@ function registries() {
     },
     commands: [
       {
-        id: "solve.v1",
+        id: "solve",
         type: "solve",
         definition: { source: "src/solve.ts", export: "solveCommand" },
-        aggregateSchema: "player.v1",
-        payloadSchema: "payload.v1",
-        outcomeSchema: "outcome.v1",
+        aggregateSchema: "player",
+        payloadSchema: "payload",
+        outcomeSchema: "outcome",
       },
     ],
-    aggregateSchemas: [
-      { id: "player.v1", kind: "player", version: 1, path: "schemas/player.json" },
-    ],
+    aggregateSchemas: [{ id: "player", kind: "player", version: 1, path: "schemas/player.json" }],
     schemas: [
-      { id: "payload.v1", path: "schemas/payload.json" },
-      { id: "outcome.v1", path: "schemas/outcome.json" },
+      { id: "payload", path: "schemas/payload.json" },
+      { id: "outcome", path: "schemas/outcome.json" },
     ],
     progressions: [
       {
-        id: "puzzle.v1",
+        id: "puzzle",
         version: 1,
         kind: "player",
         definition: { source: "src/progression.ts", export: "puzzleProgression" },
-        aggregateSchema: "player.v1",
-        commands: ["solve.v1"],
+        aggregateSchema: "player",
+        commands: ["solve"],
         content: [],
         components: [],
       },
@@ -66,16 +64,16 @@ describe("definition inspection", () => {
     const metadata = {
       commands: [
         {
-          registrationId: "solve.v1",
-          definitionId: "solve.v1",
+          registrationId: "solve",
+          definitionId: "solve",
           commandType: "solve",
           aggregateKind: "player",
         },
       ],
       progressions: [
         {
-          registrationId: "puzzle.v1",
-          graphId: "puzzle.v1",
+          registrationId: "puzzle",
+          graphId: "puzzle",
           graphVersion: 1,
           aggregateKind: "player",
           nodes: [{ nodeId: "solve", initialStatus: "active" }],

@@ -30,7 +30,7 @@ const command: Command<JsonObject, "player"> = {
 describe("record replay", () => {
   it("matches the complete canonical record", () => {
     const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-      definitionId: "replay.v1",
+      definitionId: "replay",
       commandType: "change",
       aggregateKind: "player",
       handle() {
@@ -54,7 +54,7 @@ describe("record replay", () => {
 
   it("reports the first divergent record path", () => {
     const originalDefinition = defineCommand<"player", State, JsonObject, JsonObject>({
-      definitionId: "replay.v1",
+      definitionId: "replay",
       commandType: "change",
       aggregateKind: "player",
       handle() {

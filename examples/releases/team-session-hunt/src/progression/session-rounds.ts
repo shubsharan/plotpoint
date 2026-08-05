@@ -13,7 +13,7 @@ export const sessionRoundsProgression = defineProgression<
   AdvanceRoundOutcome
 >({
   aggregateKind: "session",
-  graphId: "hunt.session-rounds.v1",
+  graphId: "hunt.session-rounds",
   graphVersion: 1,
   nodes: [
     { nodeId: "briefing", initialStatus: "active" },

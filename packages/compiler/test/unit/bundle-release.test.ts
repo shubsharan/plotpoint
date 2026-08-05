@@ -140,7 +140,7 @@ describe("snapshot release bundling", () => {
       ]),
       progressions: Object.freeze([
         Object.freeze({
-          id: "Progression.V1",
+          id: "Progression.",
           version: 1,
           kind: "player",
           definition: Object.freeze({ source: "src/progression.ts", export: "progression" }),
@@ -213,7 +213,7 @@ describe("snapshot release bundling", () => {
     );
     expect(logicModule.default).toEqual({});
     expect(Object.keys(logicModule.commands)).toEqual(["command/id"]);
-    expect(Object.keys(logicModule.progressions)).toEqual(["Progression.V1"]);
+    expect(Object.keys(logicModule.progressions)).toEqual(["Progression."]);
     expect(presentationModule.default).toEqual({});
     expect(Object.keys(presentationModule.components)).toEqual(["Component!?"]);
   });

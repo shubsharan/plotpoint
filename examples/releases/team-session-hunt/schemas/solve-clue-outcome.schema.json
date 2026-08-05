@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "hunt.solve-clue-outcome.v1",
+  "$id": "hunt.solve-clue-outcome",
   "type": "object",
   "additionalProperties": false,
   "required": ["correct", "score"],

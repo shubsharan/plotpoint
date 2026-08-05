@@ -1,16 +1,16 @@
-# Contract: Play Report V1
+# Contract: Play Report
 
 ```ts
-interface PlayReportV1 {
-  readonly version: 1;
+interface PlayReport {
+  readonly version: typeof CONTRACT_VERSIONS.playReport;
   readonly releaseId: `sha256:${string}`;
   readonly runId: string;
   readonly platform: "ios" | "android";
   readonly durationMs: number;
-  readonly events: readonly PlayReportEventV1[];
+  readonly events: readonly PlayReportEvent[];
 }
 
-type PlayReportEventV1 =
+type PlayReportEvent =
   | {
       readonly kind: "command";
       readonly elapsedMs: number;
@@ -53,8 +53,8 @@ start. Events are ordered by non-decreasing `elapsedMs`, with a stable host-defi
 events keep terminal, versions, redacted outcome code, and progression changes together so a report can
 explain both successful and failed play.
 
-Every capability event projection must validate against the independently versioned allowlist defined
-by that capability contract. Location V1 uses `LocationReportProjectionV1`; Host API Core does not
+Every capability event projection must validate against the independently governed allowlist defined
+by that capability contract. Location uses `LocationReportProjection`; Host API Core does not
 define location-specific report fields.
 
 The report is an allowlisted projection and never contains absolute timestamps, coordinates,
@@ -62,5 +62,5 @@ credentials, command payloads, raw aggregate state, arbitrary outcome objects, p
 paths, or stack traces. Outcome codes and diagnostic codes must be stable, non-sensitive identifiers.
 
 Report creation validates the run, release, receipts, journal positions, observation links, and event
-ordering. Missing or incoherent durable records fail explicitly; V1 never emits a success-shaped
+ordering. Missing or incoherent durable records fail explicitly; never emits a success-shaped
 partial report.

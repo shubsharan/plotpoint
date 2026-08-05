@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   assessCompatibility,
-  type CapabilityResultV1,
+  type CapabilityResult,
   type HostToWebBridgeEnvelope,
 } from "@plotpoint/protocol";
 
@@ -26,7 +26,7 @@ function handlersFor(fixture: HostConformanceFixture): HostBridgeHandlers {
       return fixture.transitionResult;
     },
     requestCapability: async () => {
-      throw new Error("unexpected-capability-request") as never as CapabilityResultV1;
+      throw new Error("unexpected-capability-request") as never as CapabilityResult;
     },
   };
 }
@@ -61,7 +61,7 @@ async function exerciseHostApi(fixture: HostConformanceFixture) {
   });
 }
 
-describe("Host API V1 release conformance", () => {
+describe("Host API  release conformance", () => {
   let fixtures: readonly HostConformanceFixture[];
 
   beforeAll(async () => {
@@ -196,7 +196,7 @@ describe("Host API V1 release conformance", () => {
     });
   });
 
-  it("advertises the game-neutral Host API 1.1 shared-play extension", () => {
+  it("advertises the game-neutral Host API shared-play extension", () => {
     const fixture = fixtures[0];
     if (fixture === undefined) throw new Error("field-conformance-fixture-missing");
     const manifest = { ...fixture.release.manifest, hostApi: { major: 1, minimumMinor: 1 } };

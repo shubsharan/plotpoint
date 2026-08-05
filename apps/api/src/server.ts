@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
-import type { SyncCommandV1 } from "@plotpoint/protocol";
+import { CONTRACT_VERSIONS, type SyncCommand } from "@plotpoint/protocol";
 import { HuntService, HuntServiceError } from "./hunt-service.js";
 
 const JSON_LIMIT = 256 * 1024;
@@ -69,7 +69,7 @@ export function createApiServer(service: HuntApi, config: ApiServerConfig) {
       if (request.url === undefined || request.method === undefined)
         throw new HuntServiceError("request-invalid", 400);
       const url = new URL(request.url, "http://localhost");
-      if (request.method === "POST" && url.pathname === "/v1/releases") {
+      if (request.method === "POST" && url.pathname === "/releases") {
         operator(request, config);
         if (request.headers["content-type"] !== "application/vnd.plotpoint.release")
           throw new HuntServiceError("media-type-invalid", 415);
@@ -77,24 +77,24 @@ export function createApiServer(service: HuntApi, config: ApiServerConfig) {
         if (typeof expected !== "string")
           throw new HuntServiceError("expected-release-id-invalid", 400);
         send(response, 200, {
-          version: 1,
+          version: CONTRACT_VERSIONS.sharedApi,
           ...(await service.registerRelease(await body(request, RELEASE_LIMIT), expected)),
         });
         return;
       }
-      if (request.method === "POST" && url.pathname === "/v1/hunt-sessions") {
+      if (request.method === "POST" && url.pathname === "/hunt-sessions") {
         operator(request, config);
         const value = await json(request);
         if (
           !exact(value, ["version", "creationId", "releaseId", "teamLabel"]) ||
-          value.version !== 1 ||
+          value.version !== CONTRACT_VERSIONS.sharedApi ||
           typeof value.creationId !== "string" ||
           typeof value.releaseId !== "string" ||
           typeof value.teamLabel !== "string"
         )
           throw new HuntServiceError("session-request-invalid", 400);
         send(response, 200, {
-          version: 1,
+          version: CONTRACT_VERSIONS.sharedApi,
           releaseId: value.releaseId,
           ...(await service.createSession({
             creationId: value.creationId,
@@ -104,19 +104,19 @@ export function createApiServer(service: HuntApi, config: ApiServerConfig) {
         });
         return;
       }
-      const invitation = url.pathname.match(/^\/v1\/hunt-sessions\/([^/]+)\/invitations$/);
+      const invitation = url.pathname.match(/^\/hunt-sessions\/([^/]+)\/invitations$/);
       if (request.method === "POST" && invitation !== null) {
         operator(request, config);
         const value = await json(request);
         if (
           !exact(value, ["version", "invitationId", "expiresAt"]) ||
-          value.version !== 1 ||
+          value.version !== CONTRACT_VERSIONS.sharedApi ||
           typeof value.invitationId !== "string" ||
           typeof value.expiresAt !== "string"
         )
           throw new HuntServiceError("invitation-request-invalid", 400);
         send(response, 200, {
-          version: 1,
+          version: CONTRACT_VERSIONS.sharedApi,
           ...(await service.createInvitation(
             decodeURIComponent(invitation[1] ?? ""),
             value.invitationId,
@@ -125,19 +125,19 @@ export function createApiServer(service: HuntApi, config: ApiServerConfig) {
         });
         return;
       }
-      const participants = url.pathname.match(/^\/v1\/hunt-sessions\/([^/]+)\/participants$/);
+      const participants = url.pathname.match(/^\/hunt-sessions\/([^/]+)\/participants$/);
       if (request.method === "POST" && participants !== null) {
         const value = await json(request);
         if (
           !exact(value, ["version", "joinRequestId", "invitation", "participantCredential"]) ||
-          value.version !== 1 ||
+          value.version !== CONTRACT_VERSIONS.sharedApi ||
           typeof value.joinRequestId !== "string" ||
           typeof value.invitation !== "string" ||
           typeof value.participantCredential !== "string"
         )
           throw new HuntServiceError("join-request-invalid", 400);
         send(response, 200, {
-          version: 1,
+          version: CONTRACT_VERSIONS.sharedApi,
           ...(await service.join(decodeURIComponent(participants[1] ?? ""), {
             joinRequestId: value.joinRequestId,
             invitation: value.invitation,
@@ -147,14 +147,14 @@ export function createApiServer(service: HuntApi, config: ApiServerConfig) {
         return;
       }
       const revoke = url.pathname.match(
-        /^\/v1\/hunt-sessions\/([^/]+)\/participants\/([^/]+)\/revoke$/,
+        /^\/hunt-sessions\/([^/]+)\/participants\/([^/]+)\/revoke$/,
       );
       if (request.method === "POST" && revoke !== null) {
         operator(request, config);
         const value = await json(request);
         if (
           !exact(value, ["version", "operationId"]) ||
-          value.version !== 1 ||
+          value.version !== CONTRACT_VERSIONS.sharedApi ||
           typeof value.operationId !== "string"
         )
           throw new HuntServiceError("revoke-request-invalid", 400);
@@ -163,10 +163,10 @@ export function createApiServer(service: HuntApi, config: ApiServerConfig) {
           decodeURIComponent(revoke[2] ?? ""),
           value.operationId,
         );
-        send(response, 200, { version: 1, disposition: "revoked" });
+        send(response, 200, { version: CONTRACT_VERSIONS.sharedApi, disposition: "revoked" });
         return;
       }
-      const commands = url.pathname.match(/^\/v1\/hunt-sessions\/([^/]+)\/commands$/);
+      const commands = url.pathname.match(/^\/hunt-sessions\/([^/]+)\/commands$/);
       if (request.method === "POST" && commands !== null) {
         const credential = bearer(request);
         if (credential === null) throw new HuntServiceError("participant-not-authorized", 401);
@@ -176,12 +176,12 @@ export function createApiServer(service: HuntApi, config: ApiServerConfig) {
           await service.submit(
             decodeURIComponent(commands[1] ?? ""),
             credential,
-            (await json(request)) as unknown as SyncCommandV1,
+            (await json(request)) as unknown as SyncCommand,
           ),
         );
         return;
       }
-      const sync = url.pathname.match(/^\/v1\/hunt-sessions\/([^/]+)\/sync$/);
+      const sync = url.pathname.match(/^\/hunt-sessions\/([^/]+)\/sync$/);
       if (request.method === "GET" && sync !== null) {
         const credential = bearer(request);
         if (credential === null) throw new HuntServiceError("participant-not-authorized", 401);
@@ -199,10 +199,18 @@ export function createApiServer(service: HuntApi, config: ApiServerConfig) {
       throw new HuntServiceError("route-not-found", 404);
     } catch (error) {
       if (error instanceof HuntServiceError) {
-        send(response, error.status, { version: 1, code: error.code, requestId });
+        send(response, error.status, {
+          version: CONTRACT_VERSIONS.sharedApi,
+          code: error.code,
+          requestId,
+        });
         return;
       }
-      send(response, 500, { version: 1, code: "internal-error", requestId });
+      send(response, 500, {
+        version: CONTRACT_VERSIONS.sharedApi,
+        code: "internal-error",
+        requestId,
+      });
     }
   });
 }

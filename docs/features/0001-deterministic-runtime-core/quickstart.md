@@ -20,7 +20,7 @@ type RecordClueOutcome = JsonObject & {
 };
 
 const recordClue = defineCommand<"player", ClueState, RecordCluePayload, RecordClueOutcome>({
-  definitionId: "example.record-clue.v1",
+  definitionId: "example.record-clue",
   commandType: "record-clue",
   aggregateKind: "player",
   handle(aggregate, command, context) {
@@ -54,7 +54,7 @@ The handler receives a detached frozen aggregate and command. The clock value is
 ```ts
 const progression = defineProgression<"player", ClueState, RecordCluePayload, RecordClueOutcome>({
   aggregateKind: "player",
-  graphId: "tour.v1",
+  graphId: "tour",
   graphVersion: 1,
   nodes: [
     { nodeId: "find-clue", initialStatus: "active" },
@@ -96,7 +96,7 @@ const aggregate = playerFixture<ClueState>({
   authority: "local",
   state: { discovered: [] },
   progression: {
-    graphId: "tour.v1",
+    graphId: "tour",
     graphVersion: 1,
     nodes: [
       { nodeId: "find-clue", status: "active" },

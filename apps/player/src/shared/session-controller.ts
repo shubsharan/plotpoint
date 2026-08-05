@@ -1,4 +1,4 @@
-import type { SyncPullV1 } from "@plotpoint/protocol";
+import type { SyncPull } from "@plotpoint/protocol";
 
 import type { ParticipantCredentialStore } from "./credentials";
 import { SharedSyncStore } from "./database";
@@ -17,7 +17,7 @@ export class SharedSessionController {
     readonly sessionId: string;
     readonly runId: string;
     readonly invitation: string;
-  }): Promise<SyncPullV1> {
+  }): Promise<SyncPull> {
     const credential =
       (await this.credentials.get(input.sessionId)) ??
       (await this.credentials.create(input.sessionId));

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import type { ReleaseManifestV1 } from "@plotpoint/protocol";
+import type { ReleaseManifest } from "@plotpoint/protocol";
 
 import { sha256Digest } from "../src/release/identity.js";
 import { validateReleaseManifest } from "../src/release/manifest.js";
 
 const utf8 = new TextEncoder();
 
-function manifest(): ReleaseManifestV1 {
+function manifest(): ReleaseManifest {
   const logic = utf8.encode("logic");
   const presentation = utf8.encode("presentation");
   const schema = utf8.encode("{}");
@@ -42,7 +42,7 @@ function manifest(): ReleaseManifestV1 {
   };
 }
 
-describe("release manifest v1", () => {
+describe("release manifest ", () => {
   it("accepts and freezes a closed, ordinal manifest", () => {
     const result = validateReleaseManifest(manifest());
 

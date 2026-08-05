@@ -1,5 +1,5 @@
 {
-  "audioAssetId": "hunt.audio.round.v1",
+  "audioAssetId": "hunt.audio.round",
   "rounds": [
     { "durationMinutes": 12, "round": 1, "title": "Scatter" },
     { "durationMinutes": 18, "round": 2, "title": "Decode" },

@@ -1,4 +1,4 @@
-import { createReleaseArtifact, type ReleaseManifestV1 } from "@plotpoint/protocol";
+import { createReleaseArtifact, type ReleaseManifest } from "@plotpoint/protocol";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -12,18 +12,18 @@ const manifest = {
   releaseFormatVersion: 1,
   hostApi: { major: 1, minimumMinor: 0 },
   aggregateSchemas: [
-    { id: "field.player-state.v1", kind: "player", version: 1, path: "schemas/player.json" },
+    { id: "field.player-state", kind: "player", version: 1, path: "schemas/player.json" },
   ],
   capabilities: [],
   entrypoints: { logic: "logic.js", presentation: "presentation.js" },
   inventory: [],
-} satisfies ReleaseManifestV1;
+} satisfies ReleaseManifest;
 
 const validRecords = {
   snapshot: {
     aggregate_id: "field-player",
     aggregate_kind: "player",
-    schema_id: "field.player-state.v1",
+    schema_id: "field.player-state",
     schema_version: 1,
     state_version: 1,
     state_json: JSON.stringify({ attempts: 0, phase: "puzzle" }),
@@ -48,7 +48,7 @@ const validRecords = {
         commandOutcome: "accepted",
         aggregateId: "field-player",
         aggregateKind: "player",
-        schemaId: "field.player-state.v1",
+        schemaId: "field.player-state",
         schemaVersion: 1,
         expectedVersion: 0,
         resultingVersion: 1,
@@ -71,7 +71,7 @@ describe("recovery artifact boundary", () => {
       hostApi: { major: 1, minimumMinor: 0 },
       aggregateSchemas: [
         {
-          id: "field.player-state.v1",
+          id: "field.player-state",
           kind: "player",
           version: 1,
           path: "schemas/player.json",
@@ -125,7 +125,7 @@ describe("recovery record coherence", () => {
       kind: "valid",
       aggregate: {
         aggregateId: "field-player",
-        schemaId: "field.player-state.v1",
+        schemaId: "field.player-state",
         schemaVersion: 1,
         stateVersion: 1,
         state: { attempts: 0, phase: "puzzle" },
@@ -142,7 +142,7 @@ describe("recovery record coherence", () => {
       { ...validRecords.snapshot, state_json: "{" },
       { ...validRecords.snapshot, state_json: "[]" },
       { ...validRecords.snapshot, aggregate_kind: "team" },
-      { ...validRecords.snapshot, schema_id: "other.player-state.v1" },
+      { ...validRecords.snapshot, schema_id: "other.player-state" },
       { ...validRecords.snapshot, schema_version: 2 },
       { ...validRecords.snapshot, state_version: -1 },
     ]) {

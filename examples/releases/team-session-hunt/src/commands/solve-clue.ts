@@ -13,7 +13,7 @@ export const solveClueCommand = defineCommand<
   SolveCluePayload,
   SolveClueOutcome
 >({
-  definitionId: "hunt.solve-clue.v1",
+  definitionId: "hunt.solve-clue",
   commandType: "solve-clue",
   aggregateKind: "team",
   handle(target, command) {

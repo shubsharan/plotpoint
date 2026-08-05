@@ -17,20 +17,20 @@
   },
   "commands": [
     {
-      "id": "minimal.solve.v1",
+      "id": "minimal.solve",
       "type": "solve",
       "definition": {
         "source": "src/commands/solve.ts",
         "export": "solveCommand"
       },
-      "aggregateSchema": "minimal.player-state.v1",
-      "payloadSchema": "minimal.solve-payload.v1",
-      "outcomeSchema": "minimal.solve-outcome.v1"
+      "aggregateSchema": "minimal.player-state",
+      "payloadSchema": "minimal.solve-payload",
+      "outcomeSchema": "minimal.solve-outcome"
     }
   ],
   "aggregateSchemas": [
     {
-      "id": "minimal.player-state.v1",
+      "id": "minimal.player-state",
       "kind": "player",
       "version": 1,
       "path": "schemas/player-state.schema.json"
@@ -38,56 +38,56 @@
   ],
   "schemas": [
     {
-      "id": "minimal.puzzle-content.v1",
+      "id": "minimal.puzzle-content",
       "path": "schemas/puzzle-content.schema.json"
     },
     {
-      "id": "minimal.solve-outcome.v1",
+      "id": "minimal.solve-outcome",
       "path": "schemas/solve-outcome.schema.json"
     },
     {
-      "id": "minimal.solve-payload.v1",
+      "id": "minimal.solve-payload",
       "path": "schemas/solve-payload.schema.json"
     }
   ],
   "progressions": [
     {
-      "id": "minimal.puzzle.v1",
+      "id": "minimal.puzzle",
       "version": 1,
       "kind": "player",
       "definition": {
         "source": "src/progression/main.ts",
         "export": "puzzleProgression"
       },
-      "aggregateSchema": "minimal.player-state.v1",
-      "commands": ["minimal.solve.v1"],
-      "content": ["minimal.puzzle-content.v1"],
-      "components": ["minimal.puzzle-card.v1"]
+      "aggregateSchema": "minimal.player-state",
+      "commands": ["minimal.solve"],
+      "content": ["minimal.puzzle-content"],
+      "components": ["minimal.puzzle-card"]
     }
   ],
   "components": [
     {
-      "id": "minimal.puzzle-card.v1",
+      "id": "minimal.puzzle-card",
       "implementation": {
         "source": "src/components/puzzle.ts",
         "export": "PuzzleCard"
       },
-      "commands": ["minimal.solve.v1"],
-      "content": ["minimal.puzzle-content.v1"],
-      "assets": ["minimal.clue-image.v1"],
+      "commands": ["minimal.solve"],
+      "content": ["minimal.puzzle-content"],
+      "assets": ["minimal.clue-image"],
       "capabilities": []
     }
   ],
   "content": [
     {
-      "id": "minimal.puzzle-content.v1",
+      "id": "minimal.puzzle-content",
       "path": "content/puzzle.json",
-      "schema": "minimal.puzzle-content.v1"
+      "schema": "minimal.puzzle-content"
     }
   ],
   "assets": [
     {
-      "id": "minimal.clue-image.v1",
+      "id": "minimal.clue-image",
       "path": "assets/clue.svg",
       "releasePath": "assets/clue.svg"
     }

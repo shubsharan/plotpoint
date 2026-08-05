@@ -51,14 +51,14 @@ const teamCommand: Command<JsonObject, "team"> = {
   payload: {},
 };
 const playerDefinition = defineCommand<"player", State, JsonObject, JsonObject>({
-  definitionId: "player.change.v1",
+  definitionId: "player.change",
   commandType: "change",
   aggregateKind: "player",
   handle: (target) => ({ kind: "rejected", outcome: { kind: target.kind } }),
 });
 const teamProgression = defineProgression<"team", State, JsonObject, JsonObject>({
   aggregateKind: "team",
-  graphId: "team.v1",
+  graphId: "team",
   graphVersion: 1,
   nodes: [],
   automaticRules: [],

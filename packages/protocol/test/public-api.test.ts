@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import packageJson from "../package.json" with { type: "json" };
 import * as protocol from "@plotpoint/protocol";
 import {
+  CONTRACT_VERSIONS,
   assessCompatibility,
   createReleaseArtifact,
   inspectRelease,
@@ -13,12 +14,29 @@ import {
   type InspectedRelease,
   type OpenedRelease,
   type ReleaseArtifact,
-  type ReleaseManifestV1,
+  type ReleaseManifest,
   type VerifyReleaseInput,
   type VerifiedRelease,
 } from "@plotpoint/protocol";
 
 describe("protocol public API", () => {
+  it("publishes serialized compatibility generations from one registry", () => {
+    expect(Object.isFrozen(CONTRACT_VERSIONS)).toBe(true);
+    expect(CONTRACT_VERSIONS).toEqual({
+      projectConfiguration: 1,
+      releaseFormat: 1,
+      hostApi: { major: 1, minor: 1 },
+      installDescriptor: 1,
+      hostBridge: 1,
+      capabilityObservation: 1,
+      playReport: 1,
+      sharedSync: 1,
+      sharedReport: 1,
+      sharedApi: 1,
+      gameComposition: 1,
+    });
+  });
+
   it("exports portable inspection and compatibility operations from the package root", () => {
     expectTypeOf(inspectRelease).returns.resolves.toMatchTypeOf<
       InspectedRelease | { kind: "invalid" }
@@ -27,7 +45,7 @@ describe("protocol public API", () => {
     expectTypeOf(createReleaseArtifact).returns.resolves.toMatchTypeOf<
       ReleaseArtifact | { kind: "invalid" }
     >();
-    expectTypeOf(assessCompatibility).parameter(0).toEqualTypeOf<ReleaseManifestV1>();
+    expectTypeOf(assessCompatibility).parameter(0).toEqualTypeOf<ReleaseManifest>();
     expectTypeOf(assessCompatibility).parameter(1).toEqualTypeOf<HostReleaseSupport>();
     expectTypeOf(assessCompatibility).returns.toEqualTypeOf<CompatibilityAssessment>();
     expectTypeOf(verifyRelease).parameter(0).toEqualTypeOf<VerifyReleaseInput>();

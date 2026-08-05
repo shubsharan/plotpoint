@@ -1,32 +1,35 @@
-export { createHostRuntimeClientV1 } from "./player/bridge.js";
+export { CONTRACT_VERSIONS } from "./contract-versions.js";
+export type { ContractName, ContractVersion } from "./contract-versions.js";
+
+export { createHostRuntimeClient } from "./player/bridge.js";
 export type {
-  AggregateTargetV1,
-  CapabilityVersionV1,
-  HostBridgeTransportV1,
+  AggregateTarget,
+  CapabilityVersion,
+  HostBridgeTransport,
   HostCapabilityOutputValidator,
-  HostRuntimeClientV1,
-  RuntimeBootstrapV1,
-  TransitionCandidateV1,
-  TransitionResultV1,
+  HostRuntimeClient,
+  RuntimeBootstrap,
+  TransitionCandidate,
+  TransitionResult,
 } from "./player/bridge.js";
 export {
   FOREGROUND_LOCATION_CAPABILITY,
-  isLocationObservationV1,
-  isLocationRequestInputV1,
+  isLocationObservation,
+  isLocationRequestInput,
 } from "./player/report.js";
-export type { LocationObservationV1, LocationRequestInputV1 } from "./player/report.js";
-export { createSharedPlayClientV1 } from "./shared/client.js";
+export type { LocationObservation, LocationRequestInput } from "./player/report.js";
+export { createSharedPlayClient } from "./shared/client.js";
 export {
-  isSharedCommandIntentV1,
-  isSharedCommandStatusV1,
-  isSharedPlayViewV1,
-  isSharedProjectionV1,
+  isSharedCommandIntent,
+  isSharedCommandStatus,
+  isSharedPlayView,
+  isSharedProjection,
 } from "./shared/validation.js";
 export type {
-  SharedCommandIntentV1,
-  SharedCommandStatusV1,
-  SharedPlayClientV1,
-  SharedPlayTransportV1,
-  SharedPlayViewV1,
-  SharedProjectionV1,
+  SharedCommandIntent,
+  SharedCommandStatus,
+  SharedPlayClient,
+  SharedPlayTransport,
+  SharedPlayView,
+  SharedProjection,
 } from "./shared/types.js";

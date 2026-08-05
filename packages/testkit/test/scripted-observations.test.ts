@@ -60,7 +60,7 @@ describe("scripted observations", () => {
       payload: {},
     };
     const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-      definitionId: "observe.v1",
+      definitionId: "observe",
       commandType: "observe",
       aggregateKind: "player",
       handle(_target, _command, context) {
@@ -96,7 +96,7 @@ describe("scripted observations", () => {
       harness.run({
         name: "unused observation",
         definition: defineCommand<"player", State, JsonObject, JsonObject>({
-          definitionId: "unused.v1",
+          definitionId: "unused",
           commandType: "observe",
           aggregateKind: "player",
           handle(target) {

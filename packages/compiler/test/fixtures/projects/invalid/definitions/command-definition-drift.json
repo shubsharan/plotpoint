@@ -1,8 +1,8 @@
 {
   "commands": [
     {
-      "registrationId": "solve.v1",
-      "definitionId": "solve.v2",
+      "registrationId": "solve",
+      "definitionId": "solve.drifted",
       "commandType": "solve",
       "aggregateKind": "player"
     }

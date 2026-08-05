@@ -79,7 +79,7 @@ class FakeDatabase implements PlayReportDatabase {
   }
 }
 
-describe("PlayReportV1", () => {
+describe("PlayReport", () => {
   beforeEach(() => vi.restoreAllMocks());
 
   it("orders successful, rejected, capability, interruption, and diagnostic evidence", () => {

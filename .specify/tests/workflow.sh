@@ -145,16 +145,16 @@ perl -pi -e 's/^status: Proposed$/status: Accepted/' "$adr_file"
 .specify/scripts/bash/sync-docs.sh
 .specify/scripts/bash/check-workflow.sh >/dev/null
 
-replacement_output=$(.specify/scripts/bash/create-new-adr.sh --short-name budget-contract-v2 'Budget contract v2')
+replacement_output=$(.specify/scripts/bash/create-new-adr.sh --short-name revised-budget-contract 'Revised budget contract')
 replacement=$(printf '%s\n' "$replacement_output" | field_from ADR_FILE)
 perl -pi -e 's/^status: Proposed$/status: Accepted/; s|^\*\*Supersedes\*\*: None$|**Supersedes**: [Budget contract](0001-budget-contract.md)|' "$replacement"
-perl -pi -e 's/^status: Accepted$/status: Superseded/; s|^\*\*Superseded by\*\*: None$|**Superseded by**: [Budget contract v2](0002-budget-contract-v2.md)|' "$adr_file"
+perl -pi -e 's/^status: Accepted$/status: Superseded/; s|^\*\*Superseded by\*\*: None$|**Superseded by**: [Revised budget contract](0002-revised-budget-contract.md)|' "$adr_file"
 .specify/scripts/bash/sync-docs.sh
 if .specify/scripts/bash/check-workflow.sh >/dev/null 2>&1; then
     echo 'Feature referencing a Superseded ADR unexpectedly passed validation' >&2
     exit 1
 fi
-perl -pi -e 's/0001-budget-contract\.md/0002-budget-contract-v2.md/g' "$spec" "$feature_dir/plan.md"
+perl -pi -e 's/0001-budget-contract\.md/0002-revised-budget-contract.md/g' "$spec" "$feature_dir/plan.md"
 .specify/scripts/bash/sync-docs.sh
 .specify/scripts/bash/check-workflow.sh >/dev/null
 

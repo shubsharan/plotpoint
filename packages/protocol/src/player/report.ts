@@ -1,3 +1,4 @@
+import { CONTRACT_VERSIONS } from "../contract-versions.js";
 import type { CanonicalJsonObject, ReleaseId } from "../release/types.js";
 
 export const FOREGROUND_LOCATION_CAPABILITY = Object.freeze({
@@ -7,16 +8,16 @@ export const FOREGROUND_LOCATION_CAPABILITY = Object.freeze({
 });
 
 export type LocationAvailability = "available" | "permission-denied" | "unavailable" | "failed";
-export type LocationRequestInputV1 = Readonly<Record<string, never>>;
+export type LocationRequestInput = Readonly<Record<string, never>>;
 
-interface LocationObservationBaseV1 extends CanonicalJsonObject {
-  readonly version: 1;
+interface LocationObservationBase extends CanonicalJsonObject {
+  readonly version: typeof CONTRACT_VERSIONS.capabilityObservation;
   readonly observationId: string;
   readonly recordedAt: string;
 }
 
-export type LocationObservationV1 =
-  | (LocationObservationBaseV1 & {
+export type LocationObservation =
+  | (LocationObservationBase & {
       readonly availability: "available";
       readonly capturedAt: string;
       readonly ageMs: number;
@@ -24,10 +25,10 @@ export type LocationObservationV1 =
       readonly longitude: number;
       readonly horizontalAccuracy: number;
     })
-  | (LocationObservationBaseV1 & {
+  | (LocationObservationBase & {
       readonly availability: "permission-denied" | "unavailable";
     })
-  | (LocationObservationBaseV1 & {
+  | (LocationObservationBase & {
       readonly availability: "failed";
       readonly diagnosticCode: string;
     });
@@ -57,18 +58,18 @@ function isRfc3339(value: unknown): value is string {
 
 function hasValidBase(value: Record<string, unknown>): boolean {
   return (
-    value.version === 1 &&
+    value.version === CONTRACT_VERSIONS.capabilityObservation &&
     typeof value.observationId === "string" &&
     value.observationId.length > 0 &&
     isRfc3339(value.recordedAt)
   );
 }
 
-export function isLocationRequestInputV1(value: unknown): value is LocationRequestInputV1 {
+export function isLocationRequestInput(value: unknown): value is LocationRequestInput {
   return isObject(value) && hasExactKeys(value, []);
 }
 
-export function isLocationObservationV1(value: unknown): value is LocationObservationV1 {
+export function isLocationObservation(value: unknown): value is LocationObservation {
   if (!isObject(value) || !hasValidBase(value)) return false;
   if (value.availability === "available") {
     return (
@@ -121,13 +122,13 @@ export function isLocationObservationV1(value: unknown): value is LocationObserv
 export type AccuracyBand = "excellent" | "good" | "degraded" | "unknown";
 export type RecencyBand = "fresh" | "stale" | "future" | "unknown";
 
-export interface LocationReportProjectionV1 {
+export interface LocationReportProjection {
   readonly availability: LocationAvailability;
   readonly recencyBand: RecencyBand;
   readonly accuracyBand: AccuracyBand;
 }
 
-export function isLocationReportProjectionV1(value: unknown): value is LocationReportProjectionV1 {
+export function isLocationReportProjection(value: unknown): value is LocationReportProjection {
   return (
     isObject(value) &&
     hasExactKeys(value, ["accuracyBand", "availability", "recencyBand"]) &&
@@ -160,10 +161,10 @@ export function recencyBand(ageMs: number | undefined, maximumFreshAgeMs: number
   return ageMs <= maximumFreshAgeMs ? "fresh" : "stale";
 }
 
-export function projectLocationObservationV1(
-  observation: LocationObservationV1,
+export function projectLocationObservation(
+  observation: LocationObservation,
   maximumFreshAgeMs: number,
-): LocationReportProjectionV1 {
+): LocationReportProjection {
   return Object.freeze({
     availability: observation.availability,
     recencyBand:
@@ -177,7 +178,7 @@ export function projectLocationObservationV1(
   });
 }
 
-export interface PlayReportCommandEventV1 {
+export interface PlayReportCommandEvent {
   readonly kind: "command";
   readonly elapsedMs: number;
   readonly commandId: string;
@@ -188,7 +189,7 @@ export interface PlayReportCommandEventV1 {
   readonly progressionChanges: readonly string[];
 }
 
-export interface PlayReportCapabilityEventV1 {
+export interface PlayReportCapabilityEvent {
   readonly kind: "capability";
   readonly elapsedMs: number;
   readonly capability: {
@@ -200,7 +201,7 @@ export interface PlayReportCapabilityEventV1 {
   readonly projection: CanonicalJsonObject;
 }
 
-export interface PlayReportLifecycleEventV1 {
+export interface PlayReportLifecycleEvent {
   readonly kind: "lifecycle";
   readonly elapsedMs: number;
   readonly phase: string;
@@ -209,26 +210,26 @@ export interface PlayReportLifecycleEventV1 {
   readonly diagnosticCode?: string;
 }
 
-export interface PlayReportDiagnosticEventV1 {
+export interface PlayReportDiagnosticEvent {
   readonly kind: "diagnostic";
   readonly elapsedMs: number;
   readonly code: string;
   readonly commandId?: string;
 }
 
-export type PlayReportEventV1 =
-  | PlayReportCommandEventV1
-  | PlayReportCapabilityEventV1
-  | PlayReportLifecycleEventV1
-  | PlayReportDiagnosticEventV1;
+export type PlayReportEvent =
+  | PlayReportCommandEvent
+  | PlayReportCapabilityEvent
+  | PlayReportLifecycleEvent
+  | PlayReportDiagnosticEvent;
 
-export interface PlayReportV1 {
-  readonly version: 1;
+export interface PlayReport {
+  readonly version: typeof CONTRACT_VERSIONS.playReport;
   readonly releaseId: ReleaseId;
   readonly runId: string;
   readonly platform: "ios" | "android";
   readonly durationMs: number;
-  readonly events: readonly PlayReportEventV1[];
+  readonly events: readonly PlayReportEvent[];
 }
 
 export interface CapabilityReportProjectionValidator {
@@ -236,13 +237,13 @@ export interface CapabilityReportProjectionValidator {
   validate(projection: unknown): boolean;
 }
 
-export const LOCATION_REPORT_PROJECTION_VALIDATOR_V1: CapabilityReportProjectionValidator =
+export const LOCATION_REPORT_PROJECTION_VALIDATOR: CapabilityReportProjectionValidator =
   Object.freeze({
     capability: Object.freeze({
       id: FOREGROUND_LOCATION_CAPABILITY.id,
       major: FOREGROUND_LOCATION_CAPABILITY.major,
     }),
-    validate: isLocationReportProjectionV1,
+    validate: isLocationReportProjection,
   });
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
@@ -366,7 +367,7 @@ function isDiagnosticEvent(value: Record<string, unknown>): boolean {
 function isPlayReportEvent(
   value: unknown,
   validators: readonly CapabilityReportProjectionValidator[],
-): value is PlayReportEventV1 {
+): value is PlayReportEvent {
   if (!isObject(value)) return false;
   if (value.kind === "command") return isCommandEvent(value);
   if (value.kind === "capability") return isCapabilityEvent(value, validators);
@@ -375,14 +376,14 @@ function isPlayReportEvent(
   return false;
 }
 
-export function isPlayReportV1(
+export function isPlayReport(
   value: unknown,
   projectionValidators: readonly CapabilityReportProjectionValidator[] = [],
-): value is PlayReportV1 {
+): value is PlayReport {
   if (
     !isObject(value) ||
     !hasExactKeys(value, ["durationMs", "events", "platform", "releaseId", "runId", "version"]) ||
-    value.version !== 1 ||
+    value.version !== CONTRACT_VERSIONS.playReport ||
     typeof value.releaseId !== "string" ||
     !/^sha256:[0-9a-f]{64}$/.test(value.releaseId) ||
     !isNonEmptyString(value.runId) ||

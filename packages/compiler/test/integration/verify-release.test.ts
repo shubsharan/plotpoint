@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { compileProject } from "@plotpoint/compiler";
-import { verifyRelease, type ReleaseManifestV1 } from "@plotpoint/protocol";
+import { verifyRelease, type ReleaseManifest } from "@plotpoint/protocol";
 
 import { createExternalProject } from "../helpers/external-project.js";
 
@@ -62,7 +62,7 @@ describe("golden release verification acceptance", () => {
 
         const paths = [
           "manifest.json",
-          ...(compiled.manifest as ReleaseManifestV1).inventory.map(({ path }) => path),
+          ...(compiled.manifest as ReleaseManifest).inventory.map(({ path }) => path),
         ];
         for (const path of paths) {
           const mutated = mutateStoredEntry(bytes, path);

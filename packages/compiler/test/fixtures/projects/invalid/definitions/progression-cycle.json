@@ -2,8 +2,8 @@
   "commands": [],
   "progressions": [
     {
-      "registrationId": "main.v1",
-      "graphId": "main.v1",
+      "registrationId": "main",
+      "graphId": "main",
       "graphVersion": 1,
       "aggregateKind": "player",
       "nodes": [{ "nodeId": "stage", "initialStatus": "available" }],

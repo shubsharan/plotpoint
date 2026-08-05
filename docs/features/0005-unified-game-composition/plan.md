@@ -177,7 +177,7 @@ packages/db/
 
 apps/api/
 ├── src/
-│   ├── server.ts                    # Generic /v1/shared-sessions transport
+│   ├── server.ts                    # Generic shared-sessions transport
 │   ├── shared-session-service.ts    # Release/mechanic/model authority
 │   └── operator-client.ts
 └── test/                            # Contract, Postgres, auth, idempotency, redaction
@@ -254,7 +254,7 @@ initializer input or a diagnostic; authorization returns a runtime command with 
 or a rejected/invalid terminal; projection returns a complete validated `SharedProjection` or a
 diagnostic. Preserve Sync state-version fields directly. Trusted outcomes use an exact stable-code
 shape so their Sync mapping loses no semantic fields. Rename public participant routing to
-`/v1/shared-sessions`, dispatch declared commands through that platform model, and preserve ADR 0005
+`/shared-sessions`, dispatch declared commands through that platform model, and preserve ADR 0005
 transaction, projection, authorization, and privacy semantics.
 
 The co-op reference owns one local/player shell and selects one server/team target-discovery model. Remove

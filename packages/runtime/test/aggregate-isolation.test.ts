@@ -45,7 +45,7 @@ describe("aggregate isolation", () => {
     (kind) => {
       const source = aggregateFor(kind);
       const definition = defineCommand<typeof kind, State, JsonObject, Outcome>({
-        definitionId: `change-${kind}.v1`,
+        definitionId: `change-${kind}`,
         commandType: "change",
         aggregateKind: kind,
         handle() {
@@ -78,7 +78,7 @@ describe("aggregate isolation", () => {
   it("short-circuits stale versions before the handler or observations", () => {
     const handler = vi.fn();
     const definition = defineCommand<"player", State, JsonObject, Outcome>({
-      definitionId: "stale.v1",
+      definitionId: "stale",
       commandType: "change",
       aggregateKind: "player",
       handle: handler,
@@ -100,7 +100,7 @@ describe("aggregate isolation", () => {
 
   it("rejects an exact target mismatch", () => {
     const definition = defineCommand<"player", State, JsonObject, Outcome>({
-      definitionId: "target.v1",
+      definitionId: "target",
       commandType: "change",
       aggregateKind: "player",
       handle: vi.fn(),
@@ -125,7 +125,7 @@ describe("aggregate isolation", () => {
   it("rejects version overflow without changing the target", () => {
     const source = aggregateFor("team", Number.MAX_SAFE_INTEGER);
     const definition = defineCommand<"team", State, JsonObject, Outcome>({
-      definitionId: "overflow.v1",
+      definitionId: "overflow",
       commandType: "change",
       aggregateKind: "team",
       handle() {
@@ -159,7 +159,7 @@ describe("aggregate isolation", () => {
     const source = { ...aggregateFor("session"), state: { nested: shared } };
     const nonTarget = { ...aggregateFor("team"), state: { nested: shared } };
     const definition = defineCommand<"session", State, JsonObject, Outcome>({
-      definitionId: "alias.v1",
+      definitionId: "alias",
       commandType: "change",
       aggregateKind: "session",
       handle(target) {

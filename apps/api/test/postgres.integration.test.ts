@@ -39,10 +39,7 @@ describe("authoritative hunt PostgreSQL integration", () => {
     await migrateAuthoritativeHunt(pool);
     await pool.query(
       "INSERT INTO release_registrations(release_id,manifest_json,mechanic_config_json) VALUES ($1,'{}',$2)",
-      [
-        releaseId,
-        JSON.stringify({ version: 1, targets: [target("alpha", 37), target("beta", 37.001)] }),
-      ],
+      [releaseId, JSON.stringify({ targets: [target("alpha", 37), target("beta", 37.001)] })],
     );
     service = new HuntService(pool, "integration-pepper-with-sufficient-length");
   }, 120_000);
@@ -100,11 +97,11 @@ describe("authoritative hunt PostgreSQL integration", () => {
       target: {
         aggregateKind: "team" as const,
         aggregateId: session.teamId,
-        schemaId: "plotpoint.hunt.team-state.v1",
+        schemaId: "plotpoint.hunt.team-state",
         schemaVersion: 1,
       },
       expectedStateVersion,
-      type: "plotpoint.hunt.target-discovery.v1",
+      type: "plotpoint.hunt.target-discovery",
       payload: { targetId },
       observations: [available(`observation-${commandId}`, latitude)],
     });
@@ -181,11 +178,11 @@ describe("authoritative hunt PostgreSQL integration", () => {
       target: {
         aggregateKind: "team" as const,
         aggregateId: session.teamId,
-        schemaId: "plotpoint.hunt.team-state.v1",
+        schemaId: "plotpoint.hunt.team-state",
         schemaVersion: 1,
       },
       expectedStateVersion: 0,
-      type: "plotpoint.hunt.target-discovery.v1",
+      type: "plotpoint.hunt.target-discovery",
       payload: { targetId: "alpha" },
       observations: [available("observation-fault", 37)],
     };

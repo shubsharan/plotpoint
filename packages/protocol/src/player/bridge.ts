@@ -1,6 +1,5 @@
+import { CONTRACT_VERSIONS } from "../contract-versions.js";
 import type { CanonicalJsonObject } from "../release/types.js";
-
-export const HOST_BRIDGE_VERSION = 1 as const;
 
 export type HostBridgeDirection = "web-to-host" | "host-to-web";
 export type WebToHostMessageType = "runtime.ready" | "transition.commit" | "capability.request";
@@ -11,52 +10,44 @@ export type HostToWebMessageType =
   | "host.error";
 export type HostBridgeMessageType = WebToHostMessageType | HostToWebMessageType;
 
-export interface HostBridgeEnvelopeV1<Type extends string, Payload> {
-  readonly version: 1;
+export interface HostBridgeEnvelope<Type extends string, Payload> {
+  readonly version: typeof CONTRACT_VERSIONS.hostBridge;
   readonly requestId: string;
   readonly type: Type;
   readonly payload: Payload & CanonicalJsonObject;
 }
 
-/** @deprecated Prefer the closed direction-specific envelope unions for parsed messages. */
-export interface HostBridgeEnvelope<Type extends HostBridgeMessageType = HostBridgeMessageType> {
-  readonly version: 1;
-  readonly requestId: string;
-  readonly type: Type;
-  readonly payload: CanonicalJsonObject;
-}
-
-export type AggregateTargetV1 = CanonicalJsonObject & {
+export type AggregateTarget = CanonicalJsonObject & {
   readonly aggregateId: string;
   readonly aggregateKind: "player";
   readonly schemaId: string;
   readonly schemaVersion: number;
 };
 
-type TransitionCandidateBaseV1 = CanonicalJsonObject & {
+type TransitionCandidateBase = CanonicalJsonObject & {
   readonly commandId: string;
-  readonly target: AggregateTargetV1;
+  readonly target: AggregateTarget;
   readonly expectedVersion: number;
   readonly observationIds: readonly string[];
 };
 
-export type TransitionCandidateV1 =
-  | (TransitionCandidateBaseV1 & {
+export type TransitionCandidate =
+  | (TransitionCandidateBase & {
       readonly terminal: "accepted";
       readonly nextState: CanonicalJsonObject;
       readonly outcome: CanonicalJsonObject;
       readonly progressionChanges: readonly string[];
     })
-  | (TransitionCandidateBaseV1 & {
+  | (TransitionCandidateBase & {
       readonly terminal: "no-op" | "rejected";
       readonly outcome: CanonicalJsonObject;
     })
-  | (TransitionCandidateBaseV1 & {
+  | (TransitionCandidateBase & {
       readonly terminal: "invalid";
       readonly diagnosticCodes: readonly string[];
     });
 
-export type RuntimeBootstrapV1 = CanonicalJsonObject & {
+export type RuntimeBootstrap = CanonicalJsonObject & {
   readonly runId: string;
   readonly releaseId: `sha256:${string}`;
   readonly aggregate:
@@ -71,7 +62,7 @@ export type RuntimeBootstrapV1 = CanonicalJsonObject & {
       });
 };
 
-export type TransitionResultV1 =
+export type TransitionResult =
   | {
       readonly commandId: string;
       readonly disposition: "committed" | "duplicate";
@@ -87,65 +78,59 @@ export type TransitionResultV1 =
       readonly diagnosticCodes: readonly string[];
     };
 
-export type CapabilityVersionV1 = CanonicalJsonObject & {
+export type CapabilityVersion = CanonicalJsonObject & {
   readonly id: string;
   readonly major: number;
   readonly minor: number;
 };
 
-export type CapabilityRequestV1<Input extends CanonicalJsonObject = CanonicalJsonObject> =
+export type CapabilityRequest<Input extends CanonicalJsonObject = CanonicalJsonObject> =
   CanonicalJsonObject & {
-    readonly capability: CapabilityVersionV1;
+    readonly capability: CapabilityVersion;
     readonly input: Input;
   };
 
-export type CapabilityResultV1<Output extends CanonicalJsonObject = CanonicalJsonObject> =
+export type CapabilityResult<Output extends CanonicalJsonObject = CanonicalJsonObject> =
   CanonicalJsonObject & {
-    readonly capability: CapabilityVersionV1;
+    readonly capability: CapabilityVersion;
     readonly output: Output;
   };
 
-export type HostErrorV1 = CanonicalJsonObject & {
+export type HostError = CanonicalJsonObject & {
   readonly code: string;
   readonly commandId?: string;
   readonly currentVersion?: number;
 };
 
-export type RuntimeReadyEnvelopeV1 = HostBridgeEnvelopeV1<"runtime.ready", Record<string, never>>;
-export type TransitionCommitEnvelopeV1 = HostBridgeEnvelopeV1<
+export type RuntimeReadyEnvelope = HostBridgeEnvelope<"runtime.ready", Record<string, never>>;
+export type TransitionCommitEnvelope = HostBridgeEnvelope<
   "transition.commit",
-  { readonly candidate: TransitionCandidateV1 }
+  { readonly candidate: TransitionCandidate }
 >;
-export type CapabilityRequestEnvelopeV1<Input extends CanonicalJsonObject = CanonicalJsonObject> =
-  HostBridgeEnvelopeV1<"capability.request", CapabilityRequestV1<Input>>;
-export type RuntimeBootstrapEnvelopeV1 = HostBridgeEnvelopeV1<
-  "runtime.bootstrap",
-  RuntimeBootstrapV1
->;
-export type TransitionResultEnvelopeV1 = HostBridgeEnvelopeV1<
-  "transition.result",
-  TransitionResultV1
->;
-export type CapabilityResultEnvelopeV1<Output extends CanonicalJsonObject = CanonicalJsonObject> =
-  HostBridgeEnvelopeV1<"capability.result", CapabilityResultV1<Output>>;
-export type HostErrorEnvelopeV1 = HostBridgeEnvelopeV1<"host.error", HostErrorV1>;
+export type CapabilityRequestEnvelope<Input extends CanonicalJsonObject = CanonicalJsonObject> =
+  HostBridgeEnvelope<"capability.request", CapabilityRequest<Input>>;
+export type RuntimeBootstrapEnvelope = HostBridgeEnvelope<"runtime.bootstrap", RuntimeBootstrap>;
+export type TransitionResultEnvelope = HostBridgeEnvelope<"transition.result", TransitionResult>;
+export type CapabilityResultEnvelope<Output extends CanonicalJsonObject = CanonicalJsonObject> =
+  HostBridgeEnvelope<"capability.result", CapabilityResult<Output>>;
+export type HostErrorEnvelope = HostBridgeEnvelope<"host.error", HostError>;
 
 export type WebToHostBridgeEnvelope =
-  | RuntimeReadyEnvelopeV1
-  | TransitionCommitEnvelopeV1
-  | CapabilityRequestEnvelopeV1;
+  | RuntimeReadyEnvelope
+  | TransitionCommitEnvelope
+  | CapabilityRequestEnvelope;
 export type HostToWebBridgeEnvelope =
-  | RuntimeBootstrapEnvelopeV1
-  | TransitionResultEnvelopeV1
-  | CapabilityResultEnvelopeV1
-  | HostErrorEnvelopeV1;
+  | RuntimeBootstrapEnvelope
+  | TransitionResultEnvelope
+  | CapabilityResultEnvelope
+  | HostErrorEnvelope;
 export type AnyHostBridgeEnvelope = WebToHostBridgeEnvelope | HostToWebBridgeEnvelope;
 
 export type HostBridgeParseResult<Envelope extends AnyHostBridgeEnvelope = AnyHostBridgeEnvelope> =
   | { readonly kind: "valid"; readonly envelope: Envelope }
   | { readonly kind: "invalid"; readonly code: string };
 
-export interface HostBridgeTransportV1 {
+export interface HostBridgeTransport {
   send(type: WebToHostMessageType, payload: CanonicalJsonObject): Promise<unknown>;
 }
 
@@ -153,10 +138,10 @@ export type HostCapabilityOutputValidator<Output extends object> = (
   value: unknown,
 ) => value is Output;
 
-export interface HostRuntimeClientV1 {
-  commitTransition(candidate: TransitionCandidateV1): Promise<TransitionResultV1>;
+export interface HostRuntimeClient {
+  commitTransition(candidate: TransitionCandidate): Promise<TransitionResult>;
   requestCapability<Input extends CanonicalJsonObject, Output extends object>(
-    capability: CapabilityVersionV1,
+    capability: CapabilityVersion,
     input: Input,
     validateOutput: HostCapabilityOutputValidator<Output>,
   ): Promise<Output>;
@@ -212,7 +197,7 @@ function isStringArray(value: unknown, unique = false): value is readonly string
   return !unique || new Set(value).size === value.length;
 }
 
-function isAggregateTarget(value: unknown): value is AggregateTargetV1 {
+function isAggregateTarget(value: unknown): value is AggregateTarget {
   if (!isCanonicalObject(value)) return false;
   return (
     hasExactKeys(value, ["aggregateId", "aggregateKind", "schemaId", "schemaVersion"]) &&
@@ -223,7 +208,7 @@ function isAggregateTarget(value: unknown): value is AggregateTargetV1 {
   );
 }
 
-function isTransitionCandidate(value: unknown): value is TransitionCandidateV1 {
+function isTransitionCandidate(value: unknown): value is TransitionCandidate {
   if (!isCanonicalObject(value)) return false;
   const baseIsValid =
     isNonEmptyString(value.commandId) &&
@@ -305,7 +290,7 @@ function isRuntimeBootstrap(value: CanonicalJsonObject): boolean {
   );
 }
 
-function isTransitionResult(value: CanonicalJsonObject): value is TransitionResultV1 {
+function isTransitionResult(value: CanonicalJsonObject): value is TransitionResult {
   const baseIsValid =
     isNonEmptyString(value.commandId) &&
     (value.disposition === "committed" || value.disposition === "duplicate") &&
@@ -340,7 +325,7 @@ function isTransitionResult(value: CanonicalJsonObject): value is TransitionResu
   return false;
 }
 
-function isCapabilityVersion(value: unknown): value is CapabilityVersionV1 {
+function isCapabilityVersion(value: unknown): value is CapabilityVersion {
   if (!isCanonicalObject(value)) return false;
   return (
     hasExactKeys(value, ["id", "major", "minor"]) &&
@@ -358,7 +343,7 @@ function isCapabilityRequest(value: CanonicalJsonObject): boolean {
   );
 }
 
-function isCapabilityResult(value: CanonicalJsonObject): value is CapabilityResultV1 {
+function isCapabilityResult(value: CanonicalJsonObject): value is CapabilityResult {
   return (
     hasExactKeys(value, ["capability", "output"]) &&
     isCapabilityVersion(value.capability) &&
@@ -366,13 +351,13 @@ function isCapabilityResult(value: CanonicalJsonObject): value is CapabilityResu
   );
 }
 
-function sameCapability(left: CapabilityVersionV1, right: CapabilityVersionV1): boolean {
+function sameCapability(left: CapabilityVersion, right: CapabilityVersion): boolean {
   return left.id === right.id && left.major === right.major && left.minor === right.minor;
 }
 
-export function createHostRuntimeClientV1(transport: HostBridgeTransportV1): HostRuntimeClientV1 {
-  const client: HostRuntimeClientV1 = {
-    async commitTransition(candidate: TransitionCandidateV1) {
+export function createHostRuntimeClient(transport: HostBridgeTransport): HostRuntimeClient {
+  const client: HostRuntimeClient = {
+    async commitTransition(candidate: TransitionCandidate) {
       const raw = await transport.send("transition.commit", { candidate });
       if (!isCanonicalObject(raw) || !isTransitionResult(raw)) {
         throw new Error("host-transition-result-invalid");
@@ -386,7 +371,7 @@ export function createHostRuntimeClientV1(transport: HostBridgeTransportV1): Hos
       return raw;
     },
     async requestCapability<Input extends CanonicalJsonObject, Output extends object>(
-      capability: CapabilityVersionV1,
+      capability: CapabilityVersion,
       input: Input,
       validateOutput: HostCapabilityOutputValidator<Output>,
     ): Promise<Output> {
@@ -453,7 +438,7 @@ export function parseHostBridgeEnvelope(
   if (!hasExactKeys(envelope, ["payload", "requestId", "type", "version"])) {
     return { kind: "invalid", code: "bridge-envelope-fields-invalid" };
   }
-  if (envelope.version !== HOST_BRIDGE_VERSION) {
+  if (envelope.version !== CONTRACT_VERSIONS.hostBridge) {
     return { kind: "invalid", code: "bridge-version-unsupported" };
   }
   if (!isNonEmptyString(envelope.requestId)) {
@@ -477,7 +462,7 @@ export function parseHostBridgeEnvelope(
   return {
     kind: "valid",
     envelope: Object.freeze({
-      version: HOST_BRIDGE_VERSION,
+      version: CONTRACT_VERSIONS.hostBridge,
       requestId: envelope.requestId,
       type: envelope.type,
       payload: envelope.payload,

@@ -9,7 +9,7 @@ import { validateReferences } from "../../src/composition/validate-references.js
 import type {
   CanonicalProjectRegistries,
   CompilationSnapshot,
-  ProjectConfigurationV1,
+  ProjectConfiguration,
   SnapshotFile,
 } from "../../src/project/config.js";
 import { validateCommands } from "../../src/validation/commands.js";
@@ -19,7 +19,7 @@ import { normalizeAjvErrors, validateSchemas } from "../../src/validation/schema
 const encoder = new TextEncoder();
 const fixtureRoot = new URL("../fixtures/projects/invalid/definitions/", import.meta.url);
 
-function configuration(): ProjectConfigurationV1 {
+function configuration(): ProjectConfiguration {
   return {
     projectFormatVersion: 1,
     environment: "web",
@@ -30,29 +30,27 @@ function configuration(): ProjectConfigurationV1 {
     },
     commands: [
       {
-        id: "solve.v1",
+        id: "solve",
         type: "solve",
         definition: { source: "src/solve.ts", export: "solve" },
-        aggregateSchema: "player.v1",
-        payloadSchema: "payload.v1",
-        outcomeSchema: "outcome.v1",
+        aggregateSchema: "player",
+        payloadSchema: "payload",
+        outcomeSchema: "outcome",
       },
     ],
-    aggregateSchemas: [
-      { id: "player.v1", kind: "player", version: 1, path: "schemas/player.json" },
-    ],
+    aggregateSchemas: [{ id: "player", kind: "player", version: 1, path: "schemas/player.json" }],
     schemas: [
-      { id: "payload.v1", path: "schemas/payload.json" },
-      { id: "outcome.v1", path: "schemas/outcome.json" },
+      { id: "payload", path: "schemas/payload.json" },
+      { id: "outcome", path: "schemas/outcome.json" },
     ],
     progressions: [
       {
-        id: "main.v1",
+        id: "main",
         version: 1,
         kind: "player",
         definition: { source: "src/progression.ts", export: "main" },
-        aggregateSchema: "player.v1",
-        commands: ["solve.v1"],
+        aggregateSchema: "player",
+        commands: ["solve"],
         content: [],
         components: [],
       },
@@ -73,16 +71,16 @@ function metadata(): DefinitionInspectionMetadata {
   return {
     commands: [
       {
-        registrationId: "solve.v1",
-        definitionId: "solve.v1",
+        registrationId: "solve",
+        definitionId: "solve",
         commandType: "solve",
         aggregateKind: "player",
       },
     ],
     progressions: [
       {
-        registrationId: "main.v1",
-        graphId: "main.v1",
+        registrationId: "main",
+        graphId: "main",
         graphVersion: 1,
         aggregateKind: "player",
         nodes: [{ nodeId: "stage", initialStatus: "active" }],
@@ -126,7 +124,7 @@ describe("command definition validation", () => {
         ...config.commands,
         {
           ...config.commands[0]!,
-          id: "other.v1",
+          id: "other",
           definition: { source: "src/other.ts", export: "other" },
         },
       ],
@@ -135,8 +133,8 @@ describe("command definition validation", () => {
       commands: [
         ...metadata().commands,
         {
-          registrationId: "other.v1",
-          definitionId: "other.v1",
+          registrationId: "other",
+          definitionId: "other",
           commandType: "solve",
           aggregateKind: "player",
         },
@@ -198,7 +196,7 @@ describe("closed durable schema subset", () => {
   });
 
   it("normalizes Ajv validation errors without raw messages or library objects", () => {
-    const normalized = normalizeAjvErrors("payload.v1", [
+    const normalized = normalizeAjvErrors("payload", [
       {
         instancePath: "/answer",
         schemaPath: "#/properties/answer/minLength",
@@ -209,7 +207,7 @@ describe("closed durable schema subset", () => {
     ]);
     expect(normalized).toEqual([
       {
-        schemaId: "payload.v1",
+        schemaId: "payload",
         instancePath: "/answer",
         schemaPath: "#/properties/answer/minLength",
         keyword: "minLength",

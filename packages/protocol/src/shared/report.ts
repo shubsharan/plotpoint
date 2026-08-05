@@ -1,9 +1,10 @@
-import type { LocationReportProjectionV1 } from "../player/report.js";
-import { isLocationReportProjectionV1 } from "../player/report.js";
+import { CONTRACT_VERSIONS } from "../contract-versions.js";
+import type { LocationReportProjection } from "../player/report.js";
+import { isLocationReportProjection } from "../player/report.js";
 import { isReleaseId } from "../release/identity.js";
 import type { CanonicalJsonObject } from "../release/types.js";
 
-export type SharedHuntReportEventV1 =
+export type SharedHuntReportEvent =
   | (CanonicalJsonObject & {
       readonly kind: "command";
       readonly elapsedMs: number;
@@ -23,7 +24,7 @@ export type SharedHuntReportEventV1 =
       readonly kind: "location";
       readonly elapsedMs: number;
       readonly commandAlias: string;
-      readonly projection: LocationReportProjectionV1 & CanonicalJsonObject;
+      readonly projection: LocationReportProjection & CanonicalJsonObject;
     })
   | (CanonicalJsonObject & {
       readonly kind: "synchronization";
@@ -51,8 +52,8 @@ export type SharedHuntReportEventV1 =
       readonly commandAlias?: string;
     });
 
-export interface SharedHuntReportV1 {
-  readonly version: 1;
+export interface SharedHuntReport {
+  readonly version: typeof CONTRACT_VERSIONS.sharedReport;
   readonly releaseId: `sha256:${string}`;
   readonly sessionAlias: string;
   readonly selfAlias: "self";
@@ -63,7 +64,7 @@ export interface SharedHuntReportV1 {
     readonly totalTargets: number;
     readonly complete: boolean;
   };
-  readonly events: readonly SharedHuntReportEventV1[];
+  readonly events: readonly SharedHuntReportEvent[];
 }
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -86,7 +87,7 @@ function nonnegative(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
-function event(value: unknown): value is SharedHuntReportEventV1 {
+function event(value: unknown): value is SharedHuntReportEvent {
   if (!object(value) || typeof value.kind !== "string" || !nonnegative(value.elapsedMs))
     return false;
   if (value.kind === "command") {
@@ -109,7 +110,7 @@ function event(value: unknown): value is SharedHuntReportEventV1 {
     return (
       exact(value, ["kind", "elapsedMs", "commandAlias", "projection"]) &&
       typeof value.commandAlias === "string" &&
-      isLocationReportProjectionV1(value.projection)
+      isLocationReportProjection(value.projection)
     );
   }
   if (value.kind === "synchronization") {
@@ -136,7 +137,7 @@ function event(value: unknown): value is SharedHuntReportEventV1 {
   );
 }
 
-export function isSharedHuntReportV1(value: unknown): value is SharedHuntReportV1 {
+export function isSharedHuntReport(value: unknown): value is SharedHuntReport {
   if (
     !object(value) ||
     !exact(value, [
@@ -152,7 +153,7 @@ export function isSharedHuntReportV1(value: unknown): value is SharedHuntReportV
   )
     return false;
   if (
-    value.version !== 1 ||
+    value.version !== CONTRACT_VERSIONS.sharedReport ||
     typeof value.releaseId !== "string" ||
     !isReleaseId(value.releaseId) ||
     typeof value.sessionAlias !== "string" ||

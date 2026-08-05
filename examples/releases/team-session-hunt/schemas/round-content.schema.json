@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "hunt.round-content.v1",
+  "$id": "hunt.round-content",
   "type": "object",
   "additionalProperties": false,
   "required": ["audioAssetId", "rounds"],
   "properties": {
-    "audioAssetId": { "const": "hunt.audio.round.v1" },
+    "audioAssetId": { "const": "hunt.audio.round" },
     "rounds": {
       "type": "array",
       "minItems": 2,

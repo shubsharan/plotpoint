@@ -19,19 +19,19 @@ deferred physical observations separate from feature acceptance.
 
 ---
 
-## Phase 2: Foundational Host API V1
+## Phase 2: Foundational Host API
 
 **Purpose**: Establish the smallest cross-game player contract before story-specific behavior.
 
-**Critical**: Host API Core is reusable; capability contracts, report projections, and SQLite layout
-remain independently versioned or internal.
+**Critical**: Host API Core is reusable; capability contracts and report projections use centralized
+compatibility metadata, while SQLite layout remains internal.
 
 - [x] T005 Implement exact direction-specific bootstrap, transition, result, and host-error unions in `packages/protocol/src/player/bridge.ts`
 - [x] T006 [P] Add accepted, no-op, rejected, recorded-invalid, duplicate, malformed, unsupported-version, and wrong-direction contract cases in `packages/protocol/test/player-contracts.test.ts`
-- [x] T007 Implement generic versioned capability request/result dispatch without adding a capability catalog in `packages/protocol/src/player/bridge.ts`
+- [x] T007 Implement generic capability request/result dispatch without adding a capability catalog in `packages/protocol/src/player/bridge.ts`
 - [x] T008 Derive aggregate schema and required capability compatibility from the verified release manifest in `apps/player/src/runtime/host-support.ts`
 - [x] T009 Remove field aggregate identity, schema, and location assumptions from core bootstrap and transition routing in `apps/player/App.tsx` and `apps/player/src/bridge/host-bridge.ts`
-- [x] T010 Prove the field puzzle and minimal local puzzle pass the same Host API V1 bootstrap and transition harness without player branches in `apps/player/test/host-conformance.test.ts`
+- [x] T010 Prove the field puzzle and minimal local puzzle pass the same Host API bootstrap and transition harness without player branches in `apps/player/test/host-conformance.test.ts`
 
 **Checkpoint**: Two materially different releases exercise one Host API Core provider-free.
 
@@ -77,7 +77,7 @@ Android.
 
 ### Implementation And Evidence For User Story 2
 
-- [x] T019 [US2] Register Location V1 through generic capability dispatch and persist every terminal observation before delivery in `apps/player/src/location/foreground-location.ts` and `apps/player/src/bridge/host-bridge.ts`
+- [x] T019 [US2] Register Location through generic capability dispatch and persist every terminal observation before delivery in `apps/player/src/location/foreground-location.ts` and `apps/player/src/bridge/host-bridge.ts`
 - [x] T020 [US2] Keep coordinates, radii, freshness, accuracy, clues, and progression exclusively inside the release in `examples/releases/field-puzzle/src/config.ts` and `examples/releases/field-puzzle/src/commands/advance.ts`
 - [x] T021 [US2] Exercise the complete disconnected route through the trusted WebView host with scripted observations in `apps/player/test/offline-route.test.ts`
 - [x] T022 [US2] Build, install, and launch the SDK-aligned player on an iOS simulator and record the exact boundary in `docs/features/0003-durable-offline-player/evidence/platform-simulation.md`
@@ -151,7 +151,7 @@ privacy boundary; revise one clue or location rule; install changed bytes; and r
 ## Phase 8: Host API Review Remediation
 
 **Purpose**: Remove release-side wire-shape duplication and make real release execution, rather than
-synthetic candidates, prove Host API V1 conformance.
+synthetic candidates, prove Host API conformance.
 
 - [x] T040 [P] Add semantic Host Runtime client contract and failure coverage in `packages/protocol/test/host-runtime-client.test.ts`
 - [x] T041 [P] Make both conformance releases participate in workspace type checking through `pnpm-workspace.yaml` and their package and TypeScript configurations
@@ -164,11 +164,11 @@ synthetic candidates, prove Host API V1 conformance.
 ## Dependencies And Execution Order
 
 ```text
-Baseline -> Host API V1 -> US1 install -> US2 field play -> early iOS/Android smoke
+Baseline -> Host API -> US1 install -> US2 field play -> early iOS/Android smoke
                                       -> US3 durability -> US4 learning -> exit hardening
 ```
 
-- Host API V1 requires two-game provider-free evidence before it is treated as reusable.
+- Host API requires two-game provider-free evidence before it is treated as reusable.
 - US1 depends on Host API Core; US2 depends on installed offline releases.
 - Native simulator/emulator checks establish toolchain compatibility, not physical sensor behavior.
 - Provider-free durability and revision evidence combines with those checks for feature acceptance.

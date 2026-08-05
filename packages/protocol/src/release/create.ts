@@ -1,3 +1,5 @@
+import { CONTRACT_VERSIONS } from "../contract-versions.js";
+
 import { encodeCanonicalJson } from "./canonical-json.js";
 import { sha256Digest } from "./identity.js";
 import { openRelease } from "./open.js";
@@ -8,7 +10,7 @@ import type {
   ReleaseArtifact,
   ReleaseConstructionInput,
   ReleaseEntryKind,
-  ReleaseManifestV1,
+  ReleaseManifest,
 } from "./types.js";
 
 interface PreparedMaterialEntry {
@@ -54,8 +56,8 @@ export async function createReleaseArtifact(
   }
   entries.sort((left, right) => compareOrdinal(left.path, right.path));
 
-  const manifest: ReleaseManifestV1 = {
-    releaseFormatVersion: 1,
+  const manifest: ReleaseManifest = {
+    releaseFormatVersion: CONTRACT_VERSIONS.releaseFormat,
     hostApi: input.hostApi,
     aggregateSchemas: Object.freeze(
       [...input.aggregateSchemas].sort((left, right) =>

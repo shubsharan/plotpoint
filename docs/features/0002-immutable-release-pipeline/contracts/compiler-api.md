@@ -22,7 +22,7 @@ interface CompileProjectInput extends ValidateProjectInput {
 
 interface ValidatedProject {
   readonly kind: "valid";
-  readonly manifestPreview: ReleaseManifestV1;
+  readonly manifestPreview: ReleaseManifest;
 }
 
 interface InvalidProject {
@@ -34,7 +34,7 @@ interface CompiledProject {
   readonly kind: "compiled";
   readonly outputFile: string;
   readonly releaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
 }
 
 export function validateProject(
@@ -127,7 +127,7 @@ path for untrusted code without a future accepted isolation ADR.
 - Both graphs emit browser ESM targeting ES2022.
 - The output is one deterministic logic bundle and one deterministic presentation bundle.
 - Code splitting, source maps, minification, author plugins, banners, absolute paths, timestamps,
-  random chunk IDs, and final external imports are forbidden in v1.
+  random chunk IDs, and final external imports are forbidden in.
 - Output options fix entry names, format, target behavior, export shape, and chunking. Generation must
   return exactly the two expected entry chunks and no unplanned asset or shared chunk.
 - Rolldown warnings and failures are normalized into Plotpoint diagnostics; raw tool-specific prose,

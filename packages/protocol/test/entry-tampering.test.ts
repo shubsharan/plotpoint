@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { encodeCanonicalJson } from "../src/release/canonical-json.js";
 import { computeReleaseId, sha256Digest } from "../src/release/identity.js";
-import type { ReleaseEntryKind, ReleaseId, ReleaseManifestV1 } from "../src/release/types.js";
+import type { ReleaseEntryKind, ReleaseId, ReleaseManifest } from "../src/release/types.js";
 import { verifyRelease } from "../src/release/verify.js";
 import { writeStoredZip, type StoredZipEntry } from "../src/release/zip-profile.js";
 
@@ -20,13 +20,13 @@ const payloads = [
 
 function fixture(overrides: Readonly<Record<string, Uint8Array>> = {}): {
   readonly bytes: Uint8Array;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
 } {
   const entries = payloads.map(([path, kind, text]) => {
     const bytes = overrides[path] ?? utf8.encode(text);
     return { path, kind, bytes };
   });
-  const manifest: ReleaseManifestV1 = {
+  const manifest: ReleaseManifest = {
     releaseFormatVersion: 1,
     hostApi: { major: 1, minimumMinor: 0 },
     aggregateSchemas: [
@@ -52,7 +52,7 @@ function fixture(overrides: Readonly<Record<string, Uint8Array>> = {}): {
 }
 
 function archiveWithOriginalManifest(
-  manifest: ReleaseManifestV1,
+  manifest: ReleaseManifest,
   overrides: Readonly<Record<string, Uint8Array>>,
 ): Uint8Array {
   const encoded = encodeCanonicalJson(manifest);

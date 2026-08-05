@@ -8,96 +8,96 @@
   },
   "commands": [
     {
-      "id": "tour.choose-scene.v1",
+      "id": "tour.choose-scene",
       "type": "choose-scene",
       "definition": { "source": "src/commands/choose-scene.ts", "export": "chooseSceneCommand" },
-      "aggregateSchema": "tour.player-state.v1",
-      "payloadSchema": "tour.choose-scene-payload.v1",
-      "outcomeSchema": "tour.choose-scene-outcome.v1"
+      "aggregateSchema": "tour.player-state",
+      "payloadSchema": "tour.choose-scene-payload",
+      "outcomeSchema": "tour.choose-scene-outcome"
     },
     {
-      "id": "tour.play-media.v1",
+      "id": "tour.play-media",
       "type": "play-media",
       "definition": { "source": "src/commands/play-media.ts", "export": "playMediaCommand" },
-      "aggregateSchema": "tour.player-state.v1",
-      "payloadSchema": "tour.play-media-payload.v1",
-      "outcomeSchema": "tour.play-media-outcome.v1"
+      "aggregateSchema": "tour.player-state",
+      "payloadSchema": "tour.play-media-payload",
+      "outcomeSchema": "tour.play-media-outcome"
     }
   ],
   "aggregateSchemas": [
     {
-      "id": "tour.player-state.v1",
+      "id": "tour.player-state",
       "kind": "player",
       "version": 1,
       "path": "schemas/player-state.schema.json"
     }
   ],
   "schemas": [
-    { "id": "tour.choose-scene-outcome.v1", "path": "schemas/choose-scene-outcome.schema.json" },
-    { "id": "tour.choose-scene-payload.v1", "path": "schemas/choose-scene-payload.schema.json" },
-    { "id": "tour.media-content.v1", "path": "schemas/media-content.schema.json" },
-    { "id": "tour.play-media-outcome.v1", "path": "schemas/play-media-outcome.schema.json" },
-    { "id": "tour.play-media-payload.v1", "path": "schemas/play-media-payload.schema.json" },
-    { "id": "tour.scene-content.v1", "path": "schemas/scene-content.schema.json" }
+    { "id": "tour.choose-scene-outcome", "path": "schemas/choose-scene-outcome.schema.json" },
+    { "id": "tour.choose-scene-payload", "path": "schemas/choose-scene-payload.schema.json" },
+    { "id": "tour.media-content", "path": "schemas/media-content.schema.json" },
+    { "id": "tour.play-media-outcome", "path": "schemas/play-media-outcome.schema.json" },
+    { "id": "tour.play-media-payload", "path": "schemas/play-media-payload.schema.json" },
+    { "id": "tour.scene-content", "path": "schemas/scene-content.schema.json" }
   ],
   "progressions": [
     {
-      "id": "tour.branching-route.v1",
+      "id": "tour.branching-route",
       "version": 1,
       "kind": "player",
       "definition": { "source": "src/progression/route.ts", "export": "routeProgression" },
-      "aggregateSchema": "tour.player-state.v1",
-      "commands": ["tour.choose-scene.v1", "tour.play-media.v1"],
-      "content": ["tour.media.river.v1", "tour.scene.garden.v1", "tour.scene.harbor.v1"],
-      "components": ["tour.media-panel.v1", "tour.scene-navigator.v1"]
+      "aggregateSchema": "tour.player-state",
+      "commands": ["tour.choose-scene", "tour.play-media"],
+      "content": ["tour.media.river", "tour.scene.garden", "tour.scene.harbor"],
+      "components": ["tour.media-panel", "tour.scene-navigator"]
     }
   ],
   "components": [
     {
-      "id": "tour.media-panel.v1",
+      "id": "tour.media-panel",
       "implementation": { "source": "src/components/media-panel.ts", "export": "MediaPanel" },
-      "commands": ["tour.play-media.v1"],
-      "content": ["tour.media.river.v1"],
-      "assets": ["tour.audio.river.v1"],
+      "commands": ["tour.play-media"],
+      "content": ["tour.media.river"],
+      "assets": ["tour.audio.river"],
       "capabilities": [{ "id": "plotpoint.media.audio", "major": 1, "minimumMinor": 0 }]
     },
     {
-      "id": "tour.scene-navigator.v1",
+      "id": "tour.scene-navigator",
       "implementation": {
         "source": "src/components/scene-navigator.ts",
         "export": "SceneNavigator"
       },
-      "commands": ["tour.choose-scene.v1"],
-      "content": ["tour.scene.garden.v1", "tour.scene.harbor.v1"],
-      "assets": ["tour.map.overview.v1"],
+      "commands": ["tour.choose-scene"],
+      "content": ["tour.scene.garden", "tour.scene.harbor"],
+      "assets": ["tour.map.overview"],
       "capabilities": [{ "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 1 }]
     }
   ],
   "content": [
     {
-      "id": "tour.media.river.v1",
+      "id": "tour.media.river",
       "path": "content/river-media.json",
-      "schema": "tour.media-content.v1"
+      "schema": "tour.media-content"
     },
     {
-      "id": "tour.scene.garden.v1",
+      "id": "tour.scene.garden",
       "path": "content/garden.json",
-      "schema": "tour.scene-content.v1"
+      "schema": "tour.scene-content"
     },
     {
-      "id": "tour.scene.harbor.v1",
+      "id": "tour.scene.harbor",
       "path": "content/harbor.json",
-      "schema": "tour.scene-content.v1"
+      "schema": "tour.scene-content"
     }
   ],
   "assets": [
     {
-      "id": "tour.audio.river.v1",
+      "id": "tour.audio.river",
       "path": "assets/river-audio.txt",
       "releasePath": "assets/river-audio.txt"
     },
     {
-      "id": "tour.map.overview.v1",
+      "id": "tour.map.overview",
       "path": "assets/tour-map.svg",
       "releasePath": "assets/tour-map.svg"
     }

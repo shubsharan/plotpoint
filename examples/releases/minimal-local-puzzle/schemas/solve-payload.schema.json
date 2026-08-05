@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "minimal.solve-payload.v1",
+  "$id": "minimal.solve-payload",
   "type": "object",
   "additionalProperties": false,
   "required": ["answer"],

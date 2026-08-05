@@ -2,21 +2,21 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   FOREGROUND_LOCATION_CAPABILITY,
-  createHostRuntimeClientV1,
-  isLocationObservationV1,
-  type HostBridgeTransportV1,
+  createHostRuntimeClient,
+  isLocationObservation,
+  type HostBridgeTransport,
   type HostCapabilityOutputValidator,
-  type TransitionCandidateV1,
-  type TransitionResultV1,
+  type TransitionCandidate,
+  type TransitionResult,
 } from "../src/index.js";
 
-function candidate(terminal: TransitionCandidateV1["terminal"]): TransitionCandidateV1 {
+function candidate(terminal: TransitionCandidate["terminal"]): TransitionCandidate {
   const base = {
     commandId: `command-${terminal}`,
     target: {
       aggregateId: "player-1",
       aggregateKind: "player" as const,
-      schemaId: "player-state.v1",
+      schemaId: "player-state",
       schemaVersion: 1,
     },
     expectedVersion: 2,
@@ -38,9 +38,9 @@ function candidate(terminal: TransitionCandidateV1["terminal"]): TransitionCandi
 }
 
 function result(
-  transition: TransitionCandidateV1,
-  disposition: TransitionResultV1["disposition"],
-): TransitionResultV1 {
+  transition: TransitionCandidate,
+  disposition: TransitionResult["disposition"],
+): TransitionResult {
   const base = {
     commandId: transition.commandId,
     disposition,
@@ -57,21 +57,21 @@ function result(
 
 function transport(
   response: unknown,
-): HostBridgeTransportV1 & { readonly send: ReturnType<typeof vi.fn> } {
+): HostBridgeTransport & { readonly send: ReturnType<typeof vi.fn> } {
   return { send: vi.fn(async () => response) };
 }
 
 const acceptsObject: HostCapabilityOutputValidator<object> = (value: unknown): value is object =>
   typeof value === "object" && value !== null;
 
-describe("Host Runtime Client V1", () => {
+describe("Host Runtime Client ", () => {
   it.each(["committed", "duplicate"] as const)(
     "returns every closed transition terminal for a %s result",
     async (disposition) => {
       for (const terminal of ["accepted", "no-op", "rejected", "invalid"] as const) {
         const transition = candidate(terminal);
         const raw = transport(result(transition, disposition));
-        const client = createHostRuntimeClientV1(raw);
+        const client = createHostRuntimeClient(raw);
 
         await expect(client.commitTransition(transition)).resolves.toEqual(
           result(transition, disposition),
@@ -91,10 +91,10 @@ describe("Host Runtime Client V1", () => {
       availability: "unavailable",
     } as const;
     const raw = transport({ capability: FOREGROUND_LOCATION_CAPABILITY, output });
-    const client = createHostRuntimeClientV1(raw);
+    const client = createHostRuntimeClient(raw);
 
     await expect(
-      client.requestCapability(FOREGROUND_LOCATION_CAPABILITY, {}, isLocationObservationV1),
+      client.requestCapability(FOREGROUND_LOCATION_CAPABILITY, {}, isLocationObservation),
     ).resolves.toEqual(output);
     expect(raw.send).toHaveBeenCalledWith("capability.request", {
       capability: FOREGROUND_LOCATION_CAPABILITY,
@@ -131,7 +131,7 @@ describe("Host Runtime Client V1", () => {
       expected: "host-transition-terminal-mismatch",
     },
   ])("rejects $name", async ({ response, expected }) => {
-    const client = createHostRuntimeClientV1(transport(response));
+    const client = createHostRuntimeClient(transport(response));
     await expect(client.commitTransition(candidate("accepted"))).rejects.toThrow(expected);
   });
 
@@ -155,7 +155,7 @@ describe("Host Runtime Client V1", () => {
       name: "invalid capability output",
       response: { capability: FOREGROUND_LOCATION_CAPABILITY, output: { unexpected: true } },
       expected: "host-capability-output-invalid",
-      validate: isLocationObservationV1,
+      validate: isLocationObservation,
     },
   ] satisfies readonly {
     readonly name: string;
@@ -163,7 +163,7 @@ describe("Host Runtime Client V1", () => {
     readonly expected: string;
     readonly validate: HostCapabilityOutputValidator<object>;
   }[])("rejects $name", async ({ response, expected, validate }) => {
-    const client = createHostRuntimeClientV1(transport(response));
+    const client = createHostRuntimeClient(transport(response));
     await expect(
       client.requestCapability(FOREGROUND_LOCATION_CAPABILITY, {}, validate),
     ).rejects.toThrow(expected);

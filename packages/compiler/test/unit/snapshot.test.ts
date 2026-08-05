@@ -27,9 +27,7 @@ async function fixture(): Promise<string> {
       presentation: { source: "src/presentation.ts", export: "presentation" },
     },
     commands: [],
-    aggregateSchemas: [
-      { id: "player.v1", kind: "player", version: 1, path: "schemas/player.json" },
-    ],
+    aggregateSchemas: [{ id: "player", kind: "player", version: 1, path: "schemas/player.json" }],
     schemas: [],
     progressions: [],
     components: [],

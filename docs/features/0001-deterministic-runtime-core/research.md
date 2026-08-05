@@ -14,7 +14,7 @@
 
 ## Canonical Durable Values
 
-**Decision**: Define a versioned JSON-compatible subset containing null, booleans, strings without lone surrogates, finite numbers, dense arrays, and plain or null-prototype objects with enumerable data properties. Reject undefined, bigint, symbols, functions, non-finite numbers, sparse or extended arrays, accessors, symbol keys, custom prototypes, class instances, dates, collections, typed arrays, host objects, and cycles. Traverse property descriptors without invoking getters or `toJSON`, normalize negative zero to zero, preserve array order, sort object keys lexicographically, and produce both a detached canonical tree and canonical text.
+**Decision**: Define a strict JSON-compatible subset containing null, booleans, strings without lone surrogates, finite numbers, dense arrays, and plain or null-prototype objects with enumerable data properties. Reject undefined, bigint, symbols, functions, non-finite numbers, sparse or extended arrays, accessors, symbol keys, custom prototypes, class instances, dates, collections, typed arrays, host objects, and cycles. Traverse property descriptors without invoking getters or `toJSON`, normalize negative zero to zero, preserve array order, sort object keys lexicographically, and produce both a detached canonical tree and canonical text.
 
 **Rationale**: Bare `JSON.stringify` silently drops or normalizes unsupported values and preserves construction-sensitive key order. `structuredClone` accepts cycles and richer host values. A small explicit canonical model makes validation failures local, replay equality stable, and later persistence predictable without taking on a broader cross-language canonicalization standard.
 
@@ -26,7 +26,7 @@
 
 ## Validation and Immutability
 
-**Decision**: Canonical-clone every caller input, recursively freeze the detached clone, and pass only readonly clones to handlers and rules. Canonicalize handler output again before constructing a result. Use iterative traversal with explicit depth and node limits; the resolved limits are versioned and recorded. Mutation attempts fail without reaching caller-owned or non-target objects.
+**Decision**: Canonical-clone every caller input, recursively freeze the detached clone, and pass only readonly clones to handlers and rules. Canonicalize handler output again before constructing a result. Use iterative traversal with explicit depth and node limits; the resolved limits are recorded. Mutation attempts fail without reaching caller-owned or non-target objects.
 
 **Rationale**: Type-level readonly declarations do not isolate aliased runtime objects. Detached frozen copies protect the caller and give deterministic validation a single boundary. Iterative traversal avoids uncontrolled recursion and denial by pathological fixtures.
 

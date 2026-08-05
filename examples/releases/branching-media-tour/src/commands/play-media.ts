@@ -11,7 +11,7 @@ export const playMediaCommand = defineCommand<
   PlayMediaPayload,
   PlayMediaOutcome
 >({
-  definitionId: "tour.play-media.v1",
+  definitionId: "tour.play-media",
   commandType: "play-media",
   aggregateKind: "player",
   handle(target, command) {

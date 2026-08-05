@@ -1,19 +1,18 @@
 import {
+  CONTRACT_VERSIONS,
   FOREGROUND_LOCATION_CAPABILITY,
   type HostReleaseSupport,
-  type ReleaseManifestV1,
+  type ReleaseManifest,
 } from "@plotpoint/protocol";
 
 const IMPLEMENTED_CAPABILITIES = Object.freeze([FOREGROUND_LOCATION_CAPABILITY]);
 
-function aggregateSchemaSupport(
-  manifest: ReleaseManifestV1,
-): HostReleaseSupport["aggregateSchemas"] {
+function aggregateSchemaSupport(manifest: ReleaseManifest): HostReleaseSupport["aggregateSchemas"] {
   const versionsBySchema = new Map<
     string,
     {
       readonly id: string;
-      readonly kind: ReleaseManifestV1["aggregateSchemas"][number]["kind"];
+      readonly kind: ReleaseManifest["aggregateSchemas"][number]["kind"];
       readonly versions: number[];
     }
   >();
@@ -39,9 +38,7 @@ function aggregateSchemaSupport(
   );
 }
 
-function requiredCapabilitySupport(
-  manifest: ReleaseManifestV1,
-): HostReleaseSupport["capabilities"] {
+function requiredCapabilitySupport(manifest: ReleaseManifest): HostReleaseSupport["capabilities"] {
   return Object.freeze(
     manifest.capabilities.flatMap((requirement) => {
       const implemented = IMPLEMENTED_CAPABILITIES.find(
@@ -60,10 +57,10 @@ function requiredCapabilitySupport(
  * Aggregate schemas are data validated by the generic host; native capabilities
  * remain limited to the player's explicit implementation registry.
  */
-export function deriveHostSupportFromManifest(manifest: ReleaseManifestV1): HostReleaseSupport {
+export function deriveHostSupportFromManifest(manifest: ReleaseManifest): HostReleaseSupport {
   return Object.freeze({
-    releaseFormatVersions: Object.freeze([1]),
-    hostApi: Object.freeze({ major: 1, minor: 1 }),
+    releaseFormatVersions: Object.freeze([CONTRACT_VERSIONS.releaseFormat]),
+    hostApi: CONTRACT_VERSIONS.hostApi,
     aggregateSchemas: aggregateSchemaSupport(manifest),
     capabilities: requiredCapabilitySupport(manifest),
   });

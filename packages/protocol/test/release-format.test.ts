@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeReleaseId, inspectRelease, type ReleaseManifestV1 } from "@plotpoint/protocol";
+import { computeReleaseId, inspectRelease, type ReleaseManifest } from "@plotpoint/protocol";
 
 import { encodeCanonicalJson } from "../src/release/canonical-json.js";
 import { sha256Digest } from "../src/release/identity.js";
@@ -11,7 +11,7 @@ const logic = utf8.encode("globalThis.__plotpointExecuted = true;");
 const presentation = utf8.encode("export const view = 'puzzle';");
 const content = utf8.encode('{"clue":"alpha"}');
 
-function fixture(): { readonly manifest: ReleaseManifestV1; readonly entries: StoredZipEntry[] } {
+function fixture(): { readonly manifest: ReleaseManifest; readonly entries: StoredZipEntry[] } {
   const inventory = [
     { path: "bundles/logic.js", kind: "logic-bundle" as const, bytes: logic },
     { path: "bundles/presentation.js", kind: "presentation-bundle" as const, bytes: presentation },
@@ -22,7 +22,7 @@ function fixture(): { readonly manifest: ReleaseManifestV1; readonly entries: St
     byteLength: bytes.byteLength,
     digest: sha256Digest(bytes),
   }));
-  const manifest: ReleaseManifestV1 = {
+  const manifest: ReleaseManifest = {
     releaseFormatVersion: 1,
     hostApi: { major: 1, minimumMinor: 0 },
     aggregateSchemas: [],
@@ -43,7 +43,7 @@ function fixture(): { readonly manifest: ReleaseManifestV1; readonly entries: St
   };
 }
 
-describe("strict release-format v1 container", () => {
+describe("strict release-format  container", () => {
   it("writes byte-identical stored archives in ordinal path order", () => {
     const { entries } = fixture();
     const forward = writeStoredZip(entries);

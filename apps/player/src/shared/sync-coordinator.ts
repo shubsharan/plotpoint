@@ -1,4 +1,4 @@
-import type { SyncCommandV1 } from "@plotpoint/protocol";
+import { CONTRACT_VERSIONS, type SyncCommand } from "@plotpoint/protocol";
 
 import type { ParticipantCredentialStore } from "./credentials";
 import { SharedSyncStore } from "./database";
@@ -25,8 +25,8 @@ export class SharedSyncCoordinator {
         const command = await this.store.nextQueued(sessionId);
         if (command === null) break;
         const observations = await this.store.observations(session.runId, command.observationIds);
-        const request: SyncCommandV1 = {
-          version: 1,
+        const request: SyncCommand = {
+          version: CONTRACT_VERSIONS.sharedSync,
           commandId: command.commandId,
           target: command.target,
           expectedStateVersion: command.expectedStateVersion,

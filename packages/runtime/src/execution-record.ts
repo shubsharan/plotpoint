@@ -6,7 +6,6 @@ import type { Observation, ObservationConsumption } from "./observations.js";
 import type { ProgressionTransition } from "./progression/state.js";
 
 export interface RuntimePolicy {
-  readonly contractVersion: 1;
   readonly maxCanonicalDepth: number;
   readonly maxCanonicalNodes: number;
   readonly maxAutomaticTransitions: number;
@@ -18,7 +17,6 @@ export interface ExecutionRecord<
   Payload extends JsonObject = JsonObject,
   Kind extends AggregateKind = AggregateKind,
 > {
-  readonly formatVersion: 1;
   readonly definitionId: string;
   readonly policy: RuntimePolicy;
   readonly aggregateBefore: Aggregate<State, Kind>;

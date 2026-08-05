@@ -1,4 +1,4 @@
-import type { ReleaseId, ReleaseManifestV1 } from "@plotpoint/protocol";
+import { CONTRACT_VERSIONS, type ReleaseId, type ReleaseManifest } from "@plotpoint/protocol";
 import type { JsonObject } from "@plotpoint/runtime";
 
 import type { CompilerDiagnosticCode } from "../diagnostics/codes.js";
@@ -75,8 +75,8 @@ export interface AssetRegistration {
   readonly releasePath: string;
 }
 
-export interface ProjectConfigurationV1 {
-  readonly projectFormatVersion: 1;
+export interface ProjectConfiguration {
+  readonly projectFormatVersion: typeof CONTRACT_VERSIONS.projectConfiguration;
   readonly environment: ProjectEnvironment;
   readonly hostApi: HostApiRequirement;
   readonly entries: {
@@ -111,7 +111,7 @@ export interface SnapshotFile {
 }
 
 export interface CompilationSnapshot {
-  readonly config: ProjectConfigurationV1;
+  readonly config: ProjectConfiguration;
   readonly registries: CanonicalProjectRegistries;
   readonly files: ReadonlyMap<string, SnapshotFile>;
 }
@@ -184,7 +184,7 @@ export interface CompilerDiagnostic {
 
 export interface ValidatedProject {
   readonly kind: "valid";
-  readonly manifestPreview: ReleaseManifestV1;
+  readonly manifestPreview: ReleaseManifest;
 }
 
 export interface InvalidProject {
@@ -196,7 +196,7 @@ export interface CompiledProject {
   readonly kind: "compiled";
   readonly outputFile: string;
   readonly releaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
 }
 
 export type ValidateProjectResult = ValidatedProject | InvalidProject;

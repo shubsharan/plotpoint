@@ -16,7 +16,7 @@ type Outcome = JsonObject & { readonly result: string };
 describe("quickstart acceptance", () => {
   it("repeats and replays the parallel unlock scenario through package roots", () => {
     const definition = defineCommand<"player", ClueState, Payload, Outcome>({
-      definitionId: "example.record-clue.v1",
+      definitionId: "example.record-clue",
       commandType: "record-clue",
       aggregateKind: "player",
       handle(target, command, context) {
@@ -33,7 +33,7 @@ describe("quickstart acceptance", () => {
     });
     const progression = defineProgression<"player", ClueState, Payload, Outcome>({
       aggregateKind: "player",
-      graphId: "tour.v1",
+      graphId: "tour",
       graphVersion: 1,
       nodes: [
         { nodeId: "find-clue", initialStatus: "active" },
@@ -64,7 +64,7 @@ describe("quickstart acceptance", () => {
       stateVersion: 4,
       state: { discovered: [] },
       progression: {
-        graphId: "tour.v1",
+        graphId: "tour",
         graphVersion: 1,
         nodes: [
           { nodeId: "find-clue", status: "active" },

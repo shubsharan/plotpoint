@@ -30,7 +30,8 @@ export function sessionFixture<State extends JsonObject>(
 ): Aggregate<State, "session">;
 ```
 
-Fixture defaults are explicit stable Gate 1 values and appear in returned data. Builders create detached values so test fixtures cannot share mutable nested references accidentally.
+Fixture defaults are explicit and appear in returned data. Builders create detached values so test
+fixtures cannot share mutable nested references accidentally.
 
 ## Scenario Harness
 

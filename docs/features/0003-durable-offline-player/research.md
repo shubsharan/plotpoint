@@ -23,7 +23,7 @@ or device restart behavior still require later physical iOS and Android validati
 
 ## Trusted runtime boundary
 
-**Decision**: Generate a host bootstrap document around the two verified v1 entrypoints and run logic
+**Decision**: Generate a host bootstrap document around the two verified entrypoints and run logic
 and presentation together. Lock navigation and remote connections; communicate only through closed
 bridge messages.
 
@@ -39,10 +39,10 @@ creating a replacement view.
 
 ## Reusable player contract
 
-**Decision**: Host API V1 owns only runtime bootstrap, canonical recorded transition terminals,
-transport-versus-command identity, version/schema validation, generic versioned capability dispatch,
-and explicit host-policy errors. Installation transport, capability payloads, report projections, and
-SQLite layout remain independently versioned or internal. Prove reuse with the field puzzle and the
+**Decision**: Host API owns only runtime bootstrap, canonical recorded transition terminals,
+transport-versus-command identity, compatibility/schema validation, generic capability dispatch, and
+explicit host-policy errors. Installation transport, capability payloads, and report projections use
+centralized compatibility metadata; SQLite layout remains internal. Prove reuse with the field puzzle and the
 materially different minimal local puzzle without player branches.
 
 **Rationale**: Later games need one stable player boundary, but one field game cannot distinguish a
@@ -57,7 +57,7 @@ compatibility.
 
 ## Installation transport
 
-**Decision**: `plotpoint serve` verifies one captured artifact, serves a versioned JSON descriptor and
+**Decision**: `plotpoint serve` verifies one captured artifact, serves a JSON descriptor and
 those exact bytes over one selected private IPv4 interface, and displays a QR for the descriptor URL.
 The player requires an expected identity, a private-network source, same-origin descriptor and release
 URLs, no redirects, a 64 KiB descriptor limit, a 64 MiB streaming release limit, and one 30-second
@@ -105,7 +105,7 @@ host-owned geofencing moves game rules into the player; WebView geolocation bypa
 
 ## Redacted play reports
 
-**Decision**: Derive `PlayReportV1` as an allowlisted projection of validated host records with one
+**Decision**: Derive `PlayReport` as an allowlisted projection of validated host records with one
 ordered discriminated event timeline. Keep each command terminal, versions, redacted outcome code, and
 progression changes together; include observation quality, lifecycle/recovery evidence, and correlated
 diagnostics at relative times. Never serialize raw database rows.

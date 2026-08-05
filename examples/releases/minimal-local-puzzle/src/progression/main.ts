@@ -9,7 +9,7 @@ export const puzzleProgression = defineProgression<
   SolveOutcome
 >({
   aggregateKind: "player",
-  graphId: "minimal.puzzle.v1",
+  graphId: "minimal.puzzle",
   graphVersion: 1,
   nodes: [
     { nodeId: "celebrate", initialStatus: "locked" },

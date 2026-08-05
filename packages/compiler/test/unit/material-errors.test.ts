@@ -6,7 +6,7 @@ import { buildCanonicalRegistries } from "../../src/composition/registries.js";
 import type { ImportGraph } from "../../src/imports/resolve-graph.js";
 import type {
   CompilationSnapshot,
-  ProjectConfigurationV1,
+  ProjectConfiguration,
   SnapshotFile,
 } from "../../src/project/config.js";
 import { validateAssets } from "../../src/validation/assets.js";
@@ -25,7 +25,7 @@ async function fixture<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(new URL(path, fixtureRoot), "utf8")) as T;
 }
 
-function baseConfiguration(): ProjectConfigurationV1 {
+function baseConfiguration(): ProjectConfiguration {
   return {
     projectFormatVersion: 1,
     environment: "web",
@@ -36,35 +36,33 @@ function baseConfiguration(): ProjectConfigurationV1 {
     },
     commands: [
       {
-        id: "solve.v1",
+        id: "solve",
         type: "solve",
         definition: { source: "src/solve.ts", export: "solve" },
-        aggregateSchema: "player.v1",
-        payloadSchema: "payload.v1",
-        outcomeSchema: "outcome.v1",
+        aggregateSchema: "player",
+        payloadSchema: "payload",
+        outcomeSchema: "outcome",
       },
     ],
-    aggregateSchemas: [
-      { id: "player.v1", kind: "player", version: 1, path: "schemas/player.json" },
-    ],
+    aggregateSchemas: [{ id: "player", kind: "player", version: 1, path: "schemas/player.json" }],
     schemas: [
-      { id: "content.v1", path: "schemas/content.json" },
-      { id: "outcome.v1", path: "schemas/outcome.json" },
-      { id: "payload.v1", path: "schemas/payload.json" },
+      { id: "content", path: "schemas/content.json" },
+      { id: "outcome", path: "schemas/outcome.json" },
+      { id: "payload", path: "schemas/payload.json" },
     ],
     progressions: [],
     components: [
       {
-        id: "card.v1",
+        id: "card",
         implementation: { source: "src/card.ts", export: "Card" },
-        commands: ["solve.v1"],
-        content: ["puzzle.v1"],
-        assets: ["clue.v1"],
+        commands: ["solve"],
+        content: ["puzzle"],
+        assets: ["clue"],
         capabilities: [],
       },
     ],
-    content: [{ id: "puzzle.v1", path: "content/puzzle.json", schema: "content.v1" }],
-    assets: [{ id: "clue.v1", path: "assets/clue.txt", releasePath: "assets/clue.txt" }],
+    content: [{ id: "puzzle", path: "content/puzzle.json", schema: "content" }],
+    assets: [{ id: "clue", path: "assets/clue.txt", releasePath: "assets/clue.txt" }],
   };
 }
 
@@ -73,7 +71,7 @@ function jsonFile(kind: SnapshotFile["kind"], path: string, value: unknown): Sna
 }
 
 function snapshot(
-  config: ProjectConfigurationV1,
+  config: ProjectConfiguration,
   overrides: ReadonlyMap<string, SnapshotFile> = new Map(),
 ): CompilationSnapshot {
   const objectSchema = {
@@ -226,7 +224,7 @@ describe("material validation failures", () => {
     if (result.kind === "invalid") {
       expect(result.diagnostics[0]?.code).toBe("content-schema-invalid");
       expect(result.diagnostics[0]?.details).toMatchObject({
-        schema: "content.v1",
+        schema: "content",
         instancePath: "/title",
       });
     }

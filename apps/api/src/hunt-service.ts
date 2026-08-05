@@ -1,23 +1,24 @@
 import {
+  CONTRACT_VERSIONS,
   isReleaseId,
   openRelease,
   verifyRelease,
-  isSyncCommandV1,
+  isSyncCommand,
   type CanonicalJsonObject,
-  type SyncCommandResultV1,
-  type SyncCommandV1,
-  type SyncPullV1,
+  type SyncCommandResult,
+  type SyncCommand,
+  type SyncPull,
 } from "@plotpoint/protocol";
 import {
   TEAM_HUNT_SCHEMA,
   TARGET_DISCOVERY_COMMAND,
   decideTargetDiscovery,
   initialTeamHuntState,
-  parseTargetDiscoveryConfigV1,
+  parseTargetDiscoveryConfig,
   projectTeamHuntState,
   targetDiscoveryConfigReleasePath,
-  type TargetDiscoveryConfigV1,
-  type TeamHuntStateV1,
+  type TargetDiscoveryConfig,
+  type TeamHuntState,
 } from "@plotpoint/modules";
 import {
   queryOne,
@@ -54,13 +55,13 @@ interface AggregateRow {
   release_id: `sha256:${string}`;
   team_id: string;
   state_version: number;
-  state_json: TeamHuntStateV1;
-  mechanic_config_json: TargetDiscoveryConfigV1;
+  state_json: TeamHuntState;
+  mechanic_config_json: TargetDiscoveryConfig;
 }
 
 interface ReceiptRow {
   request_digest: string;
-  terminal: SyncCommandResultV1["terminal"];
+  terminal: SyncCommandResult["terminal"];
   outcome_code: string;
   resulting_state_version: number;
   decision_position: string;
@@ -70,9 +71,9 @@ function terminalResult(
   commandId: string,
   disposition: "decided" | "duplicate",
   row: ReceiptRow,
-): SyncCommandResultV1 {
+): SyncCommandResult {
   return {
-    version: 1,
+    version: CONTRACT_VERSIONS.sharedSync,
     commandId,
     disposition,
     terminal: row.terminal,
@@ -86,7 +87,7 @@ function parseCursor(cursor: string | undefined): number | null {
   if (cursor === undefined || cursor === "") return 0;
   try {
     const decoded = Buffer.from(cursor, "base64url").toString("utf8");
-    if (!/^v1:\d+$/.test(decoded) || Buffer.from(decoded).toString("base64url") !== cursor)
+    if (!/^:\d+$/.test(decoded) || Buffer.from(decoded).toString("base64url") !== cursor)
       return null;
     const value = Number(decoded.slice(3));
     return Number.isSafeInteger(value) && value >= 0 ? value : null;
@@ -96,7 +97,7 @@ function parseCursor(cursor: string | undefined): number | null {
 }
 
 function encodeCursor(position: number): string {
-  return Buffer.from(`v1:${position}`).toString("base64url");
+  return Buffer.from(`:${position}`).toString("base64url");
 }
 
 export class HuntService {
@@ -119,11 +120,9 @@ export class HuntService {
       ({ path }) => path === targetDiscoveryConfigReleasePath(),
     );
     if (configEntry === undefined) throw new HuntServiceError("target-config-missing", 422);
-    let config: TargetDiscoveryConfigV1;
+    let config: TargetDiscoveryConfig;
     try {
-      config = parseTargetDiscoveryConfigV1(
-        JSON.parse(new TextDecoder().decode(configEntry.bytes)),
-      );
+      config = parseTargetDiscoveryConfig(JSON.parse(new TextDecoder().decode(configEntry.bytes)));
     } catch {
       throw new HuntServiceError("target-config-invalid", 422);
     }
@@ -160,7 +159,7 @@ export class HuntService {
           disposition: "duplicate",
         };
       }
-      const release = await queryOne<{ mechanic_config_json: TargetDiscoveryConfigV1 }>(
+      const release = await queryOne<{ mechanic_config_json: TargetDiscoveryConfig }>(
         client,
         "SELECT mechanic_config_json FROM release_registrations WHERE release_id = $1",
         [input.releaseId],
@@ -213,7 +212,7 @@ export class HuntService {
     teamId: string;
     releaseId: string;
     disposition: "joined" | "duplicate";
-    sync: SyncPullV1;
+    sync: SyncPull;
   }> {
     if (!isSecret(input.invitation) || !isSecret(input.participantCredential))
       throw new HuntServiceError("join-not-authorized", 401);
@@ -322,9 +321,9 @@ export class HuntService {
   async submit(
     sessionId: string,
     credential: string,
-    command: SyncCommandV1,
-  ): Promise<SyncCommandResultV1> {
-    if (!isSyncCommandV1(command)) throw new HuntServiceError("command-invalid", 400);
+    command: SyncCommand,
+  ): Promise<SyncCommandResult> {
+    if (!isSyncCommand(command)) throw new HuntServiceError("command-invalid", 400);
     const digest = requestDigest(command as unknown as CanonicalJsonObject);
     return withReadCommittedTransaction(this.pool, async (client) => {
       const participant = await this.authenticate(client, sessionId, credential, "FOR SHARE");
@@ -442,11 +441,7 @@ export class HuntService {
     });
   }
 
-  async pull(
-    sessionId: string,
-    credential: string,
-    cursor: string | undefined,
-  ): Promise<SyncPullV1> {
+  async pull(sessionId: string, credential: string, cursor: string | undefined): Promise<SyncPull> {
     const requested = parseCursor(cursor);
     const client = await this.pool.connect();
     try {
@@ -476,13 +471,13 @@ export class HuntService {
          ORDER BY decision_position`,
         [participant.participant_id, after, highWater],
       );
-      const pull: SyncPullV1 = {
-        version: 1,
+      const pull: SyncPull = {
+        version: CONTRACT_VERSIONS.sharedSync,
         kind: "snapshot",
         reset,
         nextCursor: encodeCursor(highWater),
         snapshot: {
-          version: 1,
+          version: CONTRACT_VERSIONS.sharedSync,
           sessionId,
           releaseId: aggregate.release_id,
           participantId: participant.participant_id,

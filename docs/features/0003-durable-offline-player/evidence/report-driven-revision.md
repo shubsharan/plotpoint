@@ -10,7 +10,7 @@ physical device produced the signal or that the revised threshold is empirically
 
 ## Report Signal And Revision
 
-The `PlayReportV1` field fixture records an available foreground-location observation in the
+The `PlayReport` field fixture records an available foreground-location observation in the
 `degraded` accuracy band, linked to a rejected `field-check-in` command whose redacted outcome code is
 `inaccurate`. The exported event timeline contains neither coordinates nor raw horizontal accuracy.
 
@@ -39,7 +39,7 @@ One branch-free harness exercised these materially different fixtures:
 
 | Fixture              | Identity                                                                  | Release-specific difference                              |
 | -------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Field puzzle         | `sha256:521f60ab0dfeea2b53d0b347dae978f904376e5de5af7a1340bb5ef073fa2110` | Field aggregate plus Location V1 requirement             |
+| Field puzzle         | `sha256:521f60ab0dfeea2b53d0b347dae978f904376e5de5af7a1340bb5ef073fa2110` | Field aggregate plus Location requirement                |
 | Minimal local puzzle | `sha256:f0bec61511b940909617bd28a2dbdc94af3e8100f831bd905243ee6a9518d078` | Different aggregate schema and no capability requirement |
 
 For each fixture, the provider-free harness verified exact descriptor identity and artifact bytes,

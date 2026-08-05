@@ -1,19 +1,20 @@
 import {
-  isSharedHuntReportV1,
-  projectLocationObservationV1,
-  type LocationObservationV1,
-  type SharedHuntReportEventV1,
-  type SharedHuntReportV1,
+  CONTRACT_VERSIONS,
+  isSharedHuntReport,
+  projectLocationObservation,
+  type LocationObservation,
+  type SharedHuntReportEvent,
+  type SharedHuntReport,
 } from "@plotpoint/protocol";
 
 const MAXIMUM_FRESH_AGE_MS = 15_000;
 
 export interface SharedHuntReportEvidence {
-  readonly releaseId: SharedHuntReportV1["releaseId"];
-  readonly platform: SharedHuntReportV1["platform"];
+  readonly releaseId: SharedHuntReport["releaseId"];
+  readonly platform: SharedHuntReport["platform"];
   readonly startedAtMs: number;
   readonly endedAtMs: number;
-  readonly completion: SharedHuntReportV1["completion"];
+  readonly completion: SharedHuntReport["completion"];
   readonly commands: readonly {
     readonly commandId: string;
     readonly elapsedMs: number;
@@ -27,7 +28,7 @@ export interface SharedHuntReportEvidence {
       | "blocked-revoked";
     readonly resultingVersion?: number;
     readonly outcomeCode?: string;
-    readonly observations: readonly LocationObservationV1[];
+    readonly observations: readonly LocationObservation[];
   }[];
   readonly synchronization: readonly {
     readonly elapsedMs: number;
@@ -43,7 +44,7 @@ export interface SharedHuntReportEvidence {
   }[];
 }
 
-export function buildSharedHuntReport(evidence: SharedHuntReportEvidence): SharedHuntReportV1 {
+export function buildSharedHuntReport(evidence: SharedHuntReportEvidence): SharedHuntReport {
   if (
     !Number.isSafeInteger(evidence.startedAtMs) ||
     !Number.isSafeInteger(evidence.endedAtMs) ||
@@ -56,7 +57,7 @@ export function buildSharedHuntReport(evidence: SharedHuntReportEvidence): Share
       `command-${String(index + 1).padStart(3, "0")}`,
     ]),
   );
-  const events: Array<SharedHuntReportEventV1 & { readonly order: number }> = [];
+  const events: Array<SharedHuntReportEvent & { readonly order: number }> = [];
   for (const command of evidence.commands) {
     const commandAlias = aliases.get(command.commandId);
     if (commandAlias === undefined) throw new Error("shared-report-alias-missing");
@@ -73,7 +74,7 @@ export function buildSharedHuntReport(evidence: SharedHuntReportEvidence): Share
       order: 0,
     });
     for (const observation of command.observations) {
-      const projection = projectLocationObservationV1(observation, MAXIMUM_FRESH_AGE_MS);
+      const projection = projectLocationObservation(observation, MAXIMUM_FRESH_AGE_MS);
       events.push({
         kind: "location",
         elapsedMs: command.elapsedMs,
@@ -90,8 +91,8 @@ export function buildSharedHuntReport(evidence: SharedHuntReportEvidence): Share
   for (const item of evidence.synchronization)
     events.push({ kind: "synchronization", ...item, order: 2 });
   events.sort((left, right) => left.elapsedMs - right.elapsedMs || left.order - right.order);
-  const report: SharedHuntReportV1 = {
-    version: 1,
+  const report: SharedHuntReport = {
+    version: CONTRACT_VERSIONS.sharedReport,
     releaseId: evidence.releaseId,
     sessionAlias: "session",
     selfAlias: "self",
@@ -100,7 +101,7 @@ export function buildSharedHuntReport(evidence: SharedHuntReportEvidence): Share
     completion: evidence.completion,
     events: events.map(({ order: _order, ...event }) => event),
   };
-  if (!isSharedHuntReportV1(report)) throw new Error("shared-report-contract-invalid");
+  if (!isSharedHuntReport(report)) throw new Error("shared-report-contract-invalid");
   const serialized = JSON.stringify(report);
   for (const forbidden of [
     "latitude",
@@ -136,16 +137,16 @@ export interface SharedReportDatabase {
 export async function createSharedHuntReport(
   database: SharedReportDatabase,
   sessionId: string,
-  platform: SharedHuntReportV1["platform"],
-): Promise<SharedHuntReportV1> {
+  platform: SharedHuntReport["platform"],
+): Promise<SharedHuntReport> {
   const db = database.raw();
-  const session = await db.getFirstAsync<{ release_id: SharedHuntReportV1["releaseId"] }>(
+  const session = await db.getFirstAsync<{ release_id: SharedHuntReport["releaseId"] }>(
     "SELECT release_id FROM shared_sessions WHERE session_id=?",
     sessionId,
   );
   if (session === null) throw new Error("shared-report-session-missing");
   const projection = await db.getFirstAsync<{ value_json: string }>(
-    "SELECT value_json FROM shared_projections WHERE session_id=? AND schema_id='plotpoint.hunt.team-state.v1'",
+    "SELECT value_json FROM shared_projections WHERE session_id=? AND schema_id='plotpoint.hunt.team-state'",
     sessionId,
   );
   if (projection === null) throw new Error("shared-report-projection-missing");
@@ -172,11 +173,11 @@ export async function createSharedHuntReport(
     "SELECT * FROM shared_results WHERE session_id=? ORDER BY decision_position,command_id",
     sessionId,
   );
-  const observationsFor = async (idsJson: string): Promise<LocationObservationV1[]> => {
+  const observationsFor = async (idsJson: string): Promise<LocationObservation[]> => {
     const ids: unknown = JSON.parse(idsJson);
     if (!Array.isArray(ids) || !ids.every((id) => typeof id === "string"))
       throw new Error("shared-report-observation-links-invalid");
-    const observations: LocationObservationV1[] = [];
+    const observations: LocationObservation[] = [];
     for (const id of ids) {
       const row = await db.getFirstAsync<{
         observation_id: string;
@@ -191,7 +192,7 @@ export async function createSharedHuntReport(
       }>("SELECT * FROM observations WHERE observation_id=? ORDER BY recorded_at DESC LIMIT 1", id);
       if (row === null) throw new Error("shared-report-observation-missing");
       const base = {
-        version: 1 as const,
+        version: CONTRACT_VERSIONS.capabilityObservation,
         observationId: row.observation_id,
         recordedAt: row.recorded_at,
       };

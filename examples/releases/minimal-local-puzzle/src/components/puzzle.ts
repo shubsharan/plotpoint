@@ -7,7 +7,7 @@ export interface PuzzleCardContent {
 
 export function PuzzleCard(content: PuzzleCardContent): HTMLElement {
   const card = document.createElement("article");
-  card.dataset.component = "minimal.puzzle-card.v1";
+  card.dataset.component = "minimal.puzzle-card";
 
   const title = document.createElement("h1");
   title.textContent = content.title;

@@ -6,7 +6,7 @@ export interface SceneSummary {
 
 export function SceneNavigator(scenes: readonly SceneSummary[]): HTMLElement {
   const navigation = document.createElement("nav");
-  navigation.dataset.component = "tour.scene-navigator.v1";
+  navigation.dataset.component = "tour.scene-navigator";
   for (const scene of scenes) {
     const button = document.createElement("button");
     button.dataset.sceneId = scene.id;

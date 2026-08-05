@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "minimal.puzzle-content.v1",
+  "$id": "minimal.puzzle-content",
   "type": "object",
   "additionalProperties": false,
   "required": ["answerLabel", "clue", "clueAsset", "prompt", "title"],
@@ -14,7 +14,7 @@
       "minLength": 1
     },
     "clueAsset": {
-      "const": "minimal.clue-image.v1"
+      "const": "minimal.clue-image"
     },
     "prompt": {
       "type": "string",

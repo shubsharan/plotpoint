@@ -7,7 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
 
-import { openRelease, type ReleaseManifestV1 } from "@plotpoint/protocol";
+import { openRelease, type ReleaseManifest } from "@plotpoint/protocol";
 
 import { routeHostBridgeMessage } from "./src/bridge/host-bridge";
 import { installReleaseFromDescriptor } from "./src/install/install-release";
@@ -67,7 +67,7 @@ async function readArtifactBytes(uri: string): Promise<Uint8Array> {
 
 function describeRequirements(
   releaseIdentity: string,
-  manifest: ReleaseManifestV1,
+  manifest: ReleaseManifest,
   publication: string,
 ): ReleaseDetails {
   return {
