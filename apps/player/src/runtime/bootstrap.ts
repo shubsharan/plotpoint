@@ -18,7 +18,7 @@ export function buildRuntimeBootstrap(input: RuntimeBootstrapInput): string {
 const pending = new Map(); let sequence = 0;
 const send = (type, payload) => new Promise((resolve, reject) => {
   const requestId = 'web-' + (++sequence); pending.set(requestId, { resolve, reject });
-  window.ReactNativeWebView.postMessage(JSON.stringify({ version: 1, requestId, type, payload }));
+  window.ReactNativeWebView.postMessage(JSON.stringify({ version: ${CONTRACT_VERSIONS.hostBridge}, requestId, type, payload }));
 });
 window.__plotpointReceive = (message) => {
   const parsed = typeof message === 'string' ? JSON.parse(message) : message;
@@ -41,3 +41,4 @@ window.__plotpointReceive = (message) => {
 export function allowRuntimeNavigation(url: string): boolean {
   return url === "about:blank" || url.startsWith("blob:");
 }
+import { CONTRACT_VERSIONS } from "@plotpoint/protocol";

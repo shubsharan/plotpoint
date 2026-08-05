@@ -95,7 +95,7 @@ rules.
 
 - One release-pinned session, one embedded team identity, and one team aggregate.
 - One-use invitations, idempotent join, terminal operator revocation, and native credential custody.
-- Generic Host API 1.1 shared commands/views and an internal complete-snapshot Sync V1 contract.
+- Generic Shared Play Host API commands/views and an internal complete-snapshot Sync contract.
 - One trusted target-discovery server mechanic using persisted foreground-location observations.
 - No WebSockets, deltas, participant projection stores, delivery workers, generic effects, accounts,
   device attestation, or release-authored server execution.

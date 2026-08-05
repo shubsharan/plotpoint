@@ -1,3 +1,5 @@
+import { CONTRACT_VERSIONS } from "../contract-versions.js";
+
 import { encodeCanonicalJson } from "./canonical-json.js";
 import { isSha256Digest } from "./identity.js";
 import { compareOrdinal, isCanonicalArchivePath } from "./paths.js";
@@ -6,11 +8,11 @@ import type {
   CanonicalJsonObject,
   ReleaseDiagnostic,
   ReleaseEntryKind,
-  ReleaseManifestV1,
+  ReleaseManifest,
 } from "./types.js";
 
 export type ManifestValidationResult =
-  | { readonly kind: "valid"; readonly manifest: ReleaseManifestV1 }
+  | { readonly kind: "valid"; readonly manifest: ReleaseManifest }
   | { readonly kind: "invalid"; readonly diagnostics: readonly ReleaseDiagnostic[] };
 
 const AGGREGATE_KINDS: ReadonlySet<string> = new Set(["player", "team", "session"]);
@@ -88,7 +90,7 @@ export function validateReleaseManifest(value: unknown): ManifestValidationResul
   if (!isObject(value) || !hasExactFields(value, ROOT_FIELDS)) {
     return invalid("invalid-root-shape", "");
   }
-  if (value.releaseFormatVersion !== 1)
+  if (value.releaseFormatVersion !== CONTRACT_VERSIONS.releaseFormat)
     return invalid("unsupported-release-format", "/releaseFormatVersion");
   if (!validateHostApi(value.hostApi)) return invalid("invalid-host-api", "/hostApi");
   if (!Array.isArray(value.aggregateSchemas)) return invalid("invalid-array", "/aggregateSchemas");
@@ -218,5 +220,5 @@ export function validateReleaseManifest(value: unknown): ManifestValidationResul
 
   const encoded = encodeCanonicalJson(value);
   if (encoded.kind === "invalid") return invalid("manifest-not-canonicalizable", "");
-  return { kind: "valid", manifest: encoded.document.value as unknown as ReleaseManifestV1 };
+  return { kind: "valid", manifest: encoded.document.value as unknown as ReleaseManifest };
 }

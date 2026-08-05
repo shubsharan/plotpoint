@@ -2,12 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   decideTargetDiscovery,
   initialTeamHuntState,
-  parseTargetDiscoveryConfigV1,
+  parseTargetDiscoveryConfig,
   targetDiscoveryConfigReleasePath,
 } from "../src/index.js";
 
-const config = parseTargetDiscoveryConfigV1({
-  version: 1,
+const config = parseTargetDiscoveryConfig({
   targets: [
     {
       targetId: "alpha",
@@ -48,7 +47,7 @@ const available = (overrides: Record<string, unknown> = {}) => ({
 describe("trusted target discovery", () => {
   it("addresses the compiler-emitted configuration by stable content identity", () => {
     expect(targetDiscoveryConfigReleasePath()).toBe(
-      "content/706c6f74706f696e742e68756e742e746172676574732e7631.json",
+      "content/706c6f74706f696e742e68756e742e74617267657473.json",
     );
   });
   it("accepts an in-zone observation and makes a duplicate a no-op", () => {

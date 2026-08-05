@@ -7,7 +7,7 @@ import type {
 } from "@plotpoint/compiler";
 
 // @ts-expect-error compiler deep imports are not a supported package surface
-import type { ProjectConfigurationV1 as DeepProjectConfiguration } from "@plotpoint/compiler/project/config";
+import type { ProjectConfiguration as DeepProjectConfiguration } from "@plotpoint/compiler/project/config";
 
 type DeepImportMustRemainUnavailable = DeepProjectConfiguration;
 void (undefined as unknown as DeepImportMustRemainUnavailable);

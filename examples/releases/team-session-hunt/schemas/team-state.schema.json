@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "hunt.team-state.v1",
+  "$id": "hunt.team-state",
   "type": "object",
   "additionalProperties": false,
   "required": ["score", "solvedClues"],

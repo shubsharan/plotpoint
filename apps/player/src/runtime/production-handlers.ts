@@ -1,8 +1,4 @@
-import type {
-  RuntimeBootstrapV1,
-  TransitionCandidateV1,
-  TransitionResultV1,
-} from "@plotpoint/protocol";
+import type { RuntimeBootstrap, TransitionCandidate, TransitionResult } from "@plotpoint/protocol";
 
 import { createCapabilityDispatcher, type HostBridgeHandlers } from "../bridge/host-bridge";
 import {
@@ -13,7 +9,7 @@ import type { CandidateTransition } from "../model";
 import { commitCandidateTransition, type TransitionStore } from "../persistence/commit-transition";
 import { transitionResultFromDurable } from "./transition-result";
 
-function durableCandidate(candidate: TransitionCandidateV1): CandidateTransition {
+function durableCandidate(candidate: TransitionCandidate): CandidateTransition {
   const base = {
     commandId: candidate.commandId,
     aggregateId: candidate.target.aggregateId,
@@ -39,7 +35,7 @@ function durableCandidate(candidate: TransitionCandidateV1): CandidateTransition
 }
 
 export interface ProductionRuntimeContext {
-  readonly bootstrap: RuntimeBootstrapV1;
+  readonly bootstrap: RuntimeBootstrap;
   readonly aggregateSchemaId: string;
   readonly aggregateSchemaVersion: number;
   validateAggregate(value: object): boolean;
@@ -56,7 +52,7 @@ export function createProductionHostBridgeHandlers(input: {
   ]);
   return {
     runtimeReady: async () => input.runtime.bootstrap,
-    commitTransition: async ({ candidate }): Promise<TransitionResultV1> => {
+    commitTransition: async ({ candidate }): Promise<TransitionResult> => {
       if (
         candidate.target.schemaId !== input.runtime.aggregateSchemaId ||
         candidate.target.schemaVersion !== input.runtime.aggregateSchemaVersion

@@ -1,8 +1,8 @@
-import type { LocationObservationV1, SharedProjectionV1 } from "@plotpoint/protocol";
+import type { LocationObservation, SharedProjection } from "@plotpoint/protocol";
 
-export const TARGET_DISCOVERY_COMMAND = "plotpoint.hunt.target-discovery.v1" as const;
-export const TEAM_HUNT_SCHEMA = "plotpoint.hunt.team-state.v1" as const;
-export const TARGET_DISCOVERY_CONFIG_CONTENT_ID = "plotpoint.hunt.targets.v1" as const;
+export const TARGET_DISCOVERY_COMMAND = "plotpoint.hunt.target-discovery" as const;
+export const TEAM_HUNT_SCHEMA = "plotpoint.hunt.team-state" as const;
+export const TARGET_DISCOVERY_CONFIG_CONTENT_ID = "plotpoint.hunt.targets" as const;
 
 export function targetDiscoveryConfigReleasePath(): string {
   const encoded = Array.from(new TextEncoder().encode(TARGET_DISCOVERY_CONFIG_CONTENT_ID), (byte) =>
@@ -11,7 +11,7 @@ export function targetDiscoveryConfigReleasePath(): string {
   return `content/${encoded}.json`;
 }
 
-export interface HuntTargetConfigV1 {
+export interface HuntTargetConfig {
   readonly targetId: string;
   readonly prompt: string;
   readonly zone: string;
@@ -22,12 +22,11 @@ export interface HuntTargetConfigV1 {
   readonly maximumAccuracyMeters: number;
 }
 
-export interface TargetDiscoveryConfigV1 {
-  readonly version: 1;
-  readonly targets: readonly HuntTargetConfigV1[];
+export interface TargetDiscoveryConfig {
+  readonly targets: readonly HuntTargetConfig[];
 }
 
-export interface TeamHuntStateV1 {
+export interface TeamHuntState {
   readonly targets: readonly {
     readonly targetId: string;
     readonly status: "available" | "discovered";
@@ -40,29 +39,28 @@ export type TargetDiscoveryDecision =
   | {
       readonly terminal: "accepted";
       readonly outcomeCode: "target-discovered";
-      readonly state: TeamHuntStateV1;
+      readonly state: TeamHuntState;
     }
   | {
       readonly terminal: "no-op";
       readonly outcomeCode: "target-already-discovered";
-      readonly state: TeamHuntStateV1;
+      readonly state: TeamHuntState;
     }
-  | { readonly terminal: "rejected"; readonly outcomeCode: string; readonly state: TeamHuntStateV1 }
-  | { readonly terminal: "invalid"; readonly outcomeCode: string; readonly state: TeamHuntStateV1 };
+  | { readonly terminal: "rejected"; readonly outcomeCode: string; readonly state: TeamHuntState }
+  | { readonly terminal: "invalid"; readonly outcomeCode: string; readonly state: TeamHuntState };
 
 function finite(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-export function parseTargetDiscoveryConfigV1(value: unknown): TargetDiscoveryConfigV1 {
+export function parseTargetDiscoveryConfig(value: unknown): TargetDiscoveryConfig {
   if (value === null || typeof value !== "object" || Array.isArray(value))
     throw new Error("target-config-invalid");
   const candidate = value as Record<string, unknown>;
   if (
-    candidate.version !== 1 ||
     !Array.isArray(candidate.targets) ||
     candidate.targets.length === 0 ||
-    Object.keys(candidate).some((key) => key !== "version" && key !== "targets")
+    Object.keys(candidate).some((key) => key !== "targets")
   )
     throw new Error("target-config-invalid");
   const identities = new Set<string>();
@@ -104,15 +102,15 @@ export function parseTargetDiscoveryConfigV1(value: unknown): TargetDiscoveryCon
       )
         throw new Error("target-config-invalid");
       identities.add(target.targetId);
-      return Object.freeze(target as unknown as HuntTargetConfigV1);
+      return Object.freeze(target as unknown as HuntTargetConfig);
     })
     .sort((left, right) =>
       left.targetId < right.targetId ? -1 : left.targetId > right.targetId ? 1 : 0,
     );
-  return Object.freeze({ version: 1, targets: Object.freeze(targets) });
+  return Object.freeze({ targets: Object.freeze(targets) });
 }
 
-export function initialTeamHuntState(config: TargetDiscoveryConfigV1): TeamHuntStateV1 {
+export function initialTeamHuntState(config: TargetDiscoveryConfig): TeamHuntState {
   return Object.freeze({
     targets: Object.freeze(
       config.targets.map(({ targetId }) =>
@@ -140,10 +138,10 @@ function distanceMeters(
 }
 
 export function decideTargetDiscovery(input: {
-  readonly config: TargetDiscoveryConfigV1;
-  readonly state: TeamHuntStateV1;
+  readonly config: TargetDiscoveryConfig;
+  readonly state: TeamHuntState;
   readonly targetId: string;
-  readonly observation: LocationObservationV1 | undefined;
+  readonly observation: LocationObservation | undefined;
 }): TargetDiscoveryDecision {
   const target = input.config.targets.find(({ targetId }) => targetId === input.targetId);
   const stateTarget = input.state.targets.find(({ targetId }) => targetId === input.targetId);
@@ -190,8 +188,8 @@ export function decideTargetDiscovery(input: {
 export function projectTeamHuntState(
   teamId: string,
   stateVersion: number,
-  state: TeamHuntStateV1,
-): SharedProjectionV1 {
+  state: TeamHuntState,
+): SharedProjection {
   return {
     aggregateKind: "team",
     aggregateId: teamId,

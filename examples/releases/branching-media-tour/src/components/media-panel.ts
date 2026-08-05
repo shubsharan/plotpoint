@@ -6,7 +6,7 @@ export interface MediaSummary {
 
 export function MediaPanel(media: MediaSummary): HTMLElement {
   const panel = document.createElement("figure");
-  panel.dataset.component = "tour.media-panel.v1";
+  panel.dataset.component = "tour.media-panel";
   panel.dataset.assetId = media.assetId;
   const caption = document.createElement("figcaption");
   caption.textContent = `${media.title}: ${media.caption}`;

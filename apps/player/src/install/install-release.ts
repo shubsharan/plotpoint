@@ -6,8 +6,8 @@ import {
   parseInstallDescriptor,
   verifyRelease,
   type HostReleaseSupport,
-  type InstallDescriptorV1,
-  type ReleaseManifestV1,
+  type InstallDescriptor,
+  type ReleaseManifest,
 } from "@plotpoint/protocol";
 
 export interface FetchedJson {
@@ -27,21 +27,21 @@ export interface InstallTransport {
 
 export interface InstallationPublisher {
   publish(input: {
-    readonly descriptor: InstallDescriptorV1;
+    readonly descriptor: InstallDescriptor;
     readonly bytes: Uint8Array;
-    readonly manifest: ReleaseManifestV1;
+    readonly manifest: ReleaseManifest;
   }): Promise<void>;
 }
 
 export type InstallReleaseResult =
-  | { readonly kind: "installed"; readonly descriptor: InstallDescriptorV1 }
+  | { readonly kind: "installed"; readonly descriptor: InstallDescriptor }
   | { readonly kind: "invalid"; readonly code: string };
 
 export async function installReleaseFromDescriptor(input: {
   readonly descriptorUrl: string;
   readonly transport: InstallTransport;
   readonly publisher: InstallationPublisher;
-  readonly support: HostReleaseSupport | ((manifest: ReleaseManifestV1) => HostReleaseSupport);
+  readonly support: HostReleaseSupport | ((manifest: ReleaseManifest) => HostReleaseSupport);
 }): Promise<InstallReleaseResult> {
   if (!isEligibleInstallUrl(input.descriptorUrl)) {
     return { kind: "invalid", code: "install-descriptor-url-ineligible" };

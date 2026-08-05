@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   assessCompatibility,
   type HostReleaseSupport,
-  type ReleaseManifestV1,
+  type ReleaseManifest,
 } from "@plotpoint/protocol";
 
-function manifest(): ReleaseManifestV1 {
+function manifest(): ReleaseManifest {
   return {
     releaseFormatVersion: 1,
     hostApi: { major: 2, minimumMinor: 3 },

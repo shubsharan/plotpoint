@@ -28,7 +28,7 @@ const command: Command<Payload, "player"> = {
   payload: {},
 };
 const definition = defineCommand<"player", State, Payload, Outcome>({
-  definitionId: "observe.v1",
+  definitionId: "observe",
   commandType: "observe",
   aggregateKind: "player",
   handle(_target, _input, context) {

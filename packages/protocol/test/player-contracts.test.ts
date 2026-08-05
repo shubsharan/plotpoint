@@ -3,17 +3,17 @@ import { describe, expect, it } from "vitest";
 import {
   accuracyBand,
   isEligibleInstallUrl,
-  isLocationObservationV1,
-  isLocationReportProjectionV1,
-  isLocationRequestInputV1,
-  isPlayReportV1,
-  LOCATION_REPORT_PROJECTION_VALIDATOR_V1,
+  isLocationObservation,
+  isLocationReportProjection,
+  isLocationRequestInput,
+  isPlayReport,
+  LOCATION_REPORT_PROJECTION_VALIDATOR,
   parseHostBridgeEnvelope,
   parseInstallDescriptor,
-  projectLocationObservationV1,
+  projectLocationObservation,
   recencyBand,
-  type CapabilityRequestEnvelopeV1,
-  type CapabilityResultEnvelopeV1,
+  type CapabilityRequestEnvelope,
+  type CapabilityResultEnvelope,
 } from "../src/index.js";
 
 const releaseId = `sha256:${"a".repeat(64)}`;
@@ -228,10 +228,10 @@ describe("host bridge", () => {
     ).toEqual({ kind: "invalid", code: "bridge-direction-invalid" });
   });
 
-  it("keeps capability dispatch generic, closed, and versioned", () => {
+  it("keeps capability dispatch generic, closed, and compatibility-checked", () => {
     type GeocodeInput = { readonly query: string };
     type GeocodeOutput = { readonly matchCount: number };
-    const request: CapabilityRequestEnvelopeV1<GeocodeInput> = {
+    const request: CapabilityRequestEnvelope<GeocodeInput> = {
       version: 1,
       requestId: "capability-request",
       type: "capability.request",
@@ -240,7 +240,7 @@ describe("host bridge", () => {
         input: { query: "checkpoint" },
       },
     };
-    const result: CapabilityResultEnvelopeV1<GeocodeOutput> = {
+    const result: CapabilityResultEnvelope<GeocodeOutput> = {
       version: 1,
       requestId: request.requestId,
       type: "capability.result",
@@ -310,7 +310,7 @@ describe("report policy", () => {
   });
 });
 
-describe("PlayReportV1", () => {
+describe("PlayReport", () => {
   const report = {
     version: 1,
     releaseId,
@@ -357,14 +357,14 @@ describe("PlayReportV1", () => {
   } as const;
 
   it("accepts one non-decreasing ordered timeline with exact event fields", () => {
-    expect(isPlayReportV1(report, [LOCATION_REPORT_PROJECTION_VALIDATOR_V1])).toBe(true);
-    expect(isPlayReportV1(report)).toBe(false);
+    expect(isPlayReport(report, [LOCATION_REPORT_PROJECTION_VALIDATOR])).toBe(true);
+    expect(isPlayReport(report)).toBe(false);
 
     const withEqualTie = {
       ...report,
       events: report.events.map((event) => ({ ...event, elapsedMs: 200 })),
     };
-    expect(isPlayReportV1(withEqualTie, [LOCATION_REPORT_PROJECTION_VALIDATOR_V1])).toBe(true);
+    expect(isPlayReport(withEqualTie, [LOCATION_REPORT_PROJECTION_VALIDATOR])).toBe(true);
   });
 
   it("rejects decreasing, excessive, negative, and non-integer relative times", () => {
@@ -375,7 +375,7 @@ describe("PlayReportV1", () => {
       { ...report, events: [{ ...report.events[0], elapsedMs: 1.5 }] },
       { ...report, durationMs: -1 },
     ]) {
-      expect(isPlayReportV1(invalid, [LOCATION_REPORT_PROJECTION_VALIDATOR_V1])).toBe(false);
+      expect(isPlayReport(invalid, [LOCATION_REPORT_PROJECTION_VALIDATOR])).toBe(false);
     }
   });
 
@@ -390,14 +390,14 @@ describe("PlayReportV1", () => {
       { ...command, outcomeCode: "raw provider detail!" },
     ]) {
       expect(
-        isPlayReportV1({ ...report, events: [invalid] }, [LOCATION_REPORT_PROJECTION_VALIDATOR_V1]),
+        isPlayReport({ ...report, events: [invalid] }, [LOCATION_REPORT_PROJECTION_VALIDATOR]),
       ).toBe(false);
     }
   });
 
   it("validates the location-owned projection and excludes forbidden sensor values", () => {
     const projection = report.events[1].projection;
-    expect(isLocationReportProjectionV1(projection)).toBe(true);
+    expect(isLocationReportProjection(projection)).toBe(true);
     for (const forbidden of [
       { ...projection, latitude: 37.7 },
       { ...projection, longitude: -122.4 },
@@ -405,14 +405,14 @@ describe("PlayReportV1", () => {
       { ...projection, horizontalAccuracy: 8 },
       { ...projection, diagnosticCode: "raw-provider-detail" },
     ]) {
-      expect(isLocationReportProjectionV1(forbidden)).toBe(false);
+      expect(isLocationReportProjection(forbidden)).toBe(false);
       expect(
-        isPlayReportV1(
+        isPlayReport(
           {
             ...report,
             events: [{ ...report.events[1], projection: forbidden }],
           },
-          [LOCATION_REPORT_PROJECTION_VALIDATOR_V1],
+          [LOCATION_REPORT_PROJECTION_VALIDATOR],
         ),
       ).toBe(false);
     }
@@ -435,7 +435,7 @@ describe("PlayReportV1", () => {
       },
     ];
     for (const invalid of forbiddenReports) {
-      expect(isPlayReportV1(invalid, [LOCATION_REPORT_PROJECTION_VALIDATOR_V1])).toBe(false);
+      expect(isPlayReport(invalid, [LOCATION_REPORT_PROJECTION_VALIDATOR])).toBe(false);
     }
   });
 });
@@ -457,8 +457,8 @@ describe("foreground location capability", () => {
   } as const;
 
   it("accepts only the exact empty request and closed terminal outputs", () => {
-    expect(isLocationRequestInputV1({})).toBe(true);
-    expect(isLocationRequestInputV1({ continuous: true })).toBe(false);
+    expect(isLocationRequestInput({})).toBe(true);
+    expect(isLocationRequestInput({ continuous: true })).toBe(false);
 
     for (const observation of [
       available,
@@ -466,18 +466,18 @@ describe("foreground location capability", () => {
       { ...base, availability: "unavailable" },
       { ...base, availability: "failed", diagnosticCode: "location-provider-failed" },
     ]) {
-      expect(isLocationObservationV1(observation)).toBe(true);
+      expect(isLocationObservation(observation)).toBe(true);
     }
-    expect(isLocationObservationV1({ ...available, speed: 4 })).toBe(false);
+    expect(isLocationObservation({ ...available, speed: 4 })).toBe(false);
     expect(
-      isLocationObservationV1({
+      isLocationObservation({
         ...base,
         availability: "unavailable",
         latitude: 0,
       }),
     ).toBe(false);
     expect(
-      isLocationObservationV1({
+      isLocationObservation({
         ...base,
         availability: "failed",
         diagnosticCode: "raw provider detail!",
@@ -486,8 +486,8 @@ describe("foreground location capability", () => {
   });
 
   it("validates signed age, geographic range, and horizontal accuracy", () => {
-    expect(isLocationObservationV1({ ...available, ageMs: -500 })).toBe(true);
-    expect(isLocationObservationV1({ ...available, ageMs: Number.MAX_SAFE_INTEGER })).toBe(true);
+    expect(isLocationObservation({ ...available, ageMs: -500 })).toBe(true);
+    expect(isLocationObservation({ ...available, ageMs: Number.MAX_SAFE_INTEGER })).toBe(true);
     for (const invalid of [
       { ...available, ageMs: Number.MAX_SAFE_INTEGER + 1 },
       { ...available, ageMs: 1.5 },
@@ -498,7 +498,7 @@ describe("foreground location capability", () => {
       { ...available, horizontalAccuracy: -0.01 },
       { ...available, horizontalAccuracy: Number.POSITIVE_INFINITY },
     ]) {
-      expect(isLocationObservationV1(invalid)).toBe(false);
+      expect(isLocationObservation(invalid)).toBe(false);
     }
   });
 
@@ -506,13 +506,13 @@ describe("foreground location capability", () => {
     expect(recencyBand(-1, 15_000)).toBe("future");
     expect(recencyBand(15_000, 15_000)).toBe("fresh");
     expect(recencyBand(15_001, 15_000)).toBe("stale");
-    expect(projectLocationObservationV1(available, 15_000)).toEqual({
+    expect(projectLocationObservation(available, 15_000)).toEqual({
       availability: "available",
       recencyBand: "fresh",
       accuracyBand: "excellent",
     });
     expect(
-      projectLocationObservationV1(
+      projectLocationObservation(
         { ...base, availability: "failed", diagnosticCode: "location-provider-failed" },
         15_000,
       ),
@@ -521,7 +521,7 @@ describe("foreground location capability", () => {
       recencyBand: "unknown",
       accuracyBand: "unknown",
     });
-    expect(JSON.stringify(projectLocationObservationV1(available, 15_000))).not.toMatch(
+    expect(JSON.stringify(projectLocationObservation(available, 15_000))).not.toMatch(
       /latitude|longitude|capturedAt|recordedAt|ageMs|horizontalAccuracy|diagnosticCode/,
     );
   });

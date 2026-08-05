@@ -9,7 +9,7 @@ export const teamRouteProgression = defineProgression<
   SolveClueOutcome
 >({
   aggregateKind: "team",
-  graphId: "hunt.team-route.v1",
+  graphId: "hunt.team-route",
   graphVersion: 1,
   nodes: [
     { nodeId: "search", initialStatus: "active" },

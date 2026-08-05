@@ -14,7 +14,7 @@ The strict data-only root document for one game project.
 | Field                  | Type                                | Rules                                                          |
 | ---------------------- | ----------------------------------- | -------------------------------------------------------------- |
 | `projectFormatVersion` | positive integer                    | Exactly `1` for Gate 2                                         |
-| `environment`          | enum                                | Exactly `web` for v1                                           |
+| `environment`          | enum                                | Exactly `web` for                                              |
 | `hostApi`              | Host API requirement                | Exact major and non-negative minimum minor                     |
 | `entries`              | Entry selection                     | Exactly one logic and one presentation source/export           |
 | `commands`             | Command registration array          | Canonical unique IDs; ordinalized before use                   |
@@ -154,7 +154,7 @@ inventory, avoiding self-reference.
 Compiler-generated schema, progression, component, and content entry basenames are lowercase
 hexadecimal encodings of UTF-8 logical IDs. Logical IDs remain unchanged in durable metadata.
 
-## Release Manifest V1
+## Release Manifest
 
 | Field                  | Type                           | Rules                                       |
 | ---------------------- | ------------------------------ | ------------------------------------------- |
@@ -170,13 +170,13 @@ metadata, project identity, label, channel, or timestamp.
 
 ## Release Artifact
 
-The finalized strict v1 ZIP-compatible byte sequence.
+The finalized strict ZIP-compatible byte sequence.
 
-| Field       | Type                | Rules                                               |
-| ----------- | ------------------- | --------------------------------------------------- |
-| `bytes`     | immutable bytes     | Canonical store-only container                      |
-| `manifest`  | Release Manifest V1 | Parsed from canonical `manifest.json`               |
-| `releaseId` | qualified digest    | SHA-256 over every artifact byte; external to bytes |
+| Field       | Type             | Rules                                               |
+| ----------- | ---------------- | --------------------------------------------------- |
+| `bytes`     | immutable bytes  | Canonical store-only container                      |
+| `manifest`  | Release Manifest | Parsed from canonical `manifest.json`               |
+| `releaseId` | qualified digest | SHA-256 over every artifact byte; external to bytes |
 
 ## Release Construction Input
 

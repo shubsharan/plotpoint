@@ -1,32 +1,32 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  createSharedPlayClientV1,
-  isSharedCommandIntentV1,
-  isSharedPlayViewV1,
-  isSyncCommandV1,
-  isSyncPullV1,
-  type SharedCommandIntentV1,
-  type SharedPlayViewV1,
+  createSharedPlayClient,
+  isSharedCommandIntent,
+  isSharedPlayView,
+  isSyncCommand,
+  isSyncPull,
+  type SharedCommandIntent,
+  type SharedPlayView,
 } from "../src/index.js";
 
 const target = {
   aggregateKind: "team",
   aggregateId: "team-1",
-  schemaId: "example.shared-state.v1",
+  schemaId: "example.shared-state",
   schemaVersion: 1,
 } as const;
 
-const intent: SharedCommandIntentV1 = {
+const intent: SharedCommandIntent = {
   commandId: "command-1",
   target,
   expectedStateVersion: 0,
-  type: "example.vote.cast.v1",
+  type: "example.vote.cast",
   payload: { optionId: "north" },
   observationIds: [],
 };
 
-const view: SharedPlayViewV1 = {
+const view: SharedPlayView = {
   sessionId: "session-1",
   releaseId: `sha256:${"a".repeat(64)}`,
   transport: "online",
@@ -39,22 +39,22 @@ const view: SharedPlayViewV1 = {
 
 describe("generic shared play contracts", () => {
   it("accepts unrelated command and projection schemas without mechanic branches", () => {
-    expect(isSharedCommandIntentV1(intent)).toBe(true);
+    expect(isSharedCommandIntent(intent)).toBe(true);
     expect(
-      isSharedCommandIntentV1({
+      isSharedCommandIntent({
         ...intent,
-        type: "example.inventory.claim.v1",
+        type: "example.inventory.claim",
         payload: { itemId: "map" },
       }),
     ).toBe(true);
-    expect(isSharedPlayViewV1(view)).toBe(true);
+    expect(isSharedPlayView(view)).toBe(true);
     expect(JSON.stringify(view)).not.toContain("hunt");
     expect(JSON.stringify(view)).not.toContain("targetId");
   });
 
   it("rejects unknown fields and replacement observation values", () => {
-    expect(isSharedCommandIntentV1({ ...intent, hunt: {} })).toBe(false);
-    expect(isSharedCommandIntentV1({ ...intent, observations: [{ latitude: 1 }] })).toBe(false);
+    expect(isSharedCommandIntent({ ...intent, hunt: {} })).toBe(false);
+    expect(isSharedCommandIntent({ ...intent, observations: [{ latitude: 1 }] })).toBe(false);
   });
 
   it("preserves every terminal through snapshot recovery", () => {
@@ -68,7 +68,7 @@ describe("generic shared play contracts", () => {
       decisionPosition: String(index + 1),
     }));
     expect(
-      isSyncPullV1({
+      isSyncPull({
         version: 1,
         kind: "snapshot",
         reset: false,
@@ -88,9 +88,9 @@ describe("generic shared play contracts", () => {
     ).toBe(true);
   });
 
-  it("requires host-resolved Location V1 observations on the service wire", () => {
+  it("requires host-resolved Location  observations on the service wire", () => {
     expect(
-      isSyncCommandV1({
+      isSyncCommand({
         version: 1,
         commandId: intent.commandId,
         target: intent.target,
@@ -120,7 +120,7 @@ describe("generic shared play contracts", () => {
       disposition: "queued",
       terminal: "pending",
     });
-    const client = createSharedPlayClientV1({ send, subscribe: () => () => undefined });
+    const client = createSharedPlayClient({ send, subscribe: () => () => undefined });
     await expect(client.getView()).resolves.toEqual(view);
     await expect(client.enqueueCommand(intent)).resolves.toMatchObject({ terminal: "pending" });
   });

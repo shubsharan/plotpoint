@@ -1,3 +1,5 @@
+import { CONTRACT_VERSIONS } from "../contract-versions.js";
+
 export type Sha256Digest = `sha256:${string}`;
 export type ReleaseId = Sha256Digest;
 
@@ -38,8 +40,8 @@ export interface ReleaseInventoryEntry {
   readonly digest: Sha256Digest;
 }
 
-export interface ReleaseManifestV1 {
-  readonly releaseFormatVersion: 1;
+export interface ReleaseManifest {
+  readonly releaseFormatVersion: typeof CONTRACT_VERSIONS.releaseFormat;
   readonly hostApi: HostApiRequirement;
   readonly aggregateSchemas: readonly AggregateSchemaRequirement[];
   readonly capabilities: readonly CapabilityRequirement[];
@@ -74,13 +76,13 @@ export interface ReleaseConstructionInput {
   readonly hostApi: HostApiRequirement;
   readonly aggregateSchemas: readonly AggregateSchemaRequirement[];
   readonly capabilities: readonly CapabilityRequirement[];
-  readonly entrypoints: ReleaseManifestV1["entrypoints"];
+  readonly entrypoints: ReleaseManifest["entrypoints"];
   readonly entries: readonly ReleaseMaterialEntry[];
 }
 
 export interface ReleaseArtifact {
   readonly bytes: Uint8Array;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
   readonly releaseId: ReleaseId;
 }
 
@@ -110,13 +112,13 @@ export interface ReleaseDiagnostic {
 export interface InspectedRelease {
   readonly kind: "inspected";
   readonly releaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
 }
 
 export interface OpenedRelease {
   readonly kind: "opened";
   readonly releaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
   readonly entries: readonly ReleaseEntry[];
 }
 
@@ -129,7 +131,7 @@ export interface StructurallyVerifiedRelease {
   readonly kind: "verified";
   readonly trust: "structurally-valid";
   readonly releaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
   readonly expectedReleaseId?: never;
 }
 
@@ -138,7 +140,7 @@ export interface KnownReleaseMatch {
   readonly trust: "known-release-match";
   readonly releaseId: ReleaseId;
   readonly expectedReleaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
 }
 
 export type VerifiedRelease = StructurallyVerifiedRelease | KnownReleaseMatch;

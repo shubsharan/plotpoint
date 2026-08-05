@@ -1,10 +1,10 @@
 import {
   FOREGROUND_LOCATION_CAPABILITY,
-  createHostRuntimeClientV1,
-  isLocationObservationV1,
-  type HostBridgeTransportV1,
-  type RuntimeBootstrapV1,
-  type TransitionResultV1,
+  createHostRuntimeClient,
+  isLocationObservation,
+  type HostBridgeTransport,
+  type RuntimeBootstrap,
+  type TransitionResult,
 } from "@plotpoint/protocol/player";
 
 import type { AdvancePayload, FieldState } from "./commands/advance.js";
@@ -14,15 +14,15 @@ import type { FieldLogic } from "./logic.js";
 interface MountInput {
   readonly root: HTMLElement;
   readonly logic: FieldLogic;
-  readonly host: HostBridgeTransportV1;
-  readonly bootstrap: RuntimeBootstrapV1;
+  readonly host: HostBridgeTransport;
+  readonly bootstrap: RuntimeBootstrap;
 }
 
 export interface FieldPuzzleSessionSnapshot {
   readonly state: FieldState;
   readonly stateVersion: number;
   readonly message: string;
-  readonly lastDisposition?: TransitionResultV1["disposition"];
+  readonly lastDisposition?: TransitionResult["disposition"];
 }
 
 export interface FieldPuzzleSession {
@@ -33,15 +33,15 @@ export interface FieldPuzzleSession {
 
 interface CreateFieldPuzzleSessionInput {
   readonly logic: FieldLogic;
-  readonly host: HostBridgeTransportV1;
-  readonly bootstrap: RuntimeBootstrapV1;
+  readonly host: HostBridgeTransport;
+  readonly bootstrap: RuntimeBootstrap;
   readonly createCommandId?: () => string;
   readonly onChange?: (snapshot: FieldPuzzleSessionSnapshot) => void;
 }
 
 export function FieldPuzzle(): HTMLElement {
   const element = document.createElement("section");
-  element.dataset.component = "field.puzzle.v1";
+  element.dataset.component = "field.puzzle";
   return element;
 }
 
@@ -80,11 +80,11 @@ export function createFieldPuzzleSession(input: CreateFieldPuzzleSessionInput): 
   if (restoredState !== undefined && !isFieldState(restoredState)) {
     throw new Error("field-bootstrap-state-invalid");
   }
-  const client = createHostRuntimeClientV1(input.host);
+  const client = createHostRuntimeClient(input.host);
   let state = restoredState ?? input.logic.initialState;
   let stateVersion = input.bootstrap.aggregate?.stateVersion ?? 0;
   let message = "Find the first marker to begin.";
-  let lastDisposition: TransitionResultV1["disposition"] | undefined;
+  let lastDisposition: TransitionResult["disposition"] | undefined;
 
   const snapshot = (): FieldPuzzleSessionSnapshot => ({
     state,
@@ -138,7 +138,7 @@ export function createFieldPuzzleSession(input: CreateFieldPuzzleSessionInput): 
       const observation = await client.requestCapability(
         FOREGROUND_LOCATION_CAPABILITY,
         {},
-        isLocationObservationV1,
+        isLocationObservation,
       );
       await commit({ action: "check-in" }, observation);
     } catch (error) {
@@ -190,6 +190,6 @@ async function mount({ root, logic, host, bootstrap }: MountInput): Promise<void
 }
 
 export const presentation = Object.freeze({
-  components: Object.freeze({ "field.puzzle.v1": FieldPuzzle }),
+  components: Object.freeze({ "field.puzzle": FieldPuzzle }),
   mount,
 });

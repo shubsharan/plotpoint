@@ -4,13 +4,13 @@ export {
   TEAM_HUNT_SCHEMA,
   decideTargetDiscovery,
   initialTeamHuntState,
-  parseTargetDiscoveryConfigV1,
+  parseTargetDiscoveryConfig,
   projectTeamHuntState,
   targetDiscoveryConfigReleasePath,
 } from "./hunt/target-discovery.js";
 export type {
-  HuntTargetConfigV1,
-  TargetDiscoveryConfigV1,
+  HuntTargetConfig,
+  TargetDiscoveryConfig,
   TargetDiscoveryDecision,
-  TeamHuntStateV1,
+  TeamHuntState,
 } from "./hunt/target-discovery.js";

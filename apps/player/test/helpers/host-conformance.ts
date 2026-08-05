@@ -4,21 +4,21 @@ import {
   type CanonicalJsonObject,
   type CapabilityRequirement,
   type KnownReleaseMatch,
-  type RuntimeBootstrapV1,
-  type RuntimeReadyEnvelopeV1,
-  type TransitionCandidateV1,
-  type TransitionCommitEnvelopeV1,
-  type TransitionResultV1,
+  type RuntimeBootstrap,
+  type RuntimeReadyEnvelope,
+  type TransitionCandidate,
+  type TransitionCommitEnvelope,
+  type TransitionResult,
 } from "@plotpoint/protocol";
 
 export interface HostConformanceFixture {
   readonly name: string;
   readonly release: KnownReleaseMatch;
   readonly artifactBytes: Uint8Array;
-  readonly bootstrap: RuntimeBootstrapV1;
-  readonly readyRequest: RuntimeReadyEnvelopeV1;
-  readonly transitionRequest: TransitionCommitEnvelopeV1;
-  readonly transitionResult: TransitionResultV1;
+  readonly bootstrap: RuntimeBootstrap;
+  readonly readyRequest: RuntimeReadyEnvelope;
+  readonly transitionRequest: TransitionCommitEnvelope;
+  readonly transitionResult: TransitionResult;
 }
 
 export const lifecycleFixtures = Object.freeze([
@@ -138,7 +138,7 @@ async function createFixture(input: ReleaseFixtureInput): Promise<HostConformanc
           nextState: input.nextState,
           outcome: input.outcome,
           progressionChanges: input.progressionChanges,
-        } satisfies TransitionCandidateV1),
+        } satisfies TransitionCandidate),
       }),
     }),
     transitionResult: Object.freeze({
@@ -155,7 +155,7 @@ export async function createHostConformanceFixtures(): Promise<readonly HostConf
   return Promise.all([
     createFixture({
       name: "field-puzzle",
-      schemaId: "field.player-state.v1",
+      schemaId: "field.player-state",
       aggregateId: "field-player",
       capabilities: [{ id: "plotpoint.location.foreground", major: 1, minimumMinor: 0 }],
       initialState: { attempts: 0, phase: "first-checkpoint" },
@@ -165,7 +165,7 @@ export async function createHostConformanceFixtures(): Promise<readonly HostConf
     }),
     createFixture({
       name: "minimal-local-puzzle",
-      schemaId: "minimal.player-state.v1",
+      schemaId: "minimal.player-state",
       aggregateId: "minimal-player",
       capabilities: [],
       initialState: { attempts: 0, solved: false },

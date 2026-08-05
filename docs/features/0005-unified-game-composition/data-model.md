@@ -1,16 +1,17 @@
 # Data Model: Unified Game Composition
 
-Serialized, persisted, and cross-process shapes in this feature use version 1. Repository-owned runtime
-TypeScript types remain unversioned. Because Plotpoint is pre-release, corrected V1 shapes replace the
-discarded shapes directly; no compatibility readers or migrations are part of the model.
+Serialized, persisted, and cross-process shapes in this feature use plain semantic names.
+Compatibility numbers remain centralized metadata only where a serialized boundary must select a
+parser. Because Plotpoint is pre-release, corrected shapes replace the discarded shapes directly; no
+compatibility readers or migrations are part of the model.
 
 ## Authored and Compiled Game
 
-### Project Configuration V1
+### Project Configuration
 
 The strict data-only authoring document contains:
 
-- `projectFormatVersion: 1`, web environment, and Host API 1.0 or 1.1 requirement;
+- centrally registered project-format metadata, web environment, and Host API compatibility requirement;
 - one application registration;
 - local/player and optional server/team-or-session aggregate models;
 - commands, optional local progression, components, schemas, content, and assets; and
@@ -39,7 +40,7 @@ that content must declare the exact initialization schema. Without content, the 
 canonical `{}`, which must validate against the initialization schema. This closes the prior path where
 a typed initializer could receive schema-less content.
 
-### Game Composition V1
+### Game Composition
 
 The compiler-owned catalog is the immutable runtime description of one playable release:
 
@@ -54,7 +55,7 @@ The compiler-owned catalog is the immutable runtime description of one playable 
 | `resources`       | Logical ID/role to exact inventoried path bindings                |
 | `trustedMechanic` | Optional closed platform-mechanic binding                         |
 
-The catalog is mandatory at `composition/game.v1.json`. Release Manifest V1 remains the authority for
+The catalog is mandatory at `composition/game.json`. Release Manifest remains the authority for
 Host API compatibility, release-wide capabilities, digests, and byte lengths. The catalog does not copy
 Host API or a top-level capability list. Compilation derives the capability union from component and
 mechanic selections and requires exact semantic equality with the manifest.
@@ -63,8 +64,8 @@ Generated bundle roots have fixed exports: `application`, the `components` map, 
 `aggregateModels` map. Logical IDs are map keys, so model/component descriptors do not carry fictional
 per-item export names. Server executable code is never present in release roots.
 
-The composition-aware inspector always returns a valid Game Composition V1 or fails. Only the generic
-Release Format V1 inspector can describe arbitrary artifacts. A missing catalog is not a historical
+The composition-aware inspector always returns a valid Game Composition or fails. Only the generic
+Release Format inspector can describe arbitrary artifacts. A missing catalog is not a historical
 success case for a playable release.
 
 ## Runtime Model
@@ -148,8 +149,8 @@ Games whose state already expresses all needed phases omit progression instead o
 
 ### Game Application
 
-`GameApplicationV1` has one `mount`/`unmount` lifecycle. Its context contains only the root element and
-generated component factories. Runtime Bootstrap V1 is consumed by the generated runtime adapter and
+`GameApplication` has one `mount`/`unmount` lifecycle. Its context contains only the root element and
+generated component factories. Runtime Bootstrap is consumed by the generated runtime adapter and
 is never passed through to application code.
 
 A player-owned mount scope registers component cleanup at resource acquisition. It performs reverse
@@ -163,7 +164,7 @@ Each component receives:
 | Context field  | Scope                                                                       |
 | -------------- | --------------------------------------------------------------------------- |
 | `local`        | Pure committed view reads/subscriptions and declared local command invokers |
-| `shared`       | Optional validated Shared Play V1 view and declared trusted commands        |
+| `shared`       | Optional validated Shared Play view and declared trusted commands           |
 | `content`      | Declared content only                                                       |
 | `assets`       | Declared assets only                                                        |
 | `capabilities` | Declared capability clients only                                            |
@@ -172,11 +173,11 @@ Each component receives:
 Only `ComponentContext.local` exposes aggregate reads and subscriptions. The application has no raw
 bootstrap field, and no candidate state becomes visible before the host transition transaction commits.
 
-### Runtime Bootstrap and Local Transition V1
+### Runtime Bootstrap and Local Transition
 
-Host Bridge Envelope V1 retains `runtime.ready`, `runtime.bootstrap`, `transition.commit`, and
-`transition.result`. Runtime Bootstrap V1 carries the run/release identity and current local aggregate
-view to the generated adapter. Local Transition V1 carries one runtime-recorded terminal to the host.
+Host Bridge Envelope retains `runtime.ready`, `runtime.bootstrap`, `transition.commit`, and
+`transition.result`. Runtime Bootstrap carries the run/release identity and current local aggregate
+view to the generated adapter. Local Transition carries one runtime-recorded terminal to the host.
 
 Transition candidates use `expectedStateVersion`; committed/duplicate results use
 `resultingStateVersion`. The host validates composition, schema, canonicality, observation ownership,
@@ -200,10 +201,10 @@ boundary results are explicit:
   diagnostic;
 - authorization returns a fully formed runtime command with transformed observations, or an explicit
   rejected/invalid terminal; and
-- projection returns one complete validated `SharedProjectionV1`, or an explicit failure.
+- projection returns one complete validated `SharedProjection`, or an explicit failure.
 
-The adapter preserves Sync V1 state-version fields directly. Trusted semantic outcomes are exactly
-`{ code }`; accepted/no-op/rejected codes copy losslessly to Sync V1, while recorded execution invalidity
+The adapter preserves Sync state-version fields directly. Trusted semantic outcomes are exactly
+`{ code }`; accepted/no-op/rejected codes copy losslessly to Sync, while recorded execution invalidity
 uses its deterministic primary diagnostic. No `revision` translation, partial projection, or undefined
 placeholder result exists.
 
@@ -260,8 +261,8 @@ recovery.
 
 ### Authorized Snapshot and Reconciliation
 
-Authorized Snapshot V1 is the complete current participant view: immutable identities, membership,
-confirmed time, and unique validated projections. Sync Pull V1 adds unique exact command results and
+Authorized Snapshot is the complete current participant view: immutable identities, membership,
+confirmed time, and unique validated projections. Sync Pull adds unique exact command results and
 next cursor.
 
 One exclusive transaction validates identities and schemas, compares or inserts immutable terminals,
@@ -270,7 +271,7 @@ requeues interrupted rows, updates status/cursor/time, and commits once. Reapply
 corrective, or revoked pull is byte-equivalent. A changed repeated terminal or missing both terminal and
 outbox provenance fails without exposing candidate changes.
 
-## Game Play Report V1
+## Game Play Report
 
 One host-owned report covers local and optional shared evidence for a run. It contains release,
 platform, committed duration, optional membership status, and generic lifecycle, command, capability,
@@ -294,11 +295,11 @@ excluded. There are no readers for superseded local or game-specific report shap
 ## Relationship Summary
 
 ```text
-Project Configuration V1 -> compiler -> Game Composition V1 -> Release Format V1
-Generated runtime adapter -> Executable Aggregate Model -> Local Transition V1
-Game Application -> generated Components -> scoped Host API V1 contexts
+Project Configuration -> compiler -> Game Composition -> Release Format
+Generated runtime adapter -> Executable Aggregate Model -> Local Transition
+Game Application -> generated Components -> scoped Host API contexts
 Trusted Mechanic Binding -> platform Adapter -> server Executable Aggregate Model
 Pending Join -> exact retry -> immutable Shared Session Binding
 Shared Actions -> finite Sync Pass -> atomic Snapshot Reconciliation
-Run + optional Shared Session -> one Game Play Report V1
+Run + optional Shared Session -> one Game Play Report
 ```

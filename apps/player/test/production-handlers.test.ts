@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   FOREGROUND_LOCATION_CAPABILITY,
   type CanonicalJsonObject,
-  type RuntimeBootstrapV1,
-  type TransitionCandidateV1,
+  type RuntimeBootstrap,
+  type TransitionCandidate,
 } from "@plotpoint/protocol";
 
 import { routeHostBridgeMessage } from "../src/bridge/host-bridge";
@@ -24,10 +24,10 @@ const releaseId = `sha256:${"a".repeat(64)}` as const;
 const target = {
   aggregateId: "field-player",
   aggregateKind: "player" as const,
-  schemaId: "field.player-state.v1",
+  schemaId: "field.player-state",
   schemaVersion: 1,
 };
-const bootstrap: RuntimeBootstrapV1 = {
+const bootstrap: RuntimeBootstrap = {
   runId,
   releaseId,
   aggregate: null,
@@ -100,7 +100,7 @@ class MemoryObservationStore implements ForegroundLocationPersistence {
   }
 }
 
-function request(candidate: TransitionCandidateV1): string {
+function request(candidate: TransitionCandidate): string {
   return JSON.stringify({
     version: 1,
     requestId: `${candidate.commandId}-request`,
@@ -111,8 +111,8 @@ function request(candidate: TransitionCandidateV1): string {
 
 function candidate(
   commandId: string,
-  terminal: TransitionCandidateV1["terminal"],
-): TransitionCandidateV1 {
+  terminal: TransitionCandidate["terminal"],
+): TransitionCandidate {
   const base = {
     commandId,
     target,

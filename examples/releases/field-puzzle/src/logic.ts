@@ -1,4 +1,4 @@
-import type { AggregateTargetV1, TransitionCandidateV1 } from "@plotpoint/protocol/player";
+import type { AggregateTarget, TransitionCandidate } from "@plotpoint/protocol/player";
 import { executeCommand, type JsonObject, type Observation } from "@plotpoint/runtime";
 
 import { advanceCommand, type AdvancePayload, type FieldState } from "./commands/advance.js";
@@ -8,12 +8,12 @@ const initialState: FieldState = Object.freeze({ attempts: 0, phase: "first-chec
 const target = Object.freeze({
   aggregateId: "field-player",
   aggregateKind: "player",
-  schemaId: "field.player-state.v1",
+  schemaId: "field.player-state",
   schemaVersion: 1,
-}) satisfies AggregateTargetV1;
+}) satisfies AggregateTarget;
 
 export type FieldLogicRunResult =
-  | { readonly kind: "candidate"; readonly candidate: TransitionCandidateV1 }
+  | { readonly kind: "candidate"; readonly candidate: TransitionCandidate }
   | { readonly kind: "preflight-invalid"; readonly diagnosticCodes: readonly string[] };
 
 export interface FieldLogic {

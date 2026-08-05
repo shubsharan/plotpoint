@@ -7,13 +7,13 @@ import { validateContent } from "../../src/validation/content.js";
 import { validateSchemas } from "../../src/validation/schemas.js";
 import type {
   CompilationSnapshot,
-  ProjectConfigurationV1,
+  ProjectConfiguration,
   SnapshotFile,
 } from "../../src/project/config.js";
 
 const encoder = new TextEncoder();
 
-function configuration(): ProjectConfigurationV1 {
+function configuration(): ProjectConfiguration {
   return {
     projectFormatVersion: 1,
     environment: "web",

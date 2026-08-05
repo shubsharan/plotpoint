@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   FOREGROUND_LOCATION_CAPABILITY,
   type CanonicalJsonObject,
-  type HostBridgeTransportV1,
-  type RuntimeBootstrapV1,
+  type HostBridgeTransport,
+  type RuntimeBootstrap,
 } from "@plotpoint/protocol";
 
 import { fieldGame } from "../../../examples/releases/field-puzzle/src/config";
@@ -49,7 +49,7 @@ class ScriptedObservationStore implements ForegroundLocationPersistence {
   }
 }
 
-function transportFor(handlers: HostBridgeHandlers): HostBridgeTransportV1 {
+function transportFor(handlers: HostBridgeHandlers): HostBridgeTransport {
   let sequence = 0;
   return {
     async send(type, payload) {
@@ -199,13 +199,13 @@ describe("disconnected trusted-host route", () => {
 
     let state: CanonicalJsonObject = { attempts: 0, phase: "first-checkpoint" };
     let stateVersion = 0;
-    const bootstrap: RuntimeBootstrapV1 = {
+    const bootstrap: RuntimeBootstrap = {
       runId,
       releaseId,
       aggregate: {
         aggregateId: "field-player",
         aggregateKind: "player",
-        schemaId: "field.player-state.v1",
+        schemaId: "field.player-state",
         schemaVersion: 1,
         stateVersion,
         state,
@@ -270,19 +270,19 @@ describe("disconnected trusted-host route", () => {
   });
 
   it("keeps state unchanged for rejected terminals and surfaces host errors", async () => {
-    const bootstrap: RuntimeBootstrapV1 = {
+    const bootstrap: RuntimeBootstrap = {
       runId,
       releaseId,
       aggregate: {
         aggregateId: "field-player",
         aggregateKind: "player",
-        schemaId: "field.player-state.v1",
+        schemaId: "field.player-state",
         schemaVersion: 1,
         stateVersion: 0,
         state: { attempts: 0, phase: "first-checkpoint" },
       },
     };
-    const rejectedHost: HostBridgeTransportV1 = {
+    const rejectedHost: HostBridgeTransport = {
       async send(type, payload) {
         if (type === "capability.request") {
           return {

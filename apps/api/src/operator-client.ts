@@ -36,7 +36,7 @@ export class HuntOperatorClient {
   }
 
   async registerRelease(bytes: Uint8Array, expectedReleaseId: string): Promise<unknown> {
-    const response = await this.fetcher(`${this.origin}/v1/releases`, {
+    const response = await this.fetcher(`${this.origin}/releases`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${this.options.token}`,
@@ -63,23 +63,27 @@ export class HuntOperatorClient {
     readonly releaseId: string;
     readonly teamLabel: string;
   }): Promise<unknown> {
-    return this.request("/v1/hunt-sessions", { version: 1, ...input });
+    return this.request("/hunt-sessions", {
+      version: CONTRACT_VERSIONS.sharedApi,
+      ...input,
+    });
   }
 
   createInvitation(
     sessionId: string,
     input: { readonly invitationId: string; readonly expiresAt: string },
   ): Promise<unknown> {
-    return this.request(`/v1/hunt-sessions/${encodeURIComponent(sessionId)}/invitations`, {
-      version: 1,
+    return this.request(`/hunt-sessions/${encodeURIComponent(sessionId)}/invitations`, {
+      version: CONTRACT_VERSIONS.sharedApi,
       ...input,
     });
   }
 
   revoke(sessionId: string, participantId: string, operationId: string): Promise<unknown> {
     return this.request(
-      `/v1/hunt-sessions/${encodeURIComponent(sessionId)}/participants/${encodeURIComponent(participantId)}/revoke`,
-      { version: 1, operationId },
+      `/hunt-sessions/${encodeURIComponent(sessionId)}/participants/${encodeURIComponent(participantId)}/revoke`,
+      { version: CONTRACT_VERSIONS.sharedApi, operationId },
     );
   }
 }
+import { CONTRACT_VERSIONS } from "@plotpoint/protocol";

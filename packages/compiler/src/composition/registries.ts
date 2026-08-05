@@ -6,7 +6,7 @@ import type {
   CommandRegistration,
   ComponentRegistration,
   ContentRegistration,
-  ProjectConfigurationV1,
+  ProjectConfiguration,
   ProgressionRegistration,
   SchemaRegistration,
   SourceExport,
@@ -91,7 +91,7 @@ function canonicalRegistry<T extends { readonly id: string }>(
 }
 
 export function buildCanonicalRegistries(
-  config: ProjectConfigurationV1,
+  config: ProjectConfiguration,
 ): BuildCanonicalRegistriesResult {
   const commands = canonicalRegistry("commands", config.commands, copyCommand);
   const aggregateSchemas = canonicalRegistry(

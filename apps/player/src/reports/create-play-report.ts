@@ -1,12 +1,13 @@
 import {
+  CONTRACT_VERSIONS,
   FOREGROUND_LOCATION_CAPABILITY,
-  LOCATION_REPORT_PROJECTION_VALIDATOR_V1,
+  LOCATION_REPORT_PROJECTION_VALIDATOR,
   accuracyBand,
-  isPlayReportV1,
+  isPlayReport,
   recencyBand,
   type CanonicalJsonObject,
-  type PlayReportEventV1,
-  type PlayReportV1,
+  type PlayReportEvent,
+  type PlayReport,
 } from "@plotpoint/protocol";
 
 import type { DurableTransitionResult, RunEventRecord } from "../model";
@@ -15,9 +16,9 @@ const STABLE_CODE = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const LOCATION_REPORT_MAXIMUM_FRESH_AGE_MS = 15_000;
 
 export interface PlayReportEvidence {
-  readonly releaseId: PlayReportV1["releaseId"];
+  readonly releaseId: PlayReport["releaseId"];
   readonly runId: string;
-  readonly platform: PlayReportV1["platform"];
+  readonly platform: PlayReport["platform"];
   readonly startedAtMs: number;
   readonly endedAtMs: number;
   readonly commands: readonly {
@@ -102,7 +103,7 @@ function validateCoherence(evidence: PlayReportEvidence): void {
   }
 }
 
-export function buildPlayReport(evidence: PlayReportEvidence): PlayReportV1 {
+export function buildPlayReport(evidence: PlayReportEvidence): PlayReport {
   if (
     !Number.isSafeInteger(evidence.startedAtMs) ||
     !Number.isSafeInteger(evidence.endedAtMs) ||
@@ -112,7 +113,7 @@ export function buildPlayReport(evidence: PlayReportEvidence): PlayReportV1 {
   }
   validateCoherence(evidence);
 
-  const events: Array<PlayReportEventV1 & { readonly order: number }> = [];
+  const events: Array<PlayReportEvent & { readonly order: number }> = [];
   for (const { result, elapsedMs } of evidence.commands) {
     const journal = evidence.journals.find(({ commandId }) => commandId === result.commandId);
     events.push({
@@ -155,14 +156,14 @@ export function buildPlayReport(evidence: PlayReportEvidence): PlayReportV1 {
   }
   events.sort((left, right) => left.elapsedMs - right.elapsedMs || left.order - right.order);
   const report = {
-    version: 1,
+    version: CONTRACT_VERSIONS.playReport,
     releaseId: evidence.releaseId,
     runId: evidence.runId,
     platform: evidence.platform,
     durationMs: evidence.endedAtMs - evidence.startedAtMs,
     events: events.map(({ order: _order, ...event }) => event),
-  } satisfies PlayReportV1;
-  if (!isPlayReportV1(report, [LOCATION_REPORT_PROJECTION_VALIDATOR_V1])) {
+  } satisfies PlayReport;
+  if (!isPlayReport(report, [LOCATION_REPORT_PROJECTION_VALIDATOR])) {
     throw new Error("report-contract-invalid");
   }
   const serialized = JSON.stringify(report);
@@ -193,11 +194,11 @@ export interface PlayReportDatabase {
 export async function createPlayReport(
   database: PlayReportDatabase,
   runId: string,
-  platform: PlayReportV1["platform"],
-): Promise<PlayReportV1> {
+  platform: PlayReport["platform"],
+): Promise<PlayReport> {
   const raw = database.raw();
   const run = await raw.getFirstAsync<{
-    release_id: PlayReportV1["releaseId"];
+    release_id: PlayReport["releaseId"];
     started_at: string;
   }>("SELECT release_id, started_at FROM runs WHERE run_id = ?", runId);
   if (run === null) throw new Error("report-run-missing");

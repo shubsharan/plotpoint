@@ -1,13 +1,13 @@
-# Contract: Trusted Mechanic V1
+# Contract: Trusted Mechanic
 
-Trusted Mechanic V1 is the closed boundary by which a verified release selects platform-owned
+Trusted Mechanic is the closed boundary by which a verified release selects platform-owned
 authoritative behavior. It is not a plugin API and never causes the server to import or execute release
 bundle code.
 
 ## Release Binding
 
 ```ts
-interface TrustedMechanicBindingV1 {
+interface TrustedMechanicBinding {
   readonly id: string;
   readonly version: number;
   readonly aggregateModel: string;
@@ -18,15 +18,15 @@ interface TrustedMechanicBindingV1 {
 }
 ```
 
-Game Composition V1 contains zero or one binding. It alone selects one data-only server model and its
+Game Composition contains zero or one binding. It alone selects one data-only server model and its
 trusted command contracts; those descriptors do not repeat mechanic identity. Configuration references
 schema-validated content. Projection schema and capabilities resolve through the composition and
-Release Manifest V1 inventory before mechanic lookup.
+Release Manifest inventory before mechanic lookup.
 
 ## Closed Adapter Contract
 
 ```ts
-interface MechanicDiagnosticV1 {
+interface MechanicDiagnostic {
   readonly code:
     | "invalid-binding"
     | "invalid-configuration"
@@ -37,17 +37,17 @@ interface MechanicDiagnosticV1 {
   readonly logicalIds: readonly string[];
 }
 
-interface ValidatedMechanicBindingV1 {
-  readonly binding: TrustedMechanicBindingV1;
+interface ValidatedMechanicBinding {
+  readonly binding: TrustedMechanicBinding;
   readonly configuration: JsonObject;
   readonly initializationInput: JsonObject;
 }
 
-type MechanicBindingValidationV1 =
-  | { readonly kind: "valid"; readonly value: ValidatedMechanicBindingV1 }
-  | { readonly kind: "invalid"; readonly diagnostic: MechanicDiagnosticV1 };
+type MechanicBindingValidation =
+  | { readonly kind: "valid"; readonly value: ValidatedMechanicBinding }
+  | { readonly kind: "invalid"; readonly diagnostic: MechanicDiagnostic };
 
-type MechanicAuthorizationV1<Kind extends "team" | "session"> =
+type MechanicAuthorization<Kind extends "team" | "session"> =
   | {
       readonly kind: "authorized";
       readonly command: RuntimeCommand<JsonObject, Kind>;
@@ -55,44 +55,44 @@ type MechanicAuthorizationV1<Kind extends "team" | "session"> =
     }
   | {
       readonly kind: "rejected";
-      readonly outcome: TrustedOutcomeV1;
+      readonly outcome: TrustedOutcome;
     }
   | {
       readonly kind: "invalid";
       readonly diagnostics: readonly Diagnostic[];
     };
 
-type MechanicProjectionV1 =
-  | { readonly kind: "projected"; readonly projection: SharedProjectionV1 }
-  | { readonly kind: "invalid"; readonly diagnostic: MechanicDiagnosticV1 };
+type MechanicProjection =
+  | { readonly kind: "projected"; readonly projection: SharedProjection }
+  | { readonly kind: "invalid"; readonly diagnostic: MechanicDiagnostic };
 
-interface TrustedMechanicAdapterV1<Kind extends "team" | "session"> {
+interface TrustedMechanicAdapter<Kind extends "team" | "session"> {
   readonly id: string;
   readonly version: number;
   readonly model: ExecutableAggregateModel<Kind>;
   readonly configurationSchema: RuntimeSchema<JsonObject>;
   readonly projectionSchema: RuntimeSchema<JsonObject>;
   validateBinding(input: {
-    readonly binding: TrustedMechanicBindingV1;
-    readonly composition: GameCompositionV1;
+    readonly binding: TrustedMechanicBinding;
+    readonly composition: GameComposition;
     readonly configuration: unknown;
-  }): MechanicBindingValidationV1;
+  }): MechanicBindingValidation;
   authorize(input: {
-    readonly participant: AuthorizedParticipantV1;
-    readonly command: SyncCommandV1;
-    readonly observations: readonly PersistedObservationV1[];
-  }): MechanicAuthorizationV1<Kind>;
+    readonly participant: AuthorizedParticipant;
+    readonly command: SyncCommand;
+    readonly observations: readonly PersistedObservation[];
+  }): MechanicAuthorization<Kind>;
   project(input: {
-    readonly participant: AuthorizedParticipantV1;
+    readonly participant: AuthorizedParticipant;
     readonly aggregate: Aggregate<JsonObject, Kind>;
-  }): MechanicProjectionV1;
+  }): MechanicProjection;
 }
 ```
 
 Every adapter operation has a closed result. Binding validation returns the validated canonical
 configuration and exact initializer input together, or one safe diagnostic. Authorization returns a
 fully formed runtime command plus transformed explicit observations, or an explicit rejected/invalid
-terminal. Projection returns one complete `SharedProjectionV1` or an explicit failure. There are no
+terminal. Projection returns one complete `SharedProjection` or an explicit failure. There are no
 placeholder `ValidatedMechanicConfiguration`, `AuthorizedModelCommand`, `MechanicDecision`, or
 partially described aggregate types at this boundary.
 
@@ -113,11 +113,11 @@ state and never enters an implicit mechanic input bag.
 
 ## State-Version and Outcome Mapping
 
-The adapter preserves Sync V1 names and values directly:
+The adapter preserves Sync names and values directly:
 
 ```text
-SyncCommandV1.expectedStateVersion -> RuntimeCommand.expectedStateVersion
-Aggregate.stateVersion             -> SyncCommandResultV1.resultingStateVersion
+SyncCommand.expectedStateVersion -> RuntimeCommand.expectedStateVersion
+Aggregate.stateVersion             -> SyncCommandResult.resultingStateVersion
 ```
 
 There is no revision field or translation layer. Domain-aware stale acceptance remains adapter policy,
@@ -127,30 +127,30 @@ observation facts.
 Every trusted-command outcome schema is the exact closed shape:
 
 ```ts
-interface TrustedOutcomeV1 {
+interface TrustedOutcome {
   readonly code: StableCode;
 }
 ```
 
 `StableCode` matches `^[a-z][a-z0-9-]{0,63}$` and is enumerated by the command's schema. Accepted,
 no-op, and rejected runtime records copy `outcome.code` unchanged to
-`SyncCommandResultV1.outcomeCode`. Recorded execution invalidity uses the executor's deterministic
+`SyncCommandResult.outcomeCode`. Recorded execution invalidity uses the executor's deterministic
 primary diagnostic; the full diagnostic list remains in the authoritative record. Additional outcome
 fields are rejected at release registration rather than truncated.
 
 ## Projection
 
-`project` constructs the complete participant-authorized `SharedProjectionV1`, including its projection
+`project` constructs the complete participant-authorized `SharedProjection`, including its projection
 identity, schema ID/version, and payload. The adapter validates the payload through the exact
 release-matched projection schema before returning `kind: "projected"`. The service does not stamp or
 repair a partial projection after the adapter returns. The player independently checks the same schema
 identity/version, manifest digest, and payload before persistence or component exposure.
 
-## Target Discovery V1
+## Target Discovery
 
 The first closed registry entry is `plotpoint.location.target-discovery` version `1`. It requires one
-platform-owned team model, command `plotpoint.location.target-discovery.v1`, target configuration conforming
-to `plotpoint.location.target-config.v1`, Foreground Location Capability V1, and a complete authorized team
+platform-owned team model, command `plotpoint.location.target-discovery`, target configuration conforming
+to `plotpoint.location.target-config`, Foreground Location Capability, and a complete authorized team
 projection schema.
 
 The adapter resolves persisted foreground observations, validates configured zone, age, and horizontal
@@ -160,8 +160,8 @@ reports. Trusted-client evidence remains distinct from device attestation.
 
 ## Registration and Failure
 
-Release registration verifies immutable bytes, Release Format V1, Host API compatibility, mandatory
-Game Composition V1, inventory relationships, the exact adapter identity/version, all digest-bound
+Release registration verifies immutable bytes, Release Format, Host API compatibility, mandatory
+Game Composition, inventory relationships, the exact adapter identity/version, all digest-bound
 model/command/config/projection contracts, the trusted outcome shape, and canonical configuration. It
 stores the release ID, validated descriptors, and safe initialization configuration, then discards
 release bytes. It never imports executable release roots.

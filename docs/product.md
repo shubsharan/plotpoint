@@ -2,8 +2,8 @@
 
 ## Technical Product and Architecture Direction
 
-**Status:** Active architecture direction  
-**Audience:** Product and engineering  
+**Status:** Active architecture direction
+**Audience:** Product and engineering
 **Scope:** Runtime execution, releases, player host, platform services, and code boundaries
 
 ---
@@ -61,7 +61,7 @@ Immutable release artifact
   │
   ├─────────────────────────────┐
   ▼                             ▼
-Player                         Platform services
+Playe latform services
   ├─ native host                ├─ release registry
   ├─ local database             ├─ sessions and players
   ├─ capability adapters        ├─ authoritative command handling
@@ -288,7 +288,7 @@ The WebView is disposable. Accepted durable progress must survive a WebView relo
 
 ### 6.3 Bridge
 
-The bridge is a versioned protocol for serializable requests, responses, and events.
+The bridge is a compatibility-checked protocol for serializable requests, responses, and events.
 
 It should expose coarse-grained operations such as:
 
@@ -460,7 +460,7 @@ The exact module manifest shape should emerge from implementing several mechanic
 
 ## 12. Codebase Boundaries
 
-Package names and folder structures are not platform contracts. The repository should begin with the fewest boundaries that correspond to genuinely different execution environments or versioned interfaces.
+Package names and folder structures are not platform contracts. The repository should begin with the fewest boundaries that correspond to genuinely different execution environments or serialized interfaces.
 
 A reasonable initial monorepo is:
 
@@ -562,7 +562,7 @@ These are open design decisions, not hidden assumptions.
 3. Game logic and UI execute in the web runtime; durable storage and device capabilities belong to the native host.
 4. Durable gameplay state changes only through typed commands.
 5. Deterministic game logic performs no ambient I/O.
-6. Player, team, and session state are separate versioned aggregates.
+6. Player, team, and session state are separate revisioned aggregates.
 7. A command normally mutates one aggregate.
 8. Unauthorized clients never receive server-only state.
 9. Effects execute after a committed transition.

@@ -1,21 +1,22 @@
 import {
-  isSharedCommandIntentV1,
+  CONTRACT_VERSIONS,
+  isSharedCommandIntent,
   type CanonicalJsonObject,
-  type SharedCommandIntentV1,
-  type SharedCommandStatusV1,
-  type SharedPlayViewV1,
+  type SharedCommandIntent,
+  type SharedCommandStatus,
+  type SharedPlayView,
 } from "@plotpoint/protocol";
 
 interface SharedRequest {
-  readonly version: 1;
+  readonly version: typeof CONTRACT_VERSIONS.hostBridge;
   readonly requestId: string;
   readonly type: "shared.view.get" | "shared.command.enqueue";
   readonly payload: CanonicalJsonObject;
 }
 
 export interface SharedBridgeHandlers {
-  getView(): Promise<SharedPlayViewV1>;
-  enqueue(command: SharedCommandIntentV1): Promise<SharedCommandStatusV1>;
+  getView(): Promise<SharedPlayView>;
+  enqueue(command: SharedCommandIntent): Promise<SharedCommandStatus>;
 }
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -32,7 +33,7 @@ function parse(raw: string): SharedRequest | null {
   if (
     !object(value) ||
     Object.keys(value).some((key) => !["version", "requestId", "type", "payload"].includes(key)) ||
-    value.version !== 1 ||
+    value.version !== CONTRACT_VERSIONS.hostBridge ||
     typeof value.requestId !== "string" ||
     !["shared.view.get", "shared.command.enqueue"].includes(value.type as string) ||
     !object(value.payload)
@@ -43,7 +44,7 @@ function parse(raw: string): SharedRequest | null {
     value.type === "shared.command.enqueue" &&
     (Object.keys(value.payload).length !== 1 ||
       !Object.hasOwn(value.payload, "command") ||
-      !isSharedCommandIntentV1(value.payload.command))
+      !isSharedCommandIntent(value.payload.command))
   )
     return null;
   return value as unknown as SharedRequest;
@@ -56,28 +57,28 @@ export async function routeSharedBridgeMessage(
   const request = parse(raw);
   if (request === null)
     return {
-      version: 1,
+      version: CONTRACT_VERSIONS.hostBridge,
       requestId: "unknown",
       type: "host.error",
       payload: { code: "shared-message-invalid" },
     };
   try {
-    let payload: SharedPlayViewV1 | SharedCommandStatusV1;
+    let payload: SharedPlayView | SharedCommandStatus;
     if (request.type === "shared.view.get") payload = await handlers.getView();
     else {
       const command = request.payload.command;
-      if (!isSharedCommandIntentV1(command)) throw new Error("shared-command-invalid");
+      if (!isSharedCommandIntent(command)) throw new Error("shared-command-invalid");
       payload = await handlers.enqueue(command);
     }
     return {
-      version: 1,
+      version: CONTRACT_VERSIONS.hostBridge,
       requestId: request.requestId,
       type: request.type === "shared.view.get" ? "shared.view.result" : "shared.command.result",
       payload: payload as unknown as CanonicalJsonObject,
     };
   } catch (error) {
     return {
-      version: 1,
+      version: CONTRACT_VERSIONS.hostBridge,
       requestId: request.requestId,
       type: "host.error",
       payload: { code: error instanceof Error ? error.message : "shared-operation-failed" },

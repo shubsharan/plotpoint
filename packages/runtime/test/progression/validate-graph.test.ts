@@ -5,7 +5,7 @@ import { validateProgressionGraph } from "../../src/progression/validate-graph.j
 
 const definition = defineProgression({
   aggregateKind: "player",
-  graphId: "graph.v1",
+  graphId: "graph",
   graphVersion: 1,
   nodes: [
     { nodeId: "b", initialStatus: "locked" },
@@ -24,7 +24,7 @@ describe("progression definition and instance validation", () => {
   it("orders mixed case and punctuation by ordinal code units", () => {
     const mixed = defineProgression({
       aggregateKind: "player",
-      graphId: "ordinal.v1",
+      graphId: "ordinal",
       graphVersion: 1,
       nodes: ["a_", "a-", "a", "A"].map((nodeId) => ({
         nodeId,
@@ -40,7 +40,7 @@ describe("progression definition and instance validation", () => {
     expect(() =>
       defineProgression({
         aggregateKind: "player",
-        graphId: "duplicate.v1",
+        graphId: "duplicate",
         graphVersion: 1,
         nodes: [
           { nodeId: "a", initialStatus: "locked" },
@@ -53,7 +53,7 @@ describe("progression definition and instance validation", () => {
 
   it("validates dynamic instance shape and command intents", () => {
     const valid: ProgressionInstance = {
-      graphId: "graph.v1",
+      graphId: "graph",
       graphVersion: 1,
       nodes: [
         { nodeId: "A", status: "active" },
@@ -74,12 +74,12 @@ describe("progression definition and instance validation", () => {
     { nodes: [] },
     { graphId: 42, graphVersion: 1, nodes: [] },
     {
-      graphId: "graph.v1",
+      graphId: "graph",
       graphVersion: 1,
       nodes: [{ nodeId: "A", status: "active" }, { status: "locked" }],
     },
     {
-      graphId: "graph.v1",
+      graphId: "graph",
       graphVersion: 1,
       nodes: [
         { nodeId: "A", status: "active" },
@@ -100,7 +100,7 @@ describe("progression definition and instance validation", () => {
 
   it("narrows malformed intent fields before constructing a diagnostic", () => {
     const progression: ProgressionInstance = {
-      graphId: "graph.v1",
+      graphId: "graph",
       graphVersion: 1,
       nodes: [
         { nodeId: "A", status: "active" },

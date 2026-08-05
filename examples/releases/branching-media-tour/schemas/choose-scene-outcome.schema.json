@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "tour.choose-scene-outcome.v1",
+  "$id": "tour.choose-scene-outcome",
   "type": "object",
   "additionalProperties": false,
   "required": ["sceneId", "visitedCount"],

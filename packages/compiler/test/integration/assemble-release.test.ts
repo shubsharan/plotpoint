@@ -5,7 +5,7 @@ import { inspectRelease } from "@plotpoint/protocol";
 import { buildCanonicalRegistries } from "../../src/composition/registries.js";
 import type {
   CompilationSnapshot,
-  ProjectConfigurationV1,
+  ProjectConfiguration,
   SnapshotFile,
 } from "../../src/project/config.js";
 import { assembleRelease } from "../../src/release/assemble.js";
@@ -23,7 +23,7 @@ function jsonFile(kind: SnapshotFile["kind"], path: string, value: unknown): Sna
 }
 
 function createSnapshot(): CompilationSnapshot {
-  const baseConfiguration: ProjectConfigurationV1 = {
+  const baseConfiguration: ProjectConfiguration = {
     projectFormatVersion: 1,
     environment: "web",
     hostApi: { major: 1, minimumMinor: 2 },
@@ -33,56 +33,54 @@ function createSnapshot(): CompilationSnapshot {
     },
     commands: [
       {
-        id: "solve.v1",
+        id: "solve",
         type: "solve",
         definition: { source: "src/private-solve.ts", export: "solveCommand" },
-        aggregateSchema: "player-state.v1",
-        payloadSchema: "solve-payload.v1",
-        outcomeSchema: "solve-outcome.v1",
+        aggregateSchema: "player-state",
+        payloadSchema: "solve-payload",
+        outcomeSchema: "solve-outcome",
       },
     ],
     aggregateSchemas: [
       {
-        id: "player-state.v1",
+        id: "player-state",
         kind: "player",
         version: 1,
         path: "schemas/private-player-state.json",
       },
     ],
     schemas: [
-      { id: "puzzle-content.v1", path: "schemas/private-content.json" },
-      { id: "solve-outcome.v1", path: "schemas/private-outcome.json" },
-      { id: "solve-payload.v1", path: "schemas/private-payload.json" },
+      { id: "puzzle-content", path: "schemas/private-content.json" },
+      { id: "solve-outcome", path: "schemas/private-outcome.json" },
+      { id: "solve-payload", path: "schemas/private-payload.json" },
     ],
     progressions: [
       {
-        id: "puzzle.v1",
+        id: "puzzle",
         version: 1,
         kind: "player",
         definition: { source: "src/private-progression.ts", export: "puzzleProgression" },
-        aggregateSchema: "player-state.v1",
-        commands: ["solve.v1"],
-        content: ["puzzle.v1"],
-        components: ["puzzle-card.v1"],
+        aggregateSchema: "player-state",
+        commands: ["solve"],
+        content: ["puzzle"],
+        components: ["puzzle-card"],
       },
     ],
     components: [
       {
-        id: "puzzle-card.v1",
+        id: "puzzle-card",
         implementation: { source: "src/private-component.ts", export: "PuzzleCard" },
-        commands: ["solve.v1"],
-        content: ["puzzle.v1"],
-        assets: ["clue.v1"],
+        commands: ["solve"],
+        content: ["puzzle"],
+        assets: ["clue"],
         capabilities: [
           { id: "plotpoint.haptics", major: 1, minimumMinor: 0 },
           { id: "plotpoint.haptics", major: 1, minimumMinor: 2 },
         ],
       },
     ],
-    content: [
-      { id: "puzzle.v1", path: "content/private-puzzle.json", schema: "puzzle-content.v1" },
-    ],
-    assets: [{ id: "clue.v1", path: "assets/private-clue.txt", releasePath: "assets/clue.txt" }],
+    content: [{ id: "puzzle", path: "content/private-puzzle.json", schema: "puzzle-content" }],
+    assets: [{ id: "clue", path: "assets/private-clue.txt", releasePath: "assets/clue.txt" }],
   };
   const configuration = Object.freeze({
     ...baseConfiguration,
@@ -90,7 +88,7 @@ function createSnapshot(): CompilationSnapshot {
     releaseLabel: "OPERATIONAL_RELEASE_LABEL",
     releaseChannel: "OPERATIONAL_RELEASE_CHANNEL",
     createdAt: "OPERATIONAL_TIMESTAMP",
-  }) as ProjectConfigurationV1;
+  }) as ProjectConfiguration;
   const registries = buildCanonicalRegistries(configuration);
   if (registries.kind !== "valid") throw new Error("expected valid registries");
 
@@ -177,13 +175,13 @@ describe("release assembly", () => {
       ["assets/clue.txt", "asset"],
       ["bundles/logic.js", "logic-bundle"],
       ["bundles/presentation.js", "presentation-bundle"],
-      [generatedReleaseEntryPath("component", "puzzle-card.v1"), "component-data"],
-      [generatedReleaseEntryPath("content", "puzzle.v1"), "content"],
-      [generatedReleaseEntryPath("progression", "puzzle.v1"), "progression"],
-      [generatedReleaseEntryPath("aggregate-schema", "player-state.v1"), "aggregate-schema"],
-      [generatedReleaseEntryPath("schema", "puzzle-content.v1"), "command-schema"],
-      [generatedReleaseEntryPath("schema", "solve-outcome.v1"), "command-schema"],
-      [generatedReleaseEntryPath("schema", "solve-payload.v1"), "command-schema"],
+      [generatedReleaseEntryPath("component", "puzzle-card"), "component-data"],
+      [generatedReleaseEntryPath("content", "puzzle"), "content"],
+      [generatedReleaseEntryPath("progression", "puzzle"), "progression"],
+      [generatedReleaseEntryPath("aggregate-schema", "player-state"), "aggregate-schema"],
+      [generatedReleaseEntryPath("schema", "puzzle-content"), "command-schema"],
+      [generatedReleaseEntryPath("schema", "solve-outcome"), "command-schema"],
+      [generatedReleaseEntryPath("schema", "solve-payload"), "command-schema"],
     ];
     expect(result.artifact.manifest.inventory.map(({ path, kind }) => [path, kind])).toEqual(
       expectedInventory,
@@ -217,17 +215,17 @@ describe("release assembly", () => {
     expect(parsed.kind).toBe("parsed");
     if (parsed.kind !== "parsed") return;
     const progression = parsed.entries.find(
-      ({ path }) => path === generatedReleaseEntryPath("progression", "puzzle.v1"),
+      ({ path }) => path === generatedReleaseEntryPath("progression", "puzzle"),
     );
 
     expect(JSON.parse(decoder.decode(progression?.bytes))).toEqual({
-      id: "puzzle.v1",
+      id: "puzzle",
       version: 1,
       kind: "player",
-      aggregateSchema: "player-state.v1",
-      commands: ["solve.v1"],
-      content: ["puzzle.v1"],
-      components: ["puzzle-card.v1"],
+      aggregateSchema: "player-state",
+      commands: ["solve"],
+      content: ["puzzle"],
+      components: ["puzzle-card"],
     });
   });
 

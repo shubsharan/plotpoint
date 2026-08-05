@@ -192,7 +192,7 @@ describe("field puzzle", () => {
         target: {
           aggregateId: "field-player",
           aggregateKind: "player",
-          schemaId: "field.player-state.v1",
+          schemaId: "field.player-state",
           schemaVersion: 1,
         },
         expectedVersion: 0,
@@ -222,7 +222,7 @@ describe("field puzzle", () => {
         target: {
           aggregateId: "field-player",
           aggregateKind: "player",
-          schemaId: "field.player-state.v1",
+          schemaId: "field.player-state",
           schemaVersion: 1,
         },
         expectedVersion: 0,

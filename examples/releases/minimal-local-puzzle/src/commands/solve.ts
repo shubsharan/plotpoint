@@ -14,7 +14,7 @@ export type SolveOutcome = JsonObject & {
 };
 
 export const solveCommand = defineCommand<"player", PlayerState, SolvePayload, SolveOutcome>({
-  definitionId: "minimal.solve.v1",
+  definitionId: "minimal.solve",
   commandType: "solve",
   aggregateKind: "player",
   handle(target, command) {

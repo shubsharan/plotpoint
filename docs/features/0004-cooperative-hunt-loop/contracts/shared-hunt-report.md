@@ -1,11 +1,11 @@
-# Contract: Shared Hunt Report V1
+# Contract: Shared Hunt Report
 
-The session-oriented report reuses the canonical Play Report terminal taxonomy and Location V1 redacted
+The session-oriented report reuses the canonical Play Report terminal taxonomy and Location redacted
 projection. Reusable identities become deterministic export-local aliases.
 
 ```ts
-interface SharedHuntReportV1 {
-  readonly version: 1;
+interface SharedHuntReport {
+  readonly version: typeof CONTRACT_VERSIONS.sharedReport;
   readonly releaseId: `sha256:${string}`;
   readonly sessionAlias: string;
   readonly selfAlias: "self";
@@ -16,10 +16,10 @@ interface SharedHuntReportV1 {
     readonly totalTargets: number;
     readonly complete: boolean;
   };
-  readonly events: readonly SharedHuntReportEventV1[];
+  readonly events: readonly SharedHuntReportEvent[];
 }
 
-type SharedHuntReportEventV1 =
+type SharedHuntReportEvent =
   | {
       readonly kind: "command";
       readonly elapsedMs: number;
@@ -34,7 +34,7 @@ type SharedHuntReportEventV1 =
       readonly kind: "location";
       readonly elapsedMs: number;
       readonly commandAlias: string;
-      readonly projection: LocationReportProjectionV1;
+      readonly projection: LocationReportProjection;
     }
   | {
       readonly kind: "synchronization";

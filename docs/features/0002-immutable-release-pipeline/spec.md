@@ -108,7 +108,7 @@ A release operator or downstream player can verify that a release is internally 
 - **FR-010**: The pipeline MUST derive the release's declared native capability requirements from the compiled project and MUST reject requirements that are missing, contradictory, or outside the supported declaration model.
 - **FR-011**: A successful compilation MUST emit one self-contained release artifact containing the game logic, presentation, compiled content and progression, aggregate schemas, assets, capability declarations, and integrity metadata required for later installation and play.
 - **FR-012**: The emitted release MUST NOT require access to project source, authoring-only packages, package discovery, or dependency resolution during play.
-- **FR-013**: Every release MUST contain a versioned manifest that inventories its protected entries and declares its release-format version, required host-API version, aggregate-schema versions, and native capability requirements.
+- **FR-013**: Every release MUST contain a manifest that inventories its protected entries and declares centrally registered release and host compatibility metadata, aggregate-schema identities and digests, and native capability requirements.
 - **FR-014**: The pipeline MUST compute integrity metadata for the manifest and every material bundle, content item, schema, and asset included in the release.
 - **FR-015**: The release identity MUST be derived from the complete emitted byte content covered by the release format.
 - **FR-016**: Project identity, release labels, release channels, creation timestamps, and other registry metadata MUST remain outside the content-derived release identity.
@@ -119,7 +119,7 @@ A release operator or downstream player can verify that a release is internally 
 - **FR-021**: Diagnostics MUST distinguish configuration, import-boundary, composition, command, schema, progression, component, content, asset, compatibility, and integrity failures and include enough context for an author to locate the defect.
 - **FR-022**: The pipeline MUST support golden fixtures that consume the author-facing project surface from outside the platform workspace and exercise complete valid releases and each required failure class.
 - **FR-023**: A release operator or downstream installer MUST be able to inspect manifest, compatibility, capability, inventory, identity, and integrity information without executing bundled game code.
-- **FR-024**: The release format MUST be versioned independently from the host API and aggregate schema contracts so each compatibility requirement can be evaluated explicitly.
+- **FR-024**: Release, Host API, and aggregate-schema compatibility requirements MUST be evaluated explicitly through centralized metadata and schema identity rather than embedded name suffixes.
 - **FR-025**: A downstream installer MUST be able to read every verified inventoried entry through the portable release interface without compiler internals or filesystem extraction.
 - **FR-026**: Compilation MUST NOT represent syntax-pattern inspection as proof that bundled JavaScript lacks ambient authority; runtime authority isolation belongs to the execution host.
 - **FR-027**: Once a coherent compilation snapshot is captured, subsequent compilation MUST use only captured bytes and MUST NOT fail solely because live project files later change.
@@ -130,11 +130,11 @@ A release operator or downstream player can verify that a release is internally 
 - **Game Project Configuration**: The author-controlled declaration of target environment and selected game logic, presentation, content, modules, schemas, progression, assets, and required capabilities.
 - **Compilation Input Set**: The frozen project files, resolved dependencies, selected environment, and pinned build environment that determine emitted release content.
 - **Release Artifact**: The complete immutable unit prepared for publication and later installation, containing all game-specific runtime material and integrity information.
-- **Release Manifest**: The versioned, inspectable inventory of protected release entries and their compatibility, capability, schema, and integrity declarations.
+- **Release Manifest**: The inspectable inventory of protected release entries and their compatibility, capability, schema, and integrity declarations.
 - **Release Entry**: A material bundle, content item, progression definition, schema, component, or asset included in and protected by the release.
 - **Opened Release**: A completely validated release view that exposes immutable copies of every inventoried entry without executing them.
 - **Content Identity**: The identity derived from the emitted bytes governed by the release format; it excludes mutable registry and operational metadata.
-- **Compatibility Requirement**: An independently versioned release-format, host-API, or aggregate-schema requirement that a downstream installer can evaluate before play.
+- **Compatibility Requirement**: A release-format, Host API, or aggregate-schema requirement that a downstream installer can evaluate before play from centralized metadata and schema identity.
 - **Capability Declaration**: The set of native host capabilities the compiled game requires, expressed for inspection before installation.
 - **Validation Diagnostic**: A classified explanation of a configuration, import, composition, reference, compatibility, or integrity defect and its project or release location.
 - **Golden Release Fixture**: An external-consumer-style project and its expected artifact or expected validation failure used as acceptance evidence.
@@ -171,3 +171,4 @@ A release operator or downstream player can verify that a release is internally 
 
 - [Deterministic Runtime Contract](../../adrs/0001-deterministic-runtime-contract.md)
 - [Immutable Release Format](../../adrs/0002-immutable-release-format.md)
+- [Unversioned Contract Names](../../adrs/0006-unversioned-contract-names.md)

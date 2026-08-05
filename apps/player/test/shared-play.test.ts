@@ -11,11 +11,11 @@ const command = {
   target: {
     aggregateKind: "team",
     aggregateId: "team-1",
-    schemaId: "example.counter.v1",
+    schemaId: "example.counter",
     schemaVersion: 1,
   },
   expectedStateVersion: 0,
-  type: "example.increment.v1",
+  type: "example.increment",
   payload: { amount: 1 },
   observationIds: ["observation-1"],
 } as const;
@@ -166,7 +166,7 @@ describe("shared player architecture", () => {
           {
             aggregateKind: "team" as const,
             aggregateId: "team-1",
-            schemaId: "example.counter.v1",
+            schemaId: "example.counter",
             schemaVersion: 1,
             stateVersion: 1,
             value: { count: 1 },

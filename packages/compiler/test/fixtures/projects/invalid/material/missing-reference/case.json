@@ -1,7 +1,7 @@
 {
-  "componentId": "card.v1",
-  "missingCommand": "missing-command.v1",
-  "missingContent": "missing-content.v1",
-  "missingAsset": "missing-asset.v1",
-  "missingSchema": "missing-schema.v1"
+  "componentId": "card",
+  "missingCommand": "missing-command",
+  "missingContent": "missing-content",
+  "missingAsset": "missing-asset",
+  "missingSchema": "missing-schema"
 }

@@ -28,7 +28,7 @@ The repository constitution is still an unratified placeholder, so it provides n
 ### Pre-Research Gate
 
 - **PASS - Deterministic boundary**: Every external value is explicit; runtime code performs no I/O or effect execution.
-- **PASS - Durable command boundary**: One typed command evaluates one versioned aggregate and returns data for later commit.
+- **PASS - Durable command boundary**: One typed command evaluates one revisioned aggregate and returns data for later commit.
 - **PASS - Aggregate isolation**: Player, team, and session state remain separately identified and cannot share mutable transition state.
 - **PASS - Effects after commit**: The runtime emits effect intents only and has no effect adapter dependency.
 - **PASS - Minimal proven packages**: Existing `runtime` and `testkit` packages are sufficient; no new package or service is introduced.

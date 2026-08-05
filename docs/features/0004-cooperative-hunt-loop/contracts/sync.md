@@ -1,11 +1,11 @@
-# Contract: Authoritative Synchronization V1
+# Contract: Authoritative Synchronization
 
-Sync V1 is an internal native-host-to-service contract. Objects are closed canonical JSON. Participant
+Sync is an internal native-host-to-service contract. Objects are closed canonical JSON. Participant
 and session identity come from the authenticated route; release code never receives these envelopes.
 
 ```ts
-interface SyncCommandV1 {
-  readonly version: 1;
+interface SyncCommand {
+  readonly version: typeof CONTRACT_VERSIONS.sharedSync;
   readonly commandId: string;
   readonly target: {
     readonly aggregateKind: "player" | "team" | "session";
@@ -16,11 +16,11 @@ interface SyncCommandV1 {
   readonly expectedStateVersion: number;
   readonly type: string;
   readonly payload: object;
-  readonly observations: readonly LocationObservationV1[];
+  readonly observations: readonly LocationObservation[];
 }
 
-interface SyncCommandResultV1 {
-  readonly version: 1;
+interface SyncCommandResult {
+  readonly version: typeof CONTRACT_VERSIONS.sharedSync;
   readonly commandId: string;
   readonly disposition: "decided" | "duplicate";
   readonly terminal: "accepted" | "no-op" | "rejected" | "invalid";
@@ -29,24 +29,24 @@ interface SyncCommandResultV1 {
   readonly decisionPosition: string;
 }
 
-interface AuthorizedSnapshotV1 {
-  readonly version: 1;
+interface AuthorizedSnapshot {
+  readonly version: typeof CONTRACT_VERSIONS.sharedSync;
   readonly sessionId: string;
   readonly releaseId: `sha256:${string}`;
   readonly participantId: string;
   readonly teamId: string;
   readonly membershipStatus: "active" | "revoked";
   readonly confirmedAt: string;
-  readonly projections: readonly SharedProjectionV1[];
+  readonly projections: readonly SharedProjection[];
 }
 
-interface SyncPullV1 {
-  readonly version: 1;
+interface SyncPull {
+  readonly version: typeof CONTRACT_VERSIONS.sharedSync;
   readonly kind: "snapshot";
   readonly reset: boolean;
   readonly nextCursor: string;
-  readonly snapshot: AuthorizedSnapshotV1;
-  readonly commandResults: readonly SyncCommandResultV1[];
+  readonly snapshot: AuthorizedSnapshot;
+  readonly commandResults: readonly SyncCommandResult[];
 }
 ```
 

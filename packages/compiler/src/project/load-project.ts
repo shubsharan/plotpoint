@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, relative } from "node:path";
 
+import { CONTRACT_VERSIONS } from "@plotpoint/protocol";
+
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
 import { orderCompilerDiagnostics } from "../diagnostics/order.js";
 import type {
@@ -14,7 +16,7 @@ import type {
   ContentRegistration,
   InvalidProject,
   ProgressionRegistration,
-  ProjectConfigurationV1,
+  ProjectConfiguration,
   SchemaRegistration,
   SourceExport,
   ValidateProjectInput,
@@ -32,7 +34,7 @@ export interface LoadedProject {
   readonly kind: "loaded";
   readonly root: ResolvedProjectRoot;
   readonly configPath: string;
-  readonly config: ProjectConfigurationV1;
+  readonly config: ProjectConfiguration;
   readonly registries: CanonicalProjectRegistries;
 }
 
@@ -316,7 +318,7 @@ function parseConfiguration(
   value: unknown,
   configPath: string,
   diagnostics: CompilerDiagnostic[],
-): ProjectConfigurationV1 {
+): ProjectConfiguration {
   const root =
     object(
       value,
@@ -337,7 +339,7 @@ function parseConfiguration(
       ],
       diagnostics,
     ) ?? {};
-  if (root.projectFormatVersion !== 1) {
+  if (root.projectFormatVersion !== CONTRACT_VERSIONS.projectConfiguration) {
     diagnostics.push(
       createCompilerDiagnostic({
         code: "configuration-version-unsupported",
@@ -580,7 +582,7 @@ function parseConfiguration(
   );
 
   return Object.freeze({
-    projectFormatVersion: 1,
+    projectFormatVersion: CONTRACT_VERSIONS.projectConfiguration,
     environment: "web",
     hostApi: Object.freeze({
       major: integer(host, "major", 1, configPath, "/hostApi", diagnostics),
@@ -612,7 +614,7 @@ function ordinal<T extends { readonly id: string }>(values: readonly T[]): reado
 }
 
 function buildRegistries(
-  config: ProjectConfigurationV1,
+  config: ProjectConfiguration,
   configPath: string,
   diagnostics: CompilerDiagnostic[],
 ): CanonicalProjectRegistries {

@@ -41,7 +41,7 @@ function distanceMeters(aLat: number, aLon: number, bLat: number, bLon: number):
 }
 
 export const advanceCommand = defineCommand<"player", FieldState, AdvancePayload, AdvanceOutcome>({
-  definitionId: "field.advance.v1",
+  definitionId: "field.advance",
   commandType: "advance",
   aggregateKind: "player",
   handle(target, command, context) {

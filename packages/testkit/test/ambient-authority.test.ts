@@ -29,7 +29,7 @@ describe.sequential("ambient authority audit", () => {
   ] as const)("blocks %s access and restores the global", (_name, access) => {
     const originalNow = Date.now;
     const definition = defineCommand<"player", JsonObject, JsonObject, JsonObject>({
-      definitionId: "audit.v1",
+      definitionId: "audit",
       commandType: "audit",
       aggregateKind: "player",
       handle() {

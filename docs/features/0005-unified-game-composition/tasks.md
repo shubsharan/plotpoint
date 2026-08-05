@@ -30,7 +30,7 @@ contract work begins.
 
 ## Phase 2: Foundational Contracts (Blocking Prerequisites)
 
-**Purpose**: Establish the corrected V1 serialized contracts and unversioned typed runtime boundary
+**Purpose**: Establish the corrected serialized contracts and unversioned typed runtime boundary
 used by every story.
 
 **CRITICAL**: No user-story implementation begins until this phase is complete and its contract tests
@@ -39,17 +39,17 @@ pass.
 ### Failing Contract Tests
 
 - [ ] T002 [P] Add failing type/behavior tests for model/schema identity, authority-kind constraints, safe command/model erasure, initialization results, and exact `ExecutionResult<State, Outcome, Payload, Kind>` ordering in `packages/runtime/test/aggregate-contracts.type-test.ts`, `packages/runtime/test/contracts.type-test.ts`, and `packages/runtime/test/execute-command.test.ts`
-- [ ] T003 [P] Add failing closed-shape tests for Game Composition V1, corrected Host API V1 bootstrap/transition payloads, Game Play Report V1, mandatory composition inspection, and rejected superseded shapes in `packages/protocol/test/contracts.type-test.ts`, `packages/protocol/test/player-contracts.test.ts`, `packages/protocol/test/inspection.test.ts`, and `packages/protocol/test/release-format.test.ts`
-- [ ] T004 [P] Add failing strict Project Configuration V1 fixtures for one-way model relationships, initializer-content schema agreement, authority-kind mismatch, duplicate derived command types, and rejected superseded configuration in `packages/compiler/test/unit/project.test.ts`, `packages/compiler/test/integration/invalid-projects.test.ts`, and `packages/compiler/test/fixtures/projects/invalid/configuration/`
+- [ ] T003 [P] Add failing closed-shape tests for Game Composition, corrected Host API bootstrap/transition payloads, Game Play Report, mandatory composition inspection, and rejected superseded shapes in `packages/protocol/test/contracts.type-test.ts`, `packages/protocol/test/player-contracts.test.ts`, `packages/protocol/test/inspection.test.ts`, and `packages/protocol/test/release-format.test.ts`
+- [ ] T004 [P] Add failing strict Project Configuration fixtures for one-way model relationships, initializer-content schema agreement, authority-kind mismatch, duplicate derived command types, and rejected superseded configuration in `packages/compiler/test/unit/project.test.ts`, `packages/compiler/test/integration/invalid-projects.test.ts`, and `packages/compiler/test/fixtures/projects/invalid/configuration/`
 - [ ] T005 [P] Add failing clean-break database tests proving incompatible local/shared schemas surface reset-or-reinstall guidance without migration or silent deletion in `apps/player/test/database-upgrade.test.ts` and `apps/player/test/database-observation-migration.test.ts`
 
 ### Foundational Implementation
 
 - [ ] T006 [P] Add unversioned `RuntimeSchema`, `ResolvedCommandBinding`, `ResolvedAggregateModel`, `ExecutableAggregateModel`, and explicit initialization result types while adding model/schema identity to aggregates in `packages/runtime/src/aggregate-model.ts`, `packages/runtime/src/aggregates.ts`, `packages/runtime/src/commands.ts`, and `packages/runtime/src/execution-record.ts`
 - [ ] T007 Construct payload-narrowing command bindings and state-narrowing executable model wrappers, route model-owned initialization/execution through them, and export the supported surface in `packages/runtime/src/aggregate-model.ts`, `packages/runtime/src/execute-command.ts`, and `packages/runtime/src/index.ts`
-- [ ] T008 [P] Define and parse mandatory Game Composition V1 descriptors/resources plus the composition-aware inspection result without duplicating manifest Host API/capabilities in `packages/protocol/src/release/game-composition.ts`, `packages/protocol/src/release/paths.ts`, `packages/protocol/src/release/types.ts`, `packages/protocol/src/release/inspect.ts`, and `packages/protocol/src/index.ts`
-- [ ] T009 Correct Runtime Bootstrap V1, Local Transition V1, scoped application/component contracts, and Game Play Report V1 in place while preserving existing bridge message names in `packages/protocol/src/player/bridge.ts`, `packages/protocol/src/player/report.ts`, `packages/protocol/src/player.ts`, and `packages/protocol/src/index.ts`
-- [ ] T010 Replace the compiler's old entry registries with strict Project Configuration V1 application/model/command/progression/component/mechanic registrations and one-way validation in `packages/compiler/src/project/config.ts`, `packages/compiler/src/project/load-project.ts`, `packages/compiler/src/composition/registries.ts`, and `packages/compiler/src/composition/validate-references.ts`
+- [ ] T008 [P] Define and parse mandatory Game Composition descriptors/resources plus the composition-aware inspection result without duplicating manifest Host API/capabilities in `packages/protocol/src/release/game-composition.ts`, `packages/protocol/src/release/paths.ts`, `packages/protocol/src/release/types.ts`, `packages/protocol/src/release/inspect.ts`, and `packages/protocol/src/index.ts`
+- [ ] T009 Correct Runtime Bootstrap, Local Transition, scoped application/component contracts, and Game Play Report in place while preserving existing bridge message names in `packages/protocol/src/player/bridge.ts`, `packages/protocol/src/player/report.ts`, `packages/protocol/src/player.ts`, and `packages/protocol/src/index.ts`
+- [ ] T010 Replace the compiler's old entry registries with strict Project Configuration application/model/command/progression/component/mechanic registrations and one-way validation in `packages/compiler/src/project/config.ts`, `packages/compiler/src/project/load-project.ts`, `packages/compiler/src/composition/registries.ts`, and `packages/compiler/src/composition/validate-references.ts`
 - [ ] T011 Generate fixed `application`, `components`, and local `aggregateModels` roots plus the mandatory canonical catalog and manifest capability-equality check in `packages/compiler/src/composition/generated-entries.ts`, `packages/compiler/src/composition/inspect-definitions.ts`, `packages/compiler/src/bundle/bundle-release.ts`, and `packages/compiler/src/release/assemble.ts`
 - [ ] T012 [P] Replace additive legacy database upgrades with an explicit corrected-schema gate and stable reset/reinstall failure while preserving same-schema restart recovery in `apps/player/src/persistence/database.ts`, `apps/player/src/persistence/validation.ts`, and `apps/player/src/shared/database.ts`
 - [ ] T013 Update reusable aggregate-model fixtures, runtime harness construction, replay helpers, and public exports for the new unversioned runtime seam in `packages/testkit/src/aggregate-fixtures.ts`, `packages/testkit/src/runtime-harness.ts`, `packages/testkit/src/replay.ts`, and `packages/testkit/src/index.ts`
@@ -70,18 +70,18 @@ malformed references fail before publication.
 
 ### Failing Tests for User Story 2
 
-- [ ] T014 [P] [US2] Add failing compiler contract tests for application shape, single-owner command/progression/mechanic relationships, exact initialization schemas, component dependency scopes, and manifest capability equality in `packages/compiler/test/unit/game-composition.test.ts` and `packages/compiler/test/fixtures/projects/invalid/composition-v1/`
+- [ ] T014 [P] [US2] Add failing compiler contract tests for application shape, single-owner command/progression/mechanic relationships, exact initialization schemas, component dependency scopes, and manifest capability equality in `packages/compiler/test/unit/game-composition.test.ts` and `packages/compiler/test/fixtures/projects/invalid/composition/`
 - [ ] T015 [P] [US2] Add failing integration tests for fixed generated registry keys, mandatory catalog inventory agreement, composition-aware JSON/human inspection, reproducibility, and missing-catalog rejection in `packages/compiler/test/integration/game-composition.test.ts`, `packages/compiler/test/integration/inspect-release.test.ts`, and `packages/compiler/test/integration/reproducibility.test.ts`
 - [ ] T016 [P] [US2] Add failing WebView lifecycle tests for static application validation, runtime handle validation, reverse exactly-once mount cleanup, scoped dependency maps, and component-only state reads/subscriptions in `apps/player/test/runtime-composition.test.ts` and `apps/player/test/bootstrap.test.ts`
 
 ### Implementation for User Story 2
 
 - [ ] T017 [P] [US2] Implement application/model/component/mechanic definition inspection and stable missing/mismatch diagnostics in `packages/compiler/src/composition/inspect-definitions.ts`, `packages/compiler/src/composition/validate-references.ts`, and `packages/compiler/src/diagnostics/codes.ts`
-- [ ] T018 [US2] Build canonical Game Composition V1 descriptors/resource bindings from validated registries and inventory paths in `packages/compiler/src/composition/game-composition.ts`, `packages/compiler/src/release/entry-paths.ts`, and `packages/compiler/src/release/assemble.ts`
+- [ ] T018 [US2] Build canonical Game Composition descriptors/resource bindings from validated registries and inventory paths in `packages/compiler/src/composition/game-composition.ts`, `packages/compiler/src/release/entry-paths.ts`, and `packages/compiler/src/release/assemble.ts`
 - [ ] T019 [US2] Replace author default roots with compiler-generated fixed registry maps and prove catalog-to-executable key agreement during bundling in `packages/compiler/src/composition/generated-entries.ts`, `packages/compiler/src/bundle/rolldown-plugin.ts`, and `packages/compiler/src/bundle/bundle-release.ts`
-- [ ] T020 [US2] Expose composition-aware `plotpoint inspect` JSON/human output while keeping low-level Release Format V1 inspection game-agnostic in `packages/compiler/src/cli.ts`, `packages/compiler/src/index.ts`, and `packages/protocol/src/release/inspect.ts`
+- [ ] T020 [US2] Expose composition-aware `plotpoint inspect` JSON/human output while keeping low-level Release Format inspection game-agnostic in `packages/compiler/src/cli.ts`, `packages/compiler/src/index.ts`, and `packages/protocol/src/release/inspect.ts`
 - [ ] T021 [P] [US2] Implement the generated runtime adapter, player-owned mount scope, and component factories with scoped local/shared/resource/capability contexts in `apps/player/src/runtime/composition.ts`, `apps/player/src/runtime/local-model-adapter.ts`, `apps/player/src/runtime/mount-scope.ts`, and `apps/player/src/runtime/bootstrap.ts`
-- [ ] T022 [P] [US2] Rewrite the field puzzle as corrected Project Configuration V1 with a generated application, local model initializer, command, progression, and scoped component in `examples/releases/field-puzzle/plotpoint.project.json`, `examples/releases/field-puzzle/src/application.ts`, `examples/releases/field-puzzle/src/initial-state.ts`, `examples/releases/field-puzzle/src/components/puzzle.ts`, and `examples/releases/field-puzzle/src/commands/advance.ts`
+- [ ] T022 [P] [US2] Rewrite the field puzzle as corrected Project Configuration with a generated application, local model initializer, command, progression, and scoped component in `examples/releases/field-puzzle/plotpoint.project.json`, `examples/releases/field-puzzle/src/application.ts`, `examples/releases/field-puzzle/src/initial-state.ts`, `examples/releases/field-puzzle/src/components/puzzle.ts`, and `examples/releases/field-puzzle/src/commands/advance.ts`
 - [ ] T023 [P] [US2] Rewrite the co-op game's data-only application, local/server model contracts, command/progression registrations, components, content, schemas, capabilities, and trusted-mechanic binding in `examples/releases/co-op-game/plotpoint.project.json`, `examples/releases/co-op-game/src/application.ts`, `examples/releases/co-op-game/src/components/clue-board.ts`, and `examples/releases/co-op-game/src/components/session-console.ts`
 - [ ] T024 [US2] Complete the two-release external-consumer compile/inspect/load acceptance and remove obsolete author `logic`/`presentation` registries in `packages/compiler/test/integration/game-composition.test.ts`, `examples/releases/field-puzzle/test/field-puzzle.test.ts`, `examples/releases/field-puzzle/src/logic.ts`, `examples/releases/field-puzzle/src/presentation.ts`, `examples/releases/co-op-game/src/logic.ts`, and `examples/releases/co-op-game/src/presentation.ts`
 
@@ -103,7 +103,7 @@ discovery from the mounted game UI.
 
 - [ ] T025 [P] [US1] Add failing closed trusted-mechanic registry tests for binding/config/model/schema digest agreement, explicit validation/authorization/projection results, exact `{ code }` outcomes, and no server progression in `packages/modules/test/trusted-mechanics.test.ts` and `packages/modules/test/target-discovery.test.ts`
 - [ ] T026 [P] [US1] Add failing release registration and generic shared-session API tests for adapter resolution, configuration initialization, generic routes, command dispatch, projection validation, and stable safe errors in `apps/api/test/release-registration.test.ts`, `apps/api/test/shared-session.test.ts`, and `apps/api/test/server.test.ts`
-- [ ] T027 [P] [US1] Add failing player integration tests for composition-derived join visibility, scoped Shared Play V1 contexts, generic command dispatch, mount failure rollback, and absence of shared UI for local-only releases in `apps/player/test/runtime-composition.test.ts`, `apps/player/test/shared-play.test.ts`, and `apps/player/test/production-handlers.test.ts`
+- [ ] T027 [P] [US1] Add failing player integration tests for composition-derived join visibility, scoped Shared Play contexts, generic command dispatch, mount failure rollback, and absence of shared UI for local-only releases in `apps/player/test/runtime-composition.test.ts`, `apps/player/test/shared-play.test.ts`, and `apps/player/test/production-handlers.test.ts`
 - [ ] T028 [P] [US1] Add a failing provider-free compile/install/mount/join/confirmed-view/location-discovery journey in `examples/releases/co-op-game/test/co-op-game.test.ts` and `apps/api/test/postgres.integration.test.ts`
 
 ### Implementation for User Story 1
@@ -111,8 +111,8 @@ discovery from the mounted game UI.
 - [ ] T029 [US1] Implement the closed typed trusted-mechanic registry and erased authority-kind-safe adapter resolver in `packages/modules/src/trusted-mechanics.ts` and `packages/modules/src/index.ts`
 - [ ] T030 [US1] Move target discovery behind the adapter's explicit binding, initialization, authorization, runtime-command, and complete projection results with digest-bound validators from `packages/modules/src/hunt/target-discovery.ts` to `packages/modules/src/mechanics/target-discovery.ts`
 - [ ] T031 [US1] Replace the game-specific service in `apps/api/src/hunt-service.ts` with release/composition registration and a generic shared-session service using the selected platform model in `apps/api/src/shared-session-service.ts` and `apps/api/src/index.ts`
-- [ ] T032 [US1] Replace public game-specific session routes/operator calls with `/v1/shared-sessions` release, creation, invitation, join, revoke, command, and pull operations in `apps/api/src/server.ts` and `apps/api/src/operator-client.ts`
-- [ ] T033 [P] [US1] Mount verified generated applications and derive generic native join/shared/recovery surfaces only from Game Composition V1 in `apps/player/App.tsx`, `apps/player/src/runtime/production-handlers.ts`, `apps/player/src/shared/host-bridge.ts`, and `apps/player/src/shared/http-client.ts`
+- [ ] T032 [US1] Replace public game-specific session routes/operator calls with `/shared-sessions` release, creation, invitation, join, revoke, command, and pull operations in `apps/api/src/server.ts` and `apps/api/src/operator-client.ts`
+- [ ] T033 [P] [US1] Mount verified generated applications and derive generic native join/shared/recovery surfaces only from Game Composition in `apps/player/App.tsx`, `apps/player/src/runtime/production-handlers.ts`, `apps/player/src/shared/host-bridge.ts`, and `apps/player/src/shared/http-client.ts`
 - [ ] T034 [US1] Wire the co-op application/components to the declared target-discovery command, foreground capability, confirmed team projection, and cleanup scope in `examples/releases/co-op-game/src/application.ts`, `examples/releases/co-op-game/src/components/clue-board.ts`, and `examples/releases/co-op-game/src/components/session-console.ts`
 
 **Checkpoint**: The co-op game independently completes its first shared action through generic
@@ -142,7 +142,7 @@ game that omits progression.
 - [ ] T040 [US3] Replace payload/outcome-coupled progression rules with named transitions, canonical initial instances, aggregate/event/progression facts, and bounded deterministic stabilization in `packages/runtime/src/progression/graph.ts`, `packages/runtime/src/progression/state.ts`, `packages/runtime/src/progression/validate-graph.ts`, and `packages/runtime/src/progression/evaluate-progression.ts`
 - [ ] T041 [US3] Update testkit model builders, scripted observations, strict assertions, and replay to use complete resolved models and execution records in `packages/testkit/src/aggregate-fixtures.ts`, `packages/testkit/src/scripted-observations.ts`, `packages/testkit/src/assertions.ts`, and `packages/testkit/src/replay.ts`
 - [ ] T042 [US3] Update field-puzzle and co-op-game commands/progressions to the unversioned runtime API without duplicate phase state or caller-built initial progression in `examples/releases/field-puzzle/src/commands/advance.ts`, `examples/releases/field-puzzle/src/progression/route.ts`, `examples/releases/co-op-game/src/commands/advance-round.ts`, `examples/releases/co-op-game/src/commands/solve-clue.ts`, `examples/releases/co-op-game/src/progression/session-rounds.ts`, and `examples/releases/co-op-game/src/progression/team-route.ts`
-- [ ] T043 [P] [US3] Map complete runtime records to corrected Host API V1 transitions and atomic local persistence without game-specific protocol glue in `apps/player/src/runtime/local-model-adapter.ts`, `apps/player/src/runtime/production-handlers.ts`, `apps/player/src/persistence/commit-transition.ts`, and `apps/player/src/runtime/transition-result.ts`
+- [ ] T043 [P] [US3] Map complete runtime records to corrected Host API transitions and atomic local persistence without game-specific protocol glue in `apps/player/src/runtime/local-model-adapter.ts`, `apps/player/src/runtime/production-handlers.ts`, `apps/player/src/persistence/commit-transition.ts`, and `apps/player/src/runtime/transition-result.ts`
 
 **Checkpoint**: Local and server models independently preserve every semantic terminal and exact state
 version through execution, persistence, and replay.
@@ -189,14 +189,14 @@ prior playable state remains unchanged on conflict.
 
 ### Failing Tests for User Story 5
 
-- [ ] T053 [P] [US5] Add failing protocol/API tests for `expectedReleaseId`, release check before invitation consumption, exact join digest retry, internally coherent join/snapshot identity, and safe mismatch errors in `packages/protocol/test/shared-play-v1.test.ts`, `apps/api/test/shared-session.test.ts`, and `apps/api/test/postgres.integration.test.ts`
+- [ ] T053 [P] [US5] Add failing protocol/API tests for `expectedReleaseId`, release check before invitation consumption, exact join digest retry, internally coherent join/snapshot identity, and safe mismatch errors in `packages/protocol/test/shared-play.test.ts`, `apps/api/test/shared-session.test.ts`, and `apps/api/test/postgres.integration.test.ts`
 - [ ] T054 [P] [US5] Add failing SQLite tests for pending join states, one pending-or-bound row per run, immutable binding guards, exact pending reuse, parallel conflict before submission, and incompatible identity rollback in `apps/player/test/shared-join-recovery.test.ts`
 - [ ] T055 [P] [US5] Add failing SecureStore/controller interruption tests for reserve-before-secret, secret-before-send, ready/submitting exact retry, response loss, invitation cleanup ordering, and retained mismatch attempts in `apps/player/test/shared-session-controller.test.ts`
 - [ ] T056 [P] [US5] Add failing join/pull acceptance fixtures for every run/release/session/participant/team/origin mismatch and fresh-release/fresh-session behavior in `apps/player/test/release-pinned-shared-play.test.ts`
 
 ### Implementation for User Story 5
 
-- [ ] T057 [P] [US5] Add `expectedReleaseId` and exact release-pinned join request/response validation to Shared Session API V1 and reject mismatch before invitation mutation in `packages/protocol/src/shared/types.ts`, `packages/protocol/src/shared/validation.ts`, `apps/api/src/shared-session-service.ts`, and `apps/api/src/server.ts`
+- [ ] T057 [P] [US5] Add `expectedReleaseId` and exact release-pinned join request/response validation to Shared Session API and reject mismatch before invitation mutation in `packages/protocol/src/shared/types.ts`, `packages/protocol/src/shared/validation.ts`, `apps/api/src/shared-session-service.ts`, and `apps/api/src/server.ts`
 - [ ] T058 [P] [US5] Add pending-join storage, unique run reservation, pending-versus-binding guards, and immutable run/release/session/participant/team/origin triggers in `apps/player/src/shared/database.ts`
 - [ ] T059 [US5] Persist exact request provenance and SecureStore key references before send, resume the same ready/submitting request after restart, and clean invitation secrets only after atomic binding commit in `apps/player/src/shared/session-controller.ts`, `apps/player/src/shared/credentials.ts`, and `apps/player/src/shared/http-client.ts`
 - [ ] T060 [US5] Enforce identity equality before fresh join commit and every pull, preserve immutable binding fields on exact retry, and expose no projection on conflict in `apps/player/src/shared/database.ts` and `apps/player/src/shared/session-controller.ts`
@@ -212,7 +212,7 @@ rebind or partially mutate an installed run.
 all selected stories are complete.
 
 - [ ] T061 Add failing deterministic chronology, command-alias, local/shared evidence, report-safe diagnostic, constant-alias omission, and adversarial redaction tests in `apps/player/test/game-play-report.test.ts` and `packages/protocol/test/player-contracts.test.ts`
-- [ ] T062 Replace local/game-specific report selection with one host-owned Game Play Report V1 derived only from committed evidence, then remove superseded report builders in `apps/player/src/reports/create-game-play-report.ts`, `apps/player/src/reports/create-play-report.ts`, `apps/player/src/reports/create-shared-hunt-report.ts`, `packages/protocol/src/player/report.ts`, and `apps/player/App.tsx`
+- [ ] T062 Replace local/game-specific report selection with one host-owned Game Play Report derived only from committed evidence, then remove superseded report builders in `apps/player/src/reports/create-game-play-report.ts`, `apps/player/src/reports/create-play-report.ts`, `apps/player/src/reports/create-shared-hunt-report.ts`, `packages/protocol/src/player/report.ts`, and `apps/player/App.tsx`
 - [ ] T063 [P] Add static architecture and clean-break tests preventing server release imports, game-specific player routing, duplicate author registries, composition-less playable releases, superseded shape readers, and automatic database reset in `apps/api/test/architecture.test.ts`, `packages/compiler/test/integration/invalid-projects.test.ts`, and `apps/player/test/runtime-lifecycle.test.ts`
 - [ ] T064 Record provider-free results and the separate simulator/emulator and physical-device evidence status in `docs/features/0005-unified-game-composition/evidence/implementation.md` and reconcile any command drift in `docs/features/0005-unified-game-composition/quickstart.md`
 - [ ] T065 Run `pnpm verify`, the focused PostgreSQL/Testcontainers and 100-iteration recovery suites, both public compile/inspect quickstarts, and `git diff --check`, then record exact commands/results in `docs/features/0005-unified-game-composition/evidence/implementation.md`
@@ -313,18 +313,18 @@ The smallest runnable product increment is not US1 in isolation. Complete:
 
 ## Completeness Map
 
-| Story | Contract/data-model coverage                                                         | Independent evidence tasks |
-| ----- | ------------------------------------------------------------------------------------ | -------------------------- |
-| US1   | Game Composition V1, Host Application V1, Trusted Mechanic V1, Shared Session API V1 | T025-T028                  |
-| US2   | Project Configuration V1, Game Composition V1, Game Application, Component Context   | T014-T016, T024            |
-| US3   | Aggregate Runtime V1, Aggregate, Execution Record, Progression                       | T035-T038                  |
-| US4   | Shared Recovery V1, Shared Action, Authorized Snapshot, Scheduler                    | T044-T047                  |
-| US5   | Shared Session API V1, Pending Join, Immutable Session Binding                       | T053-T056                  |
+| Story | Contract/data-model coverage                                                 | Independent evidence tasks |
+| ----- | ---------------------------------------------------------------------------- | -------------------------- |
+| US1   | Game Composition, Host Application, Trusted Mechanic, Shared Session API     | T025-T028                  |
+| US2   | Project Configuration, Game Composition, Game Application, Component Context | T014-T016, T024            |
+| US3   | Aggregate Runtime, Aggregate, Execution Record, Progression                  | T035-T038                  |
+| US4   | Shared Recovery, Shared Action, Authorized Snapshot, Scheduler               | T044-T047                  |
+| US5   | Shared Session API, Pending Join, Immutable Session Binding                  | T053-T056                  |
 
 ## Notes
 
 - `[P]` never overrides a dependency or permits concurrent edits to the same file.
-- Public/persisted contracts stay on V1; repository-owned runtime APIs stay unversioned.
+- Public and persisted contracts use plain semantic names; compatibility metadata is centralized.
 - Recompile reference releases; do not add readers, migrations, aliases, or automatic resets for
   discarded pre-release shapes.
 - Keep provider-free, simulator/emulator, and physical-device evidence as separate claims.

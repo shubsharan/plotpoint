@@ -19,7 +19,7 @@ function reference(enabled: readonly boolean[]): readonly string[] {
 function implementation(enabled: readonly boolean[]): readonly string[] {
   const definition = defineProgression({
     aggregateKind: "player",
-    graphId: "model.v1",
+    graphId: "model",
     graphVersion: 1,
     nodes: enabled.map((_value, index) => ({ nodeId: `n${index}`, initialStatus: "locked" })),
     automaticRules: enabled.map((value, index) => ({
@@ -34,7 +34,7 @@ function implementation(enabled: readonly boolean[]): readonly string[] {
   const result = evaluateProgression({
     definition,
     progression: {
-      graphId: "model.v1",
+      graphId: "model",
       graphVersion: 1,
       nodes: enabled.map((_value, index) => ({ nodeId: `n${index}`, status: "locked" })),
     },

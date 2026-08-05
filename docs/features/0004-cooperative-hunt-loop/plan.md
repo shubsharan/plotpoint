@@ -4,14 +4,14 @@
 
 ## Summary
 
-Close Loop 2 with a three-player location hunt using a generic Host API 1.1, one PostgreSQL team
+Close Loop 2 with a three-player location hunt using the generic Shared Play Host API, one PostgreSQL team
 aggregate, trusted location validation, durable SQLite command outbox, and complete authorized snapshot
 recovery. Simulator/emulator validation is accepted for sequencing; physical-device evidence remains deferred.
 
 ## Technical Context
 
 TypeScript, Node modular-monolith HTTP API, `pg`, PostgreSQL, Expo SQLite/SecureStore, existing release
-format v1 and Foreground Location V1, Vitest, and Testcontainers. Production credentials use HTTPS.
+format and Foreground Location, Vitest, and Testcontainers. Production credentials use HTTPS.
 There are no WebSockets, background location, ORM, distributed services, general accounts, delta feed,
 participant projection store, or arbitrary server execution.
 
@@ -24,10 +24,11 @@ participant projection store, or arbitrary server execution.
 - [Trusted Single-WebView Runtime](../../adrs/0003-trusted-webview-runtime.md) - **Accepted**
 - [Host-Owned Atomic Player Persistence](../../adrs/0004-atomic-player-persistence.md) - **Accepted**
 - [Authoritative Shared Sessions and Snapshot Recovery](../../adrs/0005-authoritative-shared-session-sync.md) - **Accepted**
+- [Unversioned Contract Names](../../adrs/0006-unversioned-contract-names.md) - **Accepted**
 
 ## Implementation
 
-1. Add closed generic shared-play, service sync, and report contracts without changing Host API 1.0.
+1. Add closed generic shared-play, service sync, and report contracts without changing the local Host API core.
 2. Add minimal PostgreSQL records and `READ COMMITTED` authoritative transactions for registration,
    join/revoke, one team aggregate, receipts, journals, and safe events.
 3. Implement trusted location discovery with host-resolved persisted observations and domain-aware stale acceptance.

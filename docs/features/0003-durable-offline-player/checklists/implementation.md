@@ -2,12 +2,12 @@
 
 ## Historical Provider-Free Baseline
 
-These checks describe the implementation before the reusable Host API V1 contract was revised. They
+These checks describe the implementation before the reusable Host API contract was revised. They
 remain provenance, not current acceptance evidence.
 
-| Recorded   | Command       | Result          | Acceptance meaning                                                         |
-| ---------- | ------------- | --------------- | -------------------------------------------------------------------------- |
-| 2026-08-03 | `pnpm verify` | PASS, 330 tests | Historical baseline only; does not accept the revised Host API V1 contract |
+| Recorded   | Command       | Result          | Acceptance meaning                                                      |
+| ---------- | ------------- | --------------- | ----------------------------------------------------------------------- |
+| 2026-08-03 | `pnpm verify` | PASS, 330 tests | Historical baseline only; does not accept the revised Host API contract |
 
 - [x] Field project validated and compiled into a structurally verified release on 2026-08-03.
 - [x] Expo dependency compatibility and production bundle export passed for iOS and Android.

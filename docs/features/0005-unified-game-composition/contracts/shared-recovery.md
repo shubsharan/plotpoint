@@ -1,22 +1,22 @@
-# Contract: Shared Recovery State Machine V1
+# Contract: Shared Recovery State Machine
 
 This contract fixes player-owned persistence and foreground orchestration while preserving Host API
-1.1 Shared Play and Sync V1 wire shapes.
+1.1 Shared Play and Sync wire shapes.
 
 ## Durable Outbox
 
 ```ts
-type SharedOutboxStatusV1 = "queued" | "submitting" | "blocked-revoked";
+type SharedOutboxStatus = "queued" | "submitting" | "blocked-revoked";
 
-interface SharedOutboxRecordV1 {
+interface SharedOutboxRecord {
   readonly sessionId: string;
   readonly commandId: string;
-  readonly target: SharedCommandIntentV1["target"];
+  readonly target: SharedCommandIntent["target"];
   readonly expectedStateVersion: number;
   readonly commandType: string;
   readonly payload: object;
   readonly observationIds: readonly string[];
-  readonly status: SharedOutboxStatusV1;
+  readonly status: SharedOutboxStatus;
   readonly enqueuedAt: string;
 }
 ```
@@ -32,15 +32,15 @@ Enqueue commits a new exact row or reads the prior exact row before returning pe
 ## Finite Batch Claim
 
 ```ts
-interface SubmissionBatchV1 {
+interface SubmissionBatch {
   readonly sessionId: string;
-  readonly commands: readonly SharedOutboxRecordV1[];
+  readonly commands: readonly SharedOutboxRecord[];
 }
 
-interface SharedSyncStoreV1 {
-  beginSubmissionBatch(sessionId: string): Promise<SubmissionBatchV1>;
+interface SharedSyncStore {
+  beginSubmissionBatch(sessionId: string): Promise<SubmissionBatch>;
   failSubmissionBatch(sessionId: string): Promise<void>;
-  applyPull(sessionId: string, pull: SyncPullV1): Promise<SnapshotApplicationV1>;
+  applyPull(sessionId: string, pull: SyncPull): Promise<SnapshotApplication>;
   markRevoked(sessionId: string): Promise<void>;
 }
 ```
@@ -64,7 +64,7 @@ outbox row; authoritative pull reconciliation owns terminalization. A retryable 
 One long-lived coordinator instance owns process-local state:
 
 ```ts
-interface SharedSyncSchedulerV1 {
+interface SharedSyncScheduler {
   request(
     sessionId: string,
     trigger: "enqueue" | "foreground" | "reconnect" | "retry",
@@ -91,7 +91,7 @@ the redacted revocation event. It is idempotent and does not require a snapshot.
 ## Pending Join Recovery
 
 ```ts
-interface PendingSharedJoinV1 {
+interface PendingSharedJoin {
   readonly sessionId: string;
   readonly runId: string;
   readonly expectedReleaseId: `sha256:${string}`;
@@ -152,9 +152,9 @@ player exposes no session view until an exact retry succeeds for the matching re
 
 ## Compare-or-Insert Snapshot Application
 
-Before mutation, Sync Pull V1 validation additionally requires unique projection identities and unique
+Before mutation, Sync Pull validation additionally requires unique projection identities and unique
 command IDs. Every projection must match the active composition's declared projection schema ID/version,
-the validator's digest must equal the schema's Release Format V1 manifest digest, and the payload must
+the validator's digest must equal the schema's Release Format manifest digest, and the payload must
 pass that validator before persistence or component exposure. One exclusive transaction then:
 
 1. verifies snapshot and immutable binding identities;
@@ -189,12 +189,12 @@ router preserves request correlation.
 ## Clean Break and Deferrals
 
 Fresh/provider-free databases install pending-join storage and immutable-binding guards and recover
-only rows written by this corrected V1 state machine. Database open does not inspect, rewrite, or
+only rows written by this corrected state machine. Database open does not inspect, rewrite, or
 migrate superseded shapes. An incompatible schema fails with explicit reset/reinstall guidance and is
 never silently dropped. Within the corrected schema, interrupted `submitting` rows and complete pending
 join attempts remain fully recoverable. Multiple bindings, run/release mismatch, or changed service
 origin becomes explicit recovery-required/conflict and no projection is exposed.
 
-V1 intentionally does not add background sync, WebSockets, delta feeds, multi-process leases, service
+intentionally does not add background sync, WebSockets, delta feeds, multi-process leases, service
 rebinding, credential rotation/recovery, active-session release migration, multi-device membership, or
 terminal-report provenance reconstruction after loss of both local evidence sources.

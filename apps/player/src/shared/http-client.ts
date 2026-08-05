@@ -1,9 +1,10 @@
 import {
-  isSyncCommandResultV1,
-  isSyncPullV1,
-  type SyncCommandResultV1,
-  type SyncCommandV1,
-  type SyncPullV1,
+  CONTRACT_VERSIONS,
+  isSyncCommandResult,
+  isSyncPull,
+  type SyncCommandResult,
+  type SyncCommand,
+  type SyncPull,
 } from "@plotpoint/protocol";
 
 export class SharedHttpError extends Error {
@@ -15,13 +16,13 @@ export class SharedHttpError extends Error {
   }
 }
 
-export interface JoinResultV1 {
-  readonly version: 1;
+export interface JoinResult {
+  readonly version: typeof CONTRACT_VERSIONS.sharedApi;
   readonly participantId: string;
   readonly teamId: string;
   readonly releaseId: `sha256:${string}`;
   readonly disposition: "joined" | "duplicate";
-  readonly sync: SyncPullV1;
+  readonly sync: SyncPull;
 }
 
 function object(value: unknown): value is Record<string, unknown> {
@@ -66,14 +67,14 @@ export class SharedHttpClient {
     readonly joinRequestId: string;
     readonly invitation: string;
     readonly participantCredential: string;
-  }): Promise<JoinResultV1> {
+  }): Promise<JoinResult> {
     const value = await requestJson(
-      `${this.baseUrl}/v1/hunt-sessions/${encodeURIComponent(input.sessionId)}/participants`,
+      `${this.baseUrl}/hunt-sessions/${encodeURIComponent(input.sessionId)}/participants`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          version: 1,
+          version: CONTRACT_VERSIONS.sharedApi,
           joinRequestId: input.joinRequestId,
           invitation: input.invitation,
           participantCredential: input.participantCredential,
@@ -88,24 +89,24 @@ export class SharedHttpClient {
         (key) =>
           !["version", "participantId", "teamId", "releaseId", "disposition", "sync"].includes(key),
       ) ||
-      value.version !== 1 ||
+      value.version !== CONTRACT_VERSIONS.sharedApi ||
       typeof value.participantId !== "string" ||
       typeof value.teamId !== "string" ||
       typeof value.releaseId !== "string" ||
       !["joined", "duplicate"].includes(value.disposition as string) ||
-      !isSyncPullV1(value.sync)
+      !isSyncPull(value.sync)
     )
       throw new Error("shared-join-response-invalid");
-    return value as unknown as JoinResultV1;
+    return value as unknown as JoinResult;
   }
 
   async submit(
     sessionId: string,
     credential: string,
-    command: SyncCommandV1,
-  ): Promise<SyncCommandResultV1> {
+    command: SyncCommand,
+  ): Promise<SyncCommandResult> {
     const value = await requestJson(
-      `${this.baseUrl}/v1/hunt-sessions/${encodeURIComponent(sessionId)}/commands`,
+      `${this.baseUrl}/hunt-sessions/${encodeURIComponent(sessionId)}/commands`,
       {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${credential}` },
@@ -114,13 +115,13 @@ export class SharedHttpClient {
       this.timeoutMs,
       this.fetcher,
     );
-    if (!isSyncCommandResultV1(value)) throw new Error("shared-command-response-invalid");
+    if (!isSyncCommandResult(value)) throw new Error("shared-command-response-invalid");
     return value;
   }
 
-  async pull(sessionId: string, credential: string, cursor: string): Promise<SyncPullV1> {
+  async pull(sessionId: string, credential: string, cursor: string): Promise<SyncPull> {
     const value = await requestJson(
-      `${this.baseUrl}/v1/hunt-sessions/${encodeURIComponent(sessionId)}/sync?after=${encodeURIComponent(cursor)}`,
+      `${this.baseUrl}/hunt-sessions/${encodeURIComponent(sessionId)}/sync?after=${encodeURIComponent(cursor)}`,
       {
         method: "GET",
         headers: { authorization: `Bearer ${credential}` },
@@ -128,7 +129,7 @@ export class SharedHttpClient {
       this.timeoutMs,
       this.fetcher,
     );
-    if (!isSyncPullV1(value)) throw new Error("shared-pull-response-invalid");
+    if (!isSyncPull(value)) throw new Error("shared-pull-response-invalid");
     return value;
   }
 }

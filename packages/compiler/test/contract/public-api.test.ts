@@ -5,14 +5,14 @@ import type {
   CompileProjectInput,
   CompilerDiagnostic,
   DiagnosticLocation,
-  ProjectConfigurationV1,
+  ProjectConfiguration,
   ValidateProjectInput,
 } from "@plotpoint/compiler";
 
 describe("compiler public type API", () => {
   it("exposes the planned authoring contracts from the package root", () => {
     expectTypeOf<CompileProjectInput>().toMatchTypeOf<ValidateProjectInput>();
-    expectTypeOf<ProjectConfigurationV1["projectFormatVersion"]>().toEqualTypeOf<1>();
+    expectTypeOf<ProjectConfiguration["projectFormatVersion"]>().toEqualTypeOf<1>();
     expectTypeOf<CompilerDiagnostic["severity"]>().toEqualTypeOf<"error">();
     expectTypeOf<DiagnosticLocation["kind"]>().toEqualTypeOf<
       "configuration" | "source" | "registration" | "artifact"

@@ -3,7 +3,7 @@ import {
   verifyRelease,
   type CanonicalJsonObject,
   type ReleaseId,
-  type ReleaseManifestV1,
+  type ReleaseManifest,
 } from "@plotpoint/protocol";
 import { canonicalizeValue } from "@plotpoint/runtime";
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
@@ -192,7 +192,7 @@ export async function verifyRecoveryArtifact(input: {
 }): Promise<
   | {
       readonly kind: "valid";
-      readonly manifest: ReleaseManifestV1;
+      readonly manifest: ReleaseManifest;
       readonly validateState: RecoveryStateValidator;
     }
   | { readonly kind: "invalid"; readonly code: string }
@@ -244,7 +244,7 @@ export async function verifyRecoveryArtifact(input: {
 }
 
 export function validateRecoveryRecords(
-  manifest: ReleaseManifestV1,
+  manifest: ReleaseManifest,
   records: RecoveryRecords,
   validateState: RecoveryStateValidator,
 ): RecoveryRecordsResult {

@@ -1,8 +1,9 @@
-# Contract: Aggregate Runtime V1
+# Contract: Aggregate Runtime
 
-Aggregate Runtime V1 documents the corrected pre-release runtime contract. Serialized aggregate and
-record shapes remain version 1 where they already carry a version. Repository-owned TypeScript APIs are
-unversioned: they are edited in place and do not use generation suffixes.
+Aggregate Runtime documents the corrected pre-release runtime contract. Serialized aggregate and
+record shapes use plain semantic names; centralized compatibility metadata remains only where parser
+selection requires it. Repository-owned TypeScript APIs are edited in place without generation
+suffixes.
 
 ## Schemas and Aggregates
 
@@ -34,7 +35,7 @@ interface Aggregate<State extends JsonObject, Kind extends AggregateKind> {
 }
 ```
 
-`stateVersion` is the only aggregate concurrency and commit counter. Runtime, Host API, Sync V1,
+`stateVersion` is the only aggregate concurrency and commit counter. Runtime, Host API, Sync,
 SQLite, PostgreSQL, and reports use that name directly; no `revision` alias exists. `schemaId` and
 `schemaVersion` are persisted on the aggregate because persisted state must remain self-describing.
 Resolved models derive those values from `stateSchema` and do not copy them into parallel fields.
@@ -131,7 +132,7 @@ validates the returned state, constructs `stateVersion: 0`, and attaches the sol
 progression instance. Failure returns `kind: "invalid"` with stable diagnostics; it never returns a
 partially initialized aggregate or throws schema prose across the boundary.
 
-Project Configuration V1 permits only local/player and server/team-or-session combinations. Generated
+Project Configuration permits only local/player and server/team-or-session combinations. Generated
 local registries contain local/player models. The platform mechanic registry contains server/team or
 server/session models.
 

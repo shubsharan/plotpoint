@@ -13,5 +13,6 @@ feature specs and plans must link every ADR they rely on.
 - [Trusted Single-WebView Runtime](0003-trusted-webview-runtime.md) — Accepted
 - [Host-Owned Atomic Player Persistence](0004-atomic-player-persistence.md) — Accepted
 - [Authoritative Shared Sessions and Snapshot Recovery](0005-authoritative-shared-session-sync.md) — Accepted
+- [Unversioned Contract Names](0006-unversioned-contract-names.md) — Accepted
 
 <!-- speckit:generated:adr-index END -->

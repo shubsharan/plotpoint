@@ -6,9 +6,9 @@
 ## Summary
 
 Make the field puzzle and co-op game runnable through one compiler-owned composition path. Correct
-Project Configuration V1, Game Composition V1, Host API V1, and Game Play Report V1 in place; evolve
+Project Configuration, Game Composition, Host API, and Game Play Report in place; evolve
 the repository-owned runtime and progression TypeScript APIs without version suffixes; and preserve
-Release Format V1, Host API 1.1 Shared Play, and Sync V1 wire semantics. Add an explicit closed
+Release Format, Shared Play, and Sync wire semantics. Add an explicit closed
 trusted-mechanic binding for target discovery, repair the player outbox/snapshot/join state machine,
 remove game-specific player routing, and prove both games from validation through durable action,
 recovery, and report. Because the app is pre-release, no compatibility reader, alias, or migration is
@@ -21,7 +21,7 @@ Native 0.86.2 through Expo SDK 57 for the native player
 **Primary Dependencies**: Existing dependency-free `@plotpoint/runtime`; `@plotpoint/protocol`;
 Rolldown 1.2 and AJV 8 in the compiler; React 19, Expo SQLite/SecureStore/Location, and
 `react-native-webview`; Node HTTP, `pg`, and the existing `@plotpoint/modules` boundary
-**Storage**: Existing Release Format V1 `.pprelease` bytes; host-owned SQLite plus SecureStore on the
+**Storage**: Existing Release Format `.pprelease` bytes; host-owned SQLite plus SecureStore on the
 player; PostgreSQL 17 in provider-free authoritative integration tests and the current modular service
 **Testing**: Vitest 4.1 named projects, type-facing fixtures, deterministic replay/model tests,
 compiler contract/integration fixtures, player SQLite interruption tests, WebView bootstrap tests,
@@ -49,8 +49,8 @@ _GATE: Evaluated before Phase 0 research and again after Phase 1 design._
 
 - **PASS - Complete product loop**: The feature is anchored to validate/compile/install/mount/action/
   recovery/report journeys for the field puzzle and co-op game, not isolated framework APIs.
-- **PASS - Small durable contracts**: Serialized boundaries stay on one corrected V1 generation;
-  repository-owned runtime APIs remain unversioned; Release Format V1 and Sync V1 stay stable.
+- **PASS - Small durable contracts**: Serialized boundaries stay on one corrected generation;
+  repository-owned runtime APIs remain unversioned; Release Format and Sync stay stable.
 - **PASS - Honest trust**: Compiler reference validation, one trusted WebView, allowlisted platform
   mechanics, authenticated HTTPS, and physical-device evidence remain distinct claims.
 - **PASS - Evidence before abstraction**: Existing packages, one player, and one modular API remain.
@@ -64,13 +64,13 @@ _GATE: Evaluated before Phase 0 research and again after Phase 1 design._
 
 ### Post-Design Gate
 
-- **PASS - One composition authority**: Project Configuration V1 lowers to generated registries and
-  Game Composition V1; no executable DSL or duplicate author runtime registry remains.
+- **PASS - One composition authority**: Project Configuration lowers to generated registries and
+  Game Composition; no executable DSL or duplicate author runtime registry remains.
 - **PASS - Functional core, imperative shells**: The unversioned runtime model owns deterministic decisions and
   progression; player/API adapters own persistence, transport, authorization, and capabilities.
 - **PASS - Minimal composability**: Aggregate model, scoped component context, trusted-mechanic port,
   and keyed single-flight are the smallest patterns that cover both games and observed failures.
-- **PASS - Clean pre-release break**: Existing V1 contracts are corrected in place, obsolete private
+- **PASS - Clean pre-release break**: Existing contracts are corrected in place, obsolete private
   shapes are rejected, reference artifacts are recompiled, and no compatibility parser, data migration,
   or active-session migration is promised.
 - **PASS - Failure atomicity**: Binding validation precedes view mutation; result reconciliation is
@@ -89,15 +89,18 @@ _GATE: Evaluated before Phase 0 research and again after Phase 1 design._
   the unversioned runtime model, generated composition, scoped components, the optional trusted mechanic, finite
   synchronization, release-pinned binding, and generic reporting.
 - [Immutable Release Format](../../adrs/0002-immutable-release-format.md) - **Accepted**; Release Format
-  V1 inventory, integrity, identity, and compatibility remain unchanged while Game Composition V1 is
+  inventory, integrity, identity, and compatibility remain unchanged while Game Composition is
   ordinary inventoried application content.
 - [Trusted Single-WebView Runtime](../../adrs/0003-trusted-webview-runtime.md) - **Accepted**; the
   generated application/component contexts improve composition without claiming component isolation.
 - [Host-Owned Atomic Player Persistence](../../adrs/0004-atomic-player-persistence.md) - **Accepted**;
-  Local Transition V1 and shared reconciliation remain host-owned atomic commits.
+  Local Transition and shared reconciliation remain host-owned atomic commits.
 - [Authoritative Shared Sessions and Snapshot Recovery](../../adrs/0005-authoritative-shared-session-sync.md) -
   **Accepted**; release-pinned authority, adapter-owned domain conflict policy, complete authorized
   snapshots, and generic retry, revocation, and privacy boundaries remain.
+- [Unversioned Contract Names](../../adrs/0006-unversioned-contract-names.md) - **Accepted**; symbols,
+  semantic identifiers, contract filenames, and catalog paths remain generation-free while serialized
+  compatibility metadata is centrally owned.
 
 ## Project Structure
 
@@ -111,13 +114,13 @@ docs/features/0005-unified-game-composition/
 ├── data-model.md
 ├── quickstart.md
 ├── contracts/
-│   ├── game-composition-v1.md
-│   ├── game-play-report-v1.md
-│   ├── host-application-v1.md
-│   ├── runtime-model-v1.md
-│   ├── shared-recovery-v1.md
-│   ├── shared-session-api-v1.md
-│   └── trusted-mechanic-v1.md
+│   ├── game-composition.md
+│   ├── game-play-report.md
+│   ├── host-application.md
+│   ├── runtime-model.md
+│   ├── shared-recovery.md
+│   ├── shared-session-api.md
+│   └── trusted-mechanic.md
 ├── checklists/
 │   └── requirements.md
 └── tasks.md                         # Created later by /speckit-tasks after ADR acceptance
@@ -140,26 +143,26 @@ packages/testkit/
 
 packages/compiler/
 ├── src/
-│   ├── project/                     # Corrected strict Project Configuration V1
+│   ├── project/                     # Corrected strict Project Configuration
 │   ├── composition/                 # Reference validation, definition inspection, catalog generation
 │   ├── bundle/                      # Generated local logic and presentation roots
 │   ├── validation/                  # Application/model/component/mechanic/resource agreement
 │   ├── inspection/                  # Composition-aware public inspection over verified releases
-│   └── release/                     # Composition descriptors in unchanged Release Format V1
+│   └── release/                     # Composition descriptors in unchanged Release Format
 └── test/                            # Contract, mutation, reproducibility, mount-shape fixtures
 
 packages/protocol/
 ├── src/
-│   ├── player/                      # Game application/client types, Bootstrap/Transition V1
-│   ├── report/                      # Generic Game Play Report V1
-│   ├── release/                     # V1 open/verify plus Game Composition V1 validation
-│   └── shared/                      # Existing Shared Play/Sync V1 with uniqueness validation
+│   ├── player/                      # Game application/client types, Bootstrap/Transition
+│   ├── report/                      # Generic Game Play Report
+│   ├── release/                     # open/verify plus Game Composition validation
+│   └── shared/                      # Existing Shared Play/Sync with uniqueness validation
 └── test/
 
 packages/modules/
 ├── src/
 │   ├── trusted-mechanics.ts         # Closed registry/port
-│   └── mechanics/                   # Target-discovery V1 adapter
+│   └── mechanics/                   # Target-discovery adapter
 └── test/
 
 packages/db/
@@ -168,7 +171,7 @@ packages/db/
 
 apps/api/
 ├── src/
-│   ├── server.ts                    # Generic /v1/shared-sessions transport
+│   ├── server.ts                    # Generic /shared-sessions transport
 │   ├── shared-session-service.ts    # Release/mechanic/model authority
 │   └── operator-client.ts
 └── test/                            # Contract, Postgres, auth, idempotency, redaction
@@ -177,25 +180,25 @@ apps/player/
 ├── App.tsx                          # Composition-driven local/shared shell, stable coordinator owner
 ├── src/
 │   ├── runtime/                     # Catalog loading, generated application mount, adapters
-│   ├── persistence/                 # Aggregate/progression/event/effect Local Transition V1 commit
-│   ├── bridge/                      # Host API V1 and correlated errors
+│   ├── persistence/                 # Aggregate/progression/event/effect Local Transition commit
+│   ├── bridge/                      # Host API and correlated errors
 │   └── shared/                      # Immutable join, finite batch, single-flight, reconciliation
 └── test/                            # Bootstrap, SQLite, interruption, join, bridge, offline routes
 
 examples/releases/field-puzzle/
-├── plotpoint.project.json           # Corrected V1 local composition
+├── plotpoint.project.json           # Corrected local composition
 ├── src/                             # Initializer, command, progression, component, application
 └── test/                            # External-consumer lifecycle
 
 examples/releases/co-op-game/
-├── plotpoint.project.json           # Corrected V1 shared composition + trusted mechanic
+├── plotpoint.project.json           # Corrected shared composition + trusted mechanic
 ├── src/                             # Application/components; no server executable source
 └── test/                            # Type-facing and complete shared lifecycle
 ```
 
 **Structure Decision**: Change no package or deployment boundary. `@plotpoint/runtime` owns the pure
 resolved-model/executor contract; the compiler owns authored-to-generated local composition; protocol
-owns cross-process/versioned shapes; player and API are imperative adapters; `@plotpoint/modules` owns
+owns serialized cross-process shapes; player and API are imperative adapters; `@plotpoint/modules` owns
 the closed trusted-mechanic registry plus complete platform server models and validators. Migrate
 `co-op-game` into the normal workspace test/type surface rather than treating it only as a compiler
 fixture. Remove superseded game-named player transport and author duplicate registries instead
@@ -211,8 +214,8 @@ initialization, local preflight versus recorded execution invalidity, heterogene
 payload/state schema-narrowing wrappers, duplicate command type within one model, generated
 catalog/registry agreement, malformed application lifecycle, mount-scope rollback and cleanup, scoped
 components including throw/invalid-element cleanup, executable schema validators, unchanged Release
-Format V1, and composition-aware public inspection output. Evolve the unversioned runtime and progression
-APIs in place; correct Project Configuration V1; and implement definition inspection, the resource
+Format, and composition-aware public inspection output. Evolve the unversioned runtime and progression
+APIs in place; correct Project Configuration; and implement definition inspection, the resource
 catalog, generated local roots, and `plotpoint inspect` catalog reporting. Commands and progressions
 own their aggregate-model references; models do not repeat those relationships. The trusted-mechanic
 binding alone selects its model and commands. Catalog descriptors omit per-item export names, Host API,
@@ -220,28 +223,28 @@ and release-wide capabilities that have another authority.
 
 ### 2. Host Application and Local Persistence
 
-Correct Host API V1 Bootstrap/Transition V1 in place and add the compiler-generated local model adapter
-without changing the existing V1 message names or introducing a new Host API minor. Extend the player
+Correct Host API Bootstrap/Transition in place and add the compiler-generated local model adapter
+without changing the existing message names or introducing a new Host API minor. Extend the player
 snapshot/journal/receipt transaction to store progression, typed events/effects, and accepted state-version
 semantics without effect delivery. Mount only the generated application, expose scoped component
 contexts, require cleanup before shared-session remount or disposal, preserve correlated errors, and
 derive local/shared shell state from verified composition. Replace game-selected report builders with
-one host-owned Game Play Report V1 path keyed only by run and optional shared binding. Bootstrap state
+one host-owned Game Play Report path keyed only by run and optional shared binding. Bootstrap state
 terminates at the generated runtime adapter; the application receives only its root and component
 factories, and state reads/subscriptions exist only in scoped component contexts.
 
 ### 3. Trusted Mechanic and Generic Shared Service
 
 Add the closed platform registry and move target discovery into its first adapter. Release
-registration consumes Game Composition V1's data-only server contracts and safe configuration rather
+registration consumes Game Composition's data-only server contracts and safe configuration rather
 than executable release source or hard-coded logical paths. The adapter owns the complete resolved
 server model and digest-bound validators, must match those contracts, and supplies no undeclared server
 progression. Give every adapter call a closed result: validation returns canonical configuration plus
 initializer input or a diagnostic; authorization returns a runtime command with transformed observations
-or a rejected/invalid terminal; projection returns a complete validated `SharedProjectionV1` or a
-diagnostic. Preserve Sync V1 state-version fields directly. Trusted outcomes use an exact stable-code
-shape so their Sync V1 mapping loses no semantic fields. Rename public participant routing to
-`/v1/shared-sessions`, dispatch declared commands through that platform model, and preserve ADR 0005
+or a rejected/invalid terminal; projection returns a complete validated `SharedProjection` or a
+diagnostic. Preserve Sync state-version fields directly. Trusted outcomes use an exact stable-code
+shape so their Sync mapping loses no semantic fields. Rename public participant routing to
+`/shared-sessions`, dispatch declared commands through that platform model, and preserve ADR 0005
 transaction, projection, authorization, and privacy semantics.
 
 ### 4. Durable Shared Recovery
@@ -257,7 +260,7 @@ errors and revoked snapshots with the same atomic blocked-outbox result.
 
 ### 5. Runnable Reference Games and Evidence
 
-Update the field puzzle and co-op game to the corrected Project Configuration V1. Remove their duplicate
+Update the field puzzle and co-op game to the corrected Project Configuration. Remove their duplicate
 default registries and protocol adapters; add the co-op application mount and declared target-discovery command/
 mechanic. Put both examples in normal type-checking. Prove compile/install/mount/first-action/restart/
 report journeys, three-participant disconnect/recovery/revocation, a fresh release as a fresh run/session,
@@ -269,7 +272,7 @@ Research is complete in [research.md](research.md). It resolves composition/vers
 component lifecycle, aggregate decision/state-version semantics and validators, progression facts, the
 single optional trusted mechanic, generic session transport, finite synchronization, corrective
 reconciliation, durable release-pinned join, atomic revocation, bridge correlation, and the generic
-Game Play Report V1 export and the clean rejection of obsolete shapes. There are no
+Game Play Report export and the clean rejection of obsolete shapes. There are no
 `NEEDS CLARIFICATION` items.
 
 ## Phase 1: Design & Contracts
@@ -277,21 +280,21 @@ Game Play Report V1 export and the clean rejection of obsolete shapes. There are
 - [data-model.md](data-model.md) defines authored/compiled composition, local and server model
   ownership, aggregate/progression, components, trusted mechanics, pending joins, immutable sessions,
   shared actions, snapshots, and state transitions.
-- [game-composition-v1.md](contracts/game-composition-v1.md) defines corrected Project Configuration V1,
+- [game-composition.md](contracts/game-composition.md) defines corrected Project Configuration,
   generated registries, resource catalog, lifecycle validation, and composition-aware public
-  inspection layered over Release Format V1.
-- [game-play-report-v1.md](contracts/game-play-report-v1.md) defines one privacy-safe local/shared
+  inspection layered over Release Format.
+- [game-play-report.md](contracts/game-play-report.md) defines one privacy-safe local/shared
   evidence export with no game-specific player selection.
-- [runtime-model-v1.md](contracts/runtime-model-v1.md) defines model-owned command execution, explicit
+- [runtime-model.md](contracts/runtime-model.md) defines model-owned command execution, explicit
   decisions, state-version behavior, progression nodes/transitions, and replay using unversioned
   TypeScript APIs.
-- [host-application-v1.md](contracts/host-application-v1.md) defines Host API V1 bootstrap, generated
-  adapters, scoped component context, Local Transition V1, and composition-driven shared UI.
-- [trusted-mechanic-v1.md](contracts/trusted-mechanic-v1.md) defines the allowlisted platform adapter
-  boundary and target-discovery V1.
-- [shared-session-api-v1.md](contracts/shared-session-api-v1.md) defines generic routes, release-pinned
+- [host-application.md](contracts/host-application.md) defines Host API bootstrap, generated
+  adapters, scoped component context, Local Transition, and composition-driven shared UI.
+- [trusted-mechanic.md](contracts/trusted-mechanic.md) defines the allowlisted platform adapter
+  boundary and target-discovery.
+- [shared-session-api.md](contracts/shared-session-api.md) defines generic routes, release-pinned
   join, and mechanic dispatch.
-- [shared-recovery-v1.md](contracts/shared-recovery-v1.md) defines finite batches, keyed single-flight,
+- [shared-recovery.md](contracts/shared-recovery.md) defines finite batches, keyed single-flight,
   durable pending join, atomic revocation, immutable binding, idempotent snapshots, clean database
   rejection, and correlated bridge errors.
 - [quickstart.md](quickstart.md) exercises both games as an external author/operator/player would.

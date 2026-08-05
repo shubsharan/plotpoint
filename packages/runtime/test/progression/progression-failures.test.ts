@@ -42,7 +42,7 @@ function evaluate(
 describe("progression failures", () => {
   const parallel = defineProgression({
     aggregateKind: "player",
-    graphId: "parallel.v1",
+    graphId: "parallel",
     graphVersion: 1,
     nodes: [
       { nodeId: "a", initialStatus: "locked" },
@@ -68,7 +68,7 @@ describe("progression failures", () => {
     ],
   });
   const start: ProgressionInstance = {
-    graphId: "parallel.v1",
+    graphId: "parallel",
     graphVersion: 1,
     nodes: [
       { nodeId: "a", status: "locked" },
@@ -95,7 +95,7 @@ describe("progression failures", () => {
   it("diagnoses a complete-state cycle", () => {
     const cyclic = defineProgression({
       aggregateKind: "player",
-      graphId: "cycle.v1",
+      graphId: "cycle",
       graphVersion: 1,
       nodes: [{ nodeId: "a", initialStatus: "active" }],
       automaticRules: [
@@ -119,7 +119,7 @@ describe("progression failures", () => {
     });
     const result = evaluate(
       cyclic,
-      { graphId: "cycle.v1", graphVersion: 1, nodes: [{ nodeId: "a", status: "active" }] },
+      { graphId: "cycle", graphVersion: 1, nodes: [{ nodeId: "a", status: "active" }] },
       10,
     );
 
@@ -139,7 +139,7 @@ describe("progression failures", () => {
       progression: start,
     };
     const definition = defineCommand<"player", AtomicState, JsonObject, JsonObject>({
-      definitionId: "atomic.v1",
+      definitionId: "atomic",
       commandType: "advance",
       aggregateKind: "player",
       handle() {
@@ -184,7 +184,7 @@ describe("progression failures", () => {
       progression: { nodes: [] } as never,
     };
     const definition = defineCommand<"player", JsonObject, JsonObject, JsonObject>({
-      definitionId: "malformed-progression.v1",
+      definitionId: "malformed-progression",
       commandType: "advance",
       aggregateKind: "player",
       handle: () => ({
@@ -198,7 +198,7 @@ describe("progression failures", () => {
     });
     const progression = defineProgression({
       aggregateKind: "player",
-      graphId: "malformed-progression.v1",
+      graphId: "malformed-progression",
       graphVersion: 1,
       nodes: [],
       automaticRules: [],
@@ -232,13 +232,13 @@ describe("progression failures", () => {
       authority: "local",
       state: {},
       progression: {
-        graphId: "kind-mismatch.v1",
+        graphId: "kind-mismatch",
         graphVersion: 1,
         nodes: [{ nodeId: "node", status: "locked" }],
       },
     };
     const definition = defineCommand<"player", JsonObject, JsonObject, JsonObject>({
-      definitionId: "kind-mismatch.v1",
+      definitionId: "kind-mismatch",
       commandType: "advance",
       aggregateKind: "player",
       handle: () => ({
@@ -252,7 +252,7 @@ describe("progression failures", () => {
     });
     const progression = defineProgression({
       aggregateKind: "team",
-      graphId: "kind-mismatch.v1",
+      graphId: "kind-mismatch",
       graphVersion: 1,
       nodes: [{ nodeId: "node", initialStatus: "locked" }],
       automaticRules: [
@@ -292,7 +292,7 @@ describe("progression failures", () => {
   it("rejects reverted progression instead of returning a traced no-op", () => {
     const reverted = defineProgression({
       aggregateKind: "player",
-      graphId: "reverted.v1",
+      graphId: "reverted",
       graphVersion: 1,
       nodes: [{ nodeId: "node", initialStatus: "active" }],
       automaticRules: [
@@ -314,13 +314,13 @@ describe("progression failures", () => {
       authority: "local",
       state: {},
       progression: {
-        graphId: "reverted.v1",
+        graphId: "reverted",
         graphVersion: 1,
         nodes: [{ nodeId: "node", status: "active" }],
       },
     };
     const definition = defineCommand<"player", JsonObject, JsonObject, JsonObject>({
-      definitionId: "reverted.v1",
+      definitionId: "reverted",
       commandType: "advance",
       aggregateKind: "player",
       handle: (target) => ({

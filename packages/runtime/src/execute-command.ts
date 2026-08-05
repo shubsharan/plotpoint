@@ -51,7 +51,6 @@ export interface ExecuteCommandInput<
 }
 
 export const DEFAULT_RUNTIME_POLICY: RuntimePolicy = Object.freeze({
-  contractVersion: 1,
   maxCanonicalDepth: DEFAULT_CANONICAL_LIMITS.maxCanonicalDepth,
   maxCanonicalNodes: DEFAULT_CANONICAL_LIMITS.maxCanonicalNodes,
   maxAutomaticTransitions: 100,
@@ -59,7 +58,6 @@ export const DEFAULT_RUNTIME_POLICY: RuntimePolicy = Object.freeze({
 
 function resolvePolicy(policy: Partial<RuntimePolicy> | undefined): RuntimePolicy | Diagnostic {
   const resolved = {
-    contractVersion: policy?.contractVersion ?? DEFAULT_RUNTIME_POLICY.contractVersion,
     maxCanonicalDepth: policy?.maxCanonicalDepth ?? DEFAULT_RUNTIME_POLICY.maxCanonicalDepth,
     maxCanonicalNodes: policy?.maxCanonicalNodes ?? DEFAULT_RUNTIME_POLICY.maxCanonicalNodes,
     maxAutomaticTransitions:
@@ -76,12 +74,6 @@ function resolvePolicy(policy: Partial<RuntimePolicy> | undefined): RuntimePolic
         reason: "non-negative-safe-integer-required",
       });
     }
-  }
-  if (resolved.contractVersion !== 1) {
-    return createDiagnostic("runtime-policy-invalid", {
-      field: "contractVersion",
-      reason: "unsupported-contract-version",
-    });
   }
   return Object.freeze(resolved as RuntimePolicy);
 }
@@ -149,7 +141,6 @@ function invalidResult<
   attemptedProgressionTrace: readonly ProgressionTransition[] = [],
 ): InvalidExecution<State, Payload, Kind> {
   const record = buildRecord<State, Payload, JsonObject, Kind>({
-    formatVersion: 1,
     definitionId: context.definitionId,
     policy: context.policy,
     aggregateBefore: context.aggregate,
@@ -381,7 +372,6 @@ export function executeCommand<
   const recordContext = { ...contextBase, observationTrace: cursor.trace };
   if (decisionClone.kind === "rejected") {
     const record = buildRecord<State, Payload, Outcome, Kind>({
-      formatVersion: 1,
       definitionId: input.definition.definitionId,
       policy: resolvedPolicy,
       aggregateBefore: aggregateClone,
@@ -473,7 +463,6 @@ export function executeCommand<
       ]);
     }
     const record = buildRecord<State, Payload, Outcome, Kind>({
-      formatVersion: 1,
       definitionId: input.definition.definitionId,
       policy: resolvedPolicy,
       aggregateBefore: aggregateClone,
@@ -523,7 +512,6 @@ export function executeCommand<
   const domainEvents = decisionClone.domainEvents as readonly DomainEvent[];
   const effectIntents = decisionClone.effectIntents as readonly EffectIntent[];
   const record = buildRecord<State, Payload, Outcome, Kind>({
-    formatVersion: 1,
     definitionId: input.definition.definitionId,
     policy: resolvedPolicy,
     aggregateBefore: aggregateClone,

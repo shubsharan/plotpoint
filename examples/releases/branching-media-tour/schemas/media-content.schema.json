@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "tour.media-content.v1",
+  "$id": "tour.media-content",
   "type": "object",
   "additionalProperties": false,
   "required": ["assetId", "caption", "title"],
   "properties": {
-    "assetId": { "const": "tour.audio.river.v1" },
+    "assetId": { "const": "tour.audio.river" },
     "caption": { "type": "string", "minLength": 1 },
     "title": { "type": "string", "minLength": 1 }
   }

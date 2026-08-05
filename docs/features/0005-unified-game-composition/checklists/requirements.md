@@ -34,8 +34,8 @@
 - Validation passed without clarification markers after resolving scoped component/application
   lifecycles, local/server model ownership, schema-digest matching, trusted-code validation limits,
   finite synchronization and reconnect scheduling, pending join and revocation recovery, generic report
-  export, effect-only scope, fresh-release behavior, single-owner relationships, and the clean V1 break.
-- The specification and plan intentionally define only corrected V1 serialized contracts and
+  export, effect-only scope, fresh-release behavior, single-owner relationships, and the clean break.
+- The specification and plan intentionally define only corrected serialized contracts and
   unversioned runtime TypeScript APIs. They require obsolete artifacts/reports/databases to be rejected,
   not migrated or interpreted through compatibility code.
 - Planning is complete, but this update does not generate `tasks.md` or begin implementation. At the

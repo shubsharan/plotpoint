@@ -1,6 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 
-import { openRelease, type ReleaseManifestV1 } from "@plotpoint/protocol";
+import { openRelease, type ReleaseManifest } from "@plotpoint/protocol";
 
 import type { PlayerDatabase } from "../persistence/database";
 import type { InstallTransport, InstallationPublisher } from "./install-release";
@@ -145,7 +145,7 @@ export function createNativeInstallationPublisher(
     async publish(input: {
       descriptor: { expectedReleaseId: string };
       bytes: Uint8Array;
-      manifest: ReleaseManifestV1;
+      manifest: ReleaseManifest;
     }) {
       if (fileSystem.documentDirectory === null) throw new Error("install-storage-unavailable");
       const digest = input.descriptor.expectedReleaseId.slice("sha256:".length);

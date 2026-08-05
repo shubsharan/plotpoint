@@ -3,7 +3,7 @@ import type {
   CompatibilityAssessment,
   HostReleaseSupport,
   ReleaseDiagnostic,
-  ReleaseManifestV1,
+  ReleaseManifest,
 } from "./types.js";
 
 function diagnostic(
@@ -20,7 +20,7 @@ function diagnostic(
 }
 
 export function assessCompatibility(
-  manifest: ReleaseManifestV1,
+  manifest: ReleaseManifest,
   support: HostReleaseSupport,
 ): CompatibilityAssessment {
   const diagnostics: ReleaseDiagnostic[] = [];

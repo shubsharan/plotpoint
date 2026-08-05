@@ -1,17 +1,17 @@
-# Contract: Host API 1.1 Shared Play Extension
+# Contract: Host API Shared Play Extension
 
-Host API 1.0 remains exact and unchanged. Host API 1.1 adds game-neutral shared play. Release code
+The local Host API core remains exact and unchanged. The extension adds game-neutral shared play. Release code
 never receives HTTP envelopes, bearer credentials, SQLite identities, observations belonging to
 another run, or synchronization cursors.
 
 ```ts
-interface SharedPlayClientV1 {
-  getView(): Promise<SharedPlayViewV1>;
-  enqueueCommand(command: SharedCommandIntentV1): Promise<SharedCommandStatusV1>;
+interface SharedPlayClient {
+  getView(): Promise<SharedPlayView>;
+  enqueueCommand(command: SharedCommandIntent): Promise<SharedCommandStatus>;
   onSyncChanged(listener: () => void): () => void;
 }
 
-interface SharedCommandIntentV1 {
+interface SharedCommandIntent {
   readonly commandId: string;
   readonly target: {
     readonly aggregateKind: "player" | "team" | "session";
@@ -25,7 +25,7 @@ interface SharedCommandIntentV1 {
   readonly observationIds: readonly string[];
 }
 
-interface SharedProjectionV1 {
+interface SharedProjection {
   readonly aggregateKind: "player" | "team" | "session";
   readonly aggregateId: string;
   readonly schemaId: string;
@@ -34,7 +34,7 @@ interface SharedProjectionV1 {
   readonly value: object;
 }
 
-interface SharedCommandStatusV1 {
+interface SharedCommandStatus {
   readonly commandId: string;
   readonly disposition: "queued" | "duplicate-pending" | "already-terminal";
   readonly terminal: "pending" | "accepted" | "no-op" | "rejected" | "invalid" | "blocked-revoked";
@@ -42,15 +42,15 @@ interface SharedCommandStatusV1 {
   readonly resultingStateVersion?: number;
 }
 
-interface SharedPlayViewV1 {
+interface SharedPlayView {
   readonly sessionId: string;
   readonly releaseId: `sha256:${string}`;
   readonly transport: "offline" | "connecting" | "online" | "degraded";
   readonly synchronization: "current" | "syncing" | "recovery-required" | "revoked";
   readonly confirmedAt: string | null;
   readonly membership: { readonly status: "active" | "revoked"; readonly teamId: string };
-  readonly projections: readonly SharedProjectionV1[];
-  readonly actions: readonly SharedCommandStatusV1[];
+  readonly projections: readonly SharedProjection[];
+  readonly actions: readonly SharedCommandStatus[];
 }
 ```
 

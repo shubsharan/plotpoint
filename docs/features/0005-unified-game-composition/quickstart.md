@@ -3,9 +3,9 @@
 This walkthrough defines the implementation acceptance shape for both reference games. The commands
 and files below describe planned behavior; this documentation update does not implement them.
 
-## 1. Declare One V1 Composition
+## 1. Declare One Composition
 
-A local field puzzle uses the corrected Project Configuration V1 with one local/player model, one
+A local field puzzle uses the corrected Project Configuration with one local/player model, one
 command, optional progression, one component, and no trusted mechanic:
 
 ```json
@@ -15,62 +15,62 @@ command, optional progression, one component, and no trusted mechanic:
   "hostApi": { "major": 1, "minimumMinor": 0 },
   "application": {
     "definition": { "source": "src/application.ts", "export": "fieldApplication" },
-    "components": ["field.puzzle.v1"]
+    "components": ["field.puzzle"]
   },
   "aggregateModels": [
     {
-      "id": "field.player.v1",
+      "id": "field.player",
       "authority": "local",
       "kind": "player",
-      "stateSchema": "field.player-state.v1",
-      "initializationSchema": "field.initialization.v1",
+      "stateSchema": "field.player-state",
+      "initializationSchema": "field.initialization",
       "initializer": { "source": "src/initial-state.ts", "export": "initializeField" },
-      "initializationContent": "field.game.v1",
-      "events": [{ "type": "field.advanced.v1", "schema": "field.advanced-event.v1" }],
+      "initializationContent": "field.game",
+      "events": [{ "type": "field.advanced", "schema": "field.advanced-event" }],
       "effects": []
     }
   ],
   "commands": [
     {
-      "id": "field.advance.v1",
+      "id": "field.advance",
       "type": "advance",
-      "aggregateModel": "field.player.v1",
-      "payloadSchema": "field.advance-payload.v1",
-      "outcomeSchema": "field.advance-outcome.v1",
+      "aggregateModel": "field.player",
+      "payloadSchema": "field.advance-payload",
+      "outcomeSchema": "field.advance-outcome",
       "execution": "local",
       "definition": { "source": "src/commands/advance.ts", "export": "advance" }
     }
   ],
   "progressions": [
     {
-      "id": "field.route.v1",
+      "id": "field.route",
       "version": 1,
-      "aggregateModel": "field.player.v1",
+      "aggregateModel": "field.player",
       "definition": { "source": "src/progression.ts", "export": "fieldRoute" }
     }
   ],
   "components": [
     {
-      "id": "field.puzzle.v1",
+      "id": "field.puzzle",
       "implementation": { "source": "src/components/puzzle.ts", "export": "FieldPuzzle" },
-      "commands": ["field.advance.v1"],
-      "content": ["field.game.v1"],
+      "commands": ["field.advance"],
+      "content": ["field.game"],
       "assets": [],
       "capabilities": []
     }
   ],
   "schemas": [
-    { "id": "field.player-state.v1", "version": 1, "path": "schemas/player-state.json" },
-    { "id": "field.initialization.v1", "version": 1, "path": "schemas/initialization.json" },
-    { "id": "field.advance-payload.v1", "version": 1, "path": "schemas/advance-payload.json" },
-    { "id": "field.advance-outcome.v1", "version": 1, "path": "schemas/advance-outcome.json" },
-    { "id": "field.advanced-event.v1", "version": 1, "path": "schemas/advanced-event.json" }
+    { "id": "field.player-state", "version": 1, "path": "schemas/player-state.json" },
+    { "id": "field.initialization", "version": 1, "path": "schemas/initialization.json" },
+    { "id": "field.advance-payload", "version": 1, "path": "schemas/advance-payload.json" },
+    { "id": "field.advance-outcome", "version": 1, "path": "schemas/advance-outcome.json" },
+    { "id": "field.advanced-event", "version": 1, "path": "schemas/advanced-event.json" }
   ],
   "content": [
     {
-      "id": "field.game.v1",
+      "id": "field.game",
       "path": "content/game.json",
-      "schema": { "id": "field.initialization.v1", "version": 1 }
+      "schema": { "id": "field.initialization", "version": 1 }
     }
   ],
   "assets": []
@@ -100,7 +100,7 @@ A command returns an explicit semantic decision:
 
 ```ts
 export const advance = defineCommand({
-  definitionId: "field.advance.v1",
+  definitionId: "field.advance",
   commandType: "advance",
   aggregateKind: "player",
   handle(aggregate, command, observations) {
@@ -114,7 +114,7 @@ export const advance = defineCommand({
       kind: "accepted",
       nextState: nextFieldState(aggregate.state, command.payload, observations),
       outcome: { code: "advanced" },
-      domainEvents: [{ type: "field.advanced.v1", payload: {} }],
+      domainEvents: [{ type: "field.advanced", payload: {} }],
       effectIntents: [],
       progressionIntents: [],
     };
@@ -130,7 +130,7 @@ optional progression. Application code does not write a second `logic.run()` or 
 ```ts
 export const fieldRoute = defineProgression({
   aggregateKind: "player",
-  graphId: "field.route.v1",
+  graphId: "field.route",
   graphVersion: 1,
   nodes: [
     { nodeId: "first-checkpoint", initialStatus: "active" },
@@ -176,9 +176,9 @@ game state already expresses every phase, progression is omitted.
 ## 4. Mount Scoped Components
 
 ```ts
-export function FieldPuzzle(context: ComponentContextV1): HTMLElement {
-  const game = context.content["field.game.v1"];
-  const advance = context.local.commands["field.advance.v1"];
+export function FieldPuzzle(context: ComponentContext): HTMLElement {
+  const game = context.content["field.game"];
+  const advance = context.local.commands["field.advance"];
   const element = renderPuzzle({ game, advance });
   const refresh = async () => updatePuzzle(element, await context.local.getView());
   context.lifecycle.defer(context.local.onChanged(() => void refresh()));
@@ -186,10 +186,9 @@ export function FieldPuzzle(context: ComponentContextV1): HTMLElement {
   return element;
 }
 
-export const fieldApplication = defineGameApplicationV1({
-  contractVersion: 1,
+export const fieldApplication = defineGameApplication({
   mount({ root, components }) {
-    const element = components["field.puzzle.v1"]();
+    const element = components["field.puzzle"]();
     root.replaceChildren(element);
     return { unmount: () => element.remove() };
   },
@@ -209,10 +208,10 @@ them once:
 {
   "id": "plotpoint.location.target-discovery",
   "version": 1,
-  "aggregateModel": "plotpoint.location.team.v1",
-  "commands": ["plotpoint.location.target-discovery.v1"],
-  "configuration": "plotpoint.location.target-config.v1",
-  "projectionSchema": { "id": "plotpoint.location.team-projection.v1", "version": 1 },
+  "aggregateModel": "plotpoint.location.team",
+  "commands": ["plotpoint.location.target-discovery"],
+  "configuration": "plotpoint.location.target-config",
+  "projectionSchema": { "id": "plotpoint.location.team-projection", "version": 1 },
   "capabilities": [{ "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 0 }]
 }
 ```
@@ -225,10 +224,10 @@ At registration, the API resolves the exact adapter from its closed registry, va
 schema/config/projection/capability agreement, and stores safe initialization configuration. The
 adapter returns a validated binding plus initializer input, an authorized runtime command plus explicit
 observation facts or a stable rejected/invalid terminal, and a complete validated projection.
-`expectedStateVersion` and `resultingStateVersion` pass straight through Runtime and Sync V1.
+`expectedStateVersion` and `resultingStateVersion` pass straight through Runtime and Sync.
 
 The native player remains generic: local releases have no join surface; unbound shared releases show
-generic native join controls; exact bindings expose scoped Shared Play V1; conflicts expose no
+generic native join controls; exact bindings expose scoped Shared Play; conflicts expose no
 projection.
 
 ## 6. Compile and Inspect
@@ -245,9 +244,9 @@ pnpm plotpoint compile --project examples/releases/co-op-game --out /tmp/co-op-g
 pnpm plotpoint inspect /tmp/co-op-game.pprelease --json
 ```
 
-Inspection must show unchanged Release Format V1 and Host API 1.0/1.1, exactly one mandatory
-`composition/game.v1.json`, one-way model relationships, fixed generated registry maps, exact resource
-bindings, and a trusted target-discovery binding only in the co-op game. Game Composition V1 does not repeat
+Inspection must show unchanged Release Format and Host API compatibility metadata, exactly one mandatory
+`composition/game.json`, one-way model relationships, fixed generated registry maps, exact resource
+bindings, and a trusted target-discovery binding only in the co-op game. Game Composition does not repeat
 manifest Host API/capabilities or invent per-item export names.
 
 Deleting the application export, supplying the discarded project shape, adding an undeclared component
@@ -259,11 +258,11 @@ must fail. There is no legacy parse or composition-absent success result.
 The field acceptance test:
 
 1. compiles, verifies, installs, and creates the run;
-2. sends Runtime Bootstrap V1 to the generated adapter and mounts the application;
-3. captures a declared observation and executes `field.advance.v1`;
-4. commits Local Transition V1 atomically;
+2. sends Runtime Bootstrap to the generated adapter and mounts the application;
+3. captures a declared observation and executes `field.advance`;
+4. commits Local Transition atomically;
 5. destroys/recreates the WebView and recovers identical state, progression, terminal, and state version;
-6. exports Game Play Report V1 through the generic run-owned path; and
+6. exports Game Play Report through the generic run-owned path; and
 7. fails an incompatible database with explicit reset/reinstall guidance instead of migrating/dropping it.
 
 Fixtures cover accepted state change, event/effect-only acceptance, no-op, rejection, preflight and
@@ -284,7 +283,7 @@ The co-op game acceptance test:
 7. repeats response-loss recovery and normal/corrective/revoked pulls 100 times;
 8. overlaps enqueue/foreground/reconnect/retry triggers and observes one active plus at most one trailing pass;
 9. handles authenticated revocation atomically and retains blocked outbox evidence;
-10. exports the same Game Play Report V1 shape with no target-specific fields; and
+10. exports the same Game Play Report shape with no target-specific fields; and
 11. recompiles a changed release as a fresh run/session without active-session migration.
 
 Wrong release, run, session, participant, team, or origin leaves prior binding/projection unchanged.

@@ -39,14 +39,14 @@ describe("cooperative hunt HTTP boundary", () => {
   it("requires operator authority", async () => {
     const fake = service();
     const origin = await start(fake);
-    const denied = await fetch(`${origin}/v1/hunt-sessions`, {
+    const denied = await fetch(`${origin}/hunt-sessions`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ version: 1 }),
     });
     expect(denied.status).toBe(401);
     expect(await denied.json()).toMatchObject({ code: "operator-not-authorized" });
-    const allowed = await fetch(`${origin}/v1/hunt-sessions`, {
+    const allowed = await fetch(`${origin}/hunt-sessions`, {
       method: "POST",
       headers: { authorization: "Bearer operator", "content-type": "application/json" },
       body: JSON.stringify({
@@ -71,7 +71,7 @@ describe("cooperative hunt HTTP boundary", () => {
       commandResults: [],
     });
     const origin = await start(fake);
-    const response = await fetch(`${origin}/v1/hunt-sessions/session-1/sync?after=0`, {
+    const response = await fetch(`${origin}/hunt-sessions/session-1/sync?after=0`, {
       headers: { authorization: "Bearer participant-secret" },
     });
     expect(response.status).toBe(200);
@@ -82,7 +82,7 @@ describe("cooperative hunt HTTP boundary", () => {
   it("rejects unknown request fields before service dispatch", async () => {
     const fake = service();
     const origin = await start(fake);
-    const response = await fetch(`${origin}/v1/hunt-sessions`, {
+    const response = await fetch(`${origin}/hunt-sessions`, {
       method: "POST",
       headers: { authorization: "Bearer operator", "content-type": "application/json" },
       body: JSON.stringify({

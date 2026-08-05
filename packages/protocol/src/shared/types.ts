@@ -1,28 +1,29 @@
+import { CONTRACT_VERSIONS } from "../contract-versions.js";
 import type { CanonicalJsonObject } from "../release/types.js";
-import type { LocationObservationV1 } from "../player/report.js";
+import type { LocationObservation } from "../player/report.js";
 
-export type SharedAggregateKindV1 = "player" | "team" | "session";
-export type SharedTerminalV1 = "accepted" | "no-op" | "rejected" | "invalid";
-export type SharedActionTerminalV1 = SharedTerminalV1 | "pending" | "blocked-revoked";
+export type SharedAggregateKind = "player" | "team" | "session";
+export type SharedTerminal = "accepted" | "no-op" | "rejected" | "invalid";
+export type SharedActionTerminal = SharedTerminal | "pending" | "blocked-revoked";
 
-export interface SharedAggregateTargetV1 {
-  readonly aggregateKind: SharedAggregateKindV1;
+export interface SharedAggregateTarget {
+  readonly aggregateKind: SharedAggregateKind;
   readonly aggregateId: string;
   readonly schemaId: string;
   readonly schemaVersion: number;
 }
 
-export interface SharedCommandIntentV1 {
+export interface SharedCommandIntent {
   readonly commandId: string;
-  readonly target: SharedAggregateTargetV1;
+  readonly target: SharedAggregateTarget;
   readonly expectedStateVersion: number;
   readonly type: string;
   readonly payload: CanonicalJsonObject;
   readonly observationIds: readonly string[];
 }
 
-export interface SharedProjectionV1 {
-  readonly aggregateKind: SharedAggregateKindV1;
+export interface SharedProjection {
+  readonly aggregateKind: SharedAggregateKind;
   readonly aggregateId: string;
   readonly schemaId: string;
   readonly schemaVersion: number;
@@ -30,15 +31,15 @@ export interface SharedProjectionV1 {
   readonly value: CanonicalJsonObject;
 }
 
-export interface SharedCommandStatusV1 {
+export interface SharedCommandStatus {
   readonly commandId: string;
   readonly disposition: "queued" | "duplicate-pending" | "already-terminal";
-  readonly terminal: SharedActionTerminalV1;
+  readonly terminal: SharedActionTerminal;
   readonly outcomeCode?: string;
   readonly resultingStateVersion?: number;
 }
 
-export interface SharedPlayViewV1 {
+export interface SharedPlayView {
   readonly sessionId: string;
   readonly releaseId: `sha256:${string}`;
   readonly transport: "offline" | "connecting" | "online" | "degraded";
@@ -48,51 +49,51 @@ export interface SharedPlayViewV1 {
     readonly status: "active" | "revoked";
     readonly teamId: string;
   };
-  readonly projections: readonly SharedProjectionV1[];
-  readonly actions: readonly SharedCommandStatusV1[];
+  readonly projections: readonly SharedProjection[];
+  readonly actions: readonly SharedCommandStatus[];
 }
 
-export interface SyncCommandV1 {
-  readonly version: 1;
+export interface SyncCommand {
+  readonly version: typeof CONTRACT_VERSIONS.sharedSync;
   readonly commandId: string;
-  readonly target: SharedAggregateTargetV1;
+  readonly target: SharedAggregateTarget;
   readonly expectedStateVersion: number;
   readonly type: string;
   readonly payload: CanonicalJsonObject;
-  readonly observations: readonly LocationObservationV1[];
+  readonly observations: readonly LocationObservation[];
 }
 
-export interface SyncCommandResultV1 {
-  readonly version: 1;
+export interface SyncCommandResult {
+  readonly version: typeof CONTRACT_VERSIONS.sharedSync;
   readonly commandId: string;
   readonly disposition: "decided" | "duplicate";
-  readonly terminal: SharedTerminalV1;
+  readonly terminal: SharedTerminal;
   readonly outcomeCode: string;
   readonly resultingStateVersion: number;
   readonly decisionPosition: string;
 }
 
-export interface AuthorizedSnapshotV1 {
-  readonly version: 1;
+export interface AuthorizedSnapshot {
+  readonly version: typeof CONTRACT_VERSIONS.sharedSync;
   readonly sessionId: string;
   readonly releaseId: `sha256:${string}`;
   readonly participantId: string;
   readonly teamId: string;
   readonly membershipStatus: "active" | "revoked";
   readonly confirmedAt: string;
-  readonly projections: readonly SharedProjectionV1[];
+  readonly projections: readonly SharedProjection[];
 }
 
-export interface SyncPullV1 {
-  readonly version: 1;
+export interface SyncPull {
+  readonly version: typeof CONTRACT_VERSIONS.sharedSync;
   readonly kind: "snapshot";
   readonly reset: boolean;
   readonly nextCursor: string;
-  readonly snapshot: AuthorizedSnapshotV1;
-  readonly commandResults: readonly SyncCommandResultV1[];
+  readonly snapshot: AuthorizedSnapshot;
+  readonly commandResults: readonly SyncCommandResult[];
 }
 
-export interface SharedPlayTransportV1 {
+export interface SharedPlayTransport {
   send(
     type: "shared.view.get" | "shared.command.enqueue",
     payload: CanonicalJsonObject,
@@ -100,8 +101,8 @@ export interface SharedPlayTransportV1 {
   subscribe(type: "shared.sync.changed", listener: () => void): () => void;
 }
 
-export interface SharedPlayClientV1 {
-  getView(): Promise<SharedPlayViewV1>;
-  enqueueCommand(command: SharedCommandIntentV1): Promise<SharedCommandStatusV1>;
+export interface SharedPlayClient {
+  getView(): Promise<SharedPlayView>;
+  enqueueCommand(command: SharedCommandIntent): Promise<SharedCommandStatus>;
   onSyncChanged(listener: () => void): () => void;
 }

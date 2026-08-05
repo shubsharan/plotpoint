@@ -1,20 +1,16 @@
 import type { CanonicalJsonObject } from "../release/types.js";
-import type { SharedCommandIntentV1, SharedPlayClientV1, SharedPlayTransportV1 } from "./types.js";
-import {
-  isSharedCommandIntentV1,
-  isSharedCommandStatusV1,
-  isSharedPlayViewV1,
-} from "./validation.js";
+import type { SharedCommandIntent, SharedPlayClient, SharedPlayTransport } from "./types.js";
+import { isSharedCommandIntent, isSharedCommandStatus, isSharedPlayView } from "./validation.js";
 
-export function createSharedPlayClientV1(transport: SharedPlayTransportV1): SharedPlayClientV1 {
+export function createSharedPlayClient(transport: SharedPlayTransport): SharedPlayClient {
   return Object.freeze({
     async getView() {
       const value = await transport.send("shared.view.get", {});
-      if (!isSharedPlayViewV1(value)) throw new Error("shared-view-invalid");
+      if (!isSharedPlayView(value)) throw new Error("shared-view-invalid");
       return value;
     },
-    async enqueueCommand(command: SharedCommandIntentV1) {
-      if (!isSharedCommandIntentV1(command)) throw new Error("shared-command-invalid");
+    async enqueueCommand(command: SharedCommandIntent) {
+      if (!isSharedCommandIntent(command)) throw new Error("shared-command-invalid");
       const payload: CanonicalJsonObject = {
         command: {
           commandId: command.commandId,
@@ -31,7 +27,7 @@ export function createSharedPlayClientV1(transport: SharedPlayTransportV1): Shar
         },
       };
       const value = await transport.send("shared.command.enqueue", payload);
-      if (!isSharedCommandStatusV1(value) || value.commandId !== command.commandId) {
+      if (!isSharedCommandStatus(value) || value.commandId !== command.commandId) {
         throw new Error("shared-command-result-invalid");
       }
       return value;

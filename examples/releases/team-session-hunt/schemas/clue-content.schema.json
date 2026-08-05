@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "hunt.clue-content.v1",
+  "$id": "hunt.clue-content",
   "type": "object",
   "additionalProperties": false,
   "required": ["clues", "mapAssetId"],
   "properties": {
-    "mapAssetId": { "const": "hunt.map.city.v1" },
+    "mapAssetId": { "const": "hunt.map.city" },
     "clues": {
       "type": "array",
       "minItems": 2,

@@ -206,7 +206,7 @@ export type {
   HostApiRequirement,
   InvalidProject,
   ProgressionRegistration,
-  ProjectConfigurationV1,
+  ProjectConfiguration,
   ProjectEnvironment,
   RegistrationDiagnosticLocation,
   SchemaRegistration,

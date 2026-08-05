@@ -12,7 +12,7 @@ ADR 0005 is Accepted and implementation evidence is recorded in
 5. Disconnect and restart one player while teammates finish the route; reconnect and confirm one atomic
    snapshot plus results converges all players.
 6. Revoke one participant with queued work and confirm its commands become blocked-revoked.
-7. Export Shared Hunt Report V1 and inspect it for prohibited credentials, coordinates, payload/state,
+7. Export Shared Hunt Report and inspect it for prohibited credentials, coordinates, payload/state,
    protected content, reusable identities, SQL errors, paths, and stacks.
 8. Run `pnpm verify`, focused PostgreSQL integration tests, iOS simulator validation, Android emulator
    validation, and `git diff --check`.

@@ -27,7 +27,6 @@ describe("trusted release registration", () => {
           path: targetDiscoveryConfigReleasePath(),
           kind: "content",
           value: {
-            version: 1,
             targets: [
               {
                 targetId: "alpha",

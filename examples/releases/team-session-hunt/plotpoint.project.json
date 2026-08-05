@@ -8,118 +8,118 @@
   },
   "commands": [
     {
-      "id": "hunt.advance-round.v1",
+      "id": "hunt.advance-round",
       "type": "advance-round",
       "definition": { "source": "src/commands/advance-round.ts", "export": "advanceRoundCommand" },
-      "aggregateSchema": "hunt.session-state.v1",
-      "payloadSchema": "hunt.advance-round-payload.v1",
-      "outcomeSchema": "hunt.advance-round-outcome.v1"
+      "aggregateSchema": "hunt.session-state",
+      "payloadSchema": "hunt.advance-round-payload",
+      "outcomeSchema": "hunt.advance-round-outcome"
     },
     {
-      "id": "hunt.solve-clue.v1",
+      "id": "hunt.solve-clue",
       "type": "solve-clue",
       "definition": { "source": "src/commands/solve-clue.ts", "export": "solveClueCommand" },
-      "aggregateSchema": "hunt.team-state.v1",
-      "payloadSchema": "hunt.solve-clue-payload.v1",
-      "outcomeSchema": "hunt.solve-clue-outcome.v1"
+      "aggregateSchema": "hunt.team-state",
+      "payloadSchema": "hunt.solve-clue-payload",
+      "outcomeSchema": "hunt.solve-clue-outcome"
     }
   ],
   "aggregateSchemas": [
     {
-      "id": "plotpoint.hunt.player-shell.v1",
+      "id": "plotpoint.hunt.player-shell",
       "kind": "player",
       "version": 1,
       "path": "schemas/player-shell.schema.json"
     },
     {
-      "id": "hunt.session-state.v1",
+      "id": "hunt.session-state",
       "kind": "session",
       "version": 1,
       "path": "schemas/session-state.schema.json"
     },
     {
-      "id": "hunt.team-state.v1",
+      "id": "hunt.team-state",
       "kind": "team",
       "version": 1,
       "path": "schemas/team-state.schema.json"
     }
   ],
   "schemas": [
-    { "id": "hunt.advance-round-outcome.v1", "path": "schemas/advance-round-outcome.schema.json" },
-    { "id": "hunt.advance-round-payload.v1", "path": "schemas/advance-round-payload.schema.json" },
-    { "id": "hunt.clue-content.v1", "path": "schemas/clue-content.schema.json" },
-    { "id": "hunt.round-content.v1", "path": "schemas/round-content.schema.json" },
-    { "id": "plotpoint.hunt.target-config.v1", "path": "schemas/target-config.schema.json" },
-    { "id": "hunt.solve-clue-outcome.v1", "path": "schemas/solve-clue-outcome.schema.json" },
-    { "id": "hunt.solve-clue-payload.v1", "path": "schemas/solve-clue-payload.schema.json" }
+    { "id": "hunt.advance-round-outcome", "path": "schemas/advance-round-outcome.schema.json" },
+    { "id": "hunt.advance-round-payload", "path": "schemas/advance-round-payload.schema.json" },
+    { "id": "hunt.clue-content", "path": "schemas/clue-content.schema.json" },
+    { "id": "hunt.round-content", "path": "schemas/round-content.schema.json" },
+    { "id": "plotpoint.hunt.target-config", "path": "schemas/target-config.schema.json" },
+    { "id": "hunt.solve-clue-outcome", "path": "schemas/solve-clue-outcome.schema.json" },
+    { "id": "hunt.solve-clue-payload", "path": "schemas/solve-clue-payload.schema.json" }
   ],
   "progressions": [
     {
-      "id": "hunt.session-rounds.v1",
+      "id": "hunt.session-rounds",
       "version": 1,
       "kind": "session",
       "definition": {
         "source": "src/progression/session-rounds.ts",
         "export": "sessionRoundsProgression"
       },
-      "aggregateSchema": "hunt.session-state.v1",
-      "commands": ["hunt.advance-round.v1"],
-      "content": ["hunt.round-rules.v1"],
-      "components": ["hunt.session-console.v1"]
+      "aggregateSchema": "hunt.session-state",
+      "commands": ["hunt.advance-round"],
+      "content": ["hunt.round-rules"],
+      "components": ["hunt.session-console"]
     },
     {
-      "id": "hunt.team-route.v1",
+      "id": "hunt.team-route",
       "version": 1,
       "kind": "team",
       "definition": { "source": "src/progression/team-route.ts", "export": "teamRouteProgression" },
-      "aggregateSchema": "hunt.team-state.v1",
-      "commands": ["hunt.solve-clue.v1"],
-      "content": ["hunt.clue-pack.v1"],
-      "components": ["hunt.clue-board.v1"]
+      "aggregateSchema": "hunt.team-state",
+      "commands": ["hunt.solve-clue"],
+      "content": ["hunt.clue-pack"],
+      "components": ["hunt.clue-board"]
     }
   ],
   "components": [
     {
-      "id": "hunt.clue-board.v1",
+      "id": "hunt.clue-board",
       "implementation": { "source": "src/components/clue-board.ts", "export": "ClueBoard" },
-      "commands": ["hunt.solve-clue.v1"],
-      "content": ["hunt.clue-pack.v1"],
-      "assets": ["hunt.map.city.v1"],
+      "commands": ["hunt.solve-clue"],
+      "content": ["hunt.clue-pack"],
+      "assets": ["hunt.map.city"],
       "capabilities": [{ "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 0 }]
     },
     {
-      "id": "hunt.session-console.v1",
+      "id": "hunt.session-console",
       "implementation": {
         "source": "src/components/session-console.ts",
         "export": "SessionConsole"
       },
-      "commands": ["hunt.advance-round.v1"],
-      "content": ["hunt.round-rules.v1"],
-      "assets": ["hunt.audio.round.v1"],
+      "commands": ["hunt.advance-round"],
+      "content": ["hunt.round-rules"],
+      "assets": ["hunt.audio.round"],
       "capabilities": []
     }
   ],
   "content": [
-    { "id": "hunt.clue-pack.v1", "path": "content/clues.json", "schema": "hunt.clue-content.v1" },
+    { "id": "hunt.clue-pack", "path": "content/clues.json", "schema": "hunt.clue-content" },
     {
-      "id": "plotpoint.hunt.targets.v1",
+      "id": "plotpoint.hunt.targets",
       "path": "content/targets.json",
-      "schema": "plotpoint.hunt.target-config.v1"
+      "schema": "plotpoint.hunt.target-config"
     },
     {
-      "id": "hunt.round-rules.v1",
+      "id": "hunt.round-rules",
       "path": "content/rounds.json",
-      "schema": "hunt.round-content.v1"
+      "schema": "hunt.round-content"
     }
   ],
   "assets": [
     {
-      "id": "hunt.audio.round.v1",
+      "id": "hunt.audio.round",
       "path": "assets/round-chime.txt",
       "releasePath": "assets/round-chime.txt"
     },
     {
-      "id": "hunt.map.city.v1",
+      "id": "hunt.map.city",
       "path": "assets/city-map.svg",
       "releasePath": "assets/city-map.svg"
     }

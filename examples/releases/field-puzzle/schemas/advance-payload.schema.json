@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "field.advance-payload.v1",
+  "$id": "field.advance-payload",
   "type": "object",
   "additionalProperties": false,
   "required": ["action"],

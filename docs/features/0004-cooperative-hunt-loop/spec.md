@@ -50,7 +50,7 @@ report, and prove credentials, invitations, coordinates, payload/state, and reus
 - **FR-002**: One-use invitations and repeated identical joins MUST not create duplicate participants.
 - **FR-003**: Participant credentials MUST remain in native secure storage and be stored server-side only as keyed digests.
 - **FR-004**: Unknown, expired, consumed, and wrong-session invitations MUST disclose no game view.
-- **FR-005**: Host API 1.1 commands and projections MUST remain game-neutral and schema identified.
+- **FR-005**: Shared Play commands and projections MUST remain game-neutral and schema identified.
 - **FR-006**: Release code MUST reference persisted observation identities; it MUST NOT supply replacement sensor values.
 - **FR-007**: Shared discoveries MUST be decided by one trusted server module using target, freshness, accuracy, and zone policy.
 - **FR-008**: One team aggregate MUST own target state and derived completion.
@@ -64,7 +64,7 @@ report, and prove credentials, invitations, coordinates, payload/state, and reus
 - **FR-016**: Every pull MUST provide a complete current authorized projection and retained participant results after an opaque cursor.
 - **FR-017**: Snapshot replacement, result upsert, and cursor advancement MUST commit atomically in SQLite.
 - **FR-018**: Operator revocation MUST prevent further acceptance and move queued local work to blocked-revoked without deletion.
-- **FR-019**: Reports MUST preserve exact terminal semantics and redacted Location V1 quality bands.
+- **FR-019**: Reports MUST preserve exact terminal semantics and redacted Location quality bands.
 - **FR-020**: Provider-free, iOS simulator, and Android emulator evidence MUST remain distinct from deferred physical-device claims.
 
 ## Success Criteria
@@ -91,3 +91,4 @@ report, and prove credentials, invitations, coordinates, payload/state, and reus
 - [ADR-0003: Trusted Single-WebView Runtime](../../adrs/0003-trusted-webview-runtime.md)
 - [ADR-0004: Host-Owned Atomic Player Persistence](../../adrs/0004-atomic-player-persistence.md)
 - [ADR-0005: Authoritative Shared Sessions and Snapshot Recovery](../../adrs/0005-authoritative-shared-session-sync.md)
+- [ADR-0006: Unversioned Contract Names](../../adrs/0006-unversioned-contract-names.md)

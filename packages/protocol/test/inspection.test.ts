@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeReleaseId, inspectRelease, type ReleaseManifestV1 } from "@plotpoint/protocol";
+import { computeReleaseId, inspectRelease, type ReleaseManifest } from "@plotpoint/protocol";
 
 import { encodeCanonicalJson } from "../src/release/canonical-json.js";
 import { sha256Digest } from "../src/release/identity.js";
@@ -14,7 +14,7 @@ const payloads: Readonly<Record<string, Uint8Array>> = {
   "schemas/player.json": utf8.encode("{}"),
 };
 
-function manifest(): ReleaseManifestV1 {
+function manifest(): ReleaseManifest {
   return {
     releaseFormatVersion: 1,
     hostApi: { major: 1, minimumMinor: 2 },

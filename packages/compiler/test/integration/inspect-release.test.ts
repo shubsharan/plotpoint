@@ -10,7 +10,7 @@ import {
   assessCompatibility,
   inspectRelease,
   type HostReleaseSupport,
-  type ReleaseManifestV1,
+  type ReleaseManifest,
 } from "@plotpoint/protocol";
 
 const goldenProjects = [
@@ -30,7 +30,7 @@ function fixtureRoot(project: (typeof goldenProjects)[number]): string {
   return fileURLToPath(new URL(`../../../../examples/releases/${project}/`, import.meta.url));
 }
 
-function supportedHost(manifest: ReleaseManifestV1): HostReleaseSupport {
+function supportedHost(manifest: ReleaseManifest): HostReleaseSupport {
   return {
     releaseFormatVersions: [manifest.releaseFormatVersion],
     hostApi: {
@@ -60,7 +60,7 @@ function expectIncompatibleCode(
   }
 }
 
-function expectCompatibilityMatrix(manifest: ReleaseManifestV1): void {
+function expectCompatibilityMatrix(manifest: ReleaseManifest): void {
   const supported = supportedHost(manifest);
   expect(assessCompatibility(manifest, supported)).toEqual({ kind: "compatible" });
 

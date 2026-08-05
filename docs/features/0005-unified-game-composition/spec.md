@@ -207,7 +207,7 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   any platform-visible command, resource, capability, aggregate model, or trusted mechanic operation
   absent from the caller's validated project composition.
 - **FR-006**: Component declarations MUST name their platform-visible command, content, asset,
-  capability, and optional versioned shared-projection dependencies, and each component MUST receive a
+  capability, and optional shared-projection dependencies, and each component MUST receive a
   runtime context that resolves only those declared dependencies. The context MUST also expose pure
   durable-local-view reads and post-commit change notification without direct persistence mutation.
 - **FR-007**: A release MUST declare at most one trusted authoritative mechanic. When present, the
@@ -217,7 +217,7 @@ changed-service, and changed-run joins and verify that only exact or safely reco
 - **FR-008**: The authoritative service MUST resolve only the supported trusted mechanic declared by
   the release; its platform adapter MUST own the complete resolved server model, handlers, validators,
   and projection, each validator MUST identify the exact inventoried schema digest it implements, and
-  the service MUST NOT execute release-authored server code. Trusted Mechanic V1 MUST NOT supply hidden
+  the service MUST NOT execute release-authored server code. Trusted Mechanic MUST NOT supply hidden
   server progression.
 - **FR-009**: Aggregate models MUST bind authority/kind, exact state and initialization schemas,
   deterministic initialization, validation, and typed durable event/effect declarations. Each command
@@ -226,7 +226,7 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   heterogeneous registries MUST invoke typed logic only after state- and payload-specific schema narrowing.
 - **FR-010**: Command handling MUST distinguish accepted, rejected, no-op, and invalid decisions
   explicitly. Local recorded terminals MUST retain their full schema-validated outcome. Shared recorded
-  terminals MUST preserve the exact Sync V1 participant-visible result through a lossless trusted-outcome
+  terminals MUST preserve the exact Sync participant-visible result through a lossless trusted-outcome
   restriction and deterministic invalid-diagnostic mapping. Preflight invalidity MUST remain a local
   non-committable result.
 - **FR-011**: One accepted command MUST advance the aggregate state version exactly once whenever it commits
@@ -274,13 +274,13 @@ changed-service, and changed-run joins and verify that only exact or safely reco
 - **FR-028**: Existing immutable release identity, deterministic replay, atomic local persistence,
   privacy redaction, authorization, and trusted-code boundaries MUST remain intact or change only
   through an explicitly accepted architecture decision.
-- **FR-029**: Every Project Configuration V1 release MUST export one host-owned Game Play Report V1
+- **FR-029**: Every Project Configuration release MUST export one host-owned Game Play Report
   selected only by run and optional shared-session binding. The export MUST NOT execute release code,
   select a game-specific report builder, or include game-specific completion fields, protected values,
   credentials, precise locations, service identities, or raw durable state.
 - **FR-030**: Provider-free behavior, simulated native compatibility, and physical-device evidence
   MUST remain separately reported; this feature MUST NOT infer physical acceptance from other gates.
-- **FR-031**: The compiler, player, and report readers MUST accept only the corrected V1 contracts.
+- **FR-031**: The compiler, player, and report readers MUST accept only the corrected contracts.
   They MUST NOT provide compatibility aliases, legacy parsers, artifact/report migrations, or automatic
   database resets. Incompatible artifacts MUST require recompilation, and an incompatible player
   database MUST fail with explicit reset or reinstall guidance.
@@ -295,7 +295,7 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   events, effects, and command/progression membership derived from one-way registrations.
 - **Progression Ruleset**: Optional deterministic activity-status model driven by accepted aggregate
   facts and represented once in durable aggregate state.
-- **Trusted Mechanic Binding**: Versioned declaration connecting a release to one supported
+- **Trusted Mechanic Binding**: Declaration connecting a release to one supported
   platform-owned authoritative mechanic and its configuration, aggregate, commands, and projection.
 - **Shared Session Binding**: Immutable relationship among one game run, release, service session,
   participant, team, service location, membership, and recovery cursor.
@@ -335,7 +335,7 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   registries or game-specific player routing.
 - **SC-009**: The complete cooperative provider-free lifecycle covers installation, mounting, joining,
   multiple queued discoveries, response loss, restart, corrective recovery, revocation, generic Game
-  Play Report V1 export with no target-specific fields, and a changed release that starts a fresh
+  Play Report export with no target-specific fields, and a changed release that starts a fresh
   run and session without active-session migration or manual state repair.
 - **SC-010**: All privacy, authorization, deterministic replay, immutable artifact, and failure-atomicity
   regression gates pass with zero newly exposed credentials, precise locations, protected content, or
@@ -364,3 +364,4 @@ changed-service, and changed-run joins and verify that only exact or safely reco
 - [ADR-0003: Trusted Single-WebView Runtime](../../adrs/0003-trusted-webview-runtime.md)
 - [ADR-0004: Host-Owned Atomic Player Persistence](../../adrs/0004-atomic-player-persistence.md)
 - [ADR-0005: Authoritative Shared Sessions and Snapshot Recovery](../../adrs/0005-authoritative-shared-session-sync.md)
+- [ADR-0006: Unversioned Contract Names](../../adrs/0006-unversioned-contract-names.md)

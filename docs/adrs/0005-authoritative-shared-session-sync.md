@@ -30,7 +30,7 @@ delta feeds, background workers, or a general event-delivery subsystem before a 
    concepts. A release-declared trusted-mechanic binding selects the platform-owned aggregate model,
    commands, authorization rules, and projections described by ADR 0001; game rules do not enter the
    shared-session service as hard-coded branches.
-3. Host API 1.1 Shared Play and Sync V1 use game-neutral, schema-identified envelopes for command
+3. Shared Play and Sync use game-neutral, schema-identified envelopes for command
    intents, confirmed projections, exact participant-visible terminal results, opaque cursors, and
    synchronization status. Core protocol and persistence contracts contain no reference-game fields.
 4. Each command targets one authoritative aggregate with a stable command ID, expected revision, and
@@ -56,12 +56,12 @@ delta feeds, background workers, or a general event-delivery subsystem before a 
    release migration are deferred.
 9. Capability observations may cross the configured HTTPS boundary and contribute to the canonical
    request digest. Raw or sensitive values are excluded from receipts, transition records,
-   projections, logs, operational events, and reports unless a future versioned contract explicitly
+   projections, logs, operational events, and reports unless a future serialized contract explicitly
    permits retention. Mechanic adapters may derive only the redacted facts their declared projections
    require.
 10. Reference games validate this infrastructure through their adapters and acceptance tests. They may
     specialize schemas and domain policy, but they cannot add game-named fields or behavior to the core
-    Host API, Sync V1, shared-session persistence model, or recovery state machine.
+    Host API, Sync, shared-session persistence model, or recovery state machine.
 
 ## Consequences
 

@@ -22,25 +22,23 @@ function validConfiguration(): Record<string, unknown> {
         id: "z.command",
         type: "solve",
         definition: { source: "src/command.ts", export: "command" },
-        aggregateSchema: "player.v1",
-        payloadSchema: "payload.v1",
-        outcomeSchema: "outcome.v1",
+        aggregateSchema: "player",
+        payloadSchema: "payload",
+        outcomeSchema: "outcome",
       },
       {
         id: "a.command",
         type: "start",
         definition: { source: "src/start.ts", export: "command" },
-        aggregateSchema: "player.v1",
-        payloadSchema: "payload.v1",
-        outcomeSchema: "outcome.v1",
+        aggregateSchema: "player",
+        payloadSchema: "payload",
+        outcomeSchema: "outcome",
       },
     ],
-    aggregateSchemas: [
-      { id: "player.v1", kind: "player", version: 1, path: "schemas/player.json" },
-    ],
+    aggregateSchemas: [{ id: "player", kind: "player", version: 1, path: "schemas/player.json" }],
     schemas: [
-      { id: "outcome.v1", path: "schemas/outcome.json" },
-      { id: "payload.v1", path: "schemas/payload.json" },
+      { id: "outcome", path: "schemas/outcome.json" },
+      { id: "payload", path: "schemas/payload.json" },
     ],
     progressions: [],
     components: [],
@@ -61,7 +59,7 @@ afterEach(async () => {
 });
 
 describe("loadProject", () => {
-  it("loads the closed v1 shape and ordinalizes registries", async () => {
+  it("loads the closed  shape and ordinalizes registries", async () => {
     const root = await createProject(JSON.stringify(validConfiguration()));
     const result = await loadProject({ projectRoot: root });
 
@@ -69,7 +67,7 @@ describe("loadProject", () => {
     if (result.kind !== "loaded") return;
     expect(result.config.projectFormatVersion).toBe(1);
     expect(result.registries.commands.map(({ id }) => id)).toEqual(["a.command", "z.command"]);
-    expect(result.registries.schemas.map(({ id }) => id)).toEqual(["outcome.v1", "payload.v1"]);
+    expect(result.registries.schemas.map(({ id }) => id)).toEqual(["outcome", "payload"]);
     expect(Object.isFrozen(result.config)).toBe(true);
     expect(Object.isFrozen(result.registries.commands)).toBe(true);
   });

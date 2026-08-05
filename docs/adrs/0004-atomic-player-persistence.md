@@ -15,7 +15,8 @@ game presentation or release bundle the owner of durable records.
 
 1. The Expo native host owns installed releases, runs, aggregate snapshots, command receipts,
    journals, location observations, diagnostics, and recovery metadata in SQLite.
-2. Bridge protocol v1 uses closed, versioned request and response envelopes with stable request IDs.
+2. Bridge protocol uses closed serialized request and response envelopes with stable request IDs and
+   centrally registered compatibility metadata.
    The WebView computes a candidate deterministic transition from host-supplied state and explicit
    observations, then requests `transition.commit`.
 3. Before commit, the host validates the command identity, target aggregate, expected version,
@@ -32,7 +33,7 @@ game presentation or release bundle the owner of durable records.
 
 - WebView destruction cannot erase an accepted transition, and recovery has one durable source of
   truth.
-- The bridge becomes a persisted compatibility surface governed by host API 1.0.
+- The bridge becomes a persisted compatibility surface governed by centralized Host API metadata.
 - The host trusts the semantic result produced by trusted Loop 1 release code, while independently
   enforcing identity, version, schema, and atomicity constraints.
 - General effect outboxes, authoritative server state, synchronization, and active-run migration are

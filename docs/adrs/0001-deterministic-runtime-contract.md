@@ -21,11 +21,11 @@ Plotpoint is pre-release. There are no supported external consumers or installed
 compatibility with the current private schemas. Creating replacement schema generations would add
 parsers, migrations, aliases, and terminology without preserving real user data. At the project
 owner's explicit direction, the project configuration and serialized contracts are therefore corrected
-in place at version 1. The corresponding TypeScript runtime APIs remain unversioned. Git history records
-the discarded shapes.
+in place. TypeScript symbols and semantic IDs remain unversioned; centralized compatibility metadata
+remains only where a serialized boundary requires it. Git history records the discarded shapes.
 
-ADRs 0002 through 0005 remain authoritative for immutable artifacts, WebView trust, player
-persistence, and authoritative shared-session recovery.
+ADRs 0002 through 0006 remain authoritative for immutable artifacts, WebView trust, player
+persistence, authoritative shared-session recovery, and contract naming.
 
 ## Decision
 
@@ -49,37 +49,37 @@ persistence, and authoritative shared-session recovery.
    trigger. The runtime derives the only canonical initial instance. Automatic predicates observe
    aggregate state, typed domain-event facts, and progression state rather than a progression-wide
    command payload or outcome type.
-5. `plotpoint.project.json` remains strict Project Configuration V1 and is the sole authored
+5. `plotpoint.project.json` remains strict Project Configuration and is the sole authored
    composition authority. It declares one application, local player and optional server aggregate
    models, commands, optional local progression, components, schemas, content, assets, and zero or one
    trusted mechanic. The compiler accepts only this corrected shape; it provides no legacy parser or
-   upgrade path for the discarded V1 shape.
+   upgrade path for the discarded shape.
 6. Relationships have one owner. Commands and progressions reference their aggregate model; models do
    not repeat those lists. The trusted-mechanic binding selects its server model and trusted commands;
    those records do not repeat mechanic identity. Authority is structural: local models are `player`,
    while server models are `team` or `session`.
-7. Compiler-generated bundle roots are the executable composition root. Game Composition V1 is
+7. Compiler-generated bundle roots are the executable composition root. Game Composition is
    mandatory inventoried application content in every playable release. It derives relationships from
-   Project Configuration V1, uses fixed registry-map export conventions rather than per-item export
+   Project Configuration, uses fixed registry-map export conventions rather than per-item export
    fields, and does not duplicate Host API or capability declarations already authoritative in Release
-   Manifest V1. The compiler proves the derived capability union equals the manifest declaration.
-8. Presentation exposes one `GameApplicationV1.mount(context)` lifecycle with a player-owned unmount
+   Manifest. The compiler proves the derived capability union equals the manifest declaration.
+8. Presentation exposes one `GameApplication.mount(context)` lifecycle with a player-owned unmount
    boundary. The application receives only the root and generated component factories. Generated
    component factories provide contexts scoped to declared commands, content, assets, capabilities,
    local durable views, and an optional validated shared projection. Raw or bootstrap aggregate state
    is never delivered to application code.
-9. Host Bridge Envelope V1 and the existing message names `runtime.ready`, `runtime.bootstrap`,
-   `transition.commit`, and `transition.result` remain. Host API 1.0 is the local core and Host API 1.1
-   is the shared-play extension; no additional Host API minor is introduced. Runtime Bootstrap V1 and
-   Local Transition V1 are corrected in place. The generated runtime adapter consumes bootstrap and
-   maps runtime results to the host contract without game-specific protocol code.
+9. Host Bridge Envelope and the existing message names `runtime.ready`, `runtime.bootstrap`,
+   `transition.commit`, and `transition.result` remain. The Host API has a local core and a shared-play
+   extension whose serialized compatibility values are centrally registered. Runtime Bootstrap and
+   Local Transition are corrected in place. The generated runtime adapter consumes bootstrap and maps
+   runtime results to the host contract without game-specific protocol code.
 10. A release declares zero or one trusted-mechanic binding. It selects an exact platform-owned
     adapter, one data-only server model, trusted commands, schema-validated configuration, capabilities,
     and a projection schema. The adapter returns explicit validated-binding, initialization,
-    authorization, execution, and projection results using defined runtime and Sync V1 types. It
+    authorization, execution, and projection results using defined runtime and Sync types. It
     preserves `expectedStateVersion` and `resultingStateVersion` directly and never invents revision
     translation. The server imports no release bundle and executes no release-authored server code.
-11. Host API 1.1 Shared Play and Sync V1 wire semantics remain. Shared outbox rows use
+11. Shared Play and Sync wire semantics remain. Shared outbox rows use
     `queued | submitting | blocked-revoked`; one pass atomically claims its finite start-eligible batch,
     submits each member at most once in stable order, performs at most one pull, and terminates. A
     long-lived keyed single-flight coordinator serializes and coalesces triggers per session.
@@ -88,7 +88,7 @@ persistence, and authoritative shared-session recovery.
     Join and pull prove equality among run, release, session, participant, team, and canonical service
     origin before exposing state. Authenticated revocation atomically blocks outstanding actions before
     credentials are removed.
-13. Every run exports one host-owned Game Play Report V1. The report derives generic lifecycle,
+13. Every run exports one host-owned Game Play Report. The report derives generic lifecycle,
     command, capability, synchronization, recovery, and report-safe diagnostic evidence only from
     committed host records. It uses a report-local command alias where correlation is useful and omits
     constant run/session/participant/team aliases, raw state, projections, content, observations,
@@ -102,10 +102,9 @@ persistence, and authoritative shared-session recovery.
 
 - Authors get one inspectable definition and one executable composition path for local and cooperative
   games, without duplicate relation fields, registries, or protocol adapters.
-- Release Format V1, Game Composition V1, Host API V1, Sync V1, Trusted Mechanic V1, Shared Recovery
-  V1, and Game Play Report V1 are the only serialized contract generations introduced or edited here.
-- Runtime and progression TypeScript APIs evolve in place and remain unversioned because they are
-  repository-owned pre-release APIs.
+- Release Format, Game Composition, Host API, Sync, Trusted Mechanic, Shared Recovery, and Game Play
+  Report remain explicit serialized boundaries with plain semantic names.
+- TypeScript APIs and game-defined identifiers evolve in place without generation suffixes.
 - The functional core owns canonical decisions, progression, and replay. Compiler, player, and API
   adapters own composition, persistence, transport, authorization, capabilities, and cleanup.
 - Foreground synchronization favors finite deterministic recovery over throughput. Background sync,

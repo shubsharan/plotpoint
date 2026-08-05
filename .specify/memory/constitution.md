@@ -21,11 +21,11 @@ architecture.
 
 ### II. Durable Contracts Stay Small
 
-Immutable releases, deterministic typed commands, explicit observations, versioned aggregates,
+Immutable releases, deterministic typed commands, explicit observations, revisioned aggregates,
 atomic accepted transitions, and authorized projections are Plotpoint's durable invariants. Public,
-persisted, or cross-process contracts MUST be minimal, versioned independently, and changed only
-through an Accepted ADR. Repository packages and internal APIs MUST NOT be treated as product
-contracts without evidence that independent compatibility is required.
+persisted, or cross-process contracts MUST be minimal, governed by centralized compatibility
+metadata, and changed only through an Accepted ADR. Repository packages and internal APIs MUST NOT
+be treated as product contracts without evidence that independent compatibility is required.
 
 ### III. Trust Boundaries Are Honest
 

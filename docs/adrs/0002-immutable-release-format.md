@@ -19,7 +19,7 @@ entry hashes would not detect a coordinated replacement of the manifest and payl
 
 ## Decision
 
-1. Authoring starts from a strict, versioned, data-only `plotpoint.project.json`. It explicitly
+1. Authoring starts from a strict, data-only `plotpoint.project.json`. It explicitly
    identifies code entries and command, schema, progression, component, content, and asset
    registrations. It contains no project identity, release label, channel, timestamp, or registry
    metadata. Capability requirements are derived from the selected registrations.
@@ -34,7 +34,8 @@ entry hashes would not detect a coordinated replacement of the manifest and payl
    network, storage, or device authority. JavaScript syntax checks may provide advisory authoring
    feedback, but runtime authority is enforced by the future execution realm, host policy, and
    capability bridge. Gate 3 must accept an isolation ADR before executing release bundles.
-4. Release-format version 1 is one `.pprelease` file using a strict ZIP-compatible profile: stored
+4. The centrally registered release-format compatibility value selects one `.pprelease` file using
+   a strict ZIP-compatible profile: stored
    entries only, canonical ASCII paths, ordinal entry order, fixed metadata, and no compression,
    encryption, symlinks, directory entries, comments, extra fields, data descriptors, ZIP64, source
    timestamps, ownership, permissions, or absolute paths.
@@ -51,7 +52,7 @@ entry hashes would not detect a coordinated replacement of the manifest and payl
    prove authenticity: tamper detection requires a trusted expected release identity supplied by a
    registry, installation request, or caller. Publisher signing remains outside Gate 2.
 8. Release format, host API, and aggregate schema compatibility remain independent. Release-format
-   v1 is exact; host API compatibility uses an exact major plus minimum minor; aggregate schemas use
+   is exact; host API compatibility uses an exact major plus minimum minor; aggregate schemas use
    an exact kind, schema identity, and positive integer version.
 9. `@plotpoint/protocol` owns release construction, manifest and container semantics, immutable entry
    access, inspection, verification, identity, and compatibility. The compiler supplies validated
@@ -65,8 +66,9 @@ entry hashes would not detect a coordinated replacement of the manifest and payl
 
 ## Consequences
 
-- The v1 artifact is intentionally uncompressed. Compression or another container encoding requires
-  a new release-format version rather than silently changing emitted bytes.
+- The artifact is intentionally uncompressed. Compression or another container encoding requires an
+  explicit centralized compatibility decision rather than a renamed interface or silently changed
+  bytes.
 - Declarative registration duplicates some source-level identifiers, but it keeps project discovery
   inspectable and lets the compiler diagnose drift without executing handlers.
 - Build subprocess isolation limits accidental contamination but does not make untrusted hosted

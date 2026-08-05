@@ -1,6 +1,6 @@
 # Data Model: Cooperative Hunt Loop
 
-Wire contracts are versioned; PostgreSQL and SQLite layouts are implementation-owned. The model keeps
+Wire compatibility is centrally registered; PostgreSQL and SQLite layouts are implementation-owned. The model keeps
 only records required by the three-player location hunt.
 
 ## Server Records
@@ -28,7 +28,7 @@ A participant has immutable session/team scope, join request identity, credentia
 One `(sessionId, teamId)` row contains schema identity/version, state version, and canonical state:
 
 ```ts
-interface TeamHuntStateV1 {
+interface TeamHuntState {
   readonly targets: readonly {
     readonly targetId: string;
     readonly status: "available" | "discovered";

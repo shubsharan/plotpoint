@@ -25,7 +25,7 @@ export async function discoverTarget(
   commandId: string,
 ): Promise<{ readonly terminal: string; readonly outcomeCode?: string }> {
   const view = await client.getView();
-  const team = view.projections.find(({ schemaId }) => schemaId === "plotpoint.hunt.team-state.v1");
+  const team = view.projections.find(({ schemaId }) => schemaId === "plotpoint.hunt.team-state");
   if (team === undefined) throw new Error("hunt-team-projection-missing");
   return client.enqueueCommand({
     commandId,
@@ -36,7 +36,7 @@ export async function discoverTarget(
       schemaVersion: 1,
     },
     expectedStateVersion: team.stateVersion,
-    type: "plotpoint.hunt.target-discovery.v1",
+    type: "plotpoint.hunt.target-discovery",
     payload: { targetId },
     observationIds: [observationId],
   });
@@ -44,7 +44,7 @@ export async function discoverTarget(
 
 export function ClueBoard(clues: readonly ClueSummary[]): HTMLElement {
   const board = document.createElement("section");
-  board.dataset.component = "hunt.clue-board.v1";
+  board.dataset.component = "hunt.clue-board";
   for (const clue of clues) {
     const item = document.createElement("article");
     item.dataset.clueId = clue.clueId;

@@ -1,20 +1,21 @@
+import { CONTRACT_VERSIONS } from "../contract-versions.js";
 import type { CanonicalJsonObject } from "../release/types.js";
-import { isLocationObservationV1 } from "../player/report.js";
+import { isLocationObservation } from "../player/report.js";
 import type {
-  AuthorizedSnapshotV1,
-  SharedAggregateTargetV1,
-  SharedCommandIntentV1,
-  SharedCommandStatusV1,
-  SharedPlayViewV1,
-  SharedProjectionV1,
-  SharedTerminalV1,
-  SyncCommandResultV1,
-  SyncCommandV1,
-  SyncPullV1,
+  AuthorizedSnapshot,
+  SharedAggregateTarget,
+  SharedCommandIntent,
+  SharedCommandStatus,
+  SharedPlayView,
+  SharedProjection,
+  SharedTerminal,
+  SyncCommandResult,
+  SyncCommand,
+  SyncPull,
 } from "./types.js";
 
 const KINDS = new Set(["player", "team", "session"]);
-const TERMINALS = new Set<SharedTerminalV1>(["accepted", "no-op", "rejected", "invalid"]);
+const TERMINALS = new Set<SharedTerminal>(["accepted", "no-op", "rejected", "invalid"]);
 const ACTION_TERMINALS = new Set([...TERMINALS, "pending", "blocked-revoked"]);
 
 function isReleaseId(value: unknown): value is `sha256:${string}` {
@@ -66,7 +67,7 @@ function canonical(value: unknown): value is CanonicalJsonObject {
   });
 }
 
-export function isSharedAggregateTargetV1(value: unknown): value is SharedAggregateTargetV1 {
+export function isSharedAggregateTarget(value: unknown): value is SharedAggregateTarget {
   return (
     object(value) &&
     keys(value, ["aggregateKind", "aggregateId", "schemaId", "schemaVersion"]) &&
@@ -78,7 +79,7 @@ export function isSharedAggregateTargetV1(value: unknown): value is SharedAggreg
   );
 }
 
-export function isSharedCommandIntentV1(value: unknown): value is SharedCommandIntentV1 {
+export function isSharedCommandIntent(value: unknown): value is SharedCommandIntent {
   return (
     object(value) &&
     keys(value, [
@@ -90,7 +91,7 @@ export function isSharedCommandIntentV1(value: unknown): value is SharedCommandI
       "observationIds",
     ]) &&
     nonempty(value.commandId) &&
-    isSharedAggregateTargetV1(value.target) &&
+    isSharedAggregateTarget(value.target) &&
     nonnegative(value.expectedStateVersion) &&
     nonempty(value.type) &&
     canonical(value.payload) &&
@@ -100,7 +101,7 @@ export function isSharedCommandIntentV1(value: unknown): value is SharedCommandI
   );
 }
 
-export function isSharedProjectionV1(value: unknown): value is SharedProjectionV1 {
+export function isSharedProjection(value: unknown): value is SharedProjection {
   return (
     object(value) &&
     keys(value, [
@@ -111,7 +112,7 @@ export function isSharedProjectionV1(value: unknown): value is SharedProjectionV
       "stateVersion",
       "value",
     ]) &&
-    isSharedAggregateTargetV1({
+    isSharedAggregateTarget({
       aggregateKind: value.aggregateKind,
       aggregateId: value.aggregateId,
       schemaId: value.schemaId,
@@ -122,7 +123,7 @@ export function isSharedProjectionV1(value: unknown): value is SharedProjectionV
   );
 }
 
-export function isSharedCommandStatusV1(value: unknown): value is SharedCommandStatusV1 {
+export function isSharedCommandStatus(value: unknown): value is SharedCommandStatus {
   return (
     object(value) &&
     keys(
@@ -133,13 +134,13 @@ export function isSharedCommandStatusV1(value: unknown): value is SharedCommandS
     nonempty(value.commandId) &&
     ["queued", "duplicate-pending", "already-terminal"].includes(value.disposition as string) &&
     typeof value.terminal === "string" &&
-    ACTION_TERMINALS.has(value.terminal as SharedTerminalV1 | "pending" | "blocked-revoked") &&
+    ACTION_TERMINALS.has(value.terminal as SharedTerminal | "pending" | "blocked-revoked") &&
     (value.outcomeCode === undefined || nonempty(value.outcomeCode)) &&
     (value.resultingStateVersion === undefined || nonnegative(value.resultingStateVersion))
   );
 }
 
-export function isSharedPlayViewV1(value: unknown): value is SharedPlayViewV1 {
+export function isSharedPlayView(value: unknown): value is SharedPlayView {
   if (
     !object(value) ||
     !keys(value, [
@@ -169,13 +170,13 @@ export function isSharedPlayViewV1(value: unknown): value is SharedPlayViewV1 {
     ["active", "revoked"].includes(membership.status as string) &&
     nonempty(membership.teamId) &&
     Array.isArray(value.projections) &&
-    value.projections.every(isSharedProjectionV1) &&
+    value.projections.every(isSharedProjection) &&
     Array.isArray(value.actions) &&
-    value.actions.every(isSharedCommandStatusV1)
+    value.actions.every(isSharedCommandStatus)
   );
 }
 
-export function isSyncCommandV1(value: unknown): value is SyncCommandV1 {
+export function isSyncCommand(value: unknown): value is SyncCommand {
   return (
     object(value) &&
     keys(value, [
@@ -187,8 +188,8 @@ export function isSyncCommandV1(value: unknown): value is SyncCommandV1 {
       "payload",
       "observations",
     ]) &&
-    value.version === 1 &&
-    isSharedCommandIntentV1({
+    value.version === CONTRACT_VERSIONS.sharedSync &&
+    isSharedCommandIntent({
       commandId: value.commandId,
       target: value.target,
       expectedStateVersion: value.expectedStateVersion,
@@ -201,11 +202,11 @@ export function isSyncCommandV1(value: unknown): value is SyncCommandV1 {
         : [],
     }) &&
     Array.isArray(value.observations) &&
-    value.observations.every(isLocationObservationV1)
+    value.observations.every(isLocationObservation)
   );
 }
 
-export function isSyncCommandResultV1(value: unknown): value is SyncCommandResultV1 {
+export function isSyncCommandResult(value: unknown): value is SyncCommandResult {
   return (
     object(value) &&
     keys(value, [
@@ -217,18 +218,18 @@ export function isSyncCommandResultV1(value: unknown): value is SyncCommandResul
       "resultingStateVersion",
       "decisionPosition",
     ]) &&
-    value.version === 1 &&
+    value.version === CONTRACT_VERSIONS.sharedSync &&
     nonempty(value.commandId) &&
     ["decided", "duplicate"].includes(value.disposition as string) &&
     typeof value.terminal === "string" &&
-    TERMINALS.has(value.terminal as SharedTerminalV1) &&
+    TERMINALS.has(value.terminal as SharedTerminal) &&
     nonempty(value.outcomeCode) &&
     nonnegative(value.resultingStateVersion) &&
     nonempty(value.decisionPosition)
   );
 }
 
-export function isAuthorizedSnapshotV1(value: unknown): value is AuthorizedSnapshotV1 {
+export function isAuthorizedSnapshot(value: unknown): value is AuthorizedSnapshot {
   return (
     object(value) &&
     keys(value, [
@@ -241,7 +242,7 @@ export function isAuthorizedSnapshotV1(value: unknown): value is AuthorizedSnaps
       "confirmedAt",
       "projections",
     ]) &&
-    value.version === 1 &&
+    value.version === CONTRACT_VERSIONS.sharedSync &&
     nonempty(value.sessionId) &&
     typeof value.releaseId === "string" &&
     isReleaseId(value.releaseId) &&
@@ -250,20 +251,20 @@ export function isAuthorizedSnapshotV1(value: unknown): value is AuthorizedSnaps
     ["active", "revoked"].includes(value.membershipStatus as string) &&
     nonempty(value.confirmedAt) &&
     Array.isArray(value.projections) &&
-    value.projections.every(isSharedProjectionV1)
+    value.projections.every(isSharedProjection)
   );
 }
 
-export function isSyncPullV1(value: unknown): value is SyncPullV1 {
+export function isSyncPull(value: unknown): value is SyncPull {
   return (
     object(value) &&
     keys(value, ["version", "kind", "reset", "nextCursor", "snapshot", "commandResults"]) &&
-    value.version === 1 &&
+    value.version === CONTRACT_VERSIONS.sharedSync &&
     value.kind === "snapshot" &&
     typeof value.reset === "boolean" &&
     nonempty(value.nextCursor) &&
-    isAuthorizedSnapshotV1(value.snapshot) &&
+    isAuthorizedSnapshot(value.snapshot) &&
     Array.isArray(value.commandResults) &&
-    value.commandResults.every(isSyncCommandResultV1)
+    value.commandResults.every(isSyncCommandResult)
   );
 }

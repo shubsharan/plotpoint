@@ -8,51 +8,49 @@
   },
   "commands": [
     {
-      "id": "field.advance.v1",
+      "id": "field.advance",
       "type": "advance",
       "definition": { "source": "src/commands/advance.ts", "export": "advanceCommand" },
-      "aggregateSchema": "field.player-state.v1",
-      "payloadSchema": "field.advance-payload.v1",
-      "outcomeSchema": "field.advance-outcome.v1"
+      "aggregateSchema": "field.player-state",
+      "payloadSchema": "field.advance-payload",
+      "outcomeSchema": "field.advance-outcome"
     }
   ],
   "aggregateSchemas": [
     {
-      "id": "field.player-state.v1",
+      "id": "field.player-state",
       "kind": "player",
       "version": 1,
       "path": "schemas/player-state.schema.json"
     }
   ],
   "schemas": [
-    { "id": "field.advance-outcome.v1", "path": "schemas/advance-outcome.schema.json" },
-    { "id": "field.advance-payload.v1", "path": "schemas/advance-payload.schema.json" },
-    { "id": "field.game-content.v1", "path": "schemas/game-content.schema.json" }
+    { "id": "field.advance-outcome", "path": "schemas/advance-outcome.schema.json" },
+    { "id": "field.advance-payload", "path": "schemas/advance-payload.schema.json" },
+    { "id": "field.game-content", "path": "schemas/game-content.schema.json" }
   ],
   "progressions": [
     {
-      "id": "field.route.v1",
+      "id": "field.route",
       "version": 1,
       "kind": "player",
       "definition": { "source": "src/progression/route.ts", "export": "fieldProgression" },
-      "aggregateSchema": "field.player-state.v1",
-      "commands": ["field.advance.v1"],
-      "content": ["field.game.v1"],
-      "components": ["field.puzzle.v1"]
+      "aggregateSchema": "field.player-state",
+      "commands": ["field.advance"],
+      "content": ["field.game"],
+      "components": ["field.puzzle"]
     }
   ],
   "components": [
     {
-      "id": "field.puzzle.v1",
+      "id": "field.puzzle",
       "implementation": { "source": "src/presentation.ts", "export": "FieldPuzzle" },
-      "commands": ["field.advance.v1"],
-      "content": ["field.game.v1"],
+      "commands": ["field.advance"],
+      "content": ["field.game"],
       "assets": [],
       "capabilities": [{ "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 0 }]
     }
   ],
-  "content": [
-    { "id": "field.game.v1", "path": "content/game.json", "schema": "field.game-content.v1" }
-  ],
+  "content": [{ "id": "field.game", "path": "content/game.json", "schema": "field.game-content" }],
   "assets": []
 }

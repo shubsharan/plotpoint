@@ -1,4 +1,4 @@
-# Contract: Release Format V1
+# Contract: Release Format
 
 ## Compatibility Surface
 
@@ -10,7 +10,7 @@ The artifact can be inspected and verified without extracting entries or executi
 
 ## Strict Container Profile
 
-| Property    | V1 rule                                                                                                                    |
+| Property    | rule                                                                                                                       |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Entry type  | Regular files only; no directory or symlink entries                                                                        |
 | Compression | Stored/uncompressed only                                                                                                   |
@@ -41,7 +41,7 @@ BOM or trailing newline. Re-encoding the parsed value must reproduce the exact b
 artifact is invalid.
 
 ```ts
-interface ReleaseManifestV1 {
+interface ReleaseManifest {
   readonly releaseFormatVersion: 1;
   readonly hostApi: {
     readonly major: number;
@@ -133,7 +133,7 @@ artifact bytes and therefore cannot change content identity.
 interface InspectedRelease {
   readonly kind: "inspected";
   readonly releaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
 }
 
 interface InvalidRelease {
@@ -158,7 +158,7 @@ type ReleaseMaterialEntry = ReleaseBinaryMaterialEntry | ReleaseJsonMaterialEntr
 interface OpenedRelease {
   readonly kind: "opened";
   readonly releaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
   readonly entries: readonly ReleaseEntry[];
 }
 
@@ -176,7 +176,7 @@ export function verifyRelease(input: {
 }): Promise<VerifiedRelease | InvalidRelease>;
 
 export function assessCompatibility(
-  manifest: ReleaseManifestV1,
+  manifest: ReleaseManifest,
   support: HostReleaseSupport,
 ): CompatibilityAssessment;
 ```
@@ -195,7 +195,7 @@ digest helpers are internal format machinery and are not package-root exports.
 
 - **Structurally valid**: Container, manifest, inventory, lengths, CRCs, and entry hashes agree.
 - **Known release match**: Structurally valid and the computed ID equals a trusted expected ID.
-- **Publisher authentic**: Not established by v1. Signing and publisher trust are outside Gate 2.
+- **Publisher authentic**: Not established by. Signing and publisher trust are outside Gate 2.
 
 A coordinated rewrite of payloads and manifest can produce a structurally valid artifact with a new
 release ID. It is rejected as tampering only when checked against the original expected ID. APIs and
@@ -228,7 +228,7 @@ Assessment succeeds only when:
 4. Every capability ID and major exists and its minor is at least the minimum.
 
 Each surface reports its own mismatch. No global version, implicit upgrade, prerelease rule, or
-best-effort fallback exists in v1.
+best-effort fallback exists in.
 
 ## Diagnostic Contract
 

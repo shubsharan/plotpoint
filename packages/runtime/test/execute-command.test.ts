@@ -33,7 +33,7 @@ const command: Command<Payload, "player"> = {
 describe("executeCommand", () => {
   it("returns an accepted deterministic state change", () => {
     const definition = defineCommand<"player", State, Payload, Outcome>({
-      definitionId: "increment.v1",
+      definitionId: "increment",
       commandType: "increment",
       aggregateKind: "player",
       handle(target, input) {
@@ -64,7 +64,7 @@ describe("executeCommand", () => {
 
   it("returns semantic rejection without changing state", () => {
     const definition = defineCommand<"player", State, Payload, Outcome>({
-      definitionId: "reject.v1",
+      definitionId: "reject",
       commandType: "increment",
       aggregateKind: "player",
       handle() {
@@ -86,7 +86,7 @@ describe("executeCommand", () => {
 
   it("returns a true no-op without advancing the version", () => {
     const definition = defineCommand<"player", State, Payload, Outcome>({
-      definitionId: "noop.v1",
+      definitionId: "noop",
       commandType: "increment",
       aggregateKind: "player",
       handle(target) {
@@ -128,7 +128,7 @@ describe("executeCommand", () => {
     },
   ])("returns invalid for $name", ({ handle, code }) => {
     const definition = defineCommand<"player", State, Payload, Outcome>({
-      definitionId: "invalid.v1",
+      definitionId: "invalid",
       commandType: "increment",
       aggregateKind: "player",
       handle: handle as never,
@@ -148,7 +148,7 @@ describe("executeCommand", () => {
 
   it("produces identical complete records across 100 executions", () => {
     const definition = defineCommand<"player", State, Payload, Outcome>({
-      definitionId: "repeat.v1",
+      definitionId: "repeat",
       commandType: "increment",
       aggregateKind: "player",
       handle(target, input) {
@@ -181,7 +181,7 @@ describe("executeCommand", () => {
 
   it("diagnoses malformed JavaScript command and handler output shapes", () => {
     const definition = defineCommand<"player", State, Payload, Outcome>({
-      definitionId: "shape.v1",
+      definitionId: "shape",
       commandType: "increment",
       aggregateKind: "player",
       handle: (() => ({
@@ -215,7 +215,7 @@ describe("executeCommand", () => {
 
   it("returns preflight invalidity for non-canonical inputs without throwing", () => {
     const definition = defineCommand<"player", State, Payload, Outcome>({
-      definitionId: "preflight.v1",
+      definitionId: "preflight",
       commandType: "increment",
       aggregateKind: "player",
       handle: () => ({ kind: "rejected", outcome: { result: "unused" } }),
@@ -266,7 +266,7 @@ describe("executeCommand", () => {
     "returns canonical preflight invalidity for malformed policy value %s",
     (maxCanonicalNodes) => {
       const definition = defineCommand<"player", State, Payload, Outcome>({
-        definitionId: "policy.v1",
+        definitionId: "policy",
         commandType: "increment",
         aggregateKind: "player",
         handle: () => ({ kind: "rejected", outcome: { result: "unused" } }),
@@ -305,7 +305,7 @@ describe("executeCommand", () => {
     (field) => {
       expect(() =>
         defineCommand({
-          definitionId: "identity.v1",
+          definitionId: "identity",
           commandType: "increment",
           aggregateKind: "player",
           handle: () => ({ kind: "rejected", outcome: { result: "unused" } }),
@@ -317,7 +317,7 @@ describe("executeCommand", () => {
 
   it("does not impose the component node limit again on the assembled record", () => {
     const definition = defineCommand<"player", State, Payload, Outcome>({
-      definitionId: "record-budget.v1",
+      definitionId: "record-budget",
       commandType: "increment",
       aggregateKind: "player",
       handle: () => ({ kind: "rejected", outcome: { result: "bounded" } }),

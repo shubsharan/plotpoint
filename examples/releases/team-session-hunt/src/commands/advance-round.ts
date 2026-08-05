@@ -10,7 +10,7 @@ export const advanceRoundCommand = defineCommand<
   AdvanceRoundPayload,
   AdvanceRoundOutcome
 >({
-  definitionId: "hunt.advance-round.v1",
+  definitionId: "hunt.advance-round",
   commandType: "advance-round",
   aggregateKind: "session",
   handle(target, command) {

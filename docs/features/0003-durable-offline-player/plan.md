@@ -5,11 +5,11 @@
 
 ## Summary
 
-Close Plotpoint Loop 1 with an internally authored field puzzle that compiles into release-format v1,
+Close Plotpoint Loop 1 with an internally authored field puzzle that compiles into release-format,
 installs over a bounded private-LAN QR flow, runs offline in a trusted single WebView on Expo iOS and
 Android, commits local transitions atomically to host-owned SQLite, survives interruption, exports a
 redacted play report, and supports a revised fresh release without rebuilding the player. Establish
-Host API V1 as a reusable player contract by running a second materially different release through the
+Host API as a reusable player contract by running a second materially different release through the
 same install, bootstrap, transition, recovery, and reporting surfaces without player changes.
 
 ## Technical Context
@@ -25,7 +25,7 @@ feature through simulator/emulator build-install-launch checks
 **Project Type**: monorepo CLI + cross-platform mobile application + external example game
 **Performance Goals**: reject transfers above 64 MiB; fail transfers after 30 seconds; restore a valid
 installed puzzle to a playable view within 5 seconds on each reference device
-**Constraints**: release-format v1 and project-format v1 unchanged; no hosted services; private-network
+**Constraints**: release-format and project-format unchanged; no hosted services; private-network
 HTTP only during installation; offline play; trusted code with no hostile-code isolation claim; no
 active-run migration; exported reports omit sensitive values
 **Scale/Scope**: one complete core-team field game, one foreground capability, one local player
@@ -34,9 +34,9 @@ aggregate per run, one second conformance release, and one reference device per 
 ## Constitution Check
 
 - **PASS — Complete Product Loop**: install, field play, recovery, report, and revision close one loop.
-- **PASS — Durable Contracts Stay Small**: Host API V1 contains bootstrap, canonical transition,
-  capability-dispatch, and error semantics; installation, location, and reporting remain independently
-  versioned, and release-format v1 remains unchanged.
+- **PASS — Durable Contracts Stay Small**: Host API contains bootstrap, canonical transition,
+  capability-dispatch, and error semantics; installation, location, and reporting retain centralized
+  compatibility metadata, and release-format remains unchanged.
 - **PASS — Trust Boundaries Are Honest**: accepted ADR 0003 records trusted single-realm limits.
 - **PASS — Evidence Before Abstraction**: the field puzzle and a second materially different release
   prove Host API reuse; no backend, generalized effects, sync, or broad capability catalog is added.
@@ -53,6 +53,7 @@ Major decision is governed by an Accepted ADR.
 - [Immutable Release Format](../../adrs/0002-immutable-release-format.md) — **Accepted**
 - [Trusted Single-WebView Runtime](../../adrs/0003-trusted-webview-runtime.md) — **Accepted**
 - [Host-Owned Atomic Player Persistence](../../adrs/0004-atomic-player-persistence.md) — **Accepted**
+- [Unversioned Contract Names](../../adrs/0006-unversioned-contract-names.md) — **Accepted**
 
 ## Project Structure
 
@@ -95,7 +96,7 @@ testable without an Expo runtime.
 
 - Provider-free tests cover closed contracts, exact served bytes, compatibility, transfer limits,
   interruption boundaries, atomic commit, duplicate delivery, recovery validation, and report redaction.
-- The field puzzle and minimal local puzzle pass one Host API V1 conformance harness without
+- The field puzzle and minimal local puzzle pass one Host API conformance harness without
   game-specific player branches or configuration.
 - Scripted location and lifecycle adapters prove deterministic negative cases without claiming native
   platform behavior.
@@ -108,8 +109,8 @@ testable without an Expo runtime.
 
 ## Delivery Phases
 
-1. Establish Host API V1 core semantics and prove them provider-free with two materially different
-   releases while keeping capabilities and reports independently versioned.
+1. Establish Host API core semantics and prove them provider-free with two materially different
+   releases while keeping capability and report compatibility independently evaluable.
 2. Complete verified installation and the offline field route, then build, install, and launch the
    dependency-aligned development client on an iOS simulator and Android emulator.
 3. Harden atomic transition receipts, interruption recovery, and invalid-record handling from the

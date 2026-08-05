@@ -27,14 +27,14 @@ describe("complete immutable release acceptance", () => {
   it("encodes printable registration IDs in generated paths while preserving logical IDs", async () => {
     const externalProject = await createExternalProject("minimal-local-puzzle");
     const replacements = new Map([
-      ["minimal.solve.v1", "Solve!?"],
-      ["minimal.player-state.v1", "Player/State"],
-      ["minimal.puzzle-content.v1", "chapter/one"],
-      ["minimal.solve-outcome.v1", "Outcome!Schema"],
-      ["minimal.solve-payload.v1", "Payload+Schema"],
-      ["minimal.puzzle.v1", "Progression.V1"],
-      ["minimal.puzzle-card.v1", "Card.V1"],
-      ["minimal.clue-image.v1", "Clue!?"],
+      ["minimal.solve", "Solve!?"],
+      ["minimal.player-state", "Player/State"],
+      ["minimal.puzzle-content", "chapter/one"],
+      ["minimal.solve-outcome", "Outcome!Schema"],
+      ["minimal.solve-payload", "Payload+Schema"],
+      ["minimal.puzzle-card", "Card?"],
+      ["minimal.puzzle", "Progression!"],
+      ["minimal.clue-image", "Clue!?"],
     ]);
     const relativeFiles = [
       "plotpoint.project.json",
@@ -81,22 +81,22 @@ describe("complete immutable release acceptance", () => {
         expect.arrayContaining([
           generatedReleaseEntryPath("aggregate-schema", "Player/State"),
           generatedReleaseEntryPath("schema", "chapter/one"),
-          generatedReleaseEntryPath("progression", "Progression.V1"),
-          generatedReleaseEntryPath("component", "Card.V1"),
+          generatedReleaseEntryPath("progression", "Progression!"),
+          generatedReleaseEntryPath("component", "Card?"),
           generatedReleaseEntryPath("content", "chapter/one"),
         ]),
       );
       expect(paths.every((path) => /^[a-z0-9./-]+$/.test(path))).toBe(true);
       expect(opened.manifest.aggregateSchemas[0]?.id).toBe("Player/State");
       const progression = opened.entries.find(
-        ({ path }) => path === generatedReleaseEntryPath("progression", "Progression.V1"),
+        ({ path }) => path === generatedReleaseEntryPath("progression", "Progression!"),
       );
       expect(JSON.parse(new TextDecoder().decode(progression?.bytes))).toMatchObject({
-        id: "Progression.V1",
+        id: "Progression!",
         aggregateSchema: "Player/State",
         commands: ["Solve!?"],
         content: ["chapter/one"],
-        components: ["Card.V1"],
+        components: ["Card?"],
       });
       const logicBundle = opened.entries.find(({ kind }) => kind === "logic-bundle");
       const presentationBundle = opened.entries.find(({ kind }) => kind === "presentation-bundle");
@@ -108,9 +108,9 @@ describe("complete immutable release acceptance", () => {
       );
       expect(logicModule.default).toEqual({ selected: "logic" });
       expect(Object.keys(logicModule.commands)).toEqual(["Solve!?"]);
-      expect(Object.keys(logicModule.progressions)).toEqual(["Progression.V1"]);
+      expect(Object.keys(logicModule.progressions)).toEqual(["Progression!"]);
       expect(presentationModule.default).toEqual({ selected: "presentation" });
-      expect(Object.keys(presentationModule.components)).toEqual(["Card.V1"]);
+      expect(Object.keys(presentationModule.components)).toEqual(["Card?"]);
     } finally {
       await externalProject.cleanup();
     }

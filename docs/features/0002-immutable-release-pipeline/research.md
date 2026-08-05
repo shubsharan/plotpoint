@@ -43,7 +43,7 @@ checks mutable workspace state rather than artifact coherence.
 
 ## Declarative Project Configuration
 
-**Decision**: Use one strict, versioned, data-only `plotpoint.project.json` with explicit code exports and explicit schema, progression, component, content, and asset registrations. Reject unknown keys, globs, package discovery, executable configuration, project-boundary escapes, aliases, symlinks, and case-equivalent duplicate destinations. Derive capability requirements from selected registrations.
+**Decision**: Use one strict, data-only `plotpoint.project.json` with explicit code exports and explicit schema, progression, component, content, and asset registrations. Reject unknown keys, globs, package discovery, executable configuration, project-boundary escapes, aliases, symlinks, and case-equivalent duplicate destinations. Derive capability requirements from selected registrations.
 
 **Rationale**: The compiler can enumerate and snapshot every material input without executing configuration code or depending on filesystem discovery order. JSON-pointer diagnostics remain stable and author choices stay inspectable.
 
@@ -91,9 +91,9 @@ checks mutable workspace state rather than artifact coherence.
 
 ## Deterministic Release Container
 
-**Decision**: Release-format v1 is one store-only ZIP-compatible `.pprelease` file with regular files, canonical ASCII paths, ordinal ordering, fixed metadata, and no compression, encryption, symlinks, directory entries, comments, extras, data descriptors, ZIP64, timestamps, ownership, permissions, or absolute/source paths.
+**Decision**: Release-format is one store-only ZIP-compatible `.pprelease` file with regular files, canonical ASCII paths, ordinal ordering, fixed metadata, and no compression, encryption, symlinks, directory entries, comments, extras, data descriptors, ZIP64, timestamps, ownership, permissions, or absolute/source paths.
 
-**Rationale**: A standard container remains inspectable, while the strict profile eliminates host metadata and compressor variance. Store-only bytes keep v1 simple and make every parser rule explicit.
+**Rationale**: A standard container remains inspectable, while the strict profile eliminates host metadata and compressor variance. Store-only bytes keep simple and make every parser rule explicit.
 
 **Alternatives considered**: General ZIP defaults were rejected as nondeterministic. Tar was rejected for additional platform header normalization and weaker random access. A custom container was rejected as unnecessary parser surface. Compression requires a later format version.
 
@@ -103,7 +103,7 @@ checks mutable workspace state rather than artifact coherence.
 
 **Rationale**: Exact inventory rejects omissions, extras, duplicates, and role ambiguity. Canonical cross-language bytes are safer than relying on an internal serializer whose persisted semantics were not previously public.
 
-**Alternatives considered**: Pretty JSON was rejected because serializer whitespace varies. A self-entry was rejected as recursive. A general extension map was rejected because it would make v1 compatibility and identity ambiguous.
+**Alternatives considered**: Pretty JSON was rejected because serializer whitespace varies. A self-entry was rejected as recursive. A general extension map was rejected because it would make compatibility and identity ambiguous.
 
 ## Content Identity
 

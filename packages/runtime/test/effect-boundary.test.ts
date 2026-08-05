@@ -31,7 +31,7 @@ describe("event and effect boundary", () => {
   it("preserves order and never invokes effect-shaped data", () => {
     const invoked = vi.fn();
     const definition = defineCommand<"session", State, JsonObject, Outcome>({
-      definitionId: "finish.v1",
+      definitionId: "finish",
       commandType: "finish",
       aggregateKind: "session",
       handle() {
@@ -58,7 +58,7 @@ describe("event and effect boundary", () => {
 
   it("rejects commit-dependent outputs on a no-op", () => {
     const definition = defineCommand<"session", State, JsonObject, Outcome>({
-      definitionId: "noop-output.v1",
+      definitionId: "noop-output",
       commandType: "finish",
       aggregateKind: "session",
       handle(target) {

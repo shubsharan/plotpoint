@@ -32,7 +32,7 @@ describe("runtime harness", () => {
   it("runs a strict scenario 100 times with identical records", () => {
     const { aggregate, command } = fixture();
     const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-      definitionId: "repeat.v1",
+      definitionId: "repeat",
       commandType: "change",
       aggregateKind: "player",
       handle() {
@@ -64,7 +64,7 @@ describe("runtime harness", () => {
     const { aggregate, command } = fixture();
     let count = 0;
     const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-      definitionId: "vary.v1",
+      definitionId: "vary",
       commandType: "change",
       aggregateKind: "player",
       handle() {
@@ -100,7 +100,7 @@ describe("runtime harness", () => {
       state: { count: 0 },
     };
     const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-      definitionId: "mutation.v1",
+      definitionId: "mutation",
       commandType: "change",
       aggregateKind: "player",
       handle() {
@@ -132,7 +132,7 @@ describe("runtime harness", () => {
   it("enforces exact observation consumption", () => {
     const { aggregate, command } = fixture();
     const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-      definitionId: "consume.v1",
+      definitionId: "consume",
       commandType: "change",
       aggregateKind: "player",
       handle(_target, _command, context) {

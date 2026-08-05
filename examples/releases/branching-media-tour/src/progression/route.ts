@@ -13,7 +13,7 @@ export const routeProgression = defineProgression<
   ChooseSceneOutcome
 >({
   aggregateKind: "player",
-  graphId: "tour.branching-route.v1",
+  graphId: "tour.branching-route",
   graphVersion: 1,
   nodes: [
     { nodeId: "arrive", initialStatus: "active" },

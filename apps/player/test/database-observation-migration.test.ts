@@ -19,7 +19,7 @@ function migrationDatabase(existing: readonly string[]) {
 }
 
 describe("observation schema migration", () => {
-  it("adds Location V1 evidence columns to an existing observations table and backfills recordedAt", async () => {
+  it("adds Location  evidence columns to an existing observations table and backfills recordedAt", async () => {
     const fixture = migrationDatabase([
       "run_id",
       "observation_id",
@@ -54,7 +54,7 @@ describe("observation schema migration", () => {
     );
   });
 
-  it("is idempotent once every Location V1 evidence column exists", async () => {
+  it("is idempotent once every Location  evidence column exists", async () => {
     const fixture = migrationDatabase([
       "recorded_at",
       "sensor_captured_at",

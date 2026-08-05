@@ -1,10 +1,10 @@
-# Contract: Host Bridge V1
+# Contract: Host Bridge
 
 Every message is a closed canonical JSON object:
 
 ```ts
-interface HostBridgeEnvelopeV1<Type extends string, Payload> {
-  readonly version: 1;
+interface HostBridgeEnvelope<Type extends string, Payload> {
+  readonly version: typeof CONTRACT_VERSIONS.hostBridge;
   readonly requestId: string;
   readonly type: Type;
   readonly payload: Payload;
@@ -17,14 +17,14 @@ delivery with a new request ID and the same command ID must return the original 
 ## Release-Facing Client
 
 Release presentation code imports the narrow `@plotpoint/protocol/player` surface and creates one
-`HostRuntimeClientV1` from the bootstrap document's raw transport. The transport owns envelope
+`HostRuntimeClient` from the bootstrap document's raw transport. The transport owns envelope
 serialization; game code uses semantic methods and does not reconstruct wire payloads:
 
 ```ts
-interface HostRuntimeClientV1 {
-  commitTransition(candidate: TransitionCandidateV1): Promise<TransitionResultV1>;
+interface HostRuntimeClient {
+  commitTransition(candidate: TransitionCandidate): Promise<TransitionResult>;
   requestCapability<Input extends object, Output extends object>(
-    capability: CapabilityVersionV1,
+    capability: CapabilityVersion,
     input: Input,
     validateOutput: (value: unknown) => value is Output,
   ): Promise<Output>;
@@ -44,7 +44,7 @@ preflight failures are local non-committable results; only recorded execution te
 Payload is exactly `{}`. The corresponding `runtime.bootstrap` result contains:
 
 ```ts
-interface RuntimeBootstrapV1 {
+interface RuntimeBootstrap {
   readonly runId: string;
   readonly releaseId: `sha256:${string}`;
   readonly aggregate: null | {
@@ -60,10 +60,10 @@ interface RuntimeBootstrapV1 {
 
 ### `transition.commit`
 
-Payload is exactly `{ candidate: TransitionCandidateV1 }`.
+Payload is exactly `{ candidate: TransitionCandidate }`.
 
 ```ts
-interface TransitionCandidateBaseV1 {
+interface TransitionCandidateBase {
   readonly commandId: string;
   readonly target: {
     readonly aggregateId: string;
@@ -75,18 +75,18 @@ interface TransitionCandidateBaseV1 {
   readonly observationIds: readonly string[];
 }
 
-type TransitionCandidateV1 =
-  | (TransitionCandidateBaseV1 & {
+type TransitionCandidate =
+  | (TransitionCandidateBase & {
       readonly terminal: "accepted";
       readonly nextState: object;
       readonly outcome: object;
       readonly progressionChanges: readonly string[];
     })
-  | (TransitionCandidateBaseV1 & {
+  | (TransitionCandidateBase & {
       readonly terminal: "no-op" | "rejected";
       readonly outcome: object;
     })
-  | (TransitionCandidateBaseV1 & {
+  | (TransitionCandidateBase & {
       readonly terminal: "invalid";
       readonly diagnosticCodes: readonly string[];
     });
@@ -98,7 +98,7 @@ changing candidate atomically commits its receipt, next snapshot, journal entry,
 Other canonical terminals commit only their receipt and observation links. The result is:
 
 ```ts
-interface TransitionResultV1 {
+interface TransitionResult {
   readonly commandId: string;
   readonly disposition: "committed" | "duplicate";
   readonly terminal: "accepted" | "no-op" | "rejected" | "invalid";
@@ -110,11 +110,11 @@ interface TransitionResultV1 {
 
 ### `capability.request`
 
-Host API V1 supplies one generic dispatch envelope while each capability owns its closed input and
+Host API supplies one generic dispatch envelope while each capability owns its closed input and
 output contract:
 
 ```ts
-interface CapabilityRequestV1 {
+interface CapabilityRequest {
   readonly capability: {
     readonly id: string;
     readonly major: number;
@@ -123,7 +123,7 @@ interface CapabilityRequestV1 {
   readonly input: object;
 }
 
-interface CapabilityResultV1 {
+interface CapabilityResult {
   readonly capability: {
     readonly id: string;
     readonly major: number;
@@ -136,14 +136,14 @@ interface CapabilityResultV1 {
 The host accepts only a capability declared by the verified release, implemented by the player, and
 compatible at the requested version. The registry dispatches to that capability's exact validator and
 native adapter; unknown input or output fields are rejected. Loop 1 registers only
-`plotpoint.location.foreground` V1, whose input is exactly `{}` and whose output is
-`LocationObservationV1` from `location-v1.md`.
+`plotpoint.location.foreground`, whose input is exactly `{}` and whose output is
+`LocationObservation` from `location.md`.
 
 ## Host To WebView
 
-- `runtime.bootstrap`: `RuntimeBootstrapV1`.
-- `transition.result`: `TransitionResultV1`.
-- `capability.result`: `CapabilityResultV1` with capability-validated output.
+- `runtime.bootstrap`: `RuntimeBootstrap`.
+- `transition.result`: `TransitionResult`.
+- `capability.result`: `CapabilityResult` with capability-validated output.
 - `host.error`: exactly `{ code: string, commandId?: string, currentVersion?: number }`.
 
 `host.error` represents malformed envelopes, unsupported direction/type/version, stale aggregate

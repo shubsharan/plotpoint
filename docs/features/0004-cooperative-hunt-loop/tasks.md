@@ -6,9 +6,9 @@ sync state, SecureStore owns the credential, and the trusted module owns locatio
 ## Phase 1: Contracts and Setup
 
 - [x] T001 Add `pg`, `@types/pg`, `@testcontainers/postgresql`, and `expo-secure-store` dependencies and scripts.
-- [x] T002 [P] Add generic Host API 1.1 shared command, projection, exact terminal, and view types/parsers.
-- [x] T003 [P] Add internal Sync V1 command/result/snapshot types and closed parsers.
-- [x] T004 [P] Add Shared Hunt Report V1 types by reusing Play Report terminals and Location V1 projections.
+- [x] T002 [P] Add generic Shared Play command, projection, exact terminal, and view types/parsers.
+- [x] T003 [P] Add internal Sync command/result/snapshot types and closed parsers.
+- [x] T004 [P] Add Shared Hunt Report types by reusing Play Report terminals and Location projections.
 - [x] T005 Add contract tests with two unrelated command/projection schemas and malformed inputs.
 
 ## Phase 2: Authoritative Foundation
@@ -38,14 +38,14 @@ sync state, SecureStore owns the credential, and the trusted module owns locatio
 - [x] T022 [P] Add interruption tests for enqueue, submit receipt, snapshot replacement, result upsert, and cursor advancement.
 - [x] T023 Implement SecureStore credential custody and native join/revoke client state.
 - [x] T024 Implement additive SQLite shared session, outbox, projection, result, cursor, and sync-event persistence.
-- [x] T025 Implement generic Host API 1.1 bridge/client and resolve observation IDs from the existing observation store.
+- [x] T025 Implement the generic Shared Play bridge/client and resolve observation IDs from the existing observation store.
 - [x] T026 Implement foreground HTTP submission, complete snapshot pull, and revoked-session mapping.
 - [x] T027 Implement the sync coordinator and honest pending/confirmed/no-op/rejected/invalid/blocked-revoked UI states.
 
 ## Phase 5: Report and Acceptance
 
-- [x] T028 [P] Add report chronology, exact-terminal, Location V1 projection, alias, and adversarial-redaction tests.
-- [x] T029 Implement bounded sync-event recording and Shared Hunt Report V1 generation/share UI.
+- [x] T028 [P] Add report chronology, exact-terminal, Location projection, alias, and adversarial-redaction tests.
+- [x] T029 Implement bounded sync-event recording and Shared Hunt Report generation/share UI.
 - [x] T030 Add provider-free three-player join, location discovery, race, offline restart, snapshot convergence, revocation, and report acceptance.
 - [x] T031 Add static architecture tests preventing server release execution and hunt-specific player protocol fields.
 - [x] T032 Record provider-free verification and deferred physical-device evidence honestly.

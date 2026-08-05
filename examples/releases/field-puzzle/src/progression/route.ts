@@ -9,7 +9,7 @@ export const fieldProgression = defineProgression<
   AdvanceOutcome
 >({
   aggregateKind: "player",
-  graphId: "field.route.v1",
+  graphId: "field.route",
   graphVersion: 1,
   nodes: [
     { nodeId: "first-checkpoint", initialStatus: "active" },

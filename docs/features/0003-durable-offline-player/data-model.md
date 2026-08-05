@@ -107,7 +107,7 @@ by negative age and produces a release-owned non-progressing outcome rather than
 One minimal internal evidence stream for host lifecycle, interruption, recovery, and diagnostic events.
 Each event contains run identity, relative time, kind, stable code or disposition, and safe request or
 command correlation when known. The SQLite representation is an implementation detail rather than part
-of Host API V1.
+of Host API.
 
 Run Events contain no raw command payloads, raw aggregate state, coordinates, protected content, host
 paths, credentials, or stack traces. Separate recovery and diagnostic persistence models are deferred
@@ -115,11 +115,11 @@ until distinct transactional or retention behavior is demonstrated.
 
 ## Play Report
 
-`PlayReportV1` is an allowlisted projection of one run's validated durable records. Its header contains
+`PlayReport` is an allowlisted projection of one run's validated durable records. Its header contains
 release identity, run identity, platform, and total duration. Its body is one non-decreasing ordered
 timeline of discriminated command, capability, lifecycle, and diagnostic events. Command events keep
 terminal, versions, redacted semantic outcome, and progression changes together. Capability events use
-an independently versioned, allowlisted projection defined by that capability contract.
+an independently validated, allowlisted projection defined by that capability contract.
 
 Report generation has no partial-success state: coherent records produce one complete report, while
 missing or incoherent evidence produces an explicit failure.
