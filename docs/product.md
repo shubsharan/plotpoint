@@ -130,7 +130,10 @@ The initial domain model supports three gameplay aggregate types:
 
 Local device preferences and installation metadata are not gameplay aggregates. They are host-owned local state.
 
-Each gameplay aggregate has an identity, schema version, state version, and authority rules. A command normally mutates one aggregate. Cross-aggregate behavior is coordinated explicitly rather than hidden inside a distributed transaction.
+Each gameplay aggregate has an identity, schema identity, state version, and authority rules. The
+immutable release inventories the exact schema bytes and digest for that schema identity. A command
+normally mutates one aggregate. Cross-aggregate behavior is coordinated explicitly rather than hidden
+inside a distributed transaction.
 
 ### 3.6 The server distributes projections, not universal state
 
@@ -184,7 +187,11 @@ The initial public compatibility surfaces should remain small:
 
 1. **Release format version** — how the artifact is packaged and interpreted.
 2. **Host API version** — the bridge and capability contract available to the web runtime.
-3. **Aggregate schema version** — the durable state shape for a game aggregate.
+
+Interface, type, schema, and logical-ID names remain plain. Exact schema agreement comes from the
+immutable release's schema identity and payload digest, not an independent per-schema version. If
+incompatible schema or interface evolution becomes necessary, Plotpoint will define one centralized
+compatibility mechanism rather than adding counters or generation suffixes to each contract.
 
 Internal backend APIs may version independently, but they are not part of the game authoring contract.
 
@@ -460,7 +467,9 @@ The exact module manifest shape should emerge from implementing several mechanic
 
 ## 12. Codebase Boundaries
 
-Package names and folder structures are not platform contracts. The repository should begin with the fewest boundaries that correspond to genuinely different execution environments or versioned interfaces.
+Package names and folder structures are not platform contracts. The repository should begin with the
+fewest boundaries that correspond to genuinely different execution environments or centralized
+compatibility surfaces.
 
 A reasonable initial monorepo is:
 
@@ -562,7 +571,7 @@ These are open design decisions, not hidden assumptions.
 3. Game logic and UI execute in the web runtime; durable storage and device capabilities belong to the native host.
 4. Durable gameplay state changes only through typed commands.
 5. Deterministic game logic performs no ambient I/O.
-6. Player, team, and session state are separate versioned aggregates.
+6. Player, team, and session state are separate schema-identified aggregates.
 7. A command normally mutates one aggregate.
 8. Unauthorized clients never receive server-only state.
 9. Effects execute after a committed transition.

@@ -1,6 +1,6 @@
-# Contract: Project Configuration V1 and Game Composition V1
+# Contract: Project Configuration and Game Composition
 
-Project Configuration V1 is the sole authored composition input. This feature corrects its private
+Project Configuration is the sole authored composition input. This feature corrects its private
 pre-release shape in place. The compiler accepts only the shape below and provides no legacy parser,
 upgrade mode, aliases, or compatibility diagnostics for the discarded shape.
 
@@ -11,7 +11,7 @@ every generated registry and catalog collection.
 ## Project Root
 
 ```ts
-interface ProjectConfigurationV1 {
+interface ProjectConfiguration {
   readonly projectFormatVersion: 1;
   readonly environment: "web";
   readonly hostApi: { readonly major: 1; readonly minimumMinor: 0 | 1 };
@@ -33,7 +33,6 @@ interface SourceExport {
 
 interface SchemaReference {
   readonly id: string;
-  readonly version: number;
 }
 
 interface CapabilityRequirement {
@@ -97,7 +96,6 @@ type CommandRegistration = LocalCommandRegistration | TrustedCommandContract;
 
 interface ProgressionRegistration {
   readonly id: string;
-  readonly version: number;
   readonly aggregateModel: string;
   readonly definition: SourceExport;
 }
@@ -119,12 +117,17 @@ Every playable project has exactly one local/player model. Server models may app
 by the one trusted-mechanic binding; unselected server contracts are invalid.
 
 Every model names an initialization schema. When `initializationContent` is present, it must reference
-content whose required schema is exactly that schema ID and version. When absent, the canonical
+content whose required schema is exactly that schema ID. When absent, the canonical
 initializer input is `{}`, which must validate against the initialization schema. This prevents a typed
 initializer from receiving untyped or wrongly typed content.
 
 One local model may have at most one progression after deriving progression registrations by
-`aggregateModel`. Server progression is not supported by Trusted Mechanic V1.
+`aggregateModel`. Server progression is not supported by Trusted Mechanic.
+
+The runnable co-op reference uses one local/player shell model and one server/team model selected by
+the target-discovery binding. Its valid command set is the binding-selected trusted target-discovery set.
+It has no local team/session command, unselected server contract, or server progression. The earlier
+round/clue command and progression examples are removed rather than used to widen this contract.
 
 ## Components and Resources
 
@@ -144,7 +147,6 @@ interface ComponentRegistration extends DependencySelection {
 
 interface SchemaRegistration {
   readonly id: string;
-  readonly version: number;
   readonly path: string;
 }
 
@@ -172,7 +174,6 @@ requirements.
 ```ts
 interface TrustedMechanicRegistration {
   readonly id: string;
-  readonly version: number;
   readonly aggregateModel: string;
   readonly commands: readonly string[];
   readonly configuration: string;
@@ -189,20 +190,17 @@ initializer, handler, validator, or open metadata. The platform adapter owns exe
 ## Application Definition
 
 ```ts
-interface GameApplicationDefinitionV1 {
-  readonly contractVersion: 1;
-  mount(
-    context: GameApplicationContextV1,
-  ): GameApplicationHandleV1 | Promise<GameApplicationHandleV1>;
+interface GameApplicationDefinition {
+  mount(context: GameApplicationContext): GameApplicationHandle | Promise<GameApplicationHandle>;
 }
 
-interface GameApplicationHandleV1 {
+interface GameApplicationHandle {
   unmount(): void | Promise<void>;
 }
 
-declare function defineGameApplicationV1(
-  definition: GameApplicationDefinitionV1,
-): GameApplicationDefinitionV1;
+declare function defineGameApplication(
+  definition: GameApplicationDefinition,
+): GameApplicationDefinition;
 ```
 
 Compiler inspection validates the exact static shape without invoking `mount`. Application modules do
@@ -212,25 +210,23 @@ in reverse order after a thrown mount, invalid element/handle, unmount failure, 
 
 ## Game Composition Catalog
 
-Every playable Release Format V1 artifact contains one canonical Game Composition V1 catalog at
-`composition/game.v1.json`, inventoried as application content.
+Every playable Release Format artifact contains one canonical Game Composition catalog at
+`composition/game.json`, inventoried as application content.
 
 ```ts
-interface GameCompositionV1 {
-  readonly version: 1;
+interface GameComposition {
   readonly application: {
-    readonly contractVersion: 1;
     readonly components: readonly string[];
   };
-  readonly aggregateModels: readonly AggregateModelDescriptorV1[];
-  readonly commands: readonly CommandDescriptorV1[];
-  readonly progressions: readonly ProgressionDescriptorV1[];
-  readonly components: readonly ComponentDescriptorV1[];
-  readonly resources: readonly ResourceBindingV1[];
-  readonly trustedMechanic?: TrustedMechanicBindingV1;
+  readonly aggregateModels: readonly AggregateModelDescriptor[];
+  readonly commands: readonly CommandDescriptor[];
+  readonly progressions: readonly ProgressionDescriptor[];
+  readonly components: readonly ComponentDescriptor[];
+  readonly resources: readonly ResourceBinding[];
+  readonly trustedMechanic?: TrustedMechanicBinding;
 }
 
-type AggregateModelDescriptorV1 =
+type AggregateModelDescriptor =
   | {
       readonly id: string;
       readonly authority: "local";
@@ -251,7 +247,7 @@ type AggregateModelDescriptorV1 =
       readonly effects: readonly { readonly type: string; readonly schema: SchemaReference }[];
     };
 
-interface CommandDescriptorV1 {
+interface CommandDescriptor {
   readonly id: string;
   readonly type: string;
   readonly aggregateModel: string;
@@ -260,47 +256,46 @@ interface CommandDescriptorV1 {
   readonly execution: "local" | "trusted-mechanic";
 }
 
-interface ProgressionDescriptorV1 {
+interface ProgressionDescriptor {
   readonly id: string;
-  readonly version: number;
   readonly aggregateModel: string;
 }
 
-interface ComponentDescriptorV1 extends DependencySelection {
+interface ComponentDescriptor extends DependencySelection {
   readonly id: string;
 }
 
-interface ResourceBindingBaseV1 {
+interface ResourceBindingBase {
   readonly id: string;
   readonly path: string;
 }
 
-type ResourceBindingV1 =
-  | (ResourceBindingBaseV1 & {
+type ResourceBinding =
+  | (ResourceBindingBase & {
       readonly role: "schema";
-      readonly schemaVersion: number;
     })
-  | (ResourceBindingBaseV1 & {
+  | (ResourceBindingBase & {
       readonly role: "content";
       readonly schema?: SchemaReference;
     })
-  | (ResourceBindingBaseV1 & {
+  | (ResourceBindingBase & {
       readonly role: "asset" | "progression-descriptor" | "component-descriptor";
     });
 ```
 
-`TrustedMechanicBindingV1` is defined by Trusted Mechanic V1 and has the same logical fields as the
+`TrustedMechanicBinding` is defined by Trusted Mechanic and has the same logical fields as the
 authored registration. Catalog membership is derived from the one-way references above; reverse
 command/progression lists are not serialized.
 
-The catalog omits `requiredHostApi` and a top-level capability list. Release Manifest V1 is the single
+The catalog omits `requiredHostApi` and a top-level capability list. Release Manifest is the single
 authority for both. Compilation derives the capability union from the composition and requires exact
 semantic equality with the manifest. The catalog also omits per-model and per-component `export`
 fields: generated bundle roots use fixed map exports, and registry keys are the logical IDs.
 
-Resource paths select exact Release Manifest V1 inventory entries; their digests and byte lengths stay
-authoritative in that manifest. Schema references resolve only when ID/version selects one schema
-resource. Content used for initialization or mechanic configuration must carry its required schema.
+Resource paths select exact Release Manifest inventory entries; their digests and byte lengths stay
+authoritative in that manifest. A schema reference is a stable logical ID; the release inventory binds
+that ID to exact bytes and a digest. Content used for initialization or mechanic configuration must
+carry its required schema ID.
 
 ## Generated Roots and Inspection
 
@@ -311,22 +306,21 @@ The compiler emits the fixed roots:
 export const aggregateModels: Readonly<Record<string, ExecutableAggregateModel<"player">>>;
 
 // bundles/presentation.js
-export const application: GameApplicationDefinitionV1;
-export const components: Readonly<Record<string, ComponentImplementationV1>>;
+export const application: GameApplicationDefinition;
+export const components: Readonly<Record<string, ComponentImplementation>>;
 ```
 
 There are no author-maintained default registries and no per-item named exports in the catalog. Local
 model and component registry keys equal catalog IDs. Progression stays inside its owning executable
 model. Server contracts exist only in the data catalog and are matched to a platform-owned adapter.
 
-The low-level Release Format V1 inspector remains game-agnostic. The composition-aware inspector has
+The low-level Release Format inspector remains game-agnostic. The composition-aware inspector has
 one result shape:
 
 ```ts
-interface GameReleaseInspectionV1 {
-  readonly version: 1;
+interface GameReleaseInspection {
   readonly release: InspectedRelease;
-  readonly gameComposition: GameCompositionV1;
+  readonly gameComposition: GameComposition;
 }
 ```
 
@@ -338,8 +332,16 @@ does not return an `absent` historical variant. Pre-feature artifacts must be re
 Compilation fails deterministically for missing/duplicate/wrong-role IDs, authority/kind mismatch,
 duplicate command types within a derived model, unresolved source exports, a malformed application,
 initializer/content schema mismatch, more than one derived progression per model, a trusted command
-outside the selected mechanic, invalid component dependencies, catalog/registry/inventory disagreement,
-or capability-union/manifest disagreement.
+outside the selected mechanic, an unselected server model, any server progression, invalid component
+dependencies, catalog/registry/inventory disagreement, or capability-union/manifest disagreement.
 
 These checks prove the supported composition and import boundary. They do not prove arbitrary trusted
 JavaScript lacks ambient access inside the single WebView.
+
+## Naming and Compatibility
+
+Repository interfaces, schema IDs, command IDs, component IDs, mechanic IDs, generated exports, and
+catalog paths use stable plain names without embedded generation suffixes. The existing top-level
+project format and Host API requirement remain the centralized
+compatibility boundary for this pre-release format. If Plotpoint later needs schema or interface
+evolution, it will add one centralized compatibility mechanism instead of renaming every symbol.

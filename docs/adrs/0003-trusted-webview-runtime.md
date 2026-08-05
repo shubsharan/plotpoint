@@ -18,7 +18,7 @@ network and native authority and must describe the boundary honestly.
    instance inside an Expo mobile application.
 2. The host generates a bootstrap document from verified release entrypoints. It locks navigation,
    denies remote network connections, and exposes native operations only through a strict,
-   versioned, serializable bridge.
+   serializable bridge whose compatibility is negotiated centrally.
 3. Game logic receives state, context, and observations explicitly through the runtime contract.
    The trusted single realm is a convention-enforcement boundary, not a sandbox against malicious
    release code; documentation, diagnostics, and compatibility claims must preserve that distinction.
@@ -34,7 +34,7 @@ network and native authority and must describe the boundary honestly.
   enforce determinism against intentionally adversarial code.
 - Locked navigation, denied remote connections, release verification, and the bridge still constrain
   accidental authority and keep native capabilities host-owned.
-- A future stronger isolation boundary may change the host API while release-format v1 remains
+- A future stronger isolation boundary may change the Host API while the active release format remains
   unchanged.
 
 ## Supersession

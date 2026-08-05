@@ -15,11 +15,13 @@ game presentation or release bundle the owner of durable records.
 
 1. The Expo native host owns installed releases, runs, aggregate snapshots, command receipts,
    journals, location observations, diagnostics, and recovery metadata in SQLite.
-2. Bridge protocol v1 uses closed, versioned request and response envelopes with stable request IDs.
+2. The bridge uses plain, closed request and response envelopes with stable request IDs. Host API
+   compatibility is negotiated once at the centralized boundary rather than repeated in each envelope.
    The WebView computes a candidate deterministic transition from host-supplied state and explicit
    observations, then requests `transition.commit`.
 3. Before commit, the host validates the command identity, target aggregate, expected version,
-   canonical transition shape, schema compatibility, and referenced observation identities.
+   canonical transition shape, schema identity and digest agreement, and referenced observation
+   identities.
 4. One SQLite transaction writes the command receipt, next snapshot and version, journal entry, and
    observation links. Acceptance is returned only after commit. Duplicate command identities return
    the original durable result without advancing state again.

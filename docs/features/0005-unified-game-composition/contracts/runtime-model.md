@@ -1,8 +1,8 @@
-# Contract: Aggregate Runtime V1
+# Contract: Aggregate Runtime
 
-Aggregate Runtime V1 documents the corrected pre-release runtime contract. Serialized aggregate and
-record shapes remain version 1 where they already carry a version. Repository-owned TypeScript APIs are
-unversioned: they are edited in place and do not use generation suffixes.
+Aggregate Runtime documents the corrected pre-release runtime contract. Repository-owned TypeScript
+APIs, schema IDs, and persisted record interfaces use plain names and are edited in place. Exact schema
+bytes are bound by immutable release inventory and digest rather than by generation suffixes.
 
 ## Schemas and Aggregates
 
@@ -17,7 +17,6 @@ type SchemaValidationResult<Value> =
 
 interface RuntimeSchema<Value> {
   readonly id: string;
-  readonly version: number;
   readonly schemaDigest: `sha256:${string}`;
   validate(value: unknown): SchemaValidationResult<Value>;
 }
@@ -27,20 +26,19 @@ interface Aggregate<State extends JsonObject, Kind extends AggregateKind> {
   readonly modelId: string;
   readonly aggregateKind: Kind;
   readonly schemaId: string;
-  readonly schemaVersion: number;
   readonly stateVersion: number;
   readonly state: State;
   readonly progression?: ProgressionInstance;
 }
 ```
 
-`stateVersion` is the only aggregate concurrency and commit counter. Runtime, Host API, Sync V1,
-SQLite, PostgreSQL, and reports use that name directly; no `revision` alias exists. `schemaId` and
-`schemaVersion` are persisted on the aggregate because persisted state must remain self-describing.
-Resolved models derive those values from `stateSchema` and do not copy them into parallel fields.
+`stateVersion` is the only aggregate concurrency and commit counter. Runtime, Host API, Sync, SQLite,
+PostgreSQL, and reports use that name directly; no `revision` alias exists. Persisted aggregates retain
+the stable schema ID, while the release-pinned model and exact inventory digest identify its schema
+bytes. Resolved models derive that identity from `stateSchema` and do not copy it into parallel fields.
 
-Every runtime validator names the digest of the exact inventoried schema bytes it implements. Identity
-and version without digest agreement are insufficient at release or trusted-mechanic registration.
+Every runtime validator names the digest of the exact inventoried schema bytes it implements. Logical
+identity without digest agreement is insufficient at release or trusted-mechanic registration.
 
 ## Typed Models and Commands
 
@@ -106,7 +104,7 @@ interface ExecutableAggregateModel<Kind extends AggregateKind> {
   >;
   readonly eventSchemas: Readonly<Record<string, RuntimeSchema<JsonObject>>>;
   readonly effectSchemas: Readonly<Record<string, RuntimeSchema<JsonObject>>>;
-  readonly progression?: { readonly graphId: string; readonly graphVersion: number };
+  readonly progression?: { readonly graphId: string };
   initialize(input: JsonObject): InitializationResult<Kind>;
   execute(input: {
     readonly aggregate: Aggregate<JsonObject, Kind>;
@@ -131,7 +129,7 @@ validates the returned state, constructs `stateVersion: 0`, and attaches the sol
 progression instance. Failure returns `kind: "invalid"` with stable diagnostics; it never returns a
 partially initialized aggregate or throws schema prose across the boundary.
 
-Project Configuration V1 permits only local/player and server/team-or-session combinations. Generated
+Project Configuration permits only local/player and server/team-or-session combinations. Generated
 local registries contain local/player models. The platform mechanic registry contains server/team or
 server/session models.
 
@@ -204,7 +202,6 @@ interface ProgressionTransition<State extends JsonObject, Kind extends Aggregate
 interface ProgressionDefinition<State extends JsonObject, Kind extends AggregateKind> {
   readonly aggregateKind: Kind;
   readonly graphId: string;
-  readonly graphVersion: number;
   readonly nodes: readonly ProgressionNode[];
   readonly transitions: readonly ProgressionTransition<State, Kind>[];
 }

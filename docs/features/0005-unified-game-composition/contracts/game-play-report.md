@@ -1,23 +1,22 @@
-# Contract: Game Play Report V1
+# Contract: Game Play Report
 
-Game Play Report V1 is the only report produced by the corrected pre-release player. It replaces the
+Game Play Report is the only report produced by the corrected pre-release player. It replaces the
 local and game-specific report builders in place; there are no historical readers, compatibility
 aliases, or report migrations. Report selection uses only the installed run and its optional immutable
 shared-session binding and never checks a game, mechanic, command, component, or schema-specific ID.
 
 ```ts
-interface GamePlayReportV1 {
-  readonly version: 1;
+interface GamePlayReport {
   readonly releaseId: `sha256:${string}`;
   readonly platform: "ios" | "android";
   readonly durationMs: number;
   readonly shared?: {
     readonly membership: "active" | "revoked";
   };
-  readonly events: readonly GamePlayReportEventV1[];
+  readonly events: readonly GamePlayReportEvent[];
 }
 
-type GamePlayReportEventV1 =
+type GamePlayReportEvent =
   | {
       readonly kind: "lifecycle";
       readonly elapsedMs: number;
@@ -87,3 +86,8 @@ code enters `ReportSafeDiagnosticCode` only through a host-owned closed allowlis
 contains no raw aggregate or projection value, content/configuration value, credential, invitation,
 service origin, participant/team/session ID, precise location, observation payload, host path, or bundle
 source. Product acceptance tests establish semantic completion separately from this evidence export.
+
+The co-op revision acceptance may use a generic `command` event with terminal `rejected` together with
+a `capability` event whose disposition is `expired` to justify changing observation-freshness
+configuration. That learning path does not add the target, payload, outcome code, configuration value,
+or any other game-specific report field.

@@ -14,32 +14,38 @@ status: Pending
 
 ### User Story 1 - Play the Co-op Game as One Release (Priority: P1)
 
-A core-team author can validate, compile, install, open, join, and play the co-op game as one
-coherent release. The game starts through the same player lifecycle as the field puzzle, renders its
-declared experience, requests only its declared capabilities, and submits its first shared action
-without game-specific player behavior.
+A core-team author can validate, compile, install, open, join, and complete the co-op target-discovery
+game as one coherent release. Three participants use the same player lifecycle as the field puzzle,
+discover every configured target through the declared trusted mechanic, recover after disconnects and
+restarts, export one redacted learning report, and install a configuration-only revision as a fresh
+release and session without game-specific player behavior.
 
 **Why this priority**: The cooperative loop is not complete while its release is only a collection of
 independently valid parts. A playable reference game is the evidence needed for every architectural
 improvement in this feature.
 
-**Independent Test**: Starting from the co-op game project, complete validation through installation and
-mounting, join the release-pinned session, render the initial confirmed team view, and submit one
-location-backed target discovery through the ordinary game UI.
+**Independent Test**: Starting from the co-op game project, complete a two-release journey: validate,
+compile, install, mount, join three participants, discover every configured target across disconnect and
+restart, export a report containing only generic rejected/expired learning evidence, revise the
+observation-freshness configuration, and complete the revised game in a fresh release-pinned session.
 
 **Acceptance Scenarios**:
 
 1. **Given** a valid co-op game project and matching session, **When** a player installs and
    opens the release, **Then** the game mounts successfully and presents its initial playable view.
-2. **Given** a mounted co-op game and persisted foreground observation, **When** the player attempts a
-   target discovery, **Then** the action is durably queued, decided authoritatively, and reflected in
-   the next confirmed view.
-3. **Given** a release whose configured application export is missing or has the wrong static contract
+2. **Given** three joined participants and persisted foreground observations, **When** they discover all
+   configured targets across queued work, response loss, disconnect, and restart, **Then** every action
+   reaches one exact terminal and the final confirmed team view represents a completed game.
+3. **Given** a completed first journey containing generic rejected command and expired capability
+   evidence, **When** the author revises only the observation-freshness configuration, **Then** a distinct
+   release starts a fresh session and completes without exposing a target, coordinate, payload, outcome
+   code, or service identity in the report.
+4. **Given** a release whose configured application export is missing or has the wrong static contract
    shape, **When** the author validates or compiles it, **Then** the project is rejected before
    installation.
-4. **Given** a statically valid application whose `mount` throws or returns an invalid cleanup handle,
+5. **Given** a statically valid application whose `mount` throws or returns an invalid cleanup handle,
    **When** the player opens it, **Then** mounting fails explicitly without committing a playable state.
-5. **Given** an unrelated local-only game, **When** it is installed and opened, **Then** the player
+6. **Given** an unrelated local-only game, **When** it is installed and opened, **Then** the player
    does not display or require cooperative-session controls.
 
 ---
@@ -54,9 +60,9 @@ composition, and undeclared behavior or unresolved resources cannot become playa
 running game to disagree. One inspectable composition truth is necessary for dependable authoring,
 runtime behavior, and future multi-game reuse.
 
-**Independent Test**: Define two materially different games using the supported composition model,
-compile them, inspect their declared resources and mechanics, and run each without author-maintained
-duplicate command or component registries.
+**Independent Test**: Define two materially different installed-player games using the supported
+composition model, run each without author-maintained duplicate command or component registries, and
+validate, compile, inspect, verify, and reproduce all four valid compiler examples.
 
 **Acceptance Scenarios**:
 
@@ -169,7 +175,7 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   throws or returns an invalid cleanup handle at runtime.
 - A command or content identity appears in source behavior but is absent from the project definition,
   or the same identity is bound to incompatible roles.
-- An authoritative mechanic is unknown, unsupported at the declared version, missing configuration,
+- An authoritative mechanic is unknown, missing configuration,
   or paired with the wrong aggregate schema.
 - A command commits an event or effect while leaving canonical state unchanged, or claims no-op while
   emitting durable outputs.
@@ -184,6 +190,12 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   service binding unexpectedly.
 - A local-only release, shared release, and future player-specific release are installed in succession
   without rebuilding the player.
+- A project declares a server model, trusted command, or server progression that is not selected by the
+  one trusted-mechanic binding.
+- A previously valid compiler example still uses the discarded Project Configuration shape after the
+  clean break.
+- A repository-owned interface, schema, logical ID, catalog path, or contract filename embeds a
+  generation suffix instead of using its stable plain name.
 
 ## Requirements _(mandatory)_
 
@@ -207,17 +219,17 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   any platform-visible command, resource, capability, aggregate model, or trusted mechanic operation
   absent from the caller's validated project composition.
 - **FR-006**: Component declarations MUST name their platform-visible command, content, asset,
-  capability, and optional versioned shared-projection dependencies, and each component MUST receive a
+  capability, and optional shared-projection dependencies, and each component MUST receive a
   runtime context that resolves only those declared dependencies. The context MUST also expose pure
   durable-local-view reads and post-commit change notification without direct persistence mutation.
 - **FR-007**: A release MUST declare at most one trusted authoritative mechanic. When present, the
-  binding MUST declare a stable identity and version, accepted command types, aggregate model,
-  configuration input, and projection schema identity/version, and MUST bind the matching platform-owned
+  binding MUST declare a stable identity, accepted command types, aggregate model, configuration input,
+  and projection schema identity and digest, and MUST bind the matching platform-owned
   initialization, decision, validation, and projection roles.
 - **FR-008**: The authoritative service MUST resolve only the supported trusted mechanic declared by
   the release; its platform adapter MUST own the complete resolved server model, handlers, validators,
   and projection, each validator MUST identify the exact inventoried schema digest it implements, and
-  the service MUST NOT execute release-authored server code. Trusted Mechanic V1 MUST NOT supply hidden
+  the service MUST NOT execute release-authored server code. Trusted Mechanic MUST NOT supply hidden
   server progression.
 - **FR-009**: Aggregate models MUST bind authority/kind, exact state and initialization schemas,
   deterministic initialization, validation, and typed durable event/effect declarations. Each command
@@ -226,7 +238,7 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   heterogeneous registries MUST invoke typed logic only after state- and payload-specific schema narrowing.
 - **FR-010**: Command handling MUST distinguish accepted, rejected, no-op, and invalid decisions
   explicitly. Local recorded terminals MUST retain their full schema-validated outcome. Shared recorded
-  terminals MUST preserve the exact Sync V1 participant-visible result through a lossless trusted-outcome
+  terminals MUST preserve the exact Sync participant-visible result through a lossless trusted-outcome
   restriction and deterministic invalid-diagnostic mapping. Preflight invalidity MUST remain a local
   non-committable result.
 - **FR-011**: One accepted command MUST advance the aggregate state version exactly once whenever it commits
@@ -253,7 +265,7 @@ changed-service, and changed-run joins and verify that only exact or safely reco
 - **FR-020**: Snapshot replacement, result reconciliation, outbox reconciliation, cursor advancement,
   and membership changes MUST remain atomic. An authenticated revocation MUST atomically mark local
   membership revoked and every queued or submitting action blocked before credential removal.
-- **FR-021**: Every shared projection MUST match the release-declared schema ID, version, and digest and
+- **FR-021**: Every shared projection MUST match the release-declared schema ID and digest and
   pass payload validation before persistence or component exposure.
 - **FR-022**: The player MUST reserve at most one pending-or-bound shared session per run and make the
   exact join request plus its secret references durable before the first network attempt. Parallel or
@@ -266,24 +278,38 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   caller always reaches a terminal response.
 - **FR-025**: Local-only releases MUST remain playable without shared-session controls or shared
   persistence requirements.
-- **FR-026**: The co-op game MUST use the ordinary compiled-release lifecycle, generated
-  composition, generic shared-play contract, and trusted mechanic binding without game-specific
-  player routing.
-- **FR-027**: The field puzzle and co-op game MUST both pass one external-consumer-style
+- **FR-026**: The co-op game MUST use the ordinary compiled-release lifecycle, generated composition,
+  generic shared-play contract, and target-discovery trusted mechanic without game-specific player
+  routing. Its runnable composition MUST contain one local player model, one server team model selected
+  by that mechanic, the selected trusted target-discovery commands, and no unselected team/session
+  command, decorative progression, or server progression. Three participants MUST be able to discover
+  every configured target and complete the game.
+- **FR-027**: The field puzzle and co-op game MUST each pass one integrated external-consumer-style
   compile, install, mount, action, recovery, and report acceptance path appropriate to their authority.
+  The field-puzzle path MUST consume the compiled composition through the generated runtime adapter and
+  MUST NOT import a superseded author `logic` or `presentation` root directly.
 - **FR-028**: Existing immutable release identity, deterministic replay, atomic local persistence,
   privacy redaction, authorization, and trusted-code boundaries MUST remain intact or change only
   through an explicitly accepted architecture decision.
-- **FR-029**: Every Project Configuration V1 release MUST export one host-owned Game Play Report V1
+- **FR-029**: Every Project Configuration release MUST export one host-owned Game Play Report
   selected only by run and optional shared-session binding. The export MUST NOT execute release code,
   select a game-specific report builder, or include game-specific completion fields, protected values,
   credentials, precise locations, service identities, or raw durable state.
-- **FR-030**: Provider-free behavior, simulated native compatibility, and physical-device evidence
-  MUST remain separately reported; this feature MUST NOT infer physical acceptance from other gates.
-- **FR-031**: The compiler, player, and report readers MUST accept only the corrected V1 contracts.
+- **FR-030**: Provider-free behavior, final iOS simulator compatibility, final Android emulator
+  compatibility, and physical-device evidence MUST remain separately reported. The simulator/emulator
+  build-install-launch checks MUST be rerun after the final native-player changes, and this feature MUST
+  NOT infer physical acceptance from any other gate.
+- **FR-031**: The compiler, player, and report readers MUST accept only the corrected contracts.
   They MUST NOT provide compatibility aliases, legacy parsers, artifact/report migrations, or automatic
   database resets. Incompatible artifacts MUST require recompilation, and an incompatible player
-  database MUST fail with explicit reset or reinstall guidance.
+  database MUST fail with explicit reset or reinstall guidance. Every existing valid compiler example
+  and golden release fixture MUST be migrated to the corrected shape; discarded shapes MAY remain only
+  as explicit invalid clean-break fixtures.
+- **FR-032**: Repository-owned interface, type, function, schema, command, component, mechanic, report,
+  catalog, and contract-document names MUST use stable plain names without embedded generation suffixes.
+  No per-interface or per-schema compatibility layer is added. Existing centralized
+  project/release format, Host API/capability, and `/v1` HTTP route metadata remain the only compatibility
+  discriminators in scope; any future schema or interface evolution MUST use a centralized mechanism.
 
 ### Key Entities
 
@@ -295,7 +321,7 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   events, effects, and command/progression membership derived from one-way registrations.
 - **Progression Ruleset**: Optional deterministic activity-status model driven by accepted aggregate
   facts and represented once in durable aggregate state.
-- **Trusted Mechanic Binding**: Versioned declaration connecting a release to one supported
+- **Trusted Mechanic Binding**: Declaration connecting a release to one supported
   platform-owned authoritative mechanic and its configuration, aggregate, commands, and projection.
 - **Shared Session Binding**: Immutable relationship among one game run, release, service session,
   participant, team, service location, membership, and recovery cursor.
@@ -311,14 +337,16 @@ changed-service, and changed-run joins and verify that only exact or safely reco
 
 ### Measurable Outcomes
 
-- **SC-001**: The field puzzle and co-op game each complete one validate-to-first-action path
-  and one report-export path through the same installed-game lifecycle with zero game-specific player
-  branches.
+- **SC-001**: The field puzzle completes one integrated validate/install/mount/action/restart/report path,
+  and the co-op game completes the two-release three-participant journey through the same installed-game
+  lifecycle, with zero game-specific player branches or direct legacy-root imports.
 - **SC-002**: 100% of reference releases missing or statically mis-shaping their application definition
   are rejected before installation; 100% whose mount throws or returns an invalid handle fail explicitly
   before playable state is exposed.
-- **SC-003**: 100% of runtime commands, resources, capabilities, and the trusted mechanic used by the
-  two reference games are traceable to one declared composition identity with zero hidden bindings.
+- **SC-003**: 100% of runtime commands, resources, capabilities, and trusted mechanics used by the field
+  puzzle, minimal local puzzle, branching media tour, and co-op game are traceable to one declared
+  composition identity with zero hidden bindings; all four validate, compile, inspect, verify, and
+  reproduce under the corrected Project Configuration.
 - **SC-004**: Across 100 queued-action retries and every recorded synchronization interruption point,
   each shared action reaches exactly one terminal; every pass selects each start-eligible row at most
   once, performs at most one pull, and terminates.
@@ -331,15 +359,22 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   effect-only, and progression-changing commands preserve their exact terminal and aggregate state version
   across execution, persistence, recovery, and replay. Representative preflight-invalid commands return
   locally with no receipt, observation consumption, or durable mutation across 100 repeats.
-- **SC-008**: An author can add or change one reference-game mechanic without editing duplicate runtime
-  registries or game-specific player routing.
-- **SC-009**: The complete cooperative provider-free lifecycle covers installation, mounting, joining,
-  multiple queued discoveries, response loss, restart, corrective recovery, revocation, generic Game
-  Play Report V1 export with no target-specific fields, and a changed release that starts a fresh
-  run and session without active-session migration or manual state repair.
+- **SC-008**: An author can change the co-op observation-freshness configuration or one reference-game
+  mechanic without editing duplicate runtime registries or game-specific player routing, while the
+  complete four-example compiler matrix remains valid.
+- **SC-009**: The complete cooperative provider-free lifecycle covers installation, mounting, three
+  participants, discovery of every configured target, queued work, response loss, restart, corrective
+  recovery, revocation, and generic Game Play Report export. Generic rejected/expired evidence drives
+  a configuration-only revision whose distinct release starts a fresh run and session and completes
+  without active-session migration or manual state repair. After all native-player changes, fresh iOS
+  simulator and Android emulator checks MUST each build, install, and launch successfully; physical-device
+  behavior remains separately reported and MUST NOT be inferred from those results.
 - **SC-010**: All privacy, authorization, deterministic replay, immutable artifact, and failure-atomicity
   regression gates pass with zero newly exposed credentials, precise locations, protected content, or
   raw durable state.
+- **SC-011**: Static contract and fixture checks find zero repository-owned generation suffixes in
+  maintained public interfaces, logical IDs, catalog paths, or Feature 0005
+  contract filenames, excluding the centralized `/v1` HTTP route prefix.
 
 ## Assumptions
 
@@ -349,8 +384,15 @@ changed-service, and changed-run joins and verify that only exact or safely reco
 - Release code remains trusted internal code in the existing single game view.
 - Trusted authoritative mechanics remain platform-owned and execute in the existing modular service;
   releases select supported mechanics but do not provide server-executed code.
-- The co-op game retains one session, one team, one team aggregate, foreground synchronization,
-  and complete authorized snapshots.
+- The co-op game retains one session, one team, one local player shell model, one server team aggregate,
+  foreground synchronization, complete authorized snapshots, and only the trusted target-discovery
+  command set. The former sample round/clue commands and team/session progressions are removed rather
+  than promoted into new authority or mechanic abstractions.
+- `field-puzzle`, `minimal-local-puzzle`, `branching-media-tour`, and `co-op-game` remain the valid
+  compiler/example matrix after the corrected clean break.
+- Existing project/release format numbers, Host API and capability negotiation, state versions, and the
+  `/v1` HTTP route prefix are centralized compatibility or concurrency metadata rather than generation
+  suffixes. This feature does not invent their future replacement.
 - General plugin loading, dependency injection containers, full event sourcing, entity-component
   simulation, microservices, WebSockets, background synchronization, delta feeds, and generalized
   cross-aggregate orchestration remain out of scope.
@@ -364,3 +406,4 @@ changed-service, and changed-run joins and verify that only exact or safely reco
 - [ADR-0003: Trusted Single-WebView Runtime](../../adrs/0003-trusted-webview-runtime.md)
 - [ADR-0004: Host-Owned Atomic Player Persistence](../../adrs/0004-atomic-player-persistence.md)
 - [ADR-0005: Authoritative Shared Sessions and Snapshot Recovery](../../adrs/0005-authoritative-shared-session-sync.md)
+- [ADR-0006: Centralized Contract Evolution](../../adrs/0006-centralized-contract-evolution.md)

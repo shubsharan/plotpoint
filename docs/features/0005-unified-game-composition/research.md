@@ -1,13 +1,13 @@
 # Research: Unified Game Composition
 
-## Composition Source and Versioning
+## Composition Source and Compatibility
 
 **Decision**: Keep `plotpoint.project.json` as the only authored composition truth and correct Project
-Configuration V1 in place. It declares one application, aggregate models, commands, optional local
+Configuration in place. It declares one application, aggregate models, commands, optional local
 progression, components, schemas, content, assets, capabilities, and zero or one trusted mechanic. The
-compiler lowers it into generated bundle registries plus mandatory Game Composition V1 at a fixed
-inventoried content path. Release Format V1 and Host API 1.0/1.1 stay unchanged. The public `inspect`
-command layers one required composition result over the game-agnostic Release Format V1 inspector,
+compiler lowers it into generated bundle registries plus mandatory Game Composition at a fixed
+inventoried content path. Release Format and Host API 1.0/1.1 stay unchanged. The public `inspect`
+command layers one required composition result over the game-agnostic Release Format inspector,
 making the catalog reviewable without executing bundle code.
 
 Commands and progressions are the sole owners of their aggregate-model references. Models do not
@@ -16,27 +16,42 @@ trusted commands; those descriptors do not repeat mechanic identity. Authority/k
 local/player or server/team-or-session. Initialization content must carry the model's exact input
 schema; absent content means canonical `{}` validated against that schema.
 
+The clean break migrates every valid compiler example rather than shrinking the prior evidence matrix.
+`field-puzzle`, `minimal-local-puzzle`, `branching-media-tour`, and the renamed `co-op-game` all adopt
+the corrected shape. Discarded configurations survive only as explicit invalid fixtures.
+
+Repository interfaces, schema IDs, command/component/mechanic IDs, catalog paths, and contract files
+use stable plain names. Per-interface `version` fields and embedded generation suffixes are removed.
+Existing top-level project/release format metadata, Host API and capability
+negotiation, state versions, and the `/v1` HTTP route remain because they are already centralized
+compatibility or concurrency boundaries. This feature does not invent a future schema migration system.
+
 **Rationale**: The strict JSON input already provides deterministic ordering, frozen input capture,
 portable paths, and inspectability. The missing seam is not a more expressive authoring language; it
 is making the compiled registries and their resource bindings authoritative when the game runs. A
-versioned application catalog can evolve inside Release Format V1's existing application-content
-inventory without changing ZIP, manifest, digest, or artifact identity semantics.
+application catalog can evolve inside Release Format's existing centralized compatibility boundary
+without suffixing every interface or schema name or changing ZIP, manifest, digest, or artifact
+identity semantics.
 
 **Alternatives considered**:
 
 - Add executable `defineGame()` configuration: rejected because it creates a second source of truth
   and weakens data-only validation.
-- Preserve the discarded V1 shape behind legacy parsing: rejected because the app is pre-release and
+- Preserve the discarded shape behind legacy parsing: rejected because the app is pre-release and
   there is no supported artifact or user data to justify two meanings.
 - Introduce a new project, release, or Host API generation: rejected because no compatibility burden,
   container, inventory, identity, integrity, or wire-message rule requires it.
+- Add generation suffixes or independent versions to every interface and schema: rejected because it
+  spreads compatibility policy across names without providing migration or negotiation.
+- Build a centralized schema/interface evolution registry now: deferred until incompatible published
+  contracts exist and require it.
 - Add a general module/plugin manifest: rejected because two internal games do not justify dynamic
   discovery, third-party loading, or a dependency-injection system.
 
 ## Generated Application Composition
 
-**Decision**: Define one `GameApplicationV1` lifecycle through a side-effect-free authoring helper.
-The configured application export contains version metadata and `mount(context)`, which returns an
+**Decision**: Define one `GameApplication` lifecycle through a side-effect-free authoring helper.
+The configured application export contains a plain lifecycle definition and `mount(context)`, which returns an
 explicit handle the player unmounts before remount or disposal. Generated component factories register
 cleanup callbacks in a player-owned mount scope at resource-acquisition time and expose only elements to
 the application, so thrown mounts, invalid handles, and failed unmounts still clean up exactly once. The
@@ -65,7 +80,7 @@ metadata; it is not a sandbox claim.
 
 ## Aggregate Model and Decision Semantics
 
-**Decision**: Make unversioned `ResolvedAggregateModel` the vertical deterministic unit. It binds one model
+**Decision**: Make plain `ResolvedAggregateModel` the vertical deterministic unit. It binds one model
 identity, aggregate kind, authority, one state schema, initializer, executable state/payload/
 outcome/event/effect validators, command definitions, and zero or one progression. `executeCommand`
 receives a resolved model, selects the command definition by type, validates the aggregate and schemas,
@@ -130,10 +145,10 @@ decorative. State- and event-driven facts compose across commands and preserve o
 commands, content, assets, capabilities, and optional shared-projection schema it needs. The generated
 component registry supplies a scoped `ComponentContext` whose dispatchers and resolvers can access only
 those IDs. Every component can read and subscribe to the release's one durable local aggregate without
-receiving persistence mutation authority; Shared Play V1 is present only for a component declaring the
-mechanic's projection and only after an exact session binding. Game Composition V1 carries logical
+receiving persistence mutation authority; Shared Play is present only for a component declaring the
+mechanic's projection and only after an exact session binding. Game Composition carries logical
 descriptors and maps schemas/content/assets/descriptors to exact artifact roles and paths. Fixed
-generated map exports eliminate per-item export fields. Release Manifest V1 remains the sole authority
+generated map exports eliminate per-item export fields. Release Manifest remains the sole authority
 for Host API and release-wide capabilities; compilation proves its capability list equals the union
 derived from component/mechanic selections. Compiler reference checks reject missing or ambiguous
 bindings; host-facing operations reject undeclared capabilities and commands.
@@ -153,10 +168,10 @@ inside one WebView are isolated from each other.
 
 ## Trusted Authoritative Mechanics
 
-**Decision**: Allow zero or one versioned trusted-mechanic registration in Project Configuration V1 and
-Game Composition V1. The binding names the platform mechanic ID/version, data-only server aggregate
+**Decision**: Allow zero or one trusted-mechanic registration in Project Configuration and
+Game Composition. The binding names the platform mechanic ID, data-only server aggregate
 model and accepted command contracts, configuration content, required capabilities, and projection
-schema. Selecting that identity/version binds the platform adapter's initialization, decision,
+schema. Selecting that identity binds the platform adapter's initialization, decision,
 validation, and projection roles; those are not release-authored role exports. The API composition root
 owns a closed registry of platform implementations, each owning the complete resolved server model and
 executable validators. Every platform validator declares the digest of the exact inventoried schema
@@ -164,11 +179,11 @@ bytes it implements. Release registration verifies the artifact's catalog, manif
 data descriptors against those digests and selects an exact supported adapter; it never imports release
 bundles on the server. Target discovery is the first adapter. Participant HTTP routes become
 game-neutral shared-session routes, while operator and domain logic remain in the existing modular
-monolith. Trusted Mechanic V1 prohibits server progression because the release has no declarative server
+monolith. Trusted Mechanic prohibits server progression because the release has no declarative server
 progression contract. Binding validation returns canonical configuration plus initializer input or a
 closed diagnostic; authorization returns a runtime command with transformed observations or a stable
-rejected/invalid terminal; projection returns a complete validated `SharedProjectionV1` or a closed
-failure. The adapter preserves Sync V1 state-version fields directly. It also restricts trusted outcomes to exact stable-code objects so Sync V1's
+rejected/invalid terminal; projection returns a complete validated `SharedProjection` or a closed
+failure. The adapter preserves Sync state-version fields directly. It also restricts trusted outcomes to exact stable-code objects so Sync's
 `outcomeCode` is lossless for semantic outcomes; execution invalidity publishes a deterministic primary
 diagnostic while retaining the complete server record. Session initialization derives only from
 validated release configuration; generic operator metadata does not become an implicit mechanic input.
@@ -185,9 +200,39 @@ arbitrary server execution and removes example-game vocabulary from the player t
 - Build a generic remote plugin protocol or separate mechanic service: rejected because one trusted
   mechanic is evidence only for a closed port in the existing service.
 
+## Runnable Co-op Reference Boundary
+
+**Decision**: Keep the runnable co-op game to the product-proven target-discovery loop. Its composition
+contains one local/player shell model and one server/team model selected by
+`plotpoint.location.target-discovery`. The trusted binding selects the complete target-discovery
+command set, and the game declares no server progression. The former `advance-round` and `solve-clue`
+sample commands plus their session/team progressions are removed rather than reclassified. The field
+puzzle remains the progression-bearing reference game.
+
+The complete acceptance journey uses three participants to discover every configured target, recover
+across disconnect and restart, and export a generic report. A first-release rejected command paired with
+an expired capability event provides privacy-safe evidence to revise only the observation-freshness
+configuration. The revised artifact has a new release identity, starts a fresh session, and completes
+without active-session migration.
+
+**Rationale**: The discarded co-op commands were compiler examples, not behavior reachable through the
+authoritative product loop. Under the selected authority model, local models are player-owned, the one
+server model is owned by the trusted target-discovery adapter, and Trusted Mechanic intentionally has
+no server progression. Preserving unused team/session logic would force broader authority and mechanic
+abstractions before a game needs them.
+
+**Alternatives considered**:
+
+- Add multiple trusted mechanics or multiple server models to preserve the sample commands: rejected
+  because the current game needs only one target-discovery aggregate and mechanic.
+- Fold clue solving and round advancement into target discovery: rejected because it would make a
+  reusable platform mechanic inherit game-specific vocabulary and progression.
+- Keep the files as valid but unreachable release code: rejected because valid composition must describe
+  executable product behavior rather than decorative examples.
+
 ## Shared Synchronization and Recovery
 
-**Decision**: Preserve Host API 1.1 Shared Play and Sync V1 wire shapes. Use the existing
+**Decision**: Preserve Host API 1.1 Shared Play and Sync wire shapes. Use the existing
 `queued | submitting | blocked-revoked` SQLite statuses as an explicit durable state machine. One
 atomic `beginSubmissionBatch(sessionId)` recovers interrupted submissions, captures all rows eligible
 at pass start in `(enqueued_at, command_id)` order, marks that finite set submitting, and records
@@ -221,7 +266,7 @@ transaction, validate all session identities, reject duplicate projection/result
 the complete projection, compare existing terminals or insert from outbox provenance, delete only
 matched outbox rows, advance cursor/membership/status, and commit. A repeated corrective result may
 reuse an existing local terminal when its outbox row is gone; any changed repeat aborts the whole
-transaction. Sync V1 does not reconstruct report provenance after both local result and outbox data
+transaction. Sync does not reconstruct report provenance after both local result and outbox data
 are lost.
 
 Before the first join request crosses the network, the player reserves the run with one exclusive
@@ -248,7 +293,7 @@ safe without weakening evidence or silently rebinding one game run.
 
 - Upsert and overwrite terminals or binding fields: rejected because conflicting history would become
   success-shaped local state.
-- Change Sync V1 to resend all local report provenance: deferred because the server intentionally does
+- Change Sync to resend all local report provenance: deferred because the server intentionally does
   not retain it and current recovery only promises convergence from intact host data.
 - Support service rebinding, credential rotation, active-session release migration, or multi-device
   membership: deferred until a product loop requires them.
@@ -256,7 +301,7 @@ safe without weakening evidence or silently rebinding one game run.
 ## Generic Evidence Export
 
 **Decision**: Replace local and game-specific report builders in place with one host-owned Game Play
-Report V1. Selection is keyed only by the installed run and its optional
+Report. Selection is keyed only by the installed run and its optional
 immutable shared binding. The host derives generic lifecycle, command, capability, synchronization,
 recovery, and diagnostic events from committed evidence; it never executes release code or projects
 game-specific completion fields. Superseded report shapes are not read. Only command aliases remain for
@@ -275,5 +320,5 @@ not report-specific target fields, prove that a game was completed.
   host-owned evidence and makes privacy enforcement game-specific.
 - Add optional game fields to one generic envelope: rejected because the player would still need
   per-game schema selection and redaction logic.
-- Keep both current V1 builders for new releases: rejected because the report route would remain the
+- Keep both current builders for new releases: rejected because the report route would remain the
   last game-specific branch in an otherwise composition-driven lifecycle.

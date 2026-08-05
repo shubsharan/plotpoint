@@ -34,9 +34,12 @@
 - Validation passed without clarification markers after resolving scoped component/application
   lifecycles, local/server model ownership, schema-digest matching, trusted-code validation limits,
   finite synchronization and reconnect scheduling, pending join and revocation recovery, generic report
-  export, effect-only scope, fresh-release behavior, single-owner relationships, and the clean V1 break.
-- The specification and plan intentionally define only corrected V1 serialized contracts and
-  unversioned runtime TypeScript APIs. They require obsolete artifacts/reports/databases to be rejected,
-  not migrated or interpreted through compatibility code.
-- Planning is complete, but this update does not generate `tasks.md` or begin implementation. At the
-  project owner's explicit direction, accepted ADR 0001 contains the integrated decision in place.
+  export, effect-only scope, the complete two-release co-op journey, report-driven configuration
+  revision, single-owner relationships, plain unsuffixed interface/schema names, centralized
+  compatibility boundaries, and the clean break across all four valid examples.
+- The specification and plan intentionally define corrected serialized contracts and plain runtime
+  TypeScript APIs. They require obsolete artifacts/reports/databases to be rejected, not migrated or
+  interpreted through compatibility aliases.
+- Planning and dependency-ordered task generation are complete, but production implementation has not
+  begun. At the project owner's explicit direction, accepted ADR 0001 contains the integrated decision
+  in place.

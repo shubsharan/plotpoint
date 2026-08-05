@@ -19,7 +19,8 @@ entry hashes would not detect a coordinated replacement of the manifest and payl
 
 ## Decision
 
-1. Authoring starts from a strict, versioned, data-only `plotpoint.project.json`. It explicitly
+1. Authoring starts from a strict, data-only `plotpoint.project.json` with one centralized project
+   format discriminator. It explicitly
    identifies code entries and command, schema, progression, component, content, and asset
    registrations. It contains no project identity, release label, channel, timestamp, or registry
    metadata. Capability requirements are derived from the selected registrations.
@@ -39,7 +40,8 @@ entry hashes would not detect a coordinated replacement of the manifest and payl
    encryption, symlinks, directory entries, comments, extra fields, data descriptors, ZIP64, source
    timestamps, ownership, permissions, or absolute paths.
 5. `manifest.json` is RFC 8785 canonical JSON. It declares the release-format version, bounded host
-   API requirement, exact aggregate schema versions, derived capability requirements, runtime entry
+   API requirement, exact aggregate schema identities and payload digests, derived capability
+   requirements, runtime entry
    roles, and an exact ordered inventory of every non-manifest entry with kind, byte length, and
    SHA-256 payload digest. Extra, missing, duplicate, or non-canonical entries are invalid.
 6. A release identity is `sha256:<64 lowercase hexadecimal characters>` over every finalized
@@ -50,9 +52,10 @@ entry hashes would not detect a coordinated replacement of the manifest and payl
    entry lengths and digests, and complete artifact identity. Internal consistency alone does not
    prove authenticity: tamper detection requires a trusted expected release identity supplied by a
    registry, installation request, or caller. Publisher signing remains outside Gate 2.
-8. Release format, host API, and aggregate schema compatibility remain independent. Release-format
-   v1 is exact; host API compatibility uses an exact major plus minimum minor; aggregate schemas use
-   an exact kind, schema identity, and positive integer version.
+8. Release format and Host API compatibility remain centralized and independent. The initial release
+   format is exact; Host API compatibility uses an exact major plus minimum minor. Aggregate schemas
+   use plain identities and exact payload digests inventoried by the immutable release, without
+   independent schema-generation counters, as governed by ADR 0006.
 9. `@plotpoint/protocol` owns release construction, manifest and container semantics, immutable entry
    access, inspection, verification, identity, and compatibility. The compiler supplies validated
    material entries and metadata through one high-level constructor and owns project validation,
@@ -65,7 +68,7 @@ entry hashes would not detect a coordinated replacement of the manifest and payl
 
 ## Consequences
 
-- The v1 artifact is intentionally uncompressed. Compression or another container encoding requires
+- The initial artifact is intentionally uncompressed. Compression or another container encoding requires
   a new release-format version rather than silently changing emitted bytes.
 - Declarative registration duplicates some source-level identifiers, but it keeps project discovery
   inspectable and lets the compiler diagnose drift without executing handlers.
