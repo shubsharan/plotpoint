@@ -1,15 +1,20 @@
-# Research: Game Runtime Integration
+# Research: Unified Game Composition
 
 ## Composition Source and Versioning
 
-**Decision**: Keep `plotpoint.project.json` as the only authored composition truth and replace its
-private pre-release shape with Project Configuration V2. V2 declares one application, aggregate
-models, commands, optional progression, components, schemas, content, assets, capabilities, and zero
-or one trusted mechanic. The compiler lowers it into generated bundle registries plus a canonical Game
-Composition V1 catalog at a fixed inventoried content path. Release Format V1 stays unchanged; new
-releases require Host API 1.2 so an older player rejects them before installation. The compiler's public
-`inspect` command layers a versioned Game Composition result over the unchanged game-agnostic Release
-Format V1 inspector, making the generated catalog directly reviewable without executing bundle code.
+**Decision**: Keep `plotpoint.project.json` as the only authored composition truth and correct Project
+Configuration V1 in place. It declares one application, aggregate models, commands, optional local
+progression, components, schemas, content, assets, capabilities, and zero or one trusted mechanic. The
+compiler lowers it into generated bundle registries plus mandatory Game Composition V1 at a fixed
+inventoried content path. Release Format V1 and Host API 1.0/1.1 stay unchanged. The public `inspect`
+command layers one required composition result over the game-agnostic Release Format V1 inspector,
+making the catalog reviewable without executing bundle code.
+
+Commands and progressions are the sole owners of their aggregate-model references. Models do not
+repeat command/progression lists. The trusted-mechanic binding alone selects its server model and
+trusted commands; those descriptors do not repeat mechanic identity. Authority/kind is a closed union:
+local/player or server/team-or-session. Initialization content must carry the model's exact input
+schema; absent content means canonical `{}` validated against that schema.
 
 **Rationale**: The strict JSON input already provides deterministic ordering, frozen input capture,
 portable paths, and inspectability. The missing seam is not a more expressive authoring language; it
@@ -21,10 +26,10 @@ inventory without changing ZIP, manifest, digest, or artifact identity semantics
 
 - Add executable `defineGame()` configuration: rejected because it creates a second source of truth
   and weakens data-only validation.
-- Preserve V1 plus optional fields: rejected because V1 is closed and the new lifecycle, model, and
-  mechanic semantics are incompatible rather than optional hints.
-- Introduce Release Format V2: rejected because no container, inventory, identity, or integrity rule
-  changes; Host API and composition versions express the actual compatibility boundary.
+- Preserve the discarded V1 shape behind legacy parsing: rejected because the app is pre-release and
+  there is no supported artifact or user data to justify two meanings.
+- Introduce a new project, release, or Host API generation: rejected because no compatibility burden,
+  container, inventory, identity, integrity, or wire-message rule requires it.
 - Add a general module/plugin manifest: rejected because two internal games do not justify dynamic
   discovery, third-party loading, or a dependency-injection system.
 
@@ -39,9 +44,9 @@ compiler's bounded definition inspection validates the static definition shape w
 then generates bundle roots exporting `application`, local `aggregateModels` with schema-narrowing
 command/progression closures, and `components` in ordinal immutable registries. Progression remains
 closed inside its owning model instead of becoming a second runtime selection map. The player calls only
-the generated `application.mount` and supplies the bootstrap plus pre-scoped component factories.
-Command, resource, capability, and shared-play clients exist only in the component context that declared
-them.
+the generated runtime adapter, which consumes bootstrap before calling `application.mount` with only
+the root and pre-scoped component factories. State reads/subscriptions and command, resource,
+capability, and shared-play clients exist only in the component context that declared them.
 
 **Rationale**: Today the compiler validates named registries but the player passes unrelated default
 exports. A generated composition root makes compiled evidence operational while retaining ordinary
@@ -55,13 +60,13 @@ metadata; it is not a sandbox claim.
   duplicate registries that can disagree with the project.
 - Let the player infer a lifecycle from any default export: rejected because invalid games fail only
   after installation and mounting and have no deterministic cleanup boundary.
-- Add a rendering framework or component container: rejected because the field puzzle and hunt need
+- Add a rendering framework or component container: rejected because the field puzzle and co-op game need
   only DOM-capable trusted functions and an explicit context.
 
 ## Aggregate Model and Decision Semantics
 
-**Decision**: Make `ResolvedAggregateModelV2` the vertical deterministic unit. It binds one model
-identity, aggregate kind, schema identity/version, authority, initializer, executable state/payload/
+**Decision**: Make unversioned `ResolvedAggregateModel` the vertical deterministic unit. It binds one model
+identity, aggregate kind, authority, one state schema, initializer, executable state/payload/
 outcome/event/effect validators, command definitions, and zero or one progression. `executeCommand`
 receives a resolved model, selects the command definition by type, validates the aggregate and schemas,
 evaluates the handler and optional progression, and returns the complete result. The compiler owns the
@@ -70,13 +75,13 @@ release's data-only server model and command declarations. Both use the same exe
 game-specific `run()` translation or server execution of release code.
 
 State-specific resolved models enter heterogeneous player or platform registries only through
-`ExecutableAggregateModelV2`, a constructed wrapper that validates erased persisted JSON with the exact
+`ExecutableAggregateModel`, a constructed wrapper that validates erased persisted JSON with the exact
 state schema before invoking the closed typed initializer, command, or progression code. No registry
 casts a state-specific function to a broad JSON function.
 
 Handlers explicitly return `accepted`, `no-op`, or `rejected`; `invalid` remains runtime-produced.
 An accepted result must commit at least one of state, progression, event, or effect and advances the
-aggregate revision once. An explicit no-op preserves state, progression, and revision and contains no
+aggregate state version once. An explicit no-op preserves state, progression, and state version and contains no
 events or effects. Event-only and effect-only acceptance is therefore durable and explainable without
 being misclassified as invalid. Effect intents are recorded post-commit data only.
 
@@ -91,15 +96,15 @@ avoid inferring domain intent from object equality.
   the same model and can select incompatible pieces.
 - Treat every unchanged state as no-op: rejected because events, effects, or progression may be the
   committed result.
-- Increment revisions on rejected, invalid, or no-op attempts: rejected because no durable aggregate
+- Increment state versions on rejected, invalid, or no-op attempts: rejected because no durable aggregate
   fact was accepted.
 - Add event sourcing or an effect worker: rejected because current persistence needs replayable
   records, not event reconstruction or generalized delivery.
 
 ## Progression Rules
 
-**Decision**: Keep progression optional and owned by one aggregate model. `defineProgression`
-continues to declare nodes with stable IDs and initial lifecycle statuses, but V2 names every legal
+**Decision**: Keep progression optional and owned by one aggregate model. Edit `defineProgression` in
+place: it continues to declare nodes with stable IDs and initial lifecycle statuses and names every legal
 status edge as an explicit transition with `from`, `to`, target node, priority, and optional automatic
 predicate. The runtime constructs the canonical initial instance from those nodes. Automatic
 predicates observe aggregate state, typed domain-event facts, and progression state; they are no
@@ -126,10 +131,12 @@ commands, content, assets, capabilities, and optional shared-projection schema i
 component registry supplies a scoped `ComponentContext` whose dispatchers and resolvers can access only
 those IDs. Every component can read and subscribe to the release's one durable local aggregate without
 receiving persistence mutation authority; Shared Play V1 is present only for a component declaring the
-mechanic's projection and only after an exact session binding. Game Composition V1 maps every logical schema, content, asset,
-component, command, progression, model, and mechanic ID to its exact artifact role and path. Compiler
-reference checks reject missing or ambiguous bindings; host-facing operations reject release-wide
-undeclared capabilities and commands.
+mechanic's projection and only after an exact session binding. Game Composition V1 carries logical
+descriptors and maps schemas/content/assets/descriptors to exact artifact roles and paths. Fixed
+generated map exports eliminate per-item export fields. Release Manifest V1 remains the sole authority
+for Host API and release-wide capabilities; compilation proves its capability list equals the union
+derived from component/mechanic selections. Compiler reference checks reject missing or ambiguous
+bindings; host-facing operations reject undeclared capabilities and commands.
 
 **Rationale**: Dependency metadata is useful only if it shapes the supported runtime API. A small
 scoped context provides composition and testability without claiming that mutually trusted functions
@@ -146,7 +153,7 @@ inside one WebView are isolated from each other.
 
 ## Trusted Authoritative Mechanics
 
-**Decision**: Allow zero or one versioned trusted-mechanic registration in Project Configuration V2 and
+**Decision**: Allow zero or one versioned trusted-mechanic registration in Project Configuration V1 and
 Game Composition V1. The binding names the platform mechanic ID/version, data-only server aggregate
 model and accepted command contracts, configuration content, required capabilities, and projection
 schema. Selecting that identity/version binds the platform adapter's initialization, decision,
@@ -158,14 +165,17 @@ data descriptors against those digests and selects an exact supported adapter; i
 bundles on the server. Target discovery is the first adapter. Participant HTTP routes become
 game-neutral shared-session routes, while operator and domain logic remain in the existing modular
 monolith. Trusted Mechanic V1 prohibits server progression because the release has no declarative server
-progression contract. It also restricts trusted outcomes to exact stable-code objects so Sync V1's
+progression contract. Binding validation returns canonical configuration plus initializer input or a
+closed diagnostic; authorization returns a runtime command with transformed observations or a stable
+rejected/invalid terminal; projection returns a complete validated `SharedProjectionV1` or a closed
+failure. The adapter preserves Sync V1 state-version fields directly. It also restricts trusted outcomes to exact stable-code objects so Sync V1's
 `outcomeCode` is lossless for semantic outcomes; execution invalidity publishes a deterministic primary
 diagnostic while retaining the complete server record. Session initialization derives only from
 validated release configuration; generic operator metadata does not become an implicit mechanic input.
 
-**Rationale**: The hunt currently depends on an undeclared command and a hard-coded content path in
+**Rationale**: The co-op example currently depends on an undeclared command and a hard-coded content path in
 server code. An explicit binding lets the release select known server behavior without allowing
-arbitrary server execution and removes hunt vocabulary from the player transport.
+arbitrary server execution and removes example-game vocabulary from the player transport.
 
 **Alternatives considered**:
 
@@ -245,14 +255,14 @@ safe without weakening evidence or silently rebinding one game run.
 
 ## Generic Evidence Export
 
-**Decision**: Replace new-release use of local Play Report V1 and hunt-specific Shared Hunt Report V1
-with one host-owned Game Play Report V2. Selection is keyed only by the installed run and its optional
+**Decision**: Replace local and game-specific report builders in place with one host-owned Game Play
+Report V1. Selection is keyed only by the installed run and its optional
 immutable shared binding. The host derives generic lifecycle, command, capability, synchronization,
 recovery, and diagnostic events from committed evidence; it never executes release code or projects
-game-specific completion fields. Historical V1 reports remain readable, while Project Configuration V2
-releases emit only V2. Deterministic report-local aliases and stable ordering preserve repeatability,
-and the existing privacy boundary excludes raw state, projections, observations, protected content,
-precise locations, credentials, and service or membership identities.
+game-specific completion fields. Superseded report shapes are not read. Only command aliases remain for
+useful intra-report correlation; constant run/session/participant/team aliases are removed. Stable
+ordering preserves repeatability, and the existing privacy boundary excludes raw state, projections,
+observations, protected content, precise locations, credentials, and service or membership identities.
 
 **Rationale**: A composition-driven player cannot claim zero game-specific branches while report export
 still dispatches to `createSharedHuntReport`. A single evidence contract closes the product lifecycle

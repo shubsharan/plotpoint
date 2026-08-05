@@ -2,19 +2,19 @@
 status: Pending
 ---
 
-# Feature Specification: Game Runtime Integration
+# Feature Specification: Unified Game Composition
 
-**Branch**: `feature/0005-game-runtime-integration`
+**Branch**: `feature/0005-unified-game-composition`
 **Epic**: [Plotpoint Core Product Loops](../../epics/0001-plotpoint-core-platform/epic.md)
 **PR**: Pending
 **Created**: 2026-08-05
-**Input**: Unify the game-authoring, runtime, progression, and authoritative multiplayer architecture; repair shared recovery and release-pinned joining; and make the cooperative hunt a genuinely runnable end-to-end reference game.
+**Input**: Unify the game-authoring, runtime, progression, and authoritative multiplayer architecture; repair shared recovery and release-pinned joining; and make the co-op game a genuinely runnable end-to-end reference game.
 
 ## User Scenarios & Testing _(mandatory)_
 
-### User Story 1 - Play the Cooperative Hunt as One Release (Priority: P1)
+### User Story 1 - Play the Co-op Game as One Release (Priority: P1)
 
-A core-team author can validate, compile, install, open, join, and play the cooperative hunt as one
+A core-team author can validate, compile, install, open, join, and play the co-op game as one
 coherent release. The game starts through the same player lifecycle as the field puzzle, renders its
 declared experience, requests only its declared capabilities, and submits its first shared action
 without game-specific player behavior.
@@ -23,15 +23,15 @@ without game-specific player behavior.
 independently valid parts. A playable reference game is the evidence needed for every architectural
 improvement in this feature.
 
-**Independent Test**: Starting from the hunt project, complete validation through installation and
+**Independent Test**: Starting from the co-op game project, complete validation through installation and
 mounting, join the release-pinned session, render the initial confirmed team view, and submit one
 location-backed target discovery through the ordinary game UI.
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid cooperative-hunt project and matching session, **When** a player installs and
+1. **Given** a valid co-op game project and matching session, **When** a player installs and
    opens the release, **Then** the game mounts successfully and presents its initial playable view.
-2. **Given** a mounted hunt and persisted foreground observation, **When** the player attempts a
+2. **Given** a mounted co-op game and persisted foreground observation, **When** the player attempts a
    target discovery, **Then** the action is durably queued, decided authoritatively, and reflected in
    the next confirmed view.
 3. **Given** a release whose configured application export is missing or has the wrong static contract
@@ -93,7 +93,7 @@ commands advancing one progression, replay, and invalid schema input.
 **Acceptance Scenarios**:
 
 1. **Given** a valid command that commits state, progression, an event, or a post-commit effect,
-   **When** it is accepted, **Then** exactly one durable aggregate revision is recorded with an
+   **When** it is accepted, **Then** exactly one durable aggregate state version is recorded with an
    explainable semantic result.
 2. **Given** a command that intentionally changes nothing, **When** it is evaluated, **Then** it
    returns an explicit no-op with no state-changing outputs.
@@ -197,8 +197,10 @@ changed-service, and changed-run joins and verify that only exact or safely reco
 - **FR-002**: The validated project definition MUST be the sole composition authority for commands,
   aggregate models, progression, components, content, assets, capabilities, and the optional trusted
   mechanic binding.
-- **FR-003**: The running application MUST consume the compiler-resolved composition and MUST NOT
-  require author-maintained duplicate command, progression, or component registries.
+- **FR-003**: The generated runtime adapter MUST consume the compiler-resolved composition and MUST NOT
+  require author-maintained duplicate command, progression, or component registries. It MUST pass the
+  application only a root and generated component factories; durable state reads and subscriptions MUST
+  remain component-scoped.
 - **FR-004**: Every declared logical resource MUST resolve to exactly one inspectable artifact role,
   and unresolved, ambiguous, or incompatible bindings MUST prevent compilation.
 - **FR-005**: Compilation MUST reject unknown declared references, and the runtime or host MUST reject
@@ -217,21 +219,21 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   and projection, each validator MUST identify the exact inventoried schema digest it implements, and
   the service MUST NOT execute release-authored server code. Trusted Mechanic V1 MUST NOT supply hidden
   server progression.
-- **FR-009**: Aggregate models MUST bind aggregate kind, schema identity and version, initial state,
-  exact schema digests, validation, commands, typed durable events and effects, and optional local
-  progression consistently. Command type MUST be unique within each aggregate model, and heterogeneous
-  model and command registries MUST invoke typed logic only after state- and payload-specific schema
-  narrowing.
+- **FR-009**: Aggregate models MUST bind authority/kind, exact state and initialization schemas,
+  deterministic initialization, validation, and typed durable event/effect declarations. Each command
+  and optional progression MUST reference exactly one compatible aggregate model; models MUST NOT
+  repeat those relationships. Command type MUST be unique within each derived model command set, and
+  heterogeneous registries MUST invoke typed logic only after state- and payload-specific schema narrowing.
 - **FR-010**: Command handling MUST distinguish accepted, rejected, no-op, and invalid decisions
   explicitly. Local recorded terminals MUST retain their full schema-validated outcome. Shared recorded
   terminals MUST preserve the exact Sync V1 participant-visible result through a lossless trusted-outcome
   restriction and deterministic invalid-diagnostic mapping. Preflight invalidity MUST remain a local
   non-committable result.
-- **FR-011**: One accepted command MUST advance the aggregate revision exactly once whenever it commits
+- **FR-011**: One accepted command MUST advance the aggregate state version exactly once whenever it commits
   state, progression, a durable event, or a post-commit effect. An effect-only acceptance MUST durably
-  record its effect intent and resulting revision, but this feature MUST NOT add generalized effect
+  record its effect intent and resulting state version, but this feature MUST NOT add generalized effect
   delivery, workers, or retry infrastructure.
-- **FR-012**: A no-op MUST preserve aggregate state and revision and MUST emit no durable event, effect,
+- **FR-012**: A no-op MUST preserve aggregate state and state version and MUST emit no durable event, effect,
   or progression change.
 - **FR-013**: Progression MUST be optional, MUST have one authoritative state representation when used,
   and MUST support facts produced by multiple command types without unsafe payload or outcome assumptions.
@@ -264,20 +266,24 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   caller always reaches a terminal response.
 - **FR-025**: Local-only releases MUST remain playable without shared-session controls or shared
   persistence requirements.
-- **FR-026**: The cooperative hunt MUST use the ordinary compiled-release lifecycle, generated
+- **FR-026**: The co-op game MUST use the ordinary compiled-release lifecycle, generated
   composition, generic shared-play contract, and trusted mechanic binding without game-specific
   player routing.
-- **FR-027**: The field puzzle and cooperative hunt MUST both pass one external-consumer-style
+- **FR-027**: The field puzzle and co-op game MUST both pass one external-consumer-style
   compile, install, mount, action, recovery, and report acceptance path appropriate to their authority.
 - **FR-028**: Existing immutable release identity, deterministic replay, atomic local persistence,
   privacy redaction, authorization, and trusted-code boundaries MUST remain intact or change only
   through an explicitly accepted architecture decision.
-- **FR-029**: Every Project Configuration V2 release MUST export one host-owned Game Play Report V2
+- **FR-029**: Every Project Configuration V1 release MUST export one host-owned Game Play Report V1
   selected only by run and optional shared-session binding. The export MUST NOT execute release code,
   select a game-specific report builder, or include game-specific completion fields, protected values,
   credentials, precise locations, service identities, or raw durable state.
 - **FR-030**: Provider-free behavior, simulated native compatibility, and physical-device evidence
   MUST remain separately reported; this feature MUST NOT infer physical acceptance from other gates.
+- **FR-031**: The compiler, player, and report readers MUST accept only the corrected V1 contracts.
+  They MUST NOT provide compatibility aliases, legacy parsers, artifact/report migrations, or automatic
+  database resets. Incompatible artifacts MUST require recompilation, and an incompatible player
+  database MUST fail with explicit reset or reinstall guidance.
 
 ### Key Entities
 
@@ -285,15 +291,15 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   runtime composition and host capabilities.
 - **Game Composition**: The authoritative set of aggregate models, commands, progression, components,
   content, assets, capabilities, resources, and optional trusted mechanic selected for one release.
-- **Aggregate Model**: The schema-identified durable state boundary with validation, commands, events,
-  effects, initial state, and optional progression.
+- **Aggregate Model**: The schema-identified durable state boundary with initialization, validation,
+  events, effects, and command/progression membership derived from one-way registrations.
 - **Progression Ruleset**: Optional deterministic activity-status model driven by accepted aggregate
   facts and represented once in durable aggregate state.
 - **Trusted Mechanic Binding**: Versioned declaration connecting a release to one supported
   platform-owned authoritative mechanic and its configuration, aggregate, commands, and projection.
 - **Shared Session Binding**: Immutable relationship among one game run, release, service session,
   participant, team, service location, membership, and recovery cursor.
-- **Shared Action**: One durable game intent with stable identity, target, expected revision,
+- **Shared Action**: One durable game intent with stable identity, target, expected state version,
   observations, lifecycle status, and eventual exact terminal.
 - **Authorized Snapshot**: Complete current shared view plus participant terminal results and recovery
   cursor, safe to apply atomically and repeatedly.
@@ -305,7 +311,7 @@ changed-service, and changed-run joins and verify that only exact or safely reco
 
 ### Measurable Outcomes
 
-- **SC-001**: The field puzzle and cooperative hunt each complete one validate-to-first-action path
+- **SC-001**: The field puzzle and co-op game each complete one validate-to-first-action path
   and one report-export path through the same installed-game lifecycle with zero game-specific player
   branches.
 - **SC-002**: 100% of reference releases missing or statically mis-shaping their application definition
@@ -322,14 +328,14 @@ changed-service, and changed-run joins and verify that only exact or safely reco
   including parallel changed joins for one run, perform no conflicting network submission, expose no
   mismatched game view, and leave the prior durable reservation or binding unchanged.
 - **SC-007**: Representative accepted, rejected, no-op, recorded execution-invalid, event-only,
-  effect-only, and progression-changing commands preserve their exact terminal and aggregate revision
+  effect-only, and progression-changing commands preserve their exact terminal and aggregate state version
   across execution, persistence, recovery, and replay. Representative preflight-invalid commands return
   locally with no receipt, observation consumption, or durable mutation across 100 repeats.
 - **SC-008**: An author can add or change one reference-game mechanic without editing duplicate runtime
   registries or game-specific player routing.
 - **SC-009**: The complete cooperative provider-free lifecycle covers installation, mounting, joining,
   multiple queued discoveries, response loss, restart, corrective recovery, revocation, generic Game
-  Play Report V2 export with no target-specific fields, and a fresh release revision that starts a fresh
+  Play Report V1 export with no target-specific fields, and a changed release that starts a fresh
   run and session without active-session migration or manual state repair.
 - **SC-010**: All privacy, authorization, deterministic replay, immutable artifact, and failure-atomicity
   regression gates pass with zero newly exposed credentials, precise locations, protected content, or
@@ -337,13 +343,13 @@ changed-service, and changed-run joins and verify that only exact or safely reco
 
 ## Assumptions
 
-- This feature repairs and integrates the existing field puzzle and cooperative hunt; it does not add
+- This feature repairs and integrates the existing field puzzle and co-op game; it does not add
   a new game, external creator workflow, secret-role projections, or hostile-code execution.
 - The data-only project definition and immutable release remain the canonical portable boundary.
 - Release code remains trusted internal code in the existing single game view.
 - Trusted authoritative mechanics remain platform-owned and execute in the existing modular service;
   releases select supported mechanics but do not provide server-executed code.
-- The cooperative hunt retains one session, one team, one team aggregate, foreground synchronization,
+- The co-op game retains one session, one team, one team aggregate, foreground synchronization,
   and complete authorized snapshots.
 - General plugin loading, dependency injection containers, full event sourcing, entity-component
   simulation, microservices, WebSockets, background synchronization, delta feeds, and generalized

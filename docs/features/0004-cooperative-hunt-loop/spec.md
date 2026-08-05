@@ -2,14 +2,14 @@
 status: Pending
 ---
 
-# Feature Specification: Cooperative Hunt Loop
+# Feature Specification: Co-op Game Loop
 
 **Branch**: `feature/0004-cooperative-hunt-loop`
 **Epic**: [Plotpoint Core Product Loops](../../epics/0001-plotpoint-core-platform/epic.md)
 
 ## User Scenarios
 
-### User Story 1 - Join a Release-Pinned Hunt (P1)
+### User Story 1 - Join a Release-Pinned Co-op Game (P1)
 
 An operator registers one verified release, starts a one-team session, and gives three players unique
 one-use invitations. Each player joins idempotently, stores its session credential in native secure
@@ -22,7 +22,7 @@ consumed invitations, restart each player, and verify session/release/team ident
 
 Players request foreground location and submit shared target-discovery commands. The host attaches the
 exact persisted observation. The trusted server mechanic validates zone, freshness, and accuracy and
-updates one authoritative team hunt.
+updates one authoritative team state.
 
 **Independent test**: Accept fresh accurate in-zone evidence; reject denied, unavailable, stale, future,
 inaccurate, and outside-zone evidence; race the same target; and submit different targets from one stale view.
@@ -33,7 +33,7 @@ A disconnected player keeps the last confirmed view and queues eligible attempts
 restart and reconnection, exact commands are submitted and one complete authorized snapshot plus terminal
 results atomically replaces local confirmed state.
 
-**Independent test**: Disconnect one of three players for the reference hunt's full configured route,
+**Independent test**: Disconnect one of three players for the co-op game's full configured route,
 restart around every persistence boundary, reconnect, and converge without manual reset or duplicate acceptance.
 
 ### User Story 4 - Revoke and Learn (P3)
@@ -69,11 +69,11 @@ report, and prove credentials, invitations, coordinates, payload/state, and reus
 
 ## Success Criteria
 
-- **SC-001**: Three players join one release-pinned hunt and complete every configured target in the provider-free loop.
+- **SC-001**: Three players join one release-pinned co-op game and complete every configured target in the provider-free loop.
 - **SC-002**: A same-target three-player race changes team state once; each command reaches an exact terminal.
 - **SC-003**: Different available targets submitted from one stale team version both accept through the trusted conflict policy.
 - **SC-004**: Every location failure class produces an explicit non-progressing result and no raw coordinate appears in prohibited stores/exports.
-- **SC-005**: A disconnected/restarted player converges through one snapshot pull across the reference hunt's complete configured lifecycle.
+- **SC-005**: A disconnected/restarted player converges through one snapshot pull across the co-op game's complete configured lifecycle.
 - **SC-006**: Interruption tests at every server and SQLite commit boundary produce no partial accepted state or lost terminal.
 - **SC-007**: The same complete loop passes provider-free, iOS simulator, and Android emulator validation; physical-device status remains deferred.
 

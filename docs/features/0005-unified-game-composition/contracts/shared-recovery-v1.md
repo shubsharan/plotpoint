@@ -22,7 +22,7 @@ interface SharedOutboxRecordV1 {
 ```
 
 - `queued` is eligible at the beginning of a pass.
-- `submitting` is owned by the current or interrupted pass. Before a new batch claim, legacy/interrupted
+- `submitting` is owned by the current or interrupted pass. Before a new batch claim, interrupted
   submitting rows become queued in the same transaction.
 - `blocked-revoked` is retained evidence and is never eligible.
 
@@ -186,12 +186,14 @@ Semantic failure returns `host.error` with the captured ID. Only invalid JSON or
 `unknown`. The App never fabricates an error before routing; a missing session is a handler error so the
 router preserves request correlation.
 
-## Migration and Deferrals
+## Clean Break and Deferrals
 
-Database open idempotently installs pending-join storage and immutable-binding guards, requeues legacy
-submitting rows, and resumes only complete pending join attempts. It does not rewrite legacy identities.
-Multiple bindings, run/release mismatch, or changed service origin becomes explicit
-recovery-required/conflict and no projection is exposed.
+Fresh/provider-free databases install pending-join storage and immutable-binding guards and recover
+only rows written by this corrected V1 state machine. Database open does not inspect, rewrite, or
+migrate superseded shapes. An incompatible schema fails with explicit reset/reinstall guidance and is
+never silently dropped. Within the corrected schema, interrupted `submitting` rows and complete pending
+join attempts remain fully recoverable. Multiple bindings, run/release mismatch, or changed service
+origin becomes explicit recovery-required/conflict and no projection is exposed.
 
 V1 intentionally does not add background sync, WebSockets, delta feeds, multi-process leases, service
 rebinding, credential rotation/recovery, active-session release migration, multi-device membership, or

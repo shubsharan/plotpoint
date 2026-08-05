@@ -11,7 +11,7 @@ different cooperative mechanics, aggregate state, authorization rules, observati
 but the platform must provide the same durable guarantees for authenticated membership, offline
 intent, exact retry, revocation, and recovery after interruption.
 
-The cooperative hunt is the first acceptance fixture for these guarantees, not the platform
+The co-op game is the first acceptance fixture for these guarantees, not the platform
 abstraction. Its terminology and rules belong in the game definition, trusted-mechanic adapter, and
 feature tests. Encoding targets, discoveries, locations, or a particular team shape in the core sync
 contract would make later multiplayer games inherit accidental demo-game constraints.
@@ -66,7 +66,7 @@ delta feeds, background workers, or a general event-delivery subsystem before a 
 ## Consequences
 
 - Multiplayer games share one release-bound authority, membership, retry, revocation, and recovery
-  model without inheriting the cooperative hunt's vocabulary or rules.
+  model without inheriting the co-op game's vocabulary or rules.
 - Complete authorized snapshots trade small repeated payloads for failure-atomic recovery and a much
   smaller protocol surface.
 - Commands serialize at their selected aggregate boundary. Domain-aware stale acceptance remains an

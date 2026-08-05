@@ -1,6 +1,6 @@
 # Contract: Shared Session HTTP API V1
 
-Shared Session API V1 replaces hunt-specific participant routing with a game-neutral transport. The
+Shared Session API V1 replaces game-specific participant routing with a game-neutral transport. The
 existing Node modular monolith, PostgreSQL authority, credential handling, command receipts, and Sync
 V1 envelopes remain. HTTPS is required outside loopback tests. JSON stays bounded at 256 KiB and
 release upload at 64 MiB.
@@ -26,7 +26,7 @@ release upload at 64 MiB.
 - `GET /v1/shared-sessions/{sessionId}/sync?after=<cursor>`: authenticated participant receives one
   complete Sync Pull V1.
 
-No player route, request, or response contains hunt, target, clue, or other game vocabulary.
+No player route, request, or response contains target, clue, or other example-game vocabulary.
 
 ## Join
 
@@ -101,9 +101,9 @@ request, logs, diagnostics, WebView messages, or reports.
 Raw location and protected game configuration obey the existing redaction boundary. The generic route
 does not weaken participant projection authorization.
 
-## Migration
+## Clean Break
 
 The repository is pre-release: the operator client, player HTTP adapter, provider-free fixtures, and
-reference hunt migrate together from `/v1/hunt-sessions` to `/v1/shared-sessions`. No compatibility
-alias remains in the player. Existing PostgreSQL table names may stay implementation-owned when
+existing example replace `/v1/hunt-sessions` with `/v1/shared-sessions` together. No compatibility alias
+or alternate public route remains. Existing PostgreSQL table names may stay implementation-owned when
 renaming them adds no product value; public route names and code-facing service ports must be generic.

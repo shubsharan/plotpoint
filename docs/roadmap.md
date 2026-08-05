@@ -83,9 +83,9 @@ puzzle. The same compiled release runs in an Expo mobile player on physical iOS 
   durable state, credentials, and protected content.
 - The revised release installs as a distinct release and begins a fresh run.
 
-## Loop 2: Cooperative Hunt — Active
+## Loop 2: Co-op Game — Active
 
-A real cooperative hunt pulls the minimum authoritative platform services and synchronization needed
+A real co-op game pulls the minimum authoritative platform services and synchronization needed
 for multiple players to join one release-pinned session, submit trusted shared commands, receive only
 authorized projections, disconnect, reconnect, and converge without duplicate accepted work. The
 game, not a generic backend checklist, determines the first authoritative mechanics and conflict
@@ -113,7 +113,7 @@ rules.
 
 An external creator completes the authoring and iteration loop without undocumented core-team help,
 and a secret or role-based game tests player-specific projections. Evidence from the field puzzle,
-cooperative hunt, and secret-role experience determines the minimum stable capability and module
+co-op game, and secret-role experience determines the minimum stable capability and module
 contracts and whether stronger untrusted-code isolation is required.
 
 ## Deferred Until Pulled By A Loop
