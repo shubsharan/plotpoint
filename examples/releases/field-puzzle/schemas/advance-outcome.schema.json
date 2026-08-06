@@ -11,6 +11,8 @@
         "incorrect",
         "permission-denied",
         "unavailable",
+        "failed",
+        "future",
         "stale",
         "inaccurate",
         "outside",

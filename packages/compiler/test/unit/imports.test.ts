@@ -147,6 +147,24 @@ describe("environment graph resolution", () => {
     }
   });
 
+  it("includes the compiler-owned runtime when authored logic has no package imports", async () => {
+    const captured = await snapshot(
+      "export function logic() { return {}; }",
+      "export const presentation = {};",
+    );
+    const localModel = captured.config.aggregateModels[0];
+    if (localModel?.authority !== "local") throw new Error("expected local model");
+
+    const result = resolveImportGraph(captured, localModel.initializer, "logic");
+
+    expect(result.kind).toBe("resolved");
+    if (result.kind === "resolved") {
+      expect(result.graph.nodes.map(({ path }) => path)).toContain(
+        "vendor/@plotpoint/runtime/index.js",
+      );
+    }
+  });
+
   it.each([
     "Date()",
     "new Date()",

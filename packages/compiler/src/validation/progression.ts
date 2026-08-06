@@ -21,10 +21,12 @@ function hasCycle(progression: InspectedProgressionMetadata): string | null {
   const edges = new Map<string, Set<string>>();
   for (const transition of progression.transitions) {
     if (transition.trigger !== "automatic") continue;
-    const key = `${transition.targetNodeId}\0${transition.from}`;
-    const targets = edges.get(key) ?? new Set<string>();
-    targets.add(`${transition.targetNodeId}\0${transition.to}`);
-    edges.set(key, targets);
+    for (const from of transition.from) {
+      const key = `${transition.targetNodeId}\0${from}`;
+      const targets = edges.get(key) ?? new Set<string>();
+      targets.add(`${transition.targetNodeId}\0${transition.to}`);
+      edges.set(key, targets);
+    }
   }
   const visiting = new Set<string>();
   const visited = new Set<string>();
@@ -92,7 +94,12 @@ function validateInspectedShape(
         }),
       );
     }
-    if (!STATUSES.has(transition.from) || !STATUSES.has(transition.to)) {
+    if (
+      transition.from.length === 0 ||
+      new Set(transition.from).size !== transition.from.length ||
+      transition.from.some((status) => !STATUSES.has(status)) ||
+      !STATUSES.has(transition.to)
+    ) {
       diagnostics.push(
         createCompilerDiagnostic({
           code: "progression-invalid",

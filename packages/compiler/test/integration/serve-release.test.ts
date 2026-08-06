@@ -8,10 +8,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { MAX_RELEASE_BYTES } from "@plotpoint/protocol";
 
 import { compileProject, privateIpv4Addresses, serveRelease } from "../../src/index.js";
+import { releaseExampleProjects, type ReleaseExampleProject } from "../helpers/external-project.js";
 
-const fixtureRoot = fileURLToPath(
-  new URL("../../../../examples/releases/minimal-local-puzzle/", import.meta.url),
-);
+function fixtureRoot(project: ReleaseExampleProject): string {
+  return fileURLToPath(new URL(`../../../../examples/releases/${project}/`, import.meta.url));
+}
 const roots: string[] = [];
 
 afterEach(async () => {
@@ -19,57 +20,62 @@ afterEach(async () => {
 });
 
 describe("release development server", () => {
-  it("serves one captured verified artifact byte-for-byte", async () => {
-    const root = await mkdtemp(join(tmpdir(), "plotpoint-serve-"));
-    roots.push(root);
-    await cp(fixtureRoot, root, { recursive: true });
-    const releaseFile = join(root, "field.pprelease");
-    const compiled = await compileProject({ projectRoot: root, outputFile: releaseFile });
-    expect(compiled.kind).toBe("compiled");
-    const expectedBytes = await readFile(releaseFile);
+  it.each(releaseExampleProjects)(
+    "serves one captured %s artifact byte-for-byte",
+    async (project) => {
+      const root = await mkdtemp(join(tmpdir(), `plotpoint-serve-${project}-`));
+      roots.push(root);
+      await cp(fixtureRoot(project), root, { recursive: true });
+      const releaseFile = join(root, `${project}.pprelease`);
+      const compiled = await compileProject({ projectRoot: root, outputFile: releaseFile });
+      if (compiled.kind !== "compiled") {
+        throw new Error(`${project} compile failed: ${JSON.stringify(compiled.diagnostics)}`);
+      }
+      const expectedBytes = await readFile(releaseFile);
 
-    const server = await serveRelease({ releaseFile, host: "127.0.0.1", port: 0 });
-    try {
-      await writeFile(releaseFile, "changed after server startup");
-      const descriptorResponse = await fetch(server.descriptorUrl);
-      const descriptorBody = await descriptorResponse.text();
-      const descriptor = JSON.parse(descriptorBody) as Record<string, unknown>;
-      expect(descriptor).toEqual({
-        version: 1,
-        releaseUrl: `http://127.0.0.1:${server.port}/release.pprelease`,
-        expectedReleaseId: server.releaseId,
-      });
-      expect(descriptorBody).toBe(JSON.stringify(descriptor));
-      expect(descriptorResponse.headers.get("cache-control")).toBe("no-store");
+      const server = await serveRelease({ releaseFile, host: "127.0.0.1", port: 0 });
+      try {
+        await writeFile(releaseFile, "changed after server startup");
+        const descriptorResponse = await fetch(server.descriptorUrl);
+        const descriptorBody = await descriptorResponse.text();
+        const descriptor = JSON.parse(descriptorBody) as Record<string, unknown>;
+        expect(descriptor).toEqual({
+          releaseUrl: `http://127.0.0.1:${server.port}/release.pprelease`,
+          expectedReleaseId: server.releaseId,
+        });
+        expect(descriptorBody).toBe(JSON.stringify(descriptor));
+        expect(descriptorResponse.headers.get("cache-control")).toBe("no-store");
 
-      const firstRelease = await fetch(descriptor.releaseUrl as string);
-      const secondRelease = await fetch(descriptor.releaseUrl as string);
-      expect(firstRelease.headers.get("content-type")).toBe("application/vnd.plotpoint.release");
-      expect(firstRelease.headers.get("content-length")).toBe(String(expectedBytes.byteLength));
-      expect(Buffer.from(await firstRelease.arrayBuffer())).toEqual(expectedBytes);
-      expect(Buffer.from(await secondRelease.arrayBuffer())).toEqual(expectedBytes);
-    } finally {
-      await server.close();
-    }
-  });
+        const firstRelease = await fetch(descriptor.releaseUrl as string);
+        const secondRelease = await fetch(descriptor.releaseUrl as string);
+        expect(firstRelease.headers.get("content-type")).toBe("application/vnd.plotpoint.release");
+        expect(firstRelease.headers.get("content-length")).toBe(String(expectedBytes.byteLength));
+        expect(Buffer.from(await firstRelease.arrayBuffer())).toEqual(expectedBytes);
+        expect(Buffer.from(await secondRelease.arrayBuffer())).toEqual(expectedBytes);
+      } finally {
+        await server.close();
+      }
+    },
+  );
 
   it("returns a byte-stable closed descriptor across requests", async () => {
     const root = await mkdtemp(join(tmpdir(), "plotpoint-serve-descriptor-"));
     roots.push(root);
-    await cp(fixtureRoot, root, { recursive: true });
+    await cp(fixtureRoot("minimal-local-puzzle"), root, { recursive: true });
     const releaseFile = join(root, "field.pprelease");
-    await compileProject({ projectRoot: root, outputFile: releaseFile });
+    const compiled = await compileProject({ projectRoot: root, outputFile: releaseFile });
+    if (compiled.kind !== "compiled") {
+      throw new Error(
+        `minimal-local-puzzle compile failed: ${JSON.stringify(compiled.diagnostics)}`,
+      );
+    }
 
     const server = await serveRelease({ releaseFile, host: "127.0.0.1", port: 0 });
     try {
       const first = await (await fetch(server.descriptorUrl)).text();
       const second = await (await fetch(server.descriptorUrl)).text();
       expect(second).toBe(first);
-      expect(Object.keys(JSON.parse(first) as object)).toEqual([
-        "version",
-        "releaseUrl",
-        "expectedReleaseId",
-      ]);
+      expect(Object.keys(JSON.parse(first) as object)).toEqual(["releaseUrl", "expectedReleaseId"]);
     } finally {
       await server.close();
     }
@@ -95,9 +101,14 @@ describe("release development server", () => {
   it("rejects invalid artifacts, excessive files, and ineligible advertised hosts", async () => {
     const root = await mkdtemp(join(tmpdir(), "plotpoint-serve-host-"));
     roots.push(root);
-    await cp(fixtureRoot, root, { recursive: true });
+    await cp(fixtureRoot("minimal-local-puzzle"), root, { recursive: true });
     const releaseFile = join(root, "field.pprelease");
-    await compileProject({ projectRoot: root, outputFile: releaseFile });
+    const compiled = await compileProject({ projectRoot: root, outputFile: releaseFile });
+    if (compiled.kind !== "compiled") {
+      throw new Error(
+        `minimal-local-puzzle compile failed: ${JSON.stringify(compiled.diagnostics)}`,
+      );
+    }
 
     await expect(serveRelease({ releaseFile, host: "0.0.0.0" })).rejects.toThrow("private IPv4");
     await expect(serveRelease({ releaseFile, host: "8.8.8.8" })).rejects.toThrow("private IPv4");

@@ -1,88 +1,63 @@
 {
   "projectFormatVersion": 1,
   "environment": "web",
-  "hostApi": {
-    "major": 1,
-    "minimumMinor": 0
+  "hostApi": { "major": 1, "minimumMinor": 0 },
+  "application": {
+    "definition": { "source": "src/application.ts", "export": "minimalApplication" },
+    "components": ["minimal.puzzle-card"]
   },
-  "entries": {
-    "logic": {
-      "source": "src/logic.ts",
-      "export": "logic"
-    },
-    "presentation": {
-      "source": "src/presentation.ts",
-      "export": "presentation"
+  "aggregateModels": [
+    {
+      "id": "minimal.player",
+      "authority": "local",
+      "kind": "player",
+      "stateSchema": "minimal.player-state",
+      "initializationSchema": "minimal.puzzle-content",
+      "initializer": { "source": "src/initial-state.ts", "export": "initializeMinimal" },
+      "initializationContent": "minimal.puzzle-data",
+      "events": [],
+      "effects": []
     }
-  },
+  ],
   "commands": [
     {
       "id": "minimal.solve",
       "type": "solve",
-      "definition": {
-        "source": "src/commands/solve.ts",
-        "export": "solveCommand"
-      },
-      "aggregateSchema": "minimal.player-state",
+      "execution": "local",
+      "definition": { "source": "src/commands/solve.ts", "export": "solveCommand" },
+      "aggregateModel": "minimal.player",
       "payloadSchema": "minimal.solve-payload",
       "outcomeSchema": "minimal.solve-outcome"
     }
   ],
-  "aggregateSchemas": [
-    {
-      "id": "minimal.player-state",
-      "kind": "player",
-      "version": 1,
-      "path": "schemas/player-state.schema.json"
-    }
-  ],
   "schemas": [
-    {
-      "id": "minimal.puzzle-content",
-      "path": "schemas/puzzle-content.schema.json"
-    },
-    {
-      "id": "minimal.solve-outcome",
-      "path": "schemas/solve-outcome.schema.json"
-    },
-    {
-      "id": "minimal.solve-payload",
-      "path": "schemas/solve-payload.schema.json"
-    }
+    { "id": "minimal.player-state", "path": "schemas/player-state.schema.json" },
+    { "id": "minimal.puzzle-content", "path": "schemas/puzzle-content.schema.json" },
+    { "id": "minimal.solve-outcome", "path": "schemas/solve-outcome.schema.json" },
+    { "id": "minimal.solve-payload", "path": "schemas/solve-payload.schema.json" }
   ],
   "progressions": [
     {
       "id": "minimal.puzzle",
-      "version": 1,
-      "kind": "player",
-      "definition": {
-        "source": "src/progression/main.ts",
-        "export": "puzzleProgression"
-      },
-      "aggregateSchema": "minimal.player-state",
-      "commands": ["minimal.solve"],
-      "content": ["minimal.puzzle-content"],
-      "components": ["minimal.puzzle-card"]
+      "aggregateModel": "minimal.player",
+      "definition": { "source": "src/progression/main.ts", "export": "puzzleProgression" }
     }
   ],
   "components": [
     {
       "id": "minimal.puzzle-card",
-      "implementation": {
-        "source": "src/components/puzzle.ts",
-        "export": "PuzzleCard"
-      },
+      "implementation": { "source": "src/components/puzzle.ts", "export": "PuzzleCard" },
       "commands": ["minimal.solve"],
-      "content": ["minimal.puzzle-content"],
+      "content": ["minimal.puzzle-data"],
       "assets": ["minimal.clue-image"],
       "capabilities": []
     }
   ],
   "content": [
     {
-      "id": "minimal.puzzle-content",
+      "id": "minimal.puzzle-data",
       "path": "content/puzzle.json",
-      "schema": "minimal.puzzle-content"
+      "schema": { "id": "minimal.puzzle-content" }
     }
   ],
   "assets": [

@@ -33,7 +33,7 @@ export interface InspectedProgressionMetadata {
   readonly transitions: readonly {
     readonly transitionId: string;
     readonly targetNodeId: string;
-    readonly from: string;
+    readonly from: readonly string[];
     readonly to: string;
     readonly priority: number;
     readonly trigger: "automatic" | "intent";
@@ -79,6 +79,22 @@ function diagnostic(
   };
 }
 
+function definitionMismatch(
+  registration: "application" | "aggregateModels" | "components",
+  id: string,
+  field: "definition" | "initializer" | "implementation",
+  reason: string,
+): InspectDefinitionBundleResult {
+  return {
+    kind: "invalid",
+    diagnostic: createCompilerDiagnostic({
+      code: "definition-metadata-mismatch",
+      location: { kind: "registration", registration, id, field },
+      details: { reason },
+    }),
+  };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -87,73 +103,131 @@ function isAggregateKind(value: unknown): value is "player" | "team" | "session"
   return value === "player" || value === "team" || value === "session";
 }
 
-function validMetadata(value: unknown): value is DefinitionInspectionMetadata {
+function isAggregateModelMetadata(value: unknown): value is InspectedAggregateModelMetadata {
+  return (
+    isRecord(value) &&
+    typeof value.registrationId === "string" &&
+    typeof value.initializerType === "string"
+  );
+}
+
+function isCommandMetadata(value: unknown): value is InspectedCommandMetadata {
+  return (
+    isRecord(value) &&
+    typeof value.registrationId === "string" &&
+    typeof value.definitionId === "string" &&
+    typeof value.commandType === "string" &&
+    isAggregateKind(value.aggregateKind)
+  );
+}
+
+function isProgressionMetadata(value: unknown): value is InspectedProgressionMetadata {
+  if (
+    !isRecord(value) ||
+    typeof value.registrationId !== "string" ||
+    typeof value.graphId !== "string" ||
+    !isAggregateKind(value.aggregateKind) ||
+    !Array.isArray(value.nodes) ||
+    !Array.isArray(value.transitions)
+  ) {
+    return false;
+  }
+  return (
+    value.nodes.every(
+      (node) =>
+        isRecord(node) && typeof node.nodeId === "string" && typeof node.initialStatus === "string",
+    ) &&
+    value.transitions.every(
+      (transition) =>
+        isRecord(transition) &&
+        typeof transition.transitionId === "string" &&
+        typeof transition.targetNodeId === "string" &&
+        Array.isArray(transition.from) &&
+        transition.from.every((status) => typeof status === "string") &&
+        typeof transition.to === "string" &&
+        Number.isSafeInteger(transition.priority) &&
+        (transition.trigger === "automatic" || transition.trigger === "intent"),
+    )
+  );
+}
+
+function isComponentMetadata(value: unknown): value is InspectedComponentMetadata {
+  return (
+    isRecord(value) &&
+    typeof value.registrationId === "string" &&
+    typeof value.implementationType === "string"
+  );
+}
+
+function inspectMetadata(value: unknown): InspectDefinitionBundleResult {
   if (
     !isRecord(value) ||
     !isRecord(value.application) ||
     !Array.isArray(value.application.keys) ||
     !value.application.keys.every((key) => typeof key === "string") ||
-    value.application.keys.length !== 1 ||
-    value.application.keys[0] !== "mount" ||
-    value.application.mountType !== "function" ||
+    typeof value.application.mountType !== "string" ||
     !Array.isArray(value.aggregateModels) ||
     !Array.isArray(value.commands) ||
     !Array.isArray(value.progressions) ||
     !Array.isArray(value.components)
   ) {
-    return false;
+    return diagnostic("definition-inspection-output-invalid", "metadata-shape-invalid");
   }
-  const aggregateModelsValid = value.aggregateModels.every(
-    (model) =>
-      isRecord(model) &&
-      typeof model.registrationId === "string" &&
-      model.initializerType === "function",
-  );
-  const commandsValid = value.commands.every(
-    (command) =>
-      isRecord(command) &&
-      typeof command.registrationId === "string" &&
-      typeof command.definitionId === "string" &&
-      typeof command.commandType === "string" &&
-      isAggregateKind(command.aggregateKind),
-  );
-  const progressionsValid = value.progressions.every((progression) => {
-    if (
-      !isRecord(progression) ||
-      typeof progression.registrationId !== "string" ||
-      typeof progression.graphId !== "string" ||
-      !isAggregateKind(progression.aggregateKind) ||
-      !Array.isArray(progression.nodes) ||
-      !Array.isArray(progression.transitions)
-    ) {
-      return false;
-    }
-    return (
-      progression.nodes.every(
-        (node) =>
-          isRecord(node) &&
-          typeof node.nodeId === "string" &&
-          typeof node.initialStatus === "string",
-      ) &&
-      progression.transitions.every(
-        (transition) =>
-          isRecord(transition) &&
-          typeof transition.transitionId === "string" &&
-          typeof transition.targetNodeId === "string" &&
-          typeof transition.from === "string" &&
-          typeof transition.to === "string" &&
-          Number.isSafeInteger(transition.priority) &&
-          (transition.trigger === "automatic" || transition.trigger === "intent"),
-      )
+  if (
+    value.application.keys.length !== 1 ||
+    value.application.keys[0] !== "mount" ||
+    value.application.mountType !== "function"
+  ) {
+    return definitionMismatch(
+      "application",
+      "application",
+      "definition",
+      "application-must-expose-only-mount",
     );
-  });
-  const componentsValid = value.components.every(
-    (component) =>
-      isRecord(component) &&
-      typeof component.registrationId === "string" &&
-      component.implementationType === "function",
+  }
+  if (!value.aggregateModels.every(isAggregateModelMetadata)) {
+    return diagnostic("definition-inspection-output-invalid", "metadata-shape-invalid");
+  }
+  const invalidModel = value.aggregateModels.find((model) => model.initializerType !== "function");
+  if (invalidModel !== undefined) {
+    return definitionMismatch(
+      "aggregateModels",
+      invalidModel.registrationId,
+      "initializer",
+      "initializer-must-be-function",
+    );
+  }
+  if (
+    !value.commands.every(isCommandMetadata) ||
+    !value.progressions.every(isProgressionMetadata) ||
+    !value.components.every(isComponentMetadata)
+  ) {
+    return diagnostic("definition-inspection-output-invalid", "metadata-shape-invalid");
+  }
+  const invalidComponent = value.components.find(
+    (component) => component.implementationType !== "function",
   );
-  return aggregateModelsValid && commandsValid && progressionsValid && componentsValid;
+  if (invalidComponent !== undefined) {
+    return definitionMismatch(
+      "components",
+      invalidComponent.registrationId,
+      "implementation",
+      "component-must-be-function",
+    );
+  }
+  return {
+    kind: "valid",
+    metadata: {
+      application: {
+        keys: value.application.keys,
+        mountType: value.application.mountType,
+      },
+      aggregateModels: value.aggregateModels,
+      commands: value.commands,
+      progressions: value.progressions,
+      components: value.components,
+    },
+  };
 }
 
 export async function inspectDefinitionBundle(
@@ -225,11 +299,11 @@ export async function inspectDefinitionBundle(
       try {
         const parsed: unknown = JSON.parse(Buffer.concat(stdout).toString("utf8"));
         const canonical = canonicalizeValue(parsed);
-        if (canonical.kind === "invalid" || !validMetadata(canonical.canonical.value)) {
+        if (canonical.kind === "invalid") {
           resolve(diagnostic("definition-inspection-output-invalid", "metadata-shape-invalid"));
           return;
         }
-        resolve({ kind: "valid", metadata: canonical.canonical.value });
+        resolve(inspectMetadata(canonical.canonical.value));
       } catch {
         resolve(diagnostic("definition-inspection-output-invalid", "invalid-json"));
       }

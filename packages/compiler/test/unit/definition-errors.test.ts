@@ -14,7 +14,11 @@ import type {
 } from "../../src/project/config.js";
 import { validateCommands } from "../../src/validation/commands.js";
 import { validateProgressions } from "../../src/validation/progression.js";
-import { normalizeAjvErrors, validateSchemas } from "../../src/validation/schemas.js";
+import {
+  normalizeAjvErrors,
+  validateRuntimeSchemaRoots,
+  validateSchemas,
+} from "../../src/validation/schemas.js";
 
 const encoder = new TextEncoder();
 const fixtureRoot = new URL("../fixtures/projects/invalid/definitions/", import.meta.url);
@@ -191,6 +195,40 @@ describe("closed durable schema subset", () => {
     expect(result.kind).toBe("valid");
   });
 
+  it("rejects scalar schemas selected by runtime model and command contracts", () => {
+    const result = validateSchemas(
+      snapshot({
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        type: "string",
+      }),
+    );
+    expect(result.kind).toBe("valid");
+    if (result.kind !== "valid") return;
+
+    expect(validateRuntimeSchemaRoots(registries(), result.schemas)).toMatchObject([
+      {
+        code: "schema-value-invalid",
+        location: { registration: "aggregateModels", field: "initializationSchema" },
+        details: { reason: "runtime-schema-root-must-be-object" },
+      },
+      {
+        code: "schema-value-invalid",
+        location: { registration: "aggregateModels", field: "stateSchema" },
+        details: { reason: "runtime-schema-root-must-be-object" },
+      },
+      {
+        code: "schema-value-invalid",
+        location: { registration: "commands", field: "outcomeSchema" },
+        details: { reason: "runtime-schema-root-must-be-object" },
+      },
+      {
+        code: "schema-value-invalid",
+        location: { registration: "commands", field: "payloadSchema" },
+        details: { reason: "runtime-schema-root-must-be-object" },
+      },
+    ]);
+  });
+
   it("rejects unsupported semantic formats at their stable schema pointer", async () => {
     const document = JSON.parse(
       await readFile(new URL("unsupported.schema.json", fixtureRoot), "utf8"),
@@ -254,7 +292,7 @@ describe("progression definition validation", () => {
             {
               transitionId: "missing",
               targetNodeId: "absent",
-              from: "locked",
+              from: ["locked"],
               to: "available",
               priority: 0,
               trigger: "automatic",

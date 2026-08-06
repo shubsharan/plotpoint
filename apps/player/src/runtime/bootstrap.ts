@@ -1,8 +1,16 @@
-import { HOST_BRIDGE_VERSION } from "@plotpoint/protocol";
+import {
+  HOST_BRIDGE_VERSION,
+  type CanonicalJsonValue,
+  type GameComposition,
+} from "@plotpoint/protocol";
 
 export interface RuntimeBootstrapInput {
   readonly logicSource: string;
   readonly presentationSource: string;
+  readonly gameComposition?: GameComposition;
+  readonly content?: Readonly<Record<string, CanonicalJsonValue>>;
+  readonly assets?: Readonly<Record<string, CanonicalJsonValue>>;
+  readonly sharedBindingAvailable?: boolean;
 }
 
 function scriptString(value: string): string {
@@ -12,6 +20,10 @@ function scriptString(value: string): string {
 export function buildRuntimeBootstrap(input: RuntimeBootstrapInput): string {
   const logic = scriptString(input.logicSource);
   const presentation = scriptString(input.presentationSource);
+  const gameComposition = scriptString(JSON.stringify(input.gameComposition ?? null));
+  const content = scriptString(JSON.stringify(input.content ?? {}));
+  const assets = scriptString(JSON.stringify(input.assets ?? {}));
+  const sharedBindingAvailable = input.sharedBindingAvailable === true ? "true" : "false";
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'none'; img-src data: blob:; media-src data: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline' blob:">
@@ -33,9 +45,391 @@ window.__plotpointReceive = (message) => {
   const presentationUrl = URL.createObjectURL(new Blob([${presentation}], { type: 'text/javascript' }));
   const [logicModule, presentationModule] = await Promise.all([import(logicUrl), import(presentationUrl)]);
   const bootstrap = await send('runtime.ready', {});
-  const mount = presentationModule.default && presentationModule.default.mount;
-  if (typeof mount !== 'function') throw new Error('presentation-mount-missing');
-  await mount({ root: document.getElementById('root'), logic: logicModule.default, host: { send }, bootstrap });
+  const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const exactKeys = (value, expected) => {
+    const actual = Object.keys(value).sort(); const wanted = [...expected].sort();
+    return actual.length === wanted.length && actual.every((key, index) => key === wanted[index]);
+  };
+  const allowedKeys = (value, required, optional = []) => {
+    if (!isRecord(value) || required.some((key) => !Object.hasOwn(value, key))) return false;
+    const allowed = new Set([...required, ...optional]);
+    return Object.keys(value).every((key) => allowed.has(key));
+  };
+  const deepFreeze = (value) => {
+    if (!isRecord(value) && !Array.isArray(value)) return value;
+    for (const nested of Object.values(value)) deepFreeze(nested);
+    return Object.freeze(value);
+  };
+  const schemaRegistryMatches = (descriptors, registry) =>
+    Array.isArray(descriptors) && isRecord(registry) &&
+    JSON.stringify(Object.keys(registry).sort()) ===
+      JSON.stringify(descriptors.map(({ type }) => type).sort()) &&
+    descriptors.every(({ type, schema }) => isRecord(registry[type]) && registry[type].id === schema.id);
+  if (!exactKeys(logicModule, ['aggregateModels'])) {
+    throw new Error('runtime-logic-root-invalid');
+  }
+  if (!exactKeys(presentationModule, ['application', 'components'])) {
+    throw new Error('runtime-presentation-root-invalid');
+  }
+  const application = presentationModule.application;
+  if (!isRecord(application) || !exactKeys(application, ['mount']) || typeof application.mount !== 'function') {
+    throw new Error('runtime-application-definition-invalid');
+  }
+  const generatedComponents = presentationModule.components;
+  if (!isRecord(generatedComponents) || Object.values(generatedComponents).some((value) => typeof value !== 'function')) {
+    throw new Error('runtime-component-registry-invalid');
+  }
+  const composition = JSON.parse(${gameComposition});
+  if (composition === null) throw new Error('runtime-game-composition-missing');
+  if (!isRecord(composition) || !isRecord(composition.application) ||
+      !Array.isArray(composition.application.components) ||
+      !Array.isArray(composition.aggregateModels) || !Array.isArray(composition.commands) ||
+      !Array.isArray(composition.progressions) || !Array.isArray(composition.components) ||
+      !Array.isArray(composition.resources)) {
+    throw new Error('runtime-game-composition-invalid');
+  }
+  const expectedComponentIds = composition.components.map(({ id }) => id).sort();
+  const generatedComponentIds = Object.keys(generatedComponents).sort();
+  if (JSON.stringify(expectedComponentIds) !== JSON.stringify(generatedComponentIds)) {
+    throw new Error('runtime-component-registry-mismatch');
+  }
+
+  if (!allowedKeys(bootstrap, ['runId', 'releaseId', 'aggregate']) ||
+      typeof bootstrap.runId !== 'string' || typeof bootstrap.releaseId !== 'string' ||
+      !allowedKeys(bootstrap.aggregate, ['modelId', 'aggregateId', 'aggregateKind', 'schemaId', 'stateVersion', 'state'], ['progression']) ||
+      typeof bootstrap.aggregate.modelId !== 'string' || typeof bootstrap.aggregate.aggregateId !== 'string' ||
+      bootstrap.aggregate.aggregateKind !== 'player' || typeof bootstrap.aggregate.schemaId !== 'string' ||
+      !Number.isSafeInteger(bootstrap.aggregate.stateVersion) || bootstrap.aggregate.stateVersion < 0 ||
+      !isRecord(bootstrap.aggregate.state)) {
+    throw new Error('runtime-bootstrap-invalid');
+  }
+  const generatedAggregateModels = logicModule.aggregateModels;
+  if (!isRecord(generatedAggregateModels)) throw new Error('runtime-aggregate-model-registry-invalid');
+  const localModelDescriptors = composition.aggregateModels.filter(({ authority }) => authority === 'local');
+  const expectedLocalModelIds = localModelDescriptors.map(({ id }) => id).sort();
+  if (JSON.stringify(Object.keys(generatedAggregateModels).sort()) !== JSON.stringify(expectedLocalModelIds)) {
+    throw new Error('runtime-aggregate-model-registry-mismatch');
+  }
+  const localModelDescriptor = localModelDescriptors.find(({ id }) => id === bootstrap.aggregate.modelId);
+  const generatedLocalModel = generatedAggregateModels[bootstrap.aggregate.modelId];
+  const localCommandDescriptors = composition.commands.filter(({ execution, aggregateModel }) =>
+    execution === 'local' && aggregateModel === bootstrap.aggregate.modelId
+  );
+  const localProgressionDescriptor = composition.progressions.find(
+    ({ aggregateModel }) => aggregateModel === bootstrap.aggregate.modelId
+  );
+  if (!localModelDescriptor || !isRecord(generatedLocalModel) ||
+      generatedLocalModel.modelId !== localModelDescriptor.id ||
+      generatedLocalModel.aggregateKind !== 'player' || generatedLocalModel.authority !== 'local' ||
+      !isRecord(generatedLocalModel.stateSchema) ||
+      generatedLocalModel.stateSchema.id !== localModelDescriptor.stateSchema.id ||
+      bootstrap.aggregate.schemaId !== localModelDescriptor.stateSchema.id ||
+      !isRecord(generatedLocalModel.commandContracts) ||
+      !schemaRegistryMatches(localModelDescriptor.events, generatedLocalModel.eventSchemas) ||
+      !schemaRegistryMatches(localModelDescriptor.effects, generatedLocalModel.effectSchemas) ||
+      typeof generatedLocalModel.execute !== 'function' ||
+      (localProgressionDescriptor === undefined
+        ? generatedLocalModel.progression !== undefined
+        : !isRecord(generatedLocalModel.progression) ||
+          generatedLocalModel.progression.graphId !== localProgressionDescriptor.id)) {
+    throw new Error('runtime-aggregate-model-selection-mismatch');
+  }
+  if (JSON.stringify(Object.keys(generatedLocalModel.commandContracts).sort()) !==
+      JSON.stringify(localCommandDescriptors.map(({ type }) => type).sort())) {
+    throw new Error('runtime-local-command-registry-mismatch');
+  }
+
+  let currentLocalView = deepFreeze({ ...bootstrap.aggregate });
+  const localListeners = new Set();
+  const diagnosticCodes = (diagnostics, fallback) => {
+    if (!Array.isArray(diagnostics)) return [fallback];
+    const codes = diagnostics.map((diagnostic) => isRecord(diagnostic) ? diagnostic.code : undefined);
+    return codes.length > 0 && codes.every((code) => typeof code === 'string' && code.length > 0)
+      ? codes
+      : [fallback];
+  };
+  const prepareLocalCandidate = (descriptor, commandInput) => {
+    const observations = commandInput.observations ?? [];
+    if (!Array.isArray(observations) || observations.some((observation) =>
+      !isRecord(observation) || typeof observation.observationId !== 'string' ||
+      typeof observation.kind !== 'string' || typeof observation.key !== 'string' ||
+      !Object.hasOwn(observation, 'value')
+    )) {
+      throw new Error('runtime-local-observation-reference-invalid');
+    }
+    const execution = generatedLocalModel.execute({
+      aggregate: currentLocalView,
+      command: Object.freeze({
+        id: commandInput.commandId,
+        type: descriptor.type,
+        target: Object.freeze({ kind: 'player', id: currentLocalView.aggregateId }),
+        expectedStateVersion: currentLocalView.stateVersion,
+        payload: commandInput.payload
+      }),
+      observations: observations.map(({ kind, key, value }) => Object.freeze({ kind, key, value }))
+    });
+    if (!isRecord(execution)) throw new Error('runtime-local-execution-result-invalid');
+    if (execution.kind === 'preflight-invalid') {
+      return Object.freeze({
+        commandId: commandInput.commandId,
+        disposition: 'not-recorded',
+        terminal: 'invalid',
+        phase: 'preflight',
+        diagnosticCodes: Object.freeze(diagnosticCodes(execution.diagnostics, 'runtime-local-preflight-invalid'))
+      });
+    }
+    if (execution.kind !== 'recorded' || !isRecord(execution.record) ||
+        !isRecord(execution.aggregate) || !isRecord(execution.aggregate.state)) {
+      throw new Error('runtime-local-execution-result-invalid');
+    }
+    const record = execution.record;
+    if (!isRecord(record.command) || record.command.id !== commandInput.commandId ||
+        record.command.type !== descriptor.type || !isRecord(record.command.target) ||
+        record.command.target.kind !== 'player' ||
+        record.command.target.id !== currentLocalView.aggregateId ||
+        record.command.expectedStateVersion !== currentLocalView.stateVersion ||
+        !isRecord(record.command.payload)) {
+      throw new Error('runtime-local-execution-record-invalid');
+    }
+    const base = {
+      commandId: commandInput.commandId,
+      modelId: generatedLocalModel.modelId,
+      commandType: descriptor.type,
+      payload: record.command.payload,
+      target: Object.freeze({
+        aggregateId: currentLocalView.aggregateId,
+        aggregateKind: 'player',
+        schemaId: currentLocalView.schemaId
+      }),
+      expectedStateVersion: currentLocalView.stateVersion,
+      observationIds: Object.freeze(observations.map(({ observationId }) => observationId))
+    };
+    if (record.terminal === 'accepted') {
+      if (!isRecord(record.outcome) || !Array.isArray(record.domainEvents) ||
+          !Array.isArray(record.effectIntents) || !Array.isArray(record.progressionTrace)) {
+        throw new Error('runtime-local-execution-record-invalid');
+      }
+      const stateChanged = JSON.stringify(currentLocalView.state) !== JSON.stringify(execution.aggregate.state);
+      const progressionChanged = JSON.stringify(currentLocalView.progression) !== JSON.stringify(execution.aggregate.progression);
+      if (progressionChanged && execution.aggregate.progression === undefined) {
+        throw new Error('runtime-local-execution-record-invalid');
+      }
+      return deepFreeze({
+        ...base,
+        terminal: 'accepted',
+        ...(stateChanged ? { nextState: execution.aggregate.state } : {}),
+        ...(progressionChanged ? { nextProgression: execution.aggregate.progression } : {}),
+        outcome: record.outcome,
+        domainEvents: record.domainEvents,
+        effectIntents: record.effectIntents,
+        progressionTrace: record.progressionTrace
+      });
+    }
+    if (record.terminal === 'no-op' || record.terminal === 'rejected') {
+      if (!isRecord(record.outcome)) throw new Error('runtime-local-execution-record-invalid');
+      return deepFreeze({ ...base, terminal: record.terminal, outcome: record.outcome });
+    }
+    if (record.terminal === 'invalid') {
+      return deepFreeze({
+        ...base,
+        terminal: 'invalid',
+        phase: 'execution',
+        diagnosticCodes: diagnosticCodes(record.diagnostics, 'runtime-local-execution-invalid'),
+        attemptedProgressionTrace: Array.isArray(record.progressionTrace) ? record.progressionTrace : []
+      });
+    }
+    throw new Error('runtime-local-execution-record-invalid');
+  };
+  const localCommandRegistry = Object.freeze(Object.fromEntries(
+    localCommandDescriptors.map((descriptor) => {
+      const contract = generatedLocalModel.commandContracts[descriptor.type];
+      if (!isRecord(contract) || contract.registrationId !== descriptor.id ||
+          !isRecord(contract.payloadSchema) || contract.payloadSchema.id !== descriptor.payloadSchema.id ||
+          !isRecord(contract.outcomeSchema) || contract.outcomeSchema.id !== descriptor.outcomeSchema.id) {
+        throw new Error('runtime-local-command-registry-mismatch:' + descriptor.id);
+      }
+      return [descriptor.id, Object.freeze({
+        async execute(commandInput) {
+          if (!allowedKeys(commandInput, ['commandId', 'payload'], ['observations']) ||
+              typeof commandInput.commandId !== 'string' || commandInput.commandId.length === 0 ||
+              !isRecord(commandInput.payload)) {
+            throw new Error('runtime-local-command-input-invalid');
+          }
+          const candidate = prepareLocalCandidate(descriptor, commandInput);
+          if (candidate.disposition === 'not-recorded') return candidate;
+          const result = await send('transition.commit', { candidate });
+          if (!isRecord(result) || result.commandId !== commandInput.commandId ||
+              result.terminal !== candidate.terminal ||
+              (result.disposition !== 'committed' && result.disposition !== 'duplicate') ||
+              !Number.isSafeInteger(result.resultingStateVersion)) {
+            throw new Error('runtime-local-transition-result-invalid');
+          }
+          if (result.disposition === 'committed' && result.terminal === 'accepted') {
+            if (result.resultingStateVersion !== currentLocalView.stateVersion + 1) {
+              throw new Error('runtime-local-transition-version-invalid');
+            }
+            currentLocalView = deepFreeze({
+              ...currentLocalView,
+              stateVersion: result.resultingStateVersion,
+              ...(candidate.nextState === undefined ? {} : { state: candidate.nextState }),
+              ...(candidate.nextProgression === undefined ? {} : { progression: candidate.nextProgression })
+            });
+            for (const listener of [...localListeners]) listener();
+          }
+          return result;
+        }
+      })];
+    })
+  ));
+  const local = Object.freeze({
+    async getView() { return currentLocalView; },
+    onChanged(listener) {
+      if (typeof listener !== 'function') throw new Error('runtime-local-listener-invalid');
+      localListeners.add(listener); let subscribed = true;
+      return () => { if (subscribed) { subscribed = false; localListeners.delete(listener); } };
+    },
+    commands: localCommandRegistry
+  });
+  void local.getView;
+  void local.onChanged;
+
+  const cleanupStack = [];
+  let acceptingCleanup = true;
+  let cleanupPromise;
+  const lifecycle = Object.freeze({
+    defer(cleanup) {
+      if (!acceptingCleanup) throw new Error('runtime-mount-scope-closed');
+      if (typeof cleanup !== 'function') throw new Error('runtime-component-cleanup-invalid');
+      cleanupStack.push({ cleanup, invoked: false });
+    }
+  });
+  const cleanupMountScope = () => {
+    if (cleanupPromise) return cleanupPromise;
+    acceptingCleanup = false;
+    cleanupPromise = (async () => {
+      const failures = [];
+      const reverseCleanup = cleanupStack.reverse();
+      for (const entry of reverseCleanup) {
+        try {
+          if (entry.invoked) throw new Error('runtime-component-cleanup-already-invoked');
+          entry.invoked = true;
+          await entry.cleanup();
+        } catch (error) { failures.push(error); }
+      }
+      if (failures.length > 0) throw new Error('runtime-mount-cleanup-failed');
+    })();
+    return cleanupPromise;
+  };
+
+  const select = (source, ids, code) => Object.freeze(Object.fromEntries(ids.map((id) => {
+    if (!Object.hasOwn(source, id)) throw new Error(code + ':' + id);
+    return [id, source[id]];
+  })));
+  const contentRegistry = deepFreeze(JSON.parse(${content}));
+  const assetRegistry = deepFreeze(JSON.parse(${assets}));
+  if (!isRecord(contentRegistry) || !isRecord(assetRegistry)) {
+    throw new Error('runtime-resource-registry-invalid');
+  }
+  const capabilityRegistry = Object.fromEntries(composition.components.flatMap((componentDescriptor) =>
+    componentDescriptor.capabilities.map((capability) => [capability.id, Object.freeze({
+      async request(requestInput) {
+        const expected = { id: capability.id, major: capability.major, minor: capability.minimumMinor };
+        const result = await send('capability.request', { capability: expected, input: requestInput });
+        if (!allowedKeys(result, ['capability', 'output']) || !isRecord(result.capability) ||
+            result.capability.id !== expected.id || result.capability.major !== expected.major ||
+            result.capability.minor !== expected.minor || !isRecord(result.output)) {
+          throw new Error('runtime-capability-result-invalid:' + capability.id);
+        }
+        return deepFreeze(result.output);
+      }
+    })])
+  ));
+  const sharedListeners = new Set();
+  window.addEventListener('plotpoint-host', (event) => {
+    if (event.detail && event.detail.type === 'shared.sync.changed') {
+      for (const listener of [...sharedListeners]) listener();
+    }
+  });
+  const componentFactories = Object.create(null);
+  for (const componentId of composition.application.components) {
+    const componentDescriptor = composition.components.find(({ id }) => id === componentId);
+    const implementation = generatedComponents[componentId];
+    if (!componentDescriptor || typeof implementation !== 'function') {
+      throw new Error('runtime-application-component-missing:' + componentId);
+    }
+    componentFactories[componentId] = () => {
+      let componentMounting = true;
+      const componentLifecycle = Object.freeze({
+        defer(cleanup) {
+          if (!componentMounting) throw new Error('runtime-component-mount-scope-closed');
+          lifecycle.defer(cleanup);
+        }
+      });
+      const localCommandIds = componentDescriptor.commands.filter((commandId) =>
+        composition.commands.find(({ id }) => id === commandId)?.execution === 'local'
+      );
+      const sharedCommandIds = componentDescriptor.commands.filter((commandId) =>
+        composition.commands.find(({ id }) => id === commandId)?.execution === 'trusted-mechanic'
+      );
+      const context = {
+        lifecycle: componentLifecycle,
+        local: Object.freeze({
+          getView: local.getView,
+          onChanged: local.onChanged,
+          commands: select(local.commands, localCommandIds, 'runtime-component-local-command-missing')
+        }),
+        content: select(contentRegistry, componentDescriptor.content, 'runtime-component-content-missing'),
+        assets: select(assetRegistry, componentDescriptor.assets, 'runtime-component-asset-missing'),
+        capabilities: select(capabilityRegistry, componentDescriptor.capabilities.map(({ id }) => id), 'runtime-component-capability-missing')
+      };
+      if (componentDescriptor.sharedProjection !== undefined && ${sharedBindingAvailable}) {
+        context.shared = Object.freeze({
+          getView: () => send('shared.view.get', {}),
+          onSyncChanged(listener) {
+            sharedListeners.add(listener); let subscribed = true;
+            return () => { if (subscribed) { subscribed = false; sharedListeners.delete(listener); } };
+          },
+          commands: Object.freeze(Object.fromEntries(sharedCommandIds.map((commandId) => [commandId, Object.freeze({
+            execute: (command) => send('shared.command.enqueue', { command })
+          })])))
+        });
+      }
+      let element;
+      try { element = implementation(Object.freeze(context)); }
+      finally { componentMounting = false; }
+      if (!(element instanceof HTMLElement)) throw new Error('runtime-component-element-invalid:' + componentId);
+      return element;
+    };
+  }
+
+  const root = document.getElementById('root');
+  if (!(root instanceof HTMLElement)) throw new Error('runtime-application-root-invalid');
+  const components = Object.freeze(componentFactories);
+  let applicationHandle;
+  try {
+    applicationHandle = await application.mount({ root, components });
+    if (!isRecord(applicationHandle) || !exactKeys(applicationHandle, ['unmount']) || typeof applicationHandle.unmount !== 'function') {
+      throw new Error('runtime-application-handle-invalid');
+    }
+    acceptingCleanup = false;
+  } catch (error) {
+    try { await cleanupMountScope(); } catch { throw new Error('runtime-mount-rollback-failed'); }
+    throw error;
+  }
+
+  let disposalPromise;
+  const disposeRuntime = () => {
+    if (disposalPromise) return disposalPromise;
+    disposalPromise = (async () => {
+      const failures = [];
+      try { await applicationHandle.unmount(); } catch (error) { failures.push(error); }
+      try { await cleanupMountScope(); } catch (error) { failures.push(error); }
+      if (failures.length > 0) throw new Error('runtime-application-unmount-failed');
+    })();
+    return disposalPromise;
+  };
+  window.__plotpointDispose = disposeRuntime;
+  window.addEventListener('pagehide', () => { void disposeRuntime(); }, { once: true });
 })().catch((error) => { document.getElementById('root').textContent = 'Runtime failed: ' + String(error && error.message || error); });
 </script></body></html>`;
 }

@@ -84,6 +84,18 @@ describe("project snapshot", () => {
       "src/helper.ts",
       "src/logic.ts",
       "src/presentation.ts",
+      "vendor/@plotpoint/runtime/aggregates.js",
+      "vendor/@plotpoint/runtime/canonical-json.js",
+      "vendor/@plotpoint/runtime/commands.js",
+      "vendor/@plotpoint/runtime/diagnostics.js",
+      "vendor/@plotpoint/runtime/execute-command.js",
+      "vendor/@plotpoint/runtime/index.js",
+      "vendor/@plotpoint/runtime/model-wrappers.js",
+      "vendor/@plotpoint/runtime/observations.js",
+      "vendor/@plotpoint/runtime/progression/evaluate-progression.js",
+      "vendor/@plotpoint/runtime/progression/graph.js",
+      "vendor/@plotpoint/runtime/progression/state.js",
+      "vendor/@plotpoint/runtime/progression/validate-graph.js",
     ]);
     expect(new TextDecoder().decode(result.snapshot.files.get("src/helper.ts")?.bytes)).toBe(
       "export const helper = {};\n",

@@ -261,8 +261,10 @@ export function bindExecutableAggregateModel<Kind extends AggregateKind, State e
       readonly payloadSchema: RuntimeSchema<JsonObject>;
       readonly outcomeSchema: RuntimeSchema<JsonObject>;
     }
-  > = {};
-  const bindingsByType: Record<string, ConstructedCommandBinding<State, Kind>> = {};
+  > = Object.create(null);
+  const bindingsByType: Record<string, ConstructedCommandBinding<State, Kind>> = Object.create(
+    null,
+  );
   for (const [commandType, binding] of Object.entries(model.commandsByType)) {
     if (commandType !== binding.commandType || !isConstructedCommandBinding(binding)) {
       throw new TypeError(

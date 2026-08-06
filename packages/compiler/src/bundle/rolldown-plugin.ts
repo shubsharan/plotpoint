@@ -67,6 +67,15 @@ function resolveSnapshotPath(
   if (importerPath === null) {
     const rootPath = source.startsWith("./") ? source.slice(2) : source;
     if (modulePaths.has(rootPath)) return rootPath;
+    if (!source.startsWith(".") && !source.startsWith("/")) {
+      const dependencyMatches = [...modulePaths].filter((path) =>
+        path.startsWith(`vendor/${source}/index.`),
+      );
+      if (dependencyMatches.length === 1) return dependencyMatches[0] as string;
+      if (dependencyMatches.length > 1) {
+        throw new SnapshotBundleResolutionError("ambiguous-module", source, importer);
+      }
+    }
     throw new SnapshotBundleResolutionError("module-not-in-snapshot", source, importer);
   }
 

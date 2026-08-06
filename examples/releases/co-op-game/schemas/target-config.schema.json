@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "plotpoint.hunt.target-config",
+  "$id": "plotpoint.location.target-config",
   "type": "object",
   "additionalProperties": false,
   "required": ["targets"],

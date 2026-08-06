@@ -1,9 +1,16 @@
+import { createHash } from "node:crypto";
+
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
+import standaloneModule from "ajv/dist/standalone/index.js";
 import { canonicalizeValue, type JsonObject } from "@plotpoint/runtime";
 
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
 import { orderCompilerDiagnostics } from "../diagnostics/order.js";
-import type { CompilationSnapshot, CompilerDiagnostic } from "../project/config.js";
+import type {
+  CanonicalProjectRegistries,
+  CompilationSnapshot,
+  CompilerDiagnostic,
+} from "../project/config.js";
 
 const JSON_SCHEMA_2020_12 = "https://json-schema.org/draft/2020-12/schema";
 const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -61,7 +68,13 @@ export interface ValidatedSchema {
   readonly path: string;
   readonly document: JsonObject;
   readonly canonicalBytes: Uint8Array;
+  readonly digest: `sha256:${string}`;
   readonly validate: ValidateFunction;
+}
+
+export interface StandaloneSchemaValidators {
+  readonly source: string;
+  readonly validatorNameById: ReadonlyMap<string, string>;
 }
 
 export type ValidateSchemasResult =
@@ -70,6 +83,109 @@ export type ValidateSchemasResult =
       readonly schemas: ReadonlyMap<string, ValidatedSchema>;
     }
   | { readonly kind: "invalid"; readonly diagnostics: readonly CompilerDiagnostic[] };
+
+function ajvOptions() {
+  return {
+    allErrors: true,
+    code: { esm: false, source: true },
+    strict: true,
+    validateSchema: true,
+  } as const;
+}
+
+function registrationLocation(registration: string, id: string, field: string) {
+  return { kind: "registration" as const, registration, id, field };
+}
+
+export function validateRuntimeSchemaRoots(
+  registries: CanonicalProjectRegistries,
+  schemas: ReadonlyMap<string, ValidatedSchema>,
+): readonly CompilerDiagnostic[] {
+  const references: {
+    readonly registration: string;
+    readonly id: string;
+    readonly field: string;
+    readonly schemaId: string;
+  }[] = [];
+  for (const model of registries.aggregateModels) {
+    references.push(
+      {
+        registration: "aggregateModels",
+        id: model.id,
+        field: "stateSchema",
+        schemaId: model.stateSchema,
+      },
+      {
+        registration: "aggregateModels",
+        id: model.id,
+        field: "initializationSchema",
+        schemaId: model.initializationSchema,
+      },
+      ...model.events.map((event) => ({
+        registration: "aggregateModels",
+        id: model.id,
+        field: "events",
+        schemaId: event.schema,
+      })),
+      ...model.effects.map((effect) => ({
+        registration: "aggregateModels",
+        id: model.id,
+        field: "effects",
+        schemaId: effect.schema,
+      })),
+    );
+  }
+  for (const command of registries.commands) {
+    references.push(
+      {
+        registration: "commands",
+        id: command.id,
+        field: "payloadSchema",
+        schemaId: command.payloadSchema,
+      },
+      {
+        registration: "commands",
+        id: command.id,
+        field: "outcomeSchema",
+        schemaId: command.outcomeSchema,
+      },
+    );
+  }
+
+  const diagnostics = references.flatMap((reference) => {
+    const schema = schemas.get(reference.schemaId);
+    if (schema === undefined || schema.document.type === "object") return [];
+    return [
+      createCompilerDiagnostic({
+        code: "schema-value-invalid",
+        location: registrationLocation(reference.registration, reference.id, reference.field),
+        details: {
+          reason: "runtime-schema-root-must-be-object",
+          schemaId: reference.schemaId,
+        },
+      }),
+    ];
+  });
+  return orderCompilerDiagnostics(diagnostics);
+}
+
+export function generateStandaloneSchemaValidators(
+  schemas: readonly ValidatedSchema[],
+): StandaloneSchemaValidators {
+  const ajv = new Ajv2020(ajvOptions());
+  const validatorNameById = new Map<string, string>();
+  const exportsByName: Record<string, string> = {};
+  schemas.forEach((schema, index) => {
+    const name = `schemaValidator${index}`;
+    ajv.addSchema(schema.document, schema.id);
+    validatorNameById.set(schema.id, name);
+    exportsByName[name] = schema.id;
+  });
+  return Object.freeze({
+    source: standaloneModule.default(ajv, exportsByName),
+    validatorNameById,
+  });
+}
 
 function parseSchema(bytes: Uint8Array): unknown {
   return JSON.parse(decoder.decode(bytes));
@@ -188,7 +304,7 @@ function closedSubsetDiagnostics(
 }
 
 export function validateSchemas(snapshot: CompilationSnapshot): ValidateSchemasResult {
-  const ajv = new Ajv2020({ allErrors: true, strict: true, validateSchema: true });
+  const ajv = new Ajv2020(ajvOptions());
   const schemas = new Map<string, ValidatedSchema>();
   const diagnostics: CompilerDiagnostic[] = [];
   const registrations = snapshot.registries.schemas.map((registration) => ({
@@ -268,13 +384,15 @@ export function validateSchemas(snapshot: CompilationSnapshot): ValidateSchemasR
         continue;
       }
       const validate = ajv.compile(document);
+      const canonicalBytes = encoder.encode(canonical.canonical.text);
       schemas.set(
         registration.id,
         Object.freeze({
           id: registration.id,
           path: registration.path,
           document,
-          canonicalBytes: encoder.encode(canonical.canonical.text),
+          canonicalBytes,
+          digest: `sha256:${createHash("sha256").update(canonicalBytes).digest("hex")}`,
           validate,
         }),
       );

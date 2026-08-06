@@ -5,6 +5,7 @@ import type { ReleaseArtifact } from "@plotpoint/protocol";
 import { bundleDefinitionInspection, bundleRelease } from "./bundle/bundle-release.js";
 import { inspectDefinitionBundle } from "./composition/inspect-definitions.js";
 import {
+  validateDefinitionMetadata,
   validateDefinitionExports,
   validateReferences,
 } from "./composition/validate-references.js";
@@ -37,7 +38,7 @@ import { validateCommands } from "./validation/commands.js";
 import { validateComponents } from "./validation/components.js";
 import { validateContent, validateDefaultInitializationInputs } from "./validation/content.js";
 import { validateProgressions } from "./validation/progression.js";
-import { validateSchemas } from "./validation/schemas.js";
+import { validateRuntimeSchemaRoots, validateSchemas } from "./validation/schemas.js";
 
 interface PreparedProject {
   readonly kind: "prepared";
@@ -153,6 +154,8 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
 
   const schemas = validateSchemas(snapshot);
   if (schemas.kind === "invalid") return schemas;
+  const runtimeSchemaRoots = validateRuntimeSchemaRoots(snapshot.registries, schemas.schemas);
+  if (runtimeSchemaRoots.length > 0) return invalid(runtimeSchemaRoots);
   const content = validateContent(snapshot, schemas.schemas);
   const initializationInputs = validateDefaultInitializationInputs(snapshot, schemas.schemas);
   const assets = validateAssets(snapshot);
@@ -169,6 +172,7 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
   const definitions = await inspectDefinitionBundle(inspectionBundle.bytes);
   if (definitions.kind === "invalid") return invalid([definitions.diagnostic]);
   const definitionDiagnostics = [
+    ...validateDefinitionMetadata(snapshot.registries, definitions.metadata),
     ...validateCommands(snapshot.registries, definitions.metadata),
     ...validateProgressions(snapshot.registries, definitions.metadata),
   ];
@@ -178,6 +182,7 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
     logic: logic.graph,
     presentation: presentation.graph,
     registries: snapshot.registries,
+    schemas: schemas.schemas,
   });
   if (bundled.kind === "invalid") return bundled;
 

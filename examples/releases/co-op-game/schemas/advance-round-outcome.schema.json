@@ -1,8 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "hunt.advance-round-outcome",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["activeRound"],
-  "properties": { "activeRound": { "type": "integer", "minimum": 1 } }
-}

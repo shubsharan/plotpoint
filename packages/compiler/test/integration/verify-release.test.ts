@@ -6,9 +6,7 @@ import { describe, expect, it } from "vitest";
 import { compileProject } from "@plotpoint/compiler";
 import { verifyRelease, type ReleaseManifest } from "@plotpoint/protocol";
 
-import { createExternalProject } from "../helpers/external-project.js";
-
-const goldenProjects = ["minimal-local-puzzle", "branching-media-tour", "co-op-game"] as const;
+import { createExternalProject, releaseExampleProjects } from "../helpers/external-project.js";
 
 function mutateStoredEntry(bytes: Uint8Array, targetPath: string): Uint8Array {
   const mutated = new Uint8Array(bytes);
@@ -32,7 +30,7 @@ function mutateStoredEntry(bytes: Uint8Array, targetPath: string): Uint8Array {
 }
 
 describe("golden release verification acceptance", () => {
-  it.each(goldenProjects)(
+  it.each(releaseExampleProjects)(
     "rejects every mutated entry in %s against structural and known-identity verification",
     async (project) => {
       const external = await createExternalProject(project);

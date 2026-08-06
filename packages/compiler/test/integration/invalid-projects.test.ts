@@ -297,4 +297,72 @@ describe("corrected project configuration boundary", () => {
     ).toEqual(["/aggregateSchemas", "/entries"]);
     await expect(readFile(outputFile)).rejects.toMatchObject({ code: "ENOENT" });
   });
+
+  it("rejects discarded author-selected logic and presentation roots", async () => {
+    const root = await configurationProject("discarded-author-roots");
+    const outputFile = join(root, "output.pprelease");
+
+    const result = await compileProject({ projectRoot: root, outputFile });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") throw new Error("discarded roots unexpectedly compiled");
+    expect(
+      result.diagnostics
+        .filter(({ code }) => code === "configuration-unknown-field")
+        .map(({ location }) => (location.kind === "configuration" ? location.pointer : undefined)),
+    ).toEqual(["/aggregateSchemas", "/entries"]);
+    await expect(readFile(outputFile)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it.each([
+    [
+      "unselected-server-model",
+      {
+        code: "composition-reference-missing",
+        location: {
+          kind: "registration",
+          registration: "aggregateModels",
+          id: "shared.unselected",
+          field: "authority",
+        },
+        details: { target: "trustedMechanic" },
+      },
+    ],
+    [
+      "unselected-trusted-command",
+      {
+        code: "composition-reference-missing",
+        location: {
+          kind: "registration",
+          registration: "commands",
+          id: "shared.unselected",
+          field: "execution",
+        },
+        details: { target: "trustedMechanic.commands" },
+      },
+    ],
+    [
+      "server-progression",
+      {
+        code: "progression-invalid",
+        location: {
+          kind: "registration",
+          registration: "progressions",
+          id: "shared.route",
+          field: "aggregateModel",
+        },
+        details: { reason: "server-progression-unsupported" },
+      },
+    ],
+  ] as const)("rejects the %s clean-break contract", async (caseName, expected) => {
+    const root = await configurationProject(caseName);
+    const outputFile = join(root, "output.pprelease");
+
+    const result = await compileProject({ projectRoot: root, outputFile });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") throw new Error(`${caseName} unexpectedly compiled`);
+    expect(result.diagnostics).toEqual([expect.objectContaining(expected)]);
+    await expect(readFile(outputFile)).rejects.toMatchObject({ code: "ENOENT" });
+  });
 });

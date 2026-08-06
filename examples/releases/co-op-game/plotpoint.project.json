@@ -2,126 +2,103 @@
   "projectFormatVersion": 1,
   "environment": "web",
   "hostApi": { "major": 1, "minimumMinor": 1 },
-  "entries": {
-    "logic": { "source": "src/logic.ts", "export": "logic" },
-    "presentation": { "source": "src/presentation.ts", "export": "presentation" }
+  "application": {
+    "definition": { "source": "src/application.ts", "export": "coOpApplication" },
+    "components": ["co-op.clue-board", "co-op.session-console"]
   },
-  "commands": [
+  "aggregateModels": [
     {
-      "id": "hunt.advance-round",
-      "type": "advance-round",
-      "definition": { "source": "src/commands/advance-round.ts", "export": "advanceRoundCommand" },
-      "aggregateSchema": "hunt.session-state",
-      "payloadSchema": "hunt.advance-round-payload",
-      "outcomeSchema": "hunt.advance-round-outcome"
+      "id": "co-op.player",
+      "authority": "local",
+      "kind": "player",
+      "stateSchema": "co-op.player-state",
+      "initializationSchema": "co-op.initialization",
+      "initializer": { "source": "src/initial-state.ts", "export": "initializeCoOpPlayer" },
+      "events": [],
+      "effects": []
     },
     {
-      "id": "hunt.solve-clue",
-      "type": "solve-clue",
-      "definition": { "source": "src/commands/solve-clue.ts", "export": "solveClueCommand" },
-      "aggregateSchema": "hunt.team-state",
-      "payloadSchema": "hunt.solve-clue-payload",
-      "outcomeSchema": "hunt.solve-clue-outcome"
+      "id": "plotpoint.location.team",
+      "authority": "server",
+      "kind": "team",
+      "stateSchema": "plotpoint.location.team-state",
+      "initializationSchema": "plotpoint.location.target-config",
+      "events": [],
+      "effects": []
     }
   ],
-  "aggregateSchemas": [
+  "commands": [
     {
-      "id": "plotpoint.hunt.player-shell",
-      "kind": "player",
-      "version": 1,
-      "path": "schemas/player-shell.schema.json"
-    },
-    {
-      "id": "hunt.session-state",
-      "kind": "session",
-      "version": 1,
-      "path": "schemas/session-state.schema.json"
-    },
-    {
-      "id": "hunt.team-state",
-      "kind": "team",
-      "version": 1,
-      "path": "schemas/team-state.schema.json"
+      "id": "plotpoint.location.target-discovery",
+      "type": "plotpoint.location.target-discovery",
+      "aggregateModel": "plotpoint.location.team",
+      "payloadSchema": "plotpoint.location.target-discovery-payload",
+      "outcomeSchema": "plotpoint.location.target-discovery-outcome",
+      "execution": "trusted-mechanic"
     }
   ],
   "schemas": [
-    { "id": "hunt.advance-round-outcome", "path": "schemas/advance-round-outcome.schema.json" },
-    { "id": "hunt.advance-round-payload", "path": "schemas/advance-round-payload.schema.json" },
-    { "id": "hunt.clue-content", "path": "schemas/clue-content.schema.json" },
-    { "id": "hunt.round-content", "path": "schemas/round-content.schema.json" },
-    { "id": "plotpoint.hunt.target-config", "path": "schemas/target-config.schema.json" },
-    { "id": "hunt.solve-clue-outcome", "path": "schemas/solve-clue-outcome.schema.json" },
-    { "id": "hunt.solve-clue-payload", "path": "schemas/solve-clue-payload.schema.json" }
-  ],
-  "progressions": [
+    { "id": "co-op.player-state", "path": "schemas/player-shell.schema.json" },
+    { "id": "co-op.initialization", "path": "schemas/initialization.schema.json" },
     {
-      "id": "hunt.session-rounds",
-      "version": 1,
-      "kind": "session",
-      "definition": {
-        "source": "src/progression/session-rounds.ts",
-        "export": "sessionRoundsProgression"
-      },
-      "aggregateSchema": "hunt.session-state",
-      "commands": ["hunt.advance-round"],
-      "content": ["hunt.round-rules"],
-      "components": ["hunt.session-console"]
+      "id": "plotpoint.location.target-config",
+      "path": "schemas/target-config.schema.json"
     },
     {
-      "id": "hunt.team-route",
-      "version": 1,
-      "kind": "team",
-      "definition": { "source": "src/progression/team-route.ts", "export": "teamRouteProgression" },
-      "aggregateSchema": "hunt.team-state",
-      "commands": ["hunt.solve-clue"],
-      "content": ["hunt.clue-pack"],
-      "components": ["hunt.clue-board"]
-    }
+      "id": "plotpoint.location.target-discovery-outcome",
+      "path": "schemas/target-discovery-outcome.schema.json"
+    },
+    {
+      "id": "plotpoint.location.target-discovery-payload",
+      "path": "schemas/target-discovery-payload.schema.json"
+    },
+    { "id": "plotpoint.location.team-projection", "path": "schemas/team-projection.schema.json" },
+    { "id": "plotpoint.location.team-state", "path": "schemas/team-state.schema.json" }
   ],
+  "progressions": [],
   "components": [
     {
-      "id": "hunt.clue-board",
+      "id": "co-op.clue-board",
       "implementation": { "source": "src/components/clue-board.ts", "export": "ClueBoard" },
-      "commands": ["hunt.solve-clue"],
-      "content": ["hunt.clue-pack"],
-      "assets": ["hunt.map.city"],
-      "capabilities": [{ "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 0 }]
+      "commands": ["plotpoint.location.target-discovery"],
+      "content": ["co-op.targets"],
+      "assets": ["co-op.map"],
+      "capabilities": [{ "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 0 }],
+      "sharedProjection": { "id": "plotpoint.location.team-projection" }
     },
     {
-      "id": "hunt.session-console",
+      "id": "co-op.session-console",
       "implementation": {
         "source": "src/components/session-console.ts",
         "export": "SessionConsole"
       },
-      "commands": ["hunt.advance-round"],
-      "content": ["hunt.round-rules"],
-      "assets": ["hunt.audio.round"],
-      "capabilities": []
+      "commands": [],
+      "content": [],
+      "assets": [],
+      "capabilities": [],
+      "sharedProjection": { "id": "plotpoint.location.team-projection" }
     }
   ],
   "content": [
-    { "id": "hunt.clue-pack", "path": "content/clues.json", "schema": "hunt.clue-content" },
     {
-      "id": "plotpoint.hunt.targets",
+      "id": "co-op.targets",
       "path": "content/targets.json",
-      "schema": "plotpoint.hunt.target-config"
-    },
-    {
-      "id": "hunt.round-rules",
-      "path": "content/rounds.json",
-      "schema": "hunt.round-content"
+      "schema": { "id": "plotpoint.location.target-config" }
     }
   ],
   "assets": [
     {
-      "id": "hunt.audio.round",
-      "path": "assets/round-chime.txt",
-      "releasePath": "assets/round-chime.txt"
-    },
-    {
-      "id": "hunt.map.city",
+      "id": "co-op.map",
       "path": "assets/city-map.svg",
       "releasePath": "assets/city-map.svg"
     }
-  ]
+  ],
+  "trustedMechanic": {
+    "id": "plotpoint.location.target-discovery",
+    "aggregateModel": "plotpoint.location.team",
+    "commands": ["plotpoint.location.target-discovery"],
+    "configuration": "co-op.targets",
+    "projectionSchema": { "id": "plotpoint.location.team-projection" },
+    "capabilities": [{ "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 0 }]
+  }
 }

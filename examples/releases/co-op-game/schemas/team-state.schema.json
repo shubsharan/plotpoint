@@ -1,15 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "hunt.team-state",
+  "$id": "plotpoint.location.team-state",
   "type": "object",
   "additionalProperties": false,
-  "required": ["score", "solvedClues"],
+  "required": ["complete", "completedTargets", "targets"],
   "properties": {
-    "score": { "type": "integer", "minimum": 0 },
-    "solvedClues": {
+    "complete": { "type": "boolean" },
+    "completedTargets": { "type": "integer", "minimum": 0 },
+    "targets": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 },
-      "uniqueItems": true
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "targetId"],
+        "properties": {
+          "status": { "enum": ["available", "discovered"] },
+          "targetId": { "type": "string", "minLength": 1 }
+        }
+      }
     }
   }
 }

@@ -6,9 +6,7 @@ import { describe, expect, it } from "vitest";
 import { compileProject } from "@plotpoint/compiler";
 import { computeReleaseId } from "@plotpoint/protocol";
 
-import { createExternalProject } from "../helpers/external-project.js";
-
-const goldenProjects = ["minimal-local-puzzle", "branching-media-tour", "co-op-game"] as const;
+import { createExternalProject, releaseExampleProjects } from "../helpers/external-project.js";
 
 const buildsPerProject = 20;
 const clockEpoch = Date.UTC(2030, 0, 1);
@@ -57,7 +55,7 @@ describe("golden release reproducibility", () => {
     }
   });
 
-  it.each(goldenProjects)(
+  it.each(releaseExampleProjects)(
     "retains identical byte and identity evidence for twenty %s builds",
     async (fixture) => {
       const externalProject = await createExternalProject(fixture);

@@ -241,7 +241,7 @@ export async function captureProjectSnapshot(
   const files = new Map<string, SnapshotFile>();
   const diagnostics: CompilerDiagnostic[] = [];
   const packageEntries = new Map<string, string>();
-  const pendingPackages = new Set<string>();
+  const pendingPackages = new Set<string>(["@plotpoint/runtime"]);
 
   while (pending.size > 0) {
     const [projectPath, kind] = [...pending.entries()].sort(([left], [right]) =>

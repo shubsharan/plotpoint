@@ -19,8 +19,8 @@ export const playMediaCommand = defineCommand<
       kind: "accepted",
       nextState: target.state,
       outcome: { queued: true },
-      domainEvents: [{ type: "tour-media-requested", mediaId: command.payload.mediaId }],
-      effectIntents: [{ type: "play-audio", mediaId: command.payload.mediaId }],
+      domainEvents: [{ type: "tour.media-requested", mediaId: command.payload.mediaId }],
+      effectIntents: [{ type: "tour.play-audio", mediaId: command.payload.mediaId }],
       progressionIntents: [],
     };
   },

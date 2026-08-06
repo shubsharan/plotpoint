@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tour.play-audio-effect",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mediaId", "type"],
+  "properties": {
+    "mediaId": { "type": "string", "minLength": 1 },
+    "type": { "const": "tour.play-audio" }
+  }
+}

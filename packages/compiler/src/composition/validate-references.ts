@@ -1,6 +1,7 @@
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
 import { orderCompilerDiagnostics } from "../diagnostics/order.js";
 import { resolveGraphExport, type ImportGraph } from "../imports/resolve-graph.js";
+import type { DefinitionInspectionMetadata } from "./inspect-definitions.js";
 import type {
   CanonicalProjectRegistries,
   CompilerDiagnostic,
@@ -331,6 +332,82 @@ export function validateReferences(
     );
   }
 
+  return orderCompilerDiagnostics(diagnostics);
+}
+
+export function validateDefinitionMetadata(
+  registries: CanonicalProjectRegistries,
+  inspection: DefinitionInspectionMetadata,
+): readonly CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  if (
+    inspection.application.mountType !== "function" ||
+    inspection.application.keys.length !== 1 ||
+    inspection.application.keys[0] !== "mount"
+  ) {
+    diagnostics.push(
+      createCompilerDiagnostic({
+        code: "definition-metadata-mismatch",
+        location: registrationLocation("application", "application", "definition"),
+        details: { reason: "application-must-expose-only-mount" },
+      }),
+    );
+  }
+
+  function validateSelectedDefinitions(
+    registration: "aggregateModels" | "components",
+    field: "initializer" | "implementation",
+    expectedIds: readonly string[],
+    inspected: readonly { readonly registrationId: string }[],
+  ): void {
+    const expected = new Set(expectedIds);
+    const seen = new Set<string>();
+    for (const selected of inspected) {
+      if (seen.has(selected.registrationId)) {
+        diagnostics.push(
+          createCompilerDiagnostic({
+            code: "definition-identity-duplicate",
+            location: registrationLocation(registration, selected.registrationId, field),
+            details: { id: selected.registrationId, identity: "registration" },
+          }),
+        );
+        continue;
+      }
+      seen.add(selected.registrationId);
+      if (!expected.has(selected.registrationId)) {
+        diagnostics.push(
+          createCompilerDiagnostic({
+            code: "definition-metadata-mismatch",
+            location: registrationLocation(registration, selected.registrationId, field),
+            details: { reason: "unexpected-definition" },
+          }),
+        );
+      }
+    }
+    for (const id of expectedIds) {
+      if (seen.has(id)) continue;
+      diagnostics.push(
+        createCompilerDiagnostic({
+          code: "definition-metadata-mismatch",
+          location: registrationLocation(registration, id, field),
+          details: { reason: "missing-definition" },
+        }),
+      );
+    }
+  }
+
+  validateSelectedDefinitions(
+    "aggregateModels",
+    "initializer",
+    registries.aggregateModels.filter((model) => model.authority === "local").map(({ id }) => id),
+    inspection.aggregateModels,
+  );
+  validateSelectedDefinitions(
+    "components",
+    "implementation",
+    registries.components.map(({ id }) => id),
+    inspection.components,
+  );
   return orderCompilerDiagnostics(diagnostics);
 }
 

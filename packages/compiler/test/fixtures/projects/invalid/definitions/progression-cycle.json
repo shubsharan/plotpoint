@@ -12,7 +12,7 @@
         {
           "transitionId": "activate",
           "targetNodeId": "stage",
-          "from": "available",
+          "from": ["available"],
           "to": "active",
           "priority": 0,
           "trigger": "automatic"
@@ -20,7 +20,7 @@
         {
           "transitionId": "release",
           "targetNodeId": "stage",
-          "from": "active",
+          "from": ["active"],
           "to": "available",
           "priority": 1,
           "trigger": "automatic"

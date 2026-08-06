@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "field.game-content",
+  "$id": "field.initialization",
   "type": "object",
   "additionalProperties": false,
   "required": ["title", "firstCheckpoint", "puzzle", "secondCheckpoint", "maximumObservationAgeMs"],

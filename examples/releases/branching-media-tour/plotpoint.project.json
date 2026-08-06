@@ -2,54 +2,78 @@
   "projectFormatVersion": 1,
   "environment": "web",
   "hostApi": { "major": 1, "minimumMinor": 1 },
-  "entries": {
-    "logic": { "source": "src/logic.ts", "export": "logic" },
-    "presentation": { "source": "src/presentation.ts", "export": "presentation" }
+  "application": {
+    "definition": { "source": "src/application.ts", "export": "tourApplication" },
+    "components": ["tour.media-panel", "tour.scene-navigator"]
   },
+  "aggregateModels": [
+    {
+      "id": "tour.player",
+      "authority": "local",
+      "kind": "player",
+      "stateSchema": "tour.player-state",
+      "initializationSchema": "tour.initialization",
+      "initializer": { "source": "src/initial-state.ts", "export": "initializeTour" },
+      "events": [
+        { "type": "tour.media-requested", "schema": "tour.media-requested-event" },
+        { "type": "tour.scene-chosen", "schema": "tour.scene-chosen-event" }
+      ],
+      "effects": [{ "type": "tour.play-audio", "schema": "tour.play-audio-effect" }]
+    }
+  ],
   "commands": [
     {
       "id": "tour.choose-scene",
       "type": "choose-scene",
-      "definition": { "source": "src/commands/choose-scene.ts", "export": "chooseSceneCommand" },
-      "aggregateSchema": "tour.player-state",
+      "aggregateModel": "tour.player",
       "payloadSchema": "tour.choose-scene-payload",
-      "outcomeSchema": "tour.choose-scene-outcome"
+      "outcomeSchema": "tour.choose-scene-outcome",
+      "execution": "local",
+      "definition": { "source": "src/commands/choose-scene.ts", "export": "chooseSceneCommand" }
     },
     {
       "id": "tour.play-media",
       "type": "play-media",
-      "definition": { "source": "src/commands/play-media.ts", "export": "playMediaCommand" },
-      "aggregateSchema": "tour.player-state",
+      "aggregateModel": "tour.player",
       "payloadSchema": "tour.play-media-payload",
-      "outcomeSchema": "tour.play-media-outcome"
-    }
-  ],
-  "aggregateSchemas": [
-    {
-      "id": "tour.player-state",
-      "kind": "player",
-      "version": 1,
-      "path": "schemas/player-state.schema.json"
+      "outcomeSchema": "tour.play-media-outcome",
+      "execution": "local",
+      "definition": { "source": "src/commands/play-media.ts", "export": "playMediaCommand" }
     }
   ],
   "schemas": [
-    { "id": "tour.choose-scene-outcome", "path": "schemas/choose-scene-outcome.schema.json" },
-    { "id": "tour.choose-scene-payload", "path": "schemas/choose-scene-payload.schema.json" },
+    { "id": "tour.player-state", "path": "schemas/player-state.schema.json" },
+    { "id": "tour.initialization", "path": "schemas/initialization.schema.json" },
+    {
+      "id": "tour.choose-scene-outcome",
+      "path": "schemas/choose-scene-outcome.schema.json"
+    },
+    {
+      "id": "tour.choose-scene-payload",
+      "path": "schemas/choose-scene-payload.schema.json"
+    },
     { "id": "tour.media-content", "path": "schemas/media-content.schema.json" },
-    { "id": "tour.play-media-outcome", "path": "schemas/play-media-outcome.schema.json" },
-    { "id": "tour.play-media-payload", "path": "schemas/play-media-payload.schema.json" },
+    {
+      "id": "tour.media-requested-event",
+      "path": "schemas/media-requested-event.schema.json"
+    },
+    { "id": "tour.play-audio-effect", "path": "schemas/play-audio-effect.schema.json" },
+    {
+      "id": "tour.play-media-outcome",
+      "path": "schemas/play-media-outcome.schema.json"
+    },
+    {
+      "id": "tour.play-media-payload",
+      "path": "schemas/play-media-payload.schema.json"
+    },
+    { "id": "tour.scene-chosen-event", "path": "schemas/scene-chosen-event.schema.json" },
     { "id": "tour.scene-content", "path": "schemas/scene-content.schema.json" }
   ],
   "progressions": [
     {
       "id": "tour.branching-route",
-      "version": 1,
-      "kind": "player",
-      "definition": { "source": "src/progression/route.ts", "export": "routeProgression" },
-      "aggregateSchema": "tour.player-state",
-      "commands": ["tour.choose-scene", "tour.play-media"],
-      "content": ["tour.media.river", "tour.scene.garden", "tour.scene.harbor"],
-      "components": ["tour.media-panel", "tour.scene-navigator"]
+      "aggregateModel": "tour.player",
+      "definition": { "source": "src/progression/route.ts", "export": "routeProgression" }
     }
   ],
   "components": [
@@ -77,17 +101,17 @@
     {
       "id": "tour.media.river",
       "path": "content/river-media.json",
-      "schema": "tour.media-content"
+      "schema": { "id": "tour.media-content" }
     },
     {
       "id": "tour.scene.garden",
       "path": "content/garden.json",
-      "schema": "tour.scene-content"
+      "schema": { "id": "tour.scene-content" }
     },
     {
       "id": "tour.scene.harbor",
       "path": "content/harbor.json",
-      "schema": "tour.scene-content"
+      "schema": { "id": "tour.scene-content" }
     }
   ],
   "assets": [

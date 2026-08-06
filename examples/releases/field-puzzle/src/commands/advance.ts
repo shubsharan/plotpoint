@@ -1,13 +1,12 @@
 import { defineCommand, type JsonObject } from "@plotpoint/runtime";
 
-import { fieldGame } from "../config.js";
+import type { FieldCheckpoint, FieldState } from "../initial-state.js";
 
-export type FieldPhase = "first-checkpoint" | "puzzle" | "second-checkpoint" | "complete";
-export type FieldState = JsonObject & { readonly attempts: number; readonly phase: FieldPhase };
 export type AdvancePayload = JsonObject & {
   readonly action: "check-in" | "solve";
   readonly answer?: string;
 };
+
 export type AdvanceOutcome = JsonObject & {
   readonly result:
     | "advanced"
@@ -40,35 +39,59 @@ function distanceMeters(aLat: number, aLon: number, bLat: number, bLon: number):
   return 6_371_000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
+function outsideCheckpoint(
+  latitude: number,
+  longitude: number,
+  checkpoint: FieldCheckpoint,
+): boolean {
+  return (
+    distanceMeters(latitude, longitude, checkpoint.latitude, checkpoint.longitude) >
+    checkpoint.radiusMeters
+  );
+}
+
 export const advanceCommand = defineCommand<"player", FieldState, AdvancePayload, AdvanceOutcome>({
   definitionId: "field.advance",
   commandType: "advance",
   aggregateKind: "player",
-  handle(target, command, context) {
+  handle(aggregate, command, context) {
     if (command.payload.action === "solve") {
-      if (target.state.phase !== "puzzle")
+      if (aggregate.state.phase !== "puzzle") {
         return { kind: "rejected", outcome: { result: "wrong-phase" } };
-      const correct = command.payload.answer?.trim().toLowerCase() === fieldGame.puzzle.answer;
+      }
+      const correct =
+        command.payload.answer?.trim().toLowerCase() ===
+        aggregate.state.puzzleAnswer.trim().toLowerCase();
+      if (!correct) {
+        return { kind: "rejected", outcome: { result: "incorrect" } };
+      }
       return {
         kind: "accepted",
         nextState: {
-          attempts: target.state.attempts + 1,
-          phase: correct ? "second-checkpoint" : "puzzle",
+          ...aggregate.state,
+          attempts: aggregate.state.attempts + 1,
+          phase: "second-checkpoint",
         },
-        outcome: { result: correct ? "advanced" : "incorrect" },
-        domainEvents: [{ type: correct ? "puzzle-solved" : "answer-rejected" }],
+        outcome: { result: "advanced" },
+        domainEvents: [{ type: "field.advanced", payload: {} }],
         effectIntents: [],
         progressionIntents: [],
       };
     }
-    if (target.state.phase !== "first-checkpoint" && target.state.phase !== "second-checkpoint") {
+
+    if (
+      aggregate.state.phase !== "first-checkpoint" &&
+      aggregate.state.phase !== "second-checkpoint"
+    ) {
       return { kind: "rejected", outcome: { result: "wrong-phase" } };
     }
     const location = context.take<LocationValue>("location.foreground", "current");
-    if (location.availability === "permission-denied")
+    if (location.availability === "permission-denied") {
       return { kind: "rejected", outcome: { result: "permission-denied" } };
-    if (location.availability === "failed")
+    }
+    if (location.availability === "failed") {
       return { kind: "rejected", outcome: { result: "failed" } };
+    }
     if (
       location.availability !== "available" ||
       location.latitude === undefined ||
@@ -76,36 +99,33 @@ export const advanceCommand = defineCommand<"player", FieldState, AdvancePayload
     ) {
       return { kind: "rejected", outcome: { result: "unavailable" } };
     }
-    if (location.ageMs === undefined || location.ageMs > fieldGame.maximumObservationAgeMs) {
+    if (location.ageMs === undefined || location.ageMs > aggregate.state.maximumObservationAgeMs) {
       return { kind: "rejected", outcome: { result: "stale" } };
     }
-    if (location.ageMs < 0) return { kind: "rejected", outcome: { result: "future" } };
+    if (location.ageMs < 0) {
+      return { kind: "rejected", outcome: { result: "future" } };
+    }
     const checkpoint =
-      target.state.phase === "first-checkpoint"
-        ? fieldGame.firstCheckpoint
-        : fieldGame.secondCheckpoint;
+      aggregate.state.phase === "first-checkpoint"
+        ? aggregate.state.firstCheckpoint
+        : aggregate.state.secondCheckpoint;
     if (
       location.horizontalAccuracy === undefined ||
       location.horizontalAccuracy > checkpoint.maximumAccuracyMeters
     ) {
       return { kind: "rejected", outcome: { result: "inaccurate" } };
     }
-    if (
-      distanceMeters(
-        location.latitude,
-        location.longitude,
-        checkpoint.latitude,
-        checkpoint.longitude,
-      ) > checkpoint.radiusMeters
-    ) {
+    if (outsideCheckpoint(location.latitude, location.longitude, checkpoint)) {
       return { kind: "rejected", outcome: { result: "outside" } };
     }
-    const phase = target.state.phase === "first-checkpoint" ? "puzzle" : "complete";
     return {
       kind: "accepted",
-      nextState: { attempts: target.state.attempts, phase },
+      nextState: {
+        ...aggregate.state,
+        phase: aggregate.state.phase === "first-checkpoint" ? "puzzle" : "complete",
+      },
       outcome: { result: "advanced" },
-      domainEvents: [{ type: "checkpoint-reached", checkpoint: checkpoint.name }],
+      domainEvents: [{ type: "field.advanced", payload: {} }],
       effectIntents: [],
       progressionIntents: [],
     };

@@ -1,0 +1,168 @@
+{
+  "releaseId": "sha256:14ed65b295629bb5cf56e14b29bf14b30dcd0c2281fe139dacd06c9197a8ff71",
+  "manifest": {
+    "aggregateSchemas": [
+      {
+        "id": "tour.player-state",
+        "kind": "player",
+        "path": "schemas/aggregate/746f75722e706c617965722d7374617465.json",
+        "version": 1
+      }
+    ],
+    "capabilities": [
+      {
+        "id": "plotpoint.location.foreground",
+        "major": 1,
+        "minimumMinor": 1
+      },
+      {
+        "id": "plotpoint.media.audio",
+        "major": 1,
+        "minimumMinor": 0
+      }
+    ],
+    "entrypoints": {
+      "logic": "bundles/logic.js",
+      "presentation": "bundles/presentation.js"
+    },
+    "hostApi": {
+      "major": 1,
+      "minimumMinor": 1
+    },
+    "inventory": [
+      {
+        "byteLength": 59,
+        "digest": "sha256:70510942d876e2afae71532deddab7bb2bf59c5c2250a25dc09de7377ee48727",
+        "kind": "asset",
+        "path": "assets/river-audio.txt"
+      },
+      {
+        "byteLength": 313,
+        "digest": "sha256:3f11f8295cfd8d56835a1d3a37e191ef5a056c4bb608e0a77d2088bf73623b15",
+        "kind": "asset",
+        "path": "assets/tour-map.svg"
+      },
+      {
+        "byteLength": 88286,
+        "digest": "sha256:3b34009eed7c832205047239993380cac44f241cf986e9824bea1e470959575a",
+        "kind": "logic-bundle",
+        "path": "bundles/logic.js"
+      },
+      {
+        "byteLength": 3494,
+        "digest": "sha256:b7f41f47521780203785b9904bed424ee1414deb179b0599e6b9fa9de9849c30",
+        "kind": "presentation-bundle",
+        "path": "bundles/presentation.js"
+      },
+      {
+        "byteLength": 192,
+        "digest": "sha256:12c9711cd7960339cef384f0e387a419e4eb734eca7db6972ec179b441b1c4cd",
+        "kind": "component-data",
+        "path": "components/746f75722e6d656469612d70616e656c.json"
+      },
+      {
+        "byteLength": 228,
+        "digest": "sha256:b6efd12b366d0d48f779bb67f4299a1ecdb5c4e892318771ca4d340230c4a417",
+        "kind": "component-data",
+        "path": "components/746f75722e7363656e652d6e6176696761746f72.json"
+      },
+      {
+        "byteLength": 3692,
+        "digest": "sha256:8cf2efefca0df60da377533bf767e21696ba331a9500592494ad289adc346943",
+        "kind": "content",
+        "path": "composition/game.json"
+      },
+      {
+        "byteLength": 153,
+        "digest": "sha256:7f36f54dd5378ee517a9e9e72ae8c874a312088559376f66114b55e9e2cb17cd",
+        "kind": "content",
+        "path": "content/746f75722e6d656469612e7269766572.json"
+      },
+      {
+        "byteLength": 165,
+        "digest": "sha256:30959ccd481c47bea151e5102280535bd983ade442d0418e782fc29f3047a849",
+        "kind": "content",
+        "path": "content/746f75722e7363656e652e67617264656e.json"
+      },
+      {
+        "byteLength": 164,
+        "digest": "sha256:bbf779bd7ad29ee31fc2e0d4cf9d5de5a4a7276edd61bf3d418d75b487395387",
+        "kind": "content",
+        "path": "content/746f75722e7363656e652e686172626f72.json"
+      },
+      {
+        "byteLength": 60,
+        "digest": "sha256:38aea5b5a816f261fd85735e8bbcc7d8143a68dc9e9672d5cf195a0d88f89390",
+        "kind": "progression",
+        "path": "progressions/746f75722e6272616e6368696e672d726f757465.json"
+      },
+      {
+        "byteLength": 327,
+        "digest": "sha256:7ed28d312fdc8e134e5c1f29a50143fa21ccc2deaba34cd8d6372e15a87bc5c6",
+        "kind": "aggregate-schema",
+        "path": "schemas/aggregate/746f75722e706c617965722d7374617465.json"
+      },
+      {
+        "byteLength": 278,
+        "digest": "sha256:b2074f56d6486407842c3b451f443229d6e7634672c8df248a557c3128f67595",
+        "kind": "command-schema",
+        "path": "schemas/general/746f75722e63686f6f73652d7363656e652d6f7574636f6d65.json"
+      },
+      {
+        "byteLength": 217,
+        "digest": "sha256:d71e04b8ca24d217c7ad700cd170df7a196279a13671f7c89f82a3cf96f5a6e3",
+        "kind": "command-schema",
+        "path": "schemas/general/746f75722e63686f6f73652d7363656e652d7061796c6f6164.json"
+      },
+      {
+        "byteLength": 147,
+        "digest": "sha256:1c5019e8e7baa68a5de3f33758cccaa3480edf8769f9d81847d78b011c1ffc65",
+        "kind": "command-schema",
+        "path": "schemas/general/746f75722e696e697469616c697a6174696f6e.json"
+      },
+      {
+        "byteLength": 307,
+        "digest": "sha256:e668175bfd1cdd1823b700354dcbe2dab03390ff9e6131fca3f8b9c2efbf1a3a",
+        "kind": "command-schema",
+        "path": "schemas/general/746f75722e6d656469612d636f6e74656e74.json"
+      },
+      {
+        "byteLength": 265,
+        "digest": "sha256:32102794eb1cd93ce3a0c3054675ba036ccd7daa345ea2341ec5ee4004ef1c9e",
+        "kind": "command-schema",
+        "path": "schemas/general/746f75722e6d656469612d7265717565737465642d6576656e74.json"
+      },
+      {
+        "byteLength": 256,
+        "digest": "sha256:69cb55e5bdddc882d797f7a35f0bb0ded57b3d6c5a9bf6577306a247b16c5ddf",
+        "kind": "command-schema",
+        "path": "schemas/general/746f75722e706c61792d617564696f2d656666656374.json"
+      },
+      {
+        "byteLength": 200,
+        "digest": "sha256:51340731a254c74f09ebf69378e66e672c5d05d2d95fc1bb869a766fd761ce3b",
+        "kind": "command-schema",
+        "path": "schemas/general/746f75722e706c61792d6d656469612d6f7574636f6d65.json"
+      },
+      {
+        "byteLength": 215,
+        "digest": "sha256:5abd74181a68b731d5703c52941b47f7decbaea69d1dfb8accf8eb9249e698c9",
+        "kind": "command-schema",
+        "path": "schemas/general/746f75722e706c61792d6d656469612d7061796c6f6164.json"
+      },
+      {
+        "byteLength": 259,
+        "digest": "sha256:168a6cebf0bed1a3e64ae2dbefd996ddb44913ac84ef6155ea76d3e94aaf2f77",
+        "kind": "command-schema",
+        "path": "schemas/general/746f75722e7363656e652d63686f73656e2d6576656e74.json"
+      },
+      {
+        "byteLength": 356,
+        "digest": "sha256:51cad56e122f216193a4a97d9823c15738bc44d1c6c6ce538de7c1c97e7a45d8",
+        "kind": "command-schema",
+        "path": "schemas/general/746f75722e7363656e652d636f6e74656e74.json"
+      }
+    ],
+    "releaseFormatVersion": 1
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "releaseId": "sha256:3e31a45032014163a7fa74329307395c6c66da1a71523e60bd89513f7c7f107f",
+  "releaseId": "sha256:1ba2628808e6053b2ad5e1175aa9dda374dbe1e263152321ce51164c30647e82",
   "manifest": {
     "aggregateSchemas": [
       {
@@ -26,32 +26,38 @@
         "path": "assets/clue.svg"
       },
       {
-        "byteLength": 14057,
-        "digest": "sha256:dab8c0f064e71c37e20dd50b487ac54176b1225464dec2584836df9d665aa7f3",
+        "byteLength": 71569,
+        "digest": "sha256:d02f06e6f3f1e7c295335bff0f904251c07d5044a45992fba1e7cd85c9ffa05f",
         "kind": "logic-bundle",
         "path": "bundles/logic.js"
       },
       {
-        "byteLength": 1023,
-        "digest": "sha256:32587e13cc4f3a6031471476b17c2ef85388e675e619794ba8bff7055369eb86",
+        "byteLength": 1151,
+        "digest": "sha256:1c7f1454ff45033abf1e5aaf1aa656931abe3b897c58d0da83a1d92964b3be1c",
         "kind": "presentation-bundle",
         "path": "bundles/presentation.js"
       },
       {
-        "byteLength": 166,
-        "digest": "sha256:c0eeb59d377fcb50721d11fe6b71bfc3b3c08c1f9143472dc96654dc4dd19890",
+        "byteLength": 141,
+        "digest": "sha256:fc0b9ce1d11f05850c997e701e5d2cb61bf4e04972f08ed063bde14c55de5fd1",
         "kind": "component-data",
         "path": "components/6d696e696d616c2e70757a7a6c652d63617264.json"
+      },
+      {
+        "byteLength": 1682,
+        "digest": "sha256:f0b48d33e26a2acbafffa84475e4625c3a9e4c8a8f6316de3680fad67c136018",
+        "kind": "content",
+        "path": "composition/game.json"
       },
       {
         "byteLength": 214,
         "digest": "sha256:01e03e7d6ec337c49c83bf63be01d5fb54e2812b3ced6392b54f7b4af9c9d4a9",
         "kind": "content",
-        "path": "content/6d696e696d616c2e70757a7a6c652d636f6e74656e74.json"
+        "path": "content/6d696e696d616c2e70757a7a6c652d64617461.json"
       },
       {
-        "byteLength": 195,
-        "digest": "sha256:a171bff859a41560046f7e6c0d29dc110a2b50ae30ddd33b52fc47865e66e38e",
+        "byteLength": 57,
+        "digest": "sha256:8813a0898606e97543e976376dbaaa2610a42cefd82714838afa890313e405d1",
         "kind": "progression",
         "path": "progressions/6d696e696d616c2e70757a7a6c65.json"
       },

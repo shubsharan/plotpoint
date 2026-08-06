@@ -1,3 +1,4 @@
+import { Ajv2020 } from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
 
 import { bundleDefinitionInspection, bundleRelease } from "../../src/bundle/bundle-release.js";
@@ -9,6 +10,7 @@ import type {
   CompilationSnapshot,
   SnapshotFile,
 } from "../../src/project/config.js";
+import type { ValidatedSchema } from "../../src/validation/schemas.js";
 
 const encoder = new TextEncoder();
 
@@ -47,6 +49,40 @@ function node(path: string, source: string): ImportGraphNode {
   });
 }
 
+function validatedSchema(id: string): ValidatedSchema {
+  const document = Object.freeze({
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: id,
+    type: "object",
+    additionalProperties: false,
+  });
+  const ajv = new Ajv2020({ allErrors: true, code: { esm: true, source: true }, strict: true });
+  const validate = ajv.compile(document);
+  const canonicalBytes = encoder.encode(JSON.stringify(document));
+  return Object.freeze({
+    id,
+    path: `schemas/${id}.json`,
+    document,
+    canonicalBytes,
+    digest: `sha256:${"0".repeat(64)}`,
+    validate,
+  });
+}
+
+const schemas = new Map(
+  ["outcome", "payload", "player-initialization", "player-state"].map(
+    (id) => [id, validatedSchema(id)] as const,
+  ),
+);
+const runtime = node(
+  "vendor/@plotpoint/runtime/index.js",
+  `export function resolveCommandBinding(input) { return input.definition; }
+export function canonicalizeValue(value) {
+  return { kind: "valid", canonical: { value, text: JSON.stringify(value) } };
+}
+export function bindExecutableAggregateModel(input) { return Object.freeze(input); }`,
+);
+
 function graph(
   environment: "logic" | "presentation",
   entryPath: string,
@@ -63,6 +99,28 @@ function graph(
 }
 
 describe("snapshot release bundling", () => {
+  it("returns a stable diagnostic when a generated runtime schema is unavailable", async () => {
+    const logic = node("src/logic.ts", "export const logic = () => ({});");
+    const presentation = node("src/presentation.ts", "export const presentation = {};");
+
+    await expect(
+      bundleRelease({
+        logic: graph("logic", "src/logic.ts", "logic", [logic, runtime]),
+        presentation: graph("presentation", "src/presentation.ts", "presentation", [presentation]),
+        registries: emptyRegistries,
+        schemas: new Map(),
+      }),
+    ).resolves.toMatchObject({
+      kind: "invalid",
+      diagnostics: [
+        {
+          code: "bundle-failed",
+          details: { reason: "schema-validator-generation-failed" },
+        },
+      ],
+    });
+  });
+
   it("emits deterministic self-contained logic and presentation ESM chunks", async () => {
     const answer = node("src/answer.ts", "export const answer: number = 42;");
     const logic = node(
@@ -78,7 +136,7 @@ describe("snapshot release bundling", () => {
         "logic",
         "src/logic.ts",
         "logic",
-        [answer, logic],
+        [answer, logic, runtime],
         [
           {
             from: "src/logic.ts",
@@ -91,6 +149,7 @@ describe("snapshot release bundling", () => {
       ),
       presentation: graph("presentation", "src/presentation.ts", "presentation", [presentation]),
       registries: emptyRegistries,
+      schemas,
     };
 
     const first = await bundleRelease(input);
@@ -115,9 +174,10 @@ describe("snapshot release bundling", () => {
     const presentation = node("src/presentation.ts", "export const presentation = {};");
 
     const result = await bundleRelease({
-      logic: graph("logic", "src/logic.ts", "logic", [logic]),
+      logic: graph("logic", "src/logic.ts", "logic", [logic, runtime]),
       presentation: graph("presentation", "src/presentation.ts", "presentation", [presentation]),
       registries: emptyRegistries,
+      schemas,
     });
 
     expect(result).toMatchObject({
@@ -182,7 +242,7 @@ describe("snapshot release bundling", () => {
         "logic",
         "src/logic.ts",
         "logic",
-        [command, progression, logic],
+        [command, progression, logic, runtime],
         [
           {
             from: "src/logic.ts",
@@ -216,6 +276,7 @@ describe("snapshot release bundling", () => {
         ],
       ),
       registries,
+      schemas,
     });
 
     expect(bundled.kind).toBe("bundled");

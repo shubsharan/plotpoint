@@ -28,7 +28,7 @@ export const chooseSceneCommand = defineCommand<
       kind: "accepted",
       nextState: { currentScene: command.payload.sceneId, visitedScenes },
       outcome: { sceneId: command.payload.sceneId, visitedCount: visitedScenes.length },
-      domainEvents: [{ type: "tour-scene-chosen", sceneId: command.payload.sceneId }],
+      domainEvents: [{ type: "tour.scene-chosen", sceneId: command.payload.sceneId }],
       effectIntents: [],
       progressionIntents: [],
     };

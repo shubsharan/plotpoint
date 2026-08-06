@@ -3,9 +3,34 @@
   "$id": "field.player-state",
   "type": "object",
   "additionalProperties": false,
-  "required": ["attempts", "phase"],
+  "required": [
+    "attempts",
+    "phase",
+    "firstCheckpoint",
+    "puzzleAnswer",
+    "secondCheckpoint",
+    "maximumObservationAgeMs"
+  ],
   "properties": {
     "attempts": { "type": "integer", "minimum": 0 },
-    "phase": { "enum": ["first-checkpoint", "puzzle", "second-checkpoint", "complete"] }
+    "phase": { "enum": ["first-checkpoint", "puzzle", "second-checkpoint", "complete"] },
+    "firstCheckpoint": { "$ref": "#/$defs/checkpoint" },
+    "puzzleAnswer": { "type": "string", "minLength": 1 },
+    "secondCheckpoint": { "$ref": "#/$defs/checkpoint" },
+    "maximumObservationAgeMs": { "type": "integer", "minimum": 1 }
+  },
+  "$defs": {
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "latitude", "longitude", "radiusMeters", "maximumAccuracyMeters"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+        "radiusMeters": { "type": "number", "exclusiveMinimum": 0 },
+        "maximumAccuracyMeters": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
   }
 }

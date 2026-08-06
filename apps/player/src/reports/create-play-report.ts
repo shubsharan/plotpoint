@@ -44,6 +44,51 @@ function reportElapsed(value: number, startedAtMs: number): number {
   return elapsed;
 }
 
+function journalProgressionChanges(recordJson: string, commandId: string): readonly string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(recordJson) as unknown;
+  } catch {
+    throw new Error("report-journal-incoherent");
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("report-journal-incoherent");
+  }
+  const record = parsed as Record<string, unknown>;
+  const candidate = record.candidate;
+  const result = record.result;
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    Array.isArray(candidate) ||
+    result === null ||
+    typeof result !== "object" ||
+    Array.isArray(result)
+  ) {
+    throw new Error("report-journal-incoherent");
+  }
+  const candidateRecord = candidate as Record<string, unknown>;
+  const resultRecord = result as Record<string, unknown>;
+  if (
+    candidateRecord.commandId !== commandId ||
+    resultRecord.commandId !== commandId ||
+    candidateRecord.terminal !== "accepted" ||
+    !Array.isArray(candidateRecord.progressionTrace)
+  ) {
+    throw new Error("report-journal-incoherent");
+  }
+  return candidateRecord.progressionTrace.map((entry) => {
+    const transitionId =
+      entry !== null && typeof entry === "object" && !Array.isArray(entry)
+        ? (entry as Record<string, unknown>).transitionId
+        : undefined;
+    if (typeof transitionId !== "string") {
+      throw new Error("report-journal-incoherent");
+    }
+    return transitionId;
+  });
+}
+
 function safeDiagnosticCode(value: string) {
   const code = parseReportSafeDiagnosticCode(value);
   if (code === null) throw new Error("report-diagnostic-code-unsafe");
@@ -218,9 +263,9 @@ export async function createPlayReport(
   const journals = await raw.getAllAsync<{
     sequence: number;
     command_id: string;
-    progression_json: string;
+    record_json: string;
   }>(
-    "SELECT sequence, command_id, progression_json FROM journal WHERE run_id = ? ORDER BY sequence",
+    "SELECT sequence, command_id, record_json FROM journal WHERE run_id = ? ORDER BY sequence",
     runId,
   );
   const observations = await raw.getAllAsync<{
@@ -263,7 +308,7 @@ export async function createPlayReport(
     journals: journals.map((row) => ({
       sequence: row.sequence,
       commandId: row.command_id,
-      progressionChanges: JSON.parse(row.progression_json) as string[],
+      progressionChanges: journalProgressionChanges(row.record_json, row.command_id),
     })),
     capabilities: observations.map((row) => ({
       elapsedMs: row.elapsed_ms,

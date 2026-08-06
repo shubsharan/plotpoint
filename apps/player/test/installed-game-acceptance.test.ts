@@ -226,7 +226,6 @@ describe.each(installedGames)("installed %s", (fixture) => {
           fetchJson: async () => ({
             finalUrl: descriptorUrl,
             value: {
-              version: 1,
               releaseUrl,
               expectedReleaseId: compilation.releaseId,
             },
@@ -238,7 +237,6 @@ describe.each(installedGames)("installed %s", (fixture) => {
       expect(installation).toEqual({
         kind: "installed",
         descriptor: {
-          version: 1,
           releaseUrl,
           expectedReleaseId: compilation.releaseId,
         },

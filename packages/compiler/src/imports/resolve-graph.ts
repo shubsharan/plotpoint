@@ -164,7 +164,11 @@ export function resolveImportGraph(
           snapshot.registries.application.definition.source,
           ...snapshot.registries.components.map(({ implementation }) => implementation.source),
         ];
-  const pending = [entry.source, ...registeredSources];
+  const compilerOwnedRoots =
+    environment === "logic" ? [packageEntry(snapshot, "@plotpoint/runtime")] : [];
+  const pending = [entry.source, ...registeredSources, ...compilerOwnedRoots].filter(
+    (path): path is string => path !== undefined,
+  );
 
   while (pending.length > 0) {
     pending.sort();
