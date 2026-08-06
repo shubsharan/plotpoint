@@ -348,10 +348,10 @@ without adding compatibility paths or a second owner for any boundary.
       capability clients, delete the shadow runtime/mount/local-adapter implementations, and route their
       durable tests through the generated production kernel
 - [x] T107 Run the sole-runtime and complete field-journey checkpoint and record its exact focused results
-- [ ] T108 Add failing controller, projection, and scheduler tests for startup recovery controls, pending-join
+- [x] T108 Add failing controller, projection, and scheduler tests for startup recovery controls, pending-join
       retry, centralized bound-view notification, detached enqueue failure ownership, exact pre-mutation
       projection binding, and the claim-start/trailing-pass boundary
-- [ ] T109 Make verified runtime preparation independent of synchronization success, render only controller
+- [x] T109 Make verified runtime preparation independent of synchronization success, render only controller
       state, resolve operational sync failure into retryable recovery, centralize bound-view notification,
       share one exact projection resolver, and close the scheduler claim boundary
 - [ ] T110 Add failing PostgreSQL tests proving a participant cursor cannot pass an uncommitted receipt and

@@ -230,6 +230,28 @@ describe("shared sync coordinator", () => {
     );
   });
 
+  it("requests one trailing pass for a trigger while the durable claim is in flight", async () => {
+    const firstClaim = deferred<{ readonly sessionId: string; readonly commands: readonly [] }>();
+    let claims = 0;
+    const harness = createHarness({
+      beginSubmissionBatch: async (sessionId) => {
+        claims += 1;
+        return claims === 1 ? firstClaim.promise : { sessionId, commands: [] };
+      },
+    });
+
+    const initialDrain = request(harness.coordinator, "session-1", "enqueue");
+    await vi.waitFor(() => expect(harness.store.beginSubmissionBatch).toHaveBeenCalledOnce());
+    const trailingDrain = request(harness.coordinator, "session-1", "foreground");
+    expect(trailingDrain).toBe(initialDrain);
+
+    firstClaim.resolve({ sessionId: "session-1", commands: [] });
+    await trailingDrain;
+
+    expect(harness.store.beginSubmissionBatch).toHaveBeenCalledTimes(2);
+    expect(harness.client.pull).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps the same drain through one serialized trailing pass for every trigger after claim", async () => {
     const firstPull = deferred<SyncPull>();
     const trailingPull = deferred<SyncPull>();

@@ -90,9 +90,9 @@ export class SharedSyncCoordinator {
     };
     let batchClaimed = false;
     try {
+      onClaimComplete();
       const batch = await this.store.beginSubmissionBatch(sessionId);
       batchClaimed = true;
-      onClaimComplete();
       if (batch.sessionId !== sessionId)
         throw new Error("shared-submission-batch-session-mismatch");
       await this.store.recordSyncEvent(sessionId, 0, "connecting", "started");

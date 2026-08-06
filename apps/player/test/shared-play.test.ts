@@ -5,6 +5,7 @@ import type { GameComposition, SharedPlayView, SyncPull } from "@plotpoint/proto
 import {
   createCompositionSharedBridgeHandlers,
   deriveSharedRuntimeSurface,
+  resolveSharedProjection,
   routeSharedBridgeMessage,
   type SharedProjectionContract,
 } from "../src/shared/host-bridge";
@@ -349,6 +350,14 @@ describe("shared player architecture", () => {
         { ...sharedView.projections[0]!, value: { count: "invalid" } },
         "shared-projection-payload-invalid",
       ],
+      [
+        { ...sharedView.projections[0]!, aggregateKind: "player" as const },
+        "shared-projection-binding-invalid",
+      ],
+      [
+        { ...sharedView.projections[0]!, aggregateId: "wrong-team" },
+        "shared-projection-binding-invalid",
+      ],
     ] as const) {
       expect(
         deriveSharedRuntimeSurface(
@@ -358,6 +367,21 @@ describe("shared player architecture", () => {
           projectionContract,
         ),
       ).toEqual({ kind: "recovery", sharedBindingAvailable: false, code });
+    }
+    for (const projections of [[], [...sharedView.projections, ...sharedView.projections]]) {
+      expect(
+        resolveSharedProjection(
+          sharedComposition,
+          {
+            releaseId,
+            sessionId: sharedView.sessionId,
+            teamId: sharedView.membership.teamId,
+            projections,
+          },
+          releaseId,
+          projectionContract,
+        ),
+      ).toEqual({ kind: "invalid", code: "shared-projection-binding-invalid" });
     }
   });
 
@@ -371,19 +395,7 @@ describe("shared player architecture", () => {
       composition: sharedComposition,
       expectedReleaseId: releaseId,
       projectionContract,
-      getView: async () => ({
-        ...sharedView,
-        projections: [
-          ...sharedView.projections,
-          {
-            aggregateKind: "player",
-            aggregateId: "participant-1",
-            schemaId: "private-projection",
-            stateVersion: 1,
-            value: { private: true },
-          },
-        ],
-      }),
+      getView: async () => sharedView,
       enqueue,
     });
     const viewResponse = await routeSharedBridgeMessage(

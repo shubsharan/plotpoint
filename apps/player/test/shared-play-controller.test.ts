@@ -55,7 +55,7 @@ function harness(initialMembership: "active" | "revoked" = "active") {
 }
 
 describe("run-scoped shared play controller", () => {
-  it("recovers the deterministic pending envelope when a crash preceded SQLite reservation", async () => {
+  it("retries the deterministic pending envelope when recovery has no binding yet", async () => {
     let bound = false;
     const reservePendingJoin = vi.fn(async (input) => ({ ...input, status: "preparing" as const }));
     const markPendingJoinReady = vi.fn(async (runId: string, requestDigest: string) => ({
@@ -95,7 +95,7 @@ describe("run-scoped shared play controller", () => {
       putEnvelope: vi.fn(async () => undefined),
       removeCredential: vi.fn(async () => undefined),
     };
-    const join = vi.fn(async () => ({
+    const joinResult = {
       participantId: "participant-1",
       teamId: "team-1",
       releaseId,
@@ -115,7 +115,11 @@ describe("run-scoped shared play controller", () => {
         },
         commandResults: [],
       },
-    }));
+    };
+    const join = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("shared-join-transport-failed"))
+      .mockResolvedValue(joinResult);
     const controller = new SharedPlayController(
       { runId: "run-1", releaseId, sharedRequired: true },
       store as unknown as SharedSyncStore,
@@ -125,6 +129,13 @@ describe("run-scoped shared play controller", () => {
     );
 
     await controller.start();
+
+    expect(controller.snapshot()).toEqual({
+      status: "recovery-required",
+      code: "shared-join-transport-failed",
+      retryable: true,
+    });
+    await controller.retry();
 
     expect(reservePendingJoin).toHaveBeenCalledWith(
       expect.objectContaining({ joinRequestId: "join-original" }),
@@ -149,6 +160,51 @@ describe("run-scoped shared play controller", () => {
     expect(request).toHaveBeenCalledWith("session-1", "startup");
     expect(states).toEqual(["join-required", "synchronizing", "bound"]);
     expect(controller.snapshot()).toMatchObject({ status: "bound", sessionId: "session-1" });
+  });
+
+  it("resolves startup transport failure into retryable recovery and converges on retry", async () => {
+    const { controller, request } = harness();
+    request.mockRejectedValueOnce(new Error("shared-transport-offline"));
+
+    await expect(controller.start()).resolves.toBeUndefined();
+    expect(controller.snapshot()).toEqual({
+      status: "recovery-required",
+      sessionId: "session-1",
+      code: "shared-transport-offline",
+      retryable: true,
+    });
+
+    await expect(controller.retry()).resolves.toBeUndefined();
+    expect(controller.snapshot()).toMatchObject({ status: "bound", sessionId: "session-1" });
+  });
+
+  it("owns detached enqueue synchronization failure in controller state", async () => {
+    const { controller, request } = harness();
+    await controller.start();
+    request.mockRejectedValueOnce(new Error("shared-enqueue-sync-failed"));
+
+    await expect(
+      controller.enqueue({
+        commandId: "command-detached",
+        target: {
+          aggregateKind: "team",
+          aggregateId: "team-1",
+          schemaId: "shared-state",
+        },
+        expectedStateVersion: 0,
+        type: "shared.command",
+        payload: {},
+        observationIds: [],
+      }),
+    ).resolves.toMatchObject({ terminal: "pending" });
+    await vi.waitFor(() =>
+      expect(controller.snapshot()).toEqual({
+        status: "recovery-required",
+        sessionId: "session-1",
+        code: "shared-enqueue-sync-failed",
+        retryable: true,
+      }),
+    );
   });
 
   it("requests reconnect only for an unreachable-to-reachable transition", async () => {

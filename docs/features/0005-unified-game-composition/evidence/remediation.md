@@ -74,3 +74,19 @@ remain local to their tests. The bounded runner completed 94 files and 657 tests
 - The installed journey used mounted DOM actions for check-in, solve, and second check-in, reached state
   version 3, recreated the generated runtime over recovered SQLite state, and exported three command plus
   two captured/two consumed capability events. No test imports a shadow runtime implementation.
+
+## Phase 14 Checkpoint 2: Controller, Projection, And Scheduler Ownership
+
+- Status: **PASS** on 2026-08-06.
+- Red evidence: startup transport rejected after publishing recovery, pending-join retry could not resume,
+  detached enqueue synchronization produced an unhandled rejection, and an in-flight claim trigger failed
+  to request its trailing pass before the ownership changes.
+- Focused controller, projection, recovery, scheduler, and App ownership matrix: **PASS**, 5 files and 46
+  tests.
+- `pnpm --filter @plotpoint/player test`: **PASS**, 24 files and 180 tests.
+- `pnpm --filter @plotpoint/player check-types`: **PASS**.
+- `git diff --check`: **PASS**.
+- Verified runtime metadata is prepared once before controller startup; the controller exclusively gates
+  mounting, retryability, and fresh-bound notification. The same exact projection resolver rejects empty,
+  multiple, wrong-release, wrong-kind, wrong-ID, wrong-schema, and invalid-payload snapshots before any
+  SQLite mutation and before Web exposure.

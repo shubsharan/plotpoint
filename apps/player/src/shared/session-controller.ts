@@ -314,7 +314,12 @@ export type SharedPlayControllerState =
   | { readonly status: "synchronizing"; readonly sessionId: string }
   | { readonly status: "bound"; readonly sessionId: string; readonly view: SharedPlayView }
   | { readonly status: "revoked"; readonly sessionId: string }
-  | { readonly status: "recovery-required"; readonly code: string; readonly sessionId?: string };
+  | {
+      readonly status: "recovery-required";
+      readonly code: string;
+      readonly retryable: boolean;
+      readonly sessionId?: string;
+    };
 
 export class SharedPlayController {
   private state: SharedPlayControllerState;
@@ -374,12 +379,20 @@ export class SharedPlayController {
     const envelopeKey = pending?.credentialKey ?? secureStoreKey(this.context.runId);
     const envelope = await this.credentials.getEnvelope?.(envelopeKey);
     if (pending === null && envelope?.kind === "bound") {
-      this.publish({ status: "recovery-required", code: "shared-binding-missing" });
+      this.publish({
+        status: "recovery-required",
+        code: "shared-binding-missing",
+        retryable: false,
+      });
       return;
     }
     if (pending !== null || envelope?.kind === "pending") {
       if (envelope?.kind !== "pending") {
-        this.publish({ status: "recovery-required", code: "shared-pending-join-envelope-missing" });
+        this.publish({
+          status: "recovery-required",
+          code: "shared-pending-join-envelope-missing",
+          retryable: false,
+        });
         return;
       }
       this.publish({ status: "joining" });
@@ -398,6 +411,7 @@ export class SharedPlayController {
         this.publish({
           status: "recovery-required",
           code: error instanceof Error ? error.message : "shared-join-recovery-failed",
+          retryable: true,
         });
       }
       return;
@@ -442,6 +456,7 @@ export class SharedPlayController {
       this.publish({
         status: "recovery-required",
         code: error instanceof Error ? error.message : "shared-join-failed",
+        retryable: true,
       });
       throw error;
     }
@@ -466,7 +481,14 @@ export class SharedPlayController {
   foreground(): Promise<void> {
     return this.requestCurrent("foreground");
   }
-  retry(): Promise<void> {
+  async retry(): Promise<void> {
+    if (this.state.status === "recovery-required") {
+      if (!this.state.retryable) return;
+      if (this.state.sessionId === undefined) {
+        await this.start();
+        return;
+      }
+    }
     return this.requestCurrent("retry");
   }
 
@@ -503,8 +525,8 @@ export class SharedPlayController {
         status: "recovery-required",
         sessionId,
         code: error instanceof Error ? error.message : "shared-synchronization-failed",
+        retryable: true,
       });
-      throw error;
     }
   }
 
@@ -519,6 +541,7 @@ export class SharedPlayController {
         status: "recovery-required",
         sessionId,
         code: "shared-synchronization-recovery-required",
+        retryable: true,
       });
     } else this.publish({ status: "bound", sessionId, view });
   }

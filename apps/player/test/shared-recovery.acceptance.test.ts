@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { SharedCommandIntent, SyncPull } from "@plotpoint/protocol";
+import type { GameComposition, SharedCommandIntent, SyncPull } from "@plotpoint/protocol";
 
 import { SharedSyncStore, type SharedBindingContext } from "../src/shared/database";
+import { resolveSharedProjection } from "../src/shared/host-bridge";
 import { createSharedTestDatabase, type TestSharedSqliteDatabase } from "./helpers/shared-sqlite";
 
 const releaseId = `sha256:${"a".repeat(64)}` as const;
@@ -13,6 +14,53 @@ const bindingContext: SharedBindingContext = {
   serviceOrigin: "https://service.example",
   credentialKey: "plotpoint.shared.session-1.credential",
 };
+const sharedComposition = {
+  application: { components: [] },
+  aggregateModels: [
+    {
+      id: "shared-model",
+      authority: "server",
+      kind: "team",
+      stateSchema: { id: "shared-state" },
+      initializationSchema: { id: "shared-initialization" },
+      events: [],
+      effects: [],
+    },
+  ],
+  commands: [],
+  progressions: [],
+  components: [],
+  resources: [],
+  trustedMechanic: {
+    id: "shared-mechanic",
+    aggregateModel: "shared-model",
+    commands: [],
+    configuration: "shared-configuration",
+    projectionSchema: { id: "shared-projection" },
+    capabilities: [],
+  },
+} satisfies GameComposition;
+const projectionContract = {
+  schemaId: "shared-projection",
+  validate: (value: SyncPull["snapshot"]["projections"][number]["value"]) =>
+    typeof value.completed === "number",
+};
+
+function validatesProjection(candidate: SyncPull): boolean {
+  return (
+    resolveSharedProjection(
+      sharedComposition,
+      {
+        releaseId: candidate.snapshot.releaseId,
+        sessionId: candidate.snapshot.sessionId,
+        teamId: candidate.snapshot.teamId,
+        projections: candidate.snapshot.projections,
+      },
+      releaseId,
+      projectionContract,
+    ).kind === "resolved"
+  );
+}
 
 function projection(stateVersion: number) {
   return {
@@ -74,7 +122,7 @@ async function durableBytes(database: TestSharedSqliteDatabase): Promise<string>
 }
 
 describe("shared recovery acceptance", () => {
-  it("rejects a release-invalid projection before opening a mutation transaction", async () => {
+  it("rejects every non-exact projection before opening a mutation transaction", async () => {
     const database = await createSharedTestDatabase();
     try {
       await database.runAsync(
@@ -91,13 +139,56 @@ describe("shared recovery acceptance", () => {
         bindingContext.credentialKey,
         "2030-01-01T00:00:00.000Z",
       );
-      const store = new SharedSyncStore(database, () => false);
+      const store = new SharedSyncStore(database, validatesProjection);
       const before = await durableBytes(database);
       const transactionStarts = database.transactionStarts;
 
-      await expect(
-        store.applyPull(bindingContext, pull({ cursor: "1", stateVersion: 1 })),
-      ).rejects.toThrow("shared-pull-invalid");
+      const valid = pull({ cursor: "1", stateVersion: 1 });
+      const projection = valid.snapshot.projections[0]!;
+      const invalidPulls: SyncPull[] = [
+        { ...valid, snapshot: { ...valid.snapshot, projections: [] } },
+        { ...valid, snapshot: { ...valid.snapshot, projections: [projection, projection] } },
+        {
+          ...valid,
+          snapshot: {
+            ...valid.snapshot,
+            releaseId: `sha256:${"b".repeat(64)}`,
+          },
+        },
+        {
+          ...valid,
+          snapshot: {
+            ...valid.snapshot,
+            projections: [{ ...projection, aggregateKind: "player" }],
+          },
+        },
+        {
+          ...valid,
+          snapshot: {
+            ...valid.snapshot,
+            projections: [{ ...projection, aggregateId: "wrong-team" }],
+          },
+        },
+        {
+          ...valid,
+          snapshot: {
+            ...valid.snapshot,
+            projections: [{ ...projection, schemaId: "wrong-schema" }],
+          },
+        },
+        {
+          ...valid,
+          snapshot: {
+            ...valid.snapshot,
+            projections: [{ ...projection, value: { completed: "invalid" } }],
+          },
+        },
+      ];
+      for (const invalid of invalidPulls) {
+        await expect(store.applyPull(bindingContext, invalid)).rejects.toThrow(
+          "shared-pull-invalid",
+        );
+      }
 
       expect(database.transactionStarts).toBe(transactionStarts);
       expect(await durableBytes(database)).toBe(before);

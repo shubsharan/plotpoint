@@ -138,6 +138,19 @@ describe("runtime view lifecycle", () => {
     );
   });
 
+  it("prepares shared-capable runtime metadata before controller-owned startup and notification", async () => {
+    const source = await readFile(new URL("../App.tsx", import.meta.url), "utf8");
+    const runtimePreparation = source.indexOf("setRuntime({");
+    const controllerStartup = source.indexOf("await controller.start()");
+
+    expect(runtimePreparation).toBeGreaterThan(-1);
+    expect(controllerStartup).toBeGreaterThan(runtimePreparation);
+    expect(source).toContain("sharedBindingAvailable: composition.trustedMechanic !== undefined");
+    expect(source).not.toMatch(/sharedSessionId|sharedSurface|setSharedSessionId/);
+    expect(source.match(/notifySharedSyncChanged\(\)/g)).toHaveLength(1);
+    expect(source).not.toMatch(/\.then\(notifySharedSyncChanged\)/);
+  });
+
   it("has no shadow composition, mount-scope, or local adapter implementation", async () => {
     await expect(
       Promise.all(

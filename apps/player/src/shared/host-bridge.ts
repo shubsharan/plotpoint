@@ -27,6 +27,17 @@ export interface SharedProjectionContract {
   validate(value: SharedProjection["value"]): boolean;
 }
 
+export interface SharedProjectionSource {
+  readonly releaseId: ReleaseId;
+  readonly sessionId: string;
+  readonly teamId: string;
+  readonly projections: readonly SharedProjection[];
+}
+
+export type SharedProjectionResolution =
+  | { readonly kind: "resolved"; readonly projection: SharedProjection }
+  | { readonly kind: "invalid"; readonly code: string };
+
 export type SharedRuntimeSurface =
   | { readonly kind: "local-only"; readonly sharedBindingAvailable: false }
   | { readonly kind: "join"; readonly sharedBindingAvailable: false }
@@ -49,6 +60,43 @@ function recovery(code: string): SharedRuntimeSurface {
   return { kind: "recovery", sharedBindingAvailable: false, code };
 }
 
+export function resolveSharedProjection(
+  composition: GameComposition,
+  source: SharedProjectionSource,
+  expectedReleaseId: ReleaseId,
+  projectionContract: SharedProjectionContract | null,
+): SharedProjectionResolution {
+  const mechanic = composition.trustedMechanic;
+  if (mechanic === undefined) return { kind: "invalid", code: "shared-composition-invalid" };
+  if (projectionContract === null || projectionContract.schemaId !== mechanic.projectionSchema.id) {
+    return { kind: "invalid", code: "shared-projection-contract-invalid" };
+  }
+  if (source.releaseId !== expectedReleaseId) {
+    return { kind: "invalid", code: "shared-release-mismatch" };
+  }
+  const model = composition.aggregateModels.find(({ id }) => id === mechanic.aggregateModel);
+  if (model?.authority !== "server") {
+    return { kind: "invalid", code: "shared-composition-invalid" };
+  }
+  if (source.projections.length !== 1) {
+    return { kind: "invalid", code: "shared-projection-binding-invalid" };
+  }
+  const projection = source.projections[0];
+  const expectedAggregateId = model.kind === "team" ? source.teamId : source.sessionId;
+  if (
+    projection === undefined ||
+    projection.schemaId !== mechanic.projectionSchema.id ||
+    projection.aggregateKind !== model.kind ||
+    projection.aggregateId !== expectedAggregateId
+  ) {
+    return { kind: "invalid", code: "shared-projection-binding-invalid" };
+  }
+  if (!projectionContract.validate(projection.value)) {
+    return { kind: "invalid", code: "shared-projection-payload-invalid" };
+  }
+  return { kind: "resolved", projection };
+}
+
 export function deriveSharedRuntimeSurface(
   composition: GameComposition,
   view: SharedPlayView | null,
@@ -65,33 +113,28 @@ export function deriveSharedRuntimeSurface(
     return recovery("shared-projection-contract-invalid");
   }
   if (view === null) return { kind: "join", sharedBindingAvailable: false };
-  if (view.releaseId !== expectedReleaseId) return recovery("shared-release-mismatch");
   if (view.membership.status === "revoked" || view.synchronization === "revoked") {
     return recovery("shared-membership-revoked");
   }
   if (view.synchronization === "recovery-required" || view.confirmedAt === null) {
     return recovery("shared-recovery-required");
   }
-  const model = composition.aggregateModels.find(({ id }) => id === mechanic.aggregateModel);
-  if (model?.authority !== "server") return recovery("shared-composition-invalid");
-  const projections = view.projections.filter(
-    (projection) =>
-      projection.schemaId === mechanic.projectionSchema.id &&
-      projection.aggregateKind === model.kind,
+  const resolution = resolveSharedProjection(
+    composition,
+    {
+      releaseId: view.releaseId,
+      sessionId: view.sessionId,
+      teamId: view.membership.teamId,
+      projections: view.projections,
+    },
+    expectedReleaseId,
+    projectionContract,
   );
-  if (projections.length !== 1) return recovery("shared-projection-binding-invalid");
-  const projection = projections[0];
-  const expectedAggregateId = model.kind === "team" ? view.membership.teamId : view.sessionId;
-  if (projection?.aggregateId !== expectedAggregateId) {
-    return recovery("shared-projection-binding-invalid");
-  }
-  if (!projectionContract.validate(projection.value)) {
-    return recovery("shared-projection-payload-invalid");
-  }
+  if (resolution.kind === "invalid") return recovery(resolution.code);
   return {
     kind: "bound",
     sharedBindingAvailable: true,
-    view: Object.freeze({ ...view, projections: Object.freeze([projection]) }),
+    view: Object.freeze({ ...view, projections: Object.freeze([resolution.projection]) }),
   };
 }
 
