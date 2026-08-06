@@ -2,7 +2,7 @@
 
 ## Decisions
 
-- Use the existing `team-session-hunt` release as a real location-aware three-player game. Register
+- Use the existing `co-op-game` release as a real location-aware three-player game. Register
   verified release bytes but do not host them.
 - Keep one PostgreSQL-backed Node modular monolith using `pg`, raw migrations, explicit transactions,
   and real PostgreSQL integration tests.

@@ -31,6 +31,27 @@ export default defineConfig({
         },
       }),
       defineProject({
+        resolve: {
+          alias: {
+            "@plotpoint/protocol/player": new URL(
+              "./packages/protocol/src/player.ts",
+              import.meta.url,
+            ).pathname,
+            "@plotpoint/protocol": new URL("./packages/protocol/src/index.ts", import.meta.url)
+              .pathname,
+            "@plotpoint/runtime": new URL("./packages/runtime/src/index.ts", import.meta.url)
+              .pathname,
+          },
+        },
+        test: {
+          ...sharedTestConfig,
+          name: "co-op-game",
+          passWithNoTests: true,
+          root: `${workspaceRoot}examples/releases/co-op-game`,
+          include: ["test/**/*.test.ts"],
+        },
+      }),
+      defineProject({
         test: {
           ...sharedTestConfig,
           name: "db",

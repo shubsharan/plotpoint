@@ -3,6 +3,7 @@ packages:
   - "packages/*"
   - "examples/releases/field-puzzle"
   - "examples/releases/minimal-local-puzzle"
+  - "examples/releases/co-op-game"
 allowBuilds:
   cpu-features: false
   protobufjs: false

@@ -2,10 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   FOREGROUND_LOCATION_CAPABILITY,
+  openRelease,
   type CanonicalJsonObject,
   type HostBridgeTransport,
   type RuntimeBootstrap,
 } from "@plotpoint/protocol";
+
+import { compileProject } from "../../../packages/compiler/dist/index.js";
 
 import { fieldGame } from "../../../examples/releases/field-puzzle/src/config";
 import { logic } from "../../../examples/releases/field-puzzle/src/logic";
@@ -34,6 +37,39 @@ const startedAt = "2030-01-01T00:00:00.000Z";
 const releaseId = `sha256:${"a".repeat(64)}` as const;
 
 afterEach(() => vi.restoreAllMocks());
+
+interface TestFileSystem {
+  readFile(path: string): Promise<Uint8Array>;
+  rm(path: string, options: { readonly force: true }): Promise<void>;
+}
+
+function nodeFileSystem(): TestFileSystem {
+  const runtime = globalThis as typeof globalThis & {
+    readonly process?: {
+      getBuiltinModule(name: "fs"): { readonly promises: TestFileSystem };
+    };
+  };
+  const fileSystem = runtime.process?.getBuiltinModule("fs").promises;
+  if (fileSystem === undefined) throw new Error("node-filesystem-unavailable");
+  return fileSystem;
+}
+
+function isModule(value: unknown): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === "object";
+}
+
+async function importBundle(bytes: Uint8Array): Promise<Readonly<Record<string, unknown>>> {
+  const url = `data:text/javascript,${encodeURIComponent(new TextDecoder().decode(bytes))}`;
+  const imported: unknown = await import(url);
+  if (!isModule(imported)) throw new Error("compiled-logic-module-invalid");
+  return imported;
+}
+
+function requireGeneratedRuntimeAdapter(module: Readonly<Record<string, unknown>>) {
+  const aggregateModels = module.aggregateModels;
+  if (!isModule(aggregateModels)) throw new Error("generated-runtime-adapter-missing");
+  return aggregateModels;
+}
 
 class ScriptedObservationStore implements ForegroundLocationPersistence {
   readonly observations = new Set<string>();
@@ -165,6 +201,41 @@ describe("foreground location capability", () => {
 });
 
 describe("disconnected trusted-host route", () => {
+  it("loads local execution from the compiled generated runtime adapter", async () => {
+    const fileSystem = nodeFileSystem();
+    const projectRoot = new URL("../../../examples/releases/field-puzzle/", import.meta.url)
+      .pathname;
+    const outputFile = `/tmp/plotpoint-field-offline-${globalThis.crypto.randomUUID()}.pprelease`;
+
+    try {
+      const compilation = await compileProject({
+        projectRoot,
+        outputFile,
+      });
+      expect(compilation.kind).toBe("compiled");
+      if (compilation.kind !== "compiled") {
+        throw new Error(`field-compilation-failed:${JSON.stringify(compilation.diagnostics)}`);
+      }
+
+      const opened = await openRelease(await fileSystem.readFile(outputFile));
+      expect(opened.kind).toBe("opened");
+      if (opened.kind !== "opened") {
+        throw new Error(`field-release-open-failed:${JSON.stringify(opened.diagnostics)}`);
+      }
+      const logicEntry = opened.entries.find(
+        ({ path }) => path === opened.manifest.entrypoints.logic,
+      );
+      if (logicEntry === undefined) throw new Error("compiled-logic-entry-missing");
+      const logicModule = await importBundle(logicEntry.bytes);
+      expect(logicModule.default).toBeDefined();
+
+      const aggregateModels = requireGeneratedRuntimeAdapter(logicModule);
+      expect(Object.keys(aggregateModels)).toEqual(["field.player"]);
+    } finally {
+      await fileSystem.rm(outputFile, { force: true });
+    }
+  });
+
   it("boots, visits two checkpoints, solves the puzzle, and completes without network access", async () => {
     const store = new ScriptedObservationStore();
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));

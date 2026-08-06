@@ -13,11 +13,7 @@ import {
   type ReleaseManifest,
 } from "@plotpoint/protocol";
 
-const goldenProjects = [
-  "minimal-local-puzzle",
-  "branching-media-tour",
-  "team-session-hunt",
-] as const;
+const goldenProjects = ["minimal-local-puzzle", "branching-media-tour", "co-op-game"] as const;
 
 interface RegistryMetadata {
   readonly label: string;

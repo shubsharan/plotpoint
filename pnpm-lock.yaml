@@ -132,6 +132,16 @@ importers:
         specifier: workspace:*
         version: link:../../packages/typescript-config
 
+  examples/releases/co-op-game:
+    dependencies:
+      '@plotpoint/runtime':
+        specifier: workspace:*
+        version: link:../../../packages/runtime
+    devDependencies:
+      '@plotpoint/typescript-config':
+        specifier: workspace:*
+        version: link:../../../packages/typescript-config
+
   examples/releases/field-puzzle:
     dependencies:
       '@plotpoint/protocol':

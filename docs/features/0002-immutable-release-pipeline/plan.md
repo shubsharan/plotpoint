@@ -143,7 +143,7 @@ packages/compiler/
 examples/releases/
 ├── minimal-local-puzzle/
 ├── branching-media-tour/
-└── team-session-hunt/
+└── co-op-game/
 
 vitest.config.ts
 package.json

@@ -121,7 +121,7 @@
 ### Tests for User Story 3
 
 - [x] T048 [P] [US3] Add non-executing inspection, closed manifest, inventory-role, and compatibility matrix tests in `packages/protocol/test/inspection.test.ts` and `packages/protocol/test/compatibility.test.ts`
-- [x] T049 [P] [US3] Create branching media tour and team/session hunt golden projects with multiple schemas, content, components, assets, and capability requirements in `examples/releases/branching-media-tour/` and `examples/releases/team-session-hunt/`
+- [x] T049 [P] [US3] Create branching media tour and co-op game golden projects with multiple schemas, content, components, assets, and capability requirements in `examples/releases/branching-media-tour/` and `examples/releases/co-op-game/`
 - [x] T050 [US3] Add source-free three-project inspection and registry-label/channel/project/timestamp invariance tests in `packages/compiler/test/integration/inspect-release.test.ts`
 
 ### Implementation for User Story 3

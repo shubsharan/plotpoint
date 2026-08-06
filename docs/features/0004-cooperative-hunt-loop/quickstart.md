@@ -5,7 +5,7 @@ ADR 0005 is Accepted and implementation evidence is recorded in
 
 1. Start the local PostgreSQL test/service environment and configure non-production database, operator,
    credential-pepper, and loopback-origin values.
-2. Compile `examples/releases/team-session-hunt`, install the same release through the existing verified
+2. Compile `examples/releases/co-op-game`, install the same release through the existing verified
    player flow, and register those exact bytes with the API.
 3. Create one session and three unique invitations; join three clean player stores.
 4. Exercise fresh/in-zone and every rejected location class, a same-target race, and different-target stale acceptance.

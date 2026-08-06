@@ -8,11 +8,7 @@ import { computeReleaseId } from "@plotpoint/protocol";
 
 import { createExternalProject } from "../helpers/external-project.js";
 
-const goldenProjects = [
-  "minimal-local-puzzle",
-  "branching-media-tour",
-  "team-session-hunt",
-] as const;
+const goldenProjects = ["minimal-local-puzzle", "branching-media-tour", "co-op-game"] as const;
 
 const buildsPerProject = 20;
 const clockEpoch = Date.UTC(2030, 0, 1);

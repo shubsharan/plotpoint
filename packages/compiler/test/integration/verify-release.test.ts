@@ -8,11 +8,7 @@ import { verifyRelease, type ReleaseManifest } from "@plotpoint/protocol";
 
 import { createExternalProject } from "../helpers/external-project.js";
 
-const goldenProjects = [
-  "minimal-local-puzzle",
-  "branching-media-tour",
-  "team-session-hunt",
-] as const;
+const goldenProjects = ["minimal-local-puzzle", "branching-media-tour", "co-op-game"] as const;
 
 function mutateStoredEntry(bytes: Uint8Array, targetPath: string): Uint8Array {
   const mutated = new Uint8Array(bytes);

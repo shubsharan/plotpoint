@@ -25,7 +25,7 @@ sync state, SecureStore owns the credential, and the trusted module owns locatio
 ## Phase 3: Location-Authoritative Commands
 
 - [x] T014 Add trusted mechanic tests for every location outcome, stale different-target acceptance, and same-target no-op.
-- [x] T015 Extend `team-session-hunt` with target-zone configuration, schemas, and location-backed release logic/UI.
+- [x] T015 Extend `co-op-game` with target-zone configuration, schemas, and location-backed release logic/UI.
 - [x] T016 Implement the trusted target-discovery config parser, state transition, projection, and redacted outcome helpers.
 - [x] T017 Add PostgreSQL fault/concurrency tests for exact retry, changed reuse, revocation linearization, and rollback.
 - [x] T018 Implement team aggregate and receipt/journal/event repositories.
