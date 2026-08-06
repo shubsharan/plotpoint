@@ -156,7 +156,7 @@ const LOCAL_SCHEMA_COLUMNS = Object.freeze({
 } as const);
 
 export const HOST_STORAGE_SCHEMA_DIGEST =
-  "sha256:5d21cdf48d1626c9d1f8493ce3cfae774fd2a19d06ce72ff632b1170fbac3ff5";
+  "sha256:b8b5747584b111d39f75743893e8281d75cf1c7f61baee911fb9e1e1f95e7ebe";
 
 export interface ObservationMigrationDatabase {
   getAllAsync<T>(query: string, ...parameters: unknown[]): Promise<T[]>;

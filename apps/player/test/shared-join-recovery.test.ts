@@ -14,8 +14,7 @@ interface PendingSharedJoin {
   readonly serviceOrigin: string;
   readonly joinRequestId: string;
   readonly invitationDigest: string;
-  readonly invitationKey: string;
-  readonly credentialKey: string;
+  readonly envelopeKey: string;
   readonly requestDigest: string;
   readonly status: "preparing" | "ready" | "submitting";
 }
@@ -27,7 +26,7 @@ interface SharedBindingContext {
   readonly runId: string;
   readonly expectedReleaseId: `sha256:${string}`;
   readonly serviceOrigin: string;
-  readonly credentialKey: string;
+  readonly envelopeKey: string;
 }
 
 interface JoinResponseIdentity {
@@ -64,8 +63,7 @@ function pending(overrides: Partial<PendingSharedJoinInput> = {}): PendingShared
     serviceOrigin: "https://example.test",
     joinRequestId: "join-request-1",
     invitationDigest: `sha256:${"c".repeat(64)}`,
-    invitationKey: "plotpoint.shared.run-1.invitation",
-    credentialKey: "plotpoint.shared.run-1.credential",
+    envelopeKey: "plotpoint.shared.run-1.envelope",
     requestDigest: `sha256:${"d".repeat(64)}`,
     ...overrides,
   };
@@ -77,7 +75,7 @@ function context(overrides: Partial<SharedBindingContext> = {}): SharedBindingCo
     runId: "run-1",
     expectedReleaseId: releaseId,
     serviceOrigin: "https://example.test",
-    credentialKey: "plotpoint.shared.run-1.credential",
+    envelopeKey: "plotpoint.shared.run-1.envelope",
     ...overrides,
   };
 }
@@ -253,8 +251,7 @@ describe("release-pinned shared join SQLite recovery", () => {
       pending({ serviceOrigin: "https://changed.example.test" }),
       pending({ joinRequestId: "join-request-changed" }),
       pending({ invitationDigest: `sha256:${"e".repeat(64)}` }),
-      pending({ invitationKey: "plotpoint.shared.run-1.invitation-changed" }),
-      pending({ credentialKey: "plotpoint.shared.run-1.credential-changed" }),
+      pending({ envelopeKey: "plotpoint.shared.run-1.envelope-changed" }),
       pending({ requestDigest: `sha256:${"f".repeat(64)}` }),
     ];
 
@@ -317,7 +314,7 @@ describe("release-pinned shared join SQLite recovery", () => {
       ["participant_id", "participant-changed"],
       ["team_id", "team-changed"],
       ["service_origin", "https://changed.example.test"],
-      ["credential_key", "plotpoint.shared.run-1.credential-changed"],
+      ["envelope_key", "plotpoint.shared.run-1.envelope-changed"],
     ] as const;
     for (const [column, value] of mutations) {
       await expect(
@@ -334,7 +331,7 @@ describe("release-pinned shared join SQLite recovery", () => {
       database.runAsync(
         `UPDATE shared_sessions SET run_id=run_id,release_id=release_id,
          participant_id=participant_id,team_id=team_id,service_origin=service_origin,
-         credential_key=credential_key WHERE session_id=?`,
+         envelope_key=envelope_key WHERE session_id=?`,
         "session-1",
       ),
     ).resolves.toMatchObject({ changes: 1 });
@@ -358,7 +355,7 @@ describe("release-pinned shared join SQLite recovery", () => {
       { context: context({ expectedReleaseId: otherReleaseId }) },
       { context: context({ sessionId: "session-changed" }) },
       { context: context({ serviceOrigin: "https://changed.example.test" }) },
-      { context: context({ credentialKey: "plotpoint.shared.run-1.credential-changed" }) },
+      { context: context({ envelopeKey: "plotpoint.shared.run-1.envelope-changed" }) },
       { response: response({ releaseId: otherReleaseId }) },
       { response: response({ participantId: "participant-changed" }) },
       { response: response({ teamId: "team-changed" }) },
@@ -383,7 +380,7 @@ describe("release-pinned shared join SQLite recovery", () => {
       context({ expectedReleaseId: otherReleaseId }),
       context({ sessionId: "session-changed" }),
       context({ serviceOrigin: "https://changed.example.test" }),
-      context({ credentialKey: "plotpoint.shared.run-1.credential-changed" }),
+      context({ envelopeKey: "plotpoint.shared.run-1.envelope-changed" }),
     ];
 
     for (const conflict of conflicts) {

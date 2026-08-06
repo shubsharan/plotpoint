@@ -109,6 +109,12 @@ function adapter() {
   return result.adapter;
 }
 
+function aggregate(mechanic = adapter(), configuration = config) {
+  const initialized = mechanic.model.initialize(configuration);
+  if (initialized.kind !== "initialized") throw new Error(initialized.diagnostics[0]?.code);
+  return { ...initialized.aggregate, aggregateId: participant.teamId };
+}
+
 type AvailableLocation = Extract<LocationObservation, { readonly availability: "available" }>;
 
 const available = (overrides: Partial<AvailableLocation> = {}): AvailableLocation => ({
@@ -136,29 +142,21 @@ describe("trusted target discovery", () => {
     );
   });
 
-  it("authorizes an in-zone observation as a coordinate-free runtime fact", () => {
+  it("executes an in-zone observation with coordinate-free terminal evidence", () => {
     const command = syncCommand(available());
-    const result = adapter().authorize({
+    const mechanic = adapter();
+    const result = mechanic.execute({
       participant,
+      aggregate: aggregate(mechanic),
       command,
       observations: command.observations,
     });
     expect(result).toMatchObject({
-      kind: "authorized",
-      command: {
-        id: "command-1",
-        type: TARGET_DISCOVERY_COMMAND,
-        target: { kind: "team", id: "team-1" },
-        expectedStateVersion: 7,
-        payload: { targetId: "alpha" },
-      },
-      observations: [
-        {
-          kind: "plotpoint.location.target-discovery",
-          key: "alpha",
-          value: { qualified: true },
-        },
-      ],
+      terminal: "accepted",
+      outcomeCode: "target-discovered",
+      aggregateBefore: { stateVersion: 0 },
+      aggregateAfter: { stateVersion: 1 },
+      capabilityEvidence: [{ observationId: "observation-1", disposition: "consumed" }],
     });
     expect(JSON.stringify(result)).not.toMatch(/latitude|longitude|horizontalAccuracy/);
   });
@@ -173,12 +171,13 @@ describe("trusted target discovery", () => {
   ])("rejects non-qualifying evidence", (observationOverride, observation, code) => {
     const command = syncCommand(observation);
     expect(
-      adapter().authorize({
+      adapter().execute({
         participant,
+        aggregate: aggregate(),
         command,
         observations: observationOverride ?? command.observations,
       }),
-    ).toEqual({ kind: "rejected", outcome: { code } });
+    ).toMatchObject({ terminal: "rejected", outcomeCode: code });
   });
 
   it("rejects antipodal evidence when floating-point error exceeds the haversine domain", () => {
@@ -196,12 +195,13 @@ describe("trusted target discovery", () => {
     const observation = available({ latitude: 87.4, longitude: 180 });
     const command = syncCommand(observation);
     expect(
-      resolved.adapter.authorize({
+      resolved.adapter.execute({
         participant,
+        aggregate: aggregate(resolved.adapter, antipodalConfiguration),
         command,
         observations: command.observations,
       }),
-    ).toEqual({ kind: "rejected", outcome: { code: "location-outside-zone" } });
+    ).toMatchObject({ terminal: "rejected", outcomeCode: "location-outside-zone" });
   });
 
   it("initializes, executes accepted/no-op decisions, and projects one complete team view", () => {
@@ -278,16 +278,17 @@ describe("trusted target discovery", () => {
     });
   });
 
-  it("returns explicit invalid authorization and projection results", () => {
+  it("returns explicit invalid execution and projection results", () => {
     const mechanic = adapter();
     const wrongTarget = syncCommand(available());
     expect(
-      mechanic.authorize({
+      mechanic.execute({
         participant,
+        aggregate: aggregate(mechanic),
         command: { ...wrongTarget, target: { ...wrongTarget.target, aggregateId: "other-team" } },
         observations: wrongTarget.observations,
       }),
-    ).toMatchObject({ kind: "invalid", diagnostics: [{ code: "command-target-mismatch" }] });
+    ).toMatchObject({ terminal: "invalid", outcomeCode: "command-target-mismatch" });
 
     expect(
       mechanic.project({

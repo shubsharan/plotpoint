@@ -20,8 +20,7 @@ interface PendingJoinRecord {
   readonly joinRequestId: string;
   readonly requestDigest: `sha256:${string}`;
   readonly invitationDigest: `sha256:${string}`;
-  readonly invitationKey: string;
-  readonly credentialKey: string;
+  readonly envelopeKey: string;
   readonly status: "preparing" | "ready" | "submitting";
 }
 
@@ -30,7 +29,7 @@ interface ReleasePinnedBindingContext {
   readonly runId: string;
   readonly expectedReleaseId: `sha256:${string}`;
   readonly serviceOrigin: string;
-  readonly credentialKey: string;
+  readonly envelopeKey: string;
 }
 
 interface SharedJoinResponse {
@@ -149,8 +148,7 @@ function pending(
     joinRequestId: "join-request-a",
     requestDigest: `sha256:${"c".repeat(64)}`,
     invitationDigest: `sha256:${"d".repeat(64)}`,
-    invitationKey: "plotpoint.shared.session-a.invitation",
-    credentialKey: "plotpoint.shared.session-a.credential",
+    envelopeKey: "plotpoint.shared.session-a.envelope",
     ...overrides,
   };
 }
@@ -163,7 +161,7 @@ function bindingContext(
     runId: "run-a",
     expectedReleaseId: releaseA,
     serviceOrigin,
-    credentialKey: "plotpoint.shared.session-a.credential",
+    envelopeKey: "plotpoint.shared.session-a.envelope",
     ...overrides,
   };
 }
@@ -268,10 +266,10 @@ const joinMismatchCases: readonly {
     },
   },
   {
-    name: "credential key",
+    name: "envelope key",
     mutate: (fixture) => {
       Object.assign(fixture, {
-        context: bindingContext({ credentialKey: "plotpoint.shared.other.credential" }),
+        context: bindingContext({ envelopeKey: "plotpoint.shared.other.envelope" }),
       });
     },
   },
@@ -379,11 +377,11 @@ describe("release-pinned shared play", () => {
       }),
     },
     {
-      name: "credential key",
+      name: "envelope key",
       mutate: async () => ({
         sessionId: "session-a",
         pull: pull({ cursor: "cursor-2", stateVersion: 2 }),
-        context: bindingContext({ credentialKey: "plotpoint.shared.other.credential" }),
+        context: bindingContext({ envelopeKey: "plotpoint.shared.other.envelope" }),
       }),
     },
   ];
@@ -477,8 +475,7 @@ describe("release-pinned shared play", () => {
       joinRequestId: "join-request-b",
       requestDigest: `sha256:${"e".repeat(64)}`,
       invitationDigest: `sha256:${"f".repeat(64)}`,
-      invitationKey: "plotpoint.shared.session-b.invitation",
-      credentialKey: "plotpoint.shared.session-b.credential",
+      envelopeKey: "plotpoint.shared.session-b.envelope",
     });
     await fixture.store.reservePendingJoin(secondPending);
     await fixture.store.markPendingJoinReady("run-b", secondPending.requestDigest);
@@ -487,7 +484,7 @@ describe("release-pinned shared play", () => {
       sessionId: "session-b",
       runId: "run-b",
       expectedReleaseId: releaseB,
-      credentialKey: secondPending.credentialKey,
+      envelopeKey: secondPending.envelopeKey,
     });
     await fixture.store.commitJoinedSession({
       context: secondContext,

@@ -1,229 +1,133 @@
 # Contract: Shared Recovery State Machine
 
-## Run-Scoped Controller Amendment
+One run-scoped controller created from a verified installed run owns startup, join, enqueue, foreground,
+connectivity, retry, snapshot publication, and disposal. SQLite owns durable recovery state; SecureStore
+owns the single secret envelope; the controller is the sole authority for shared presentation.
 
-One controller created from a verified installed run owns `start`, `join`, `enqueue`, `foreground`,
-`connectivityChanged`, `retry`, `snapshot`, `subscribe`, and `dispose`. It emits exactly `local-only`,
-`join-required`, `joining`, `synchronizing`, `bound`, `revoked`, or `recovery-required`. `start()` alone
-finishes/cleans interrupted secret preparation, resumes a complete pending join, schedules one pass for
-an active binding, and exposes revoked or unrecoverable state before WebView mount.
+## Controller and Presentation
 
-One deterministic SecureStore envelope exists per run. Pending form includes immutable join identity,
-invitation, and participant credential; bound form retains only the credential. Secret write precedes
-SQLite reservation. A losing reservation deletes its unused envelope. Binding and the validated initial
-pull commit atomically; later cleanup failure is diagnostic, never join failure.
+The controller publishes exactly `local-only`, `join-required`, `joining`, `synchronizing`, `bound`,
+`revoked`, or `recovery-required`. A recovery-required state always declares whether retry is possible
+and never exposes a cached shared projection. The native shell mounts shared-capable runtime HTML only
+for a current `bound` state.
 
-The complete pull is validated before a mutation transaction starts. The transaction compare-or-inserts
-results, replaces projections, reconciles outbox, advances cursor/status, appends evidence, and commits
-once. Revocation commits state and blocked work, removes credentials, and prevents any further game
-message before presentation can remount. Only unreachable-to-reachable network transitions trigger a
-reconnect pass.
+`start()` cleans or resumes secret preparation, continues a complete pending join, schedules one pass
+for an active binding, and resolves operational transport or synchronization failure into retryable
+recovery after publishing that state. `retry()` resumes the pending join when no binding exists and
+synchronizes the bound session otherwise. Detached enqueue synchronization terminates in explicit
+controller state and never creates an unhandled rejection.
 
-This contract fixes player-owned persistence and foreground orchestration while preserving Host API
-1.1 Shared Play and Sync semantics through their corrected plain pre-release shapes.
+The controller subscription publishes `shared.sync.changed` exactly when it publishes a fresh bound
+view. Foreground, reconnect, and manual retry only request synchronization; they do not publish separate
+notifications. The App derives session identity, recovery controls, WebView mounting, and presentation
+solely from controller state.
 
-## Durable Outbox
+## Single Secret Envelope
 
-```ts
-type SharedOutboxStatus = "queued" | "submitting" | "blocked-revoked";
-
-interface SharedOutboxRecord {
-  readonly sessionId: string;
-  readonly commandId: string;
-  readonly target: SharedCommandIntent["target"];
-  readonly expectedStateVersion: number;
-  readonly commandType: string;
-  readonly payload: object;
-  readonly observationIds: readonly string[];
-  readonly status: SharedOutboxStatus;
-  readonly enqueuedAt: string;
-}
-```
-
-- `queued` is eligible at the beginning of a pass.
-- `submitting` is owned by the current or interrupted pass. Before a new batch claim, interrupted
-  submitting rows become queued in the same transaction.
-- `blocked-revoked` is retained evidence and is never eligible.
-
-Enqueue commits a new exact row or reads the prior exact row before returning pending. Changed reuse of
-`commandId` fails. Revocation atomically changes queued/submitting rows to blocked evidence.
-
-## Finite Batch Claim
+`ParticipantCredentialStore` exposes mandatory envelope operations only. Each run has one deterministic
+immutable `envelope_key` in pending or bound SQLite storage:
 
 ```ts
-interface SubmissionBatch {
-  readonly sessionId: string;
-  readonly commands: readonly SharedOutboxRecord[];
-}
-
-interface SharedSyncStore {
-  beginSubmissionBatch(sessionId: string): Promise<SubmissionBatch>;
-  failSubmissionBatch(sessionId: string): Promise<void>;
-  applyPull(sessionId: string, pull: SyncPull): Promise<SnapshotApplication>;
-  markRevoked(sessionId: string): Promise<void>;
-}
+type SharedSecretEnvelope =
+  | {
+      readonly kind: "pending";
+      readonly sessionId: string;
+      readonly expectedReleaseId: ReleaseId;
+      readonly serviceOrigin: string;
+      readonly joinRequestId: string;
+      readonly invitation: string;
+      readonly participantCredential: string;
+    }
+  | { readonly kind: "bound"; readonly participantCredential: string };
 ```
 
-`beginSubmissionBatch` is one exclusive SQLite transaction:
+The pending envelope is written before SQLite reservation. A losing reservation removes its unused
+envelope. SQLite then reserves the pending request with run, session, release, origin, request and
+invitation digests, envelope key, and `preparing | ready | submitting` status. Exact reuse resumes the
+same envelope; changed reuse conflicts before network submission.
 
-1. validate that the immutable session binding is usable and active;
-2. recover interrupted `submitting` rows to `queued`;
-3. select every queued row currently present in `(enqueued_at, command_id)` order;
-4. mark exactly that finite set `submitting`;
-5. persist `transport=connecting`, `synchronization=syncing`; and
-6. return detached immutable copies.
+Binding and the validated initial pull commit atomically and delete the pending SQLite row. Only after
+that commit is the pending envelope reduced at the same key to its bound form. If reduction is
+interrupted, startup recognizes the committed binding and completes it before synchronization. A
+response mismatch retains the complete pending attempt for exact retry and exposes no projection.
+Revocation commits SQLite state and blocked work before removing the envelope.
 
-One pass submits every returned member sequentially at most once and then performs at most one pull.
-Rows enqueued after claim remain queued. The submit response is validated but does not delete the
-outbox row; authoritative pull reconciliation owns terminalization. A retryable failure calls
-`failSubmissionBatch`, which requeues submitting rows and records degraded status atomically.
+There is no two-secret representation, optional envelope operation, migration, alias, or legacy
+reader. An incompatible pre-release database fails with explicit reset or reinstall guidance.
+
+## Durable Outbox and Finite Claim
+
+Outbox status is `queued`, `submitting`, or `blocked-revoked`. Enqueue compare-or-inserts one exact row
+before returning pending; changed command reuse fails. Revocation atomically turns queued or submitting
+work into retained blocked evidence.
+
+`beginSubmissionBatch()` uses one exclusive transaction to validate the active binding, recover
+interrupted submissions, capture all currently queued rows in stable order, mark exactly that finite set
+submitting, and record synchronizing status. One pass submits every captured member sequentially at most
+once and performs at most one pull. Submit responses do not delete outbox rows; authoritative pull
+reconciliation owns terminalization. Retryable failure requeues submitting rows atomically.
 
 ## Keyed Single Flight
 
-One long-lived coordinator instance owns process-local state:
+One coordinator serializes passes per session. Every request receives the stable drain promise covering
+its trigger. The scheduler marks the active pass's claim cutoff immediately before invoking
+`beginSubmissionBatch()`: triggers before that cutoff coalesce into the active pass, while any trigger
+after the cutoff conservatively requests one trailing pass. Further triggers coalesce into that same
+trailing pass. Different sessions proceed independently, and durable rows recover process restart.
 
-```ts
-interface SharedSyncScheduler {
-  request(
-    sessionId: string,
-    trigger: "enqueue" | "foreground" | "reconnect" | "retry",
-  ): Promise<void>;
-}
+`shared.view.get` is a pure durable read. Enqueue schedules only after its transaction commits. Only a
+durably observed unreachable-to-reachable transition requests reconnect. Foreground and explicit retry
+enter the same scheduler.
+
+## Pending Join and Immutable Binding
+
+SQLite enforces one pending-or-bound session per run with a unique run constraint and cross-table
+guards. Network submission begins only after the envelope and pending row are durable. Immediately
+before sending, the pending status changes to `submitting`; response loss therefore resumes the exact
+request identity and credential.
+
+Fresh join commit requires equality across active run, expected release, response release, snapshot
+release, route session, snapshot session, participant, team, service origin, and envelope key. Binding
+identity is immutable:
+
+```text
+run + release + service origin + session + participant + team + envelope key
 ```
 
-For one session, only one pass may submit or apply a pull. `request()` returns one stable per-session
-drain promise that resolves only after the pass covering that caller's trigger finishes. A trigger that
-arrives after the active pass claims its batch requests at most one following pass and observes the drain
-through that pass; further triggers coalesce into the same trailing pass. Different sessions may run
-independently. Process restart loses promises but not the durable submitting rows recovered by the next
-claim.
+Membership may move only from active to revoked. Exact retry updates recovery fields only. Changed
+reuse or stale reactivation rolls back with a stable conflict.
 
-`shared.view.get` is a pure durable read and never schedules synchronization. Enqueue schedules only
-after its SQLite transaction commits. After the host durably observes an offline-to-reachable network
-transition, it requests the explicit `reconnect` trigger for each active session; that trigger coalesces
-through the same keyed single flight and never runs from a view read. Notifications are emitted after
-durable enqueue, batch status, pull, failure, or revocation changes—not after mere network attempts.
+## Projection Validation and Atomic Pull
 
-If submit or pull returns authenticated `participant-revoked`, the coordinator calls `markRevoked`
-before removing the SecureStore credential. One SQLite transaction sets membership/sync status to
-revoked, transport to degraded, changes all queued/submitting actions to `blocked-revoked`, and records
-the redacted revocation event. It is idempotent and does not require a snapshot.
+One pure resolver validates the complete pull before any mutation transaction and resolves the same
+projection before runtime exposure. It requires exactly one projection with the binding's release,
+declared schema, aggregate kind, aggregate ID, and valid payload. Empty, multiple, wrong-identity,
+wrong-schema, or invalid-payload input leaves SQLite byte-identical and does not open a mutation
+transaction.
 
-## Pending Join Recovery
+The exclusive apply transaction then verifies immutable identities, compare-or-inserts each terminal
+result, rejects changed repetition or missing provenance, replaces the complete projection set, removes
+only outbox rows matched by identical terminals, reconciles revocation or interrupted work, advances
+cursor and confirmed time, appends redacted evidence, and commits once. Reapplying a normal, corrective,
+or revoked pull is byte-equivalent.
 
-```ts
-interface PendingSharedJoin {
-  readonly sessionId: string;
-  readonly runId: string;
-  readonly expectedReleaseId: `sha256:${string}`;
-  readonly serviceOrigin: string;
-  readonly joinRequestId: string;
-  readonly invitationDigest: string;
-  readonly invitationKey: string;
-  readonly credentialKey: string;
-  readonly requestDigest: string;
-  readonly status: "preparing" | "ready" | "submitting";
-}
-```
+Authenticated pull ordering is participant-scoped. In a repeatable-read transaction the server reads
+the authenticated participant's committed `receipt_position` as its high-water mark and returns only
+that participant's receipts through it. New terminal decisions increment and insert that position in
+the same participant-row-locked transaction, so rollback creates no gap and uncommitted work cannot be
+skipped. `nextCursor` and `decisionPosition` remain opaque numeric strings on the existing wire; their
+ordering scope is the authenticated participant, not the session or deployment.
 
-SQLite enforces one pending-or-bound session per `runId`: `pending_shared_joins.run_id` is unique, and
-cross-table guards prevent a pending row beside an existing shared-session binding. One exclusive
-transaction compares any existing pending/bound record before reserving a new `preparing` row. Exact
-pending request reuse resumes the same keys and digest; a changed session, origin, release, request ID,
-or request digest fails before secret writes or network submission. Concurrent different joins race on
-the same invariant, so only one can reserve the run.
+## Revocation, Correlation, and Deferrals
 
-After reservation, the player stores the raw invitation and participant credential in SecureStore
-under the exact `invitationKey` and `credentialKey`, then changes the same row to `ready`. A request is
-sent only after both stores are durable. A crash while preparing may leave a non-sendable row or unused
-secrets, which startup cleanup can remove or an exact retry can complete; it cannot consume an invitation
-without a recoverable request record.
+Authenticated revocation commits membership, degraded transport, revoked synchronization status,
+blocked outbox, and redacted evidence before the envelope is removed. Revoked state is terminal and no
+game message is accepted before presentation unmounts.
 
-Immediately before a network attempt, one SQLite transaction changes `ready` to `submitting`; response
-loss leaves that evidence intact. Startup treats complete `ready` and `submitting` rows as exact-retry
-candidates, never as permission to generate a new request identity.
+Bridge parsing captures a valid canonical request ID before operation validation. Semantic failures
+return `host.error` with that ID; only invalid JSON or an invalid ID uses `unknown`. The App never
+fabricates a pre-routing error.
 
-Restart loads the pending row and both key-addressed secrets, reconstructs the same request ID, expected release,
-invitation, credential, session, and origin, and retries. Changed input for the same session/request
-fails against `requestDigest`. Successful immutable session/snapshot commit deletes the pending SQLite
-row in the same transaction; the invitation secret is removed only afterward, while the participant
-credential remains. A response-side mismatch retains the complete pending attempt for exact retry and
-exposes no shared view.
-
-## Immutable Session Binding
-
-Fresh join commit accepts the active `runId`, its expected installed `releaseId`, canonical service
-origin, complete join response, and initial pull. Before any write it requires:
-
-- active run release = expected release = response release = snapshot release;
-- route session = response scope = snapshot session;
-- response participant/team = snapshot participant/team;
-- pending credential key = inserted binding credential key;
-- existing binding, when present, has the exact same
-  run/release/session/participant/team/origin/credential key; and
-- there is no second session binding for the run.
-
-Fresh binding insertion and pending-row deletion occur in the same transaction. Exact retry updates
-only membership, transport/sync status, cursor, confirmed time, projections, and results. Changed reuse
-throws a stable binding conflict and rolls back. An idempotent SQLite trigger rejects updates to run,
-release, session, participant, team, service origin, and credential key. Membership may move only from
-`active` to `revoked`; an exact retry cannot update `revoked` back to `active`. Every later pull repeats
-the same checks before projection deletion.
-
-A response-side mismatch retains the pending SQLite request plus its SecureStore invitation and
-credential because the server may have committed an exact participant before response processing; the
-player exposes no session view until an exact retry succeeds for the matching release.
-
-## Compare-or-Insert Snapshot Application
-
-Before mutation, Sync Pull validation additionally requires unique projection identities and unique
-command IDs. Every projection must match the active composition's declared projection schema ID,
-the validator's digest must equal the schema's Release Format manifest digest, and the payload must
-pass that validator before persistence or component exposure. One exclusive transaction then:
-
-1. verifies snapshot and immutable binding identities;
-2. for each command result, compares an existing immutable result exactly, or reads matching outbox
-   provenance and inserts a new result;
-3. fails if a repeated result changes terminal, outcome, resulting state version, or decision position;
-4. fails if both prior result and outbox provenance are absent;
-5. replaces the complete projection set;
-6. removes only outbox rows matched by identical terminal results;
-7. if the authenticated snapshot membership is revoked, changes every remaining queued/submitting row
-   to `blocked-revoked` and selects revoked/degraded status; otherwise requeues remaining submitting rows
-   and selects `recovery-required` or `current`, unless the stored binding is already revoked, in which
-   case the active candidate fails with `membership-reactivation-conflict`;
-8. applies membership, transport, cursor, and confirmed time consistently with that branch; and
-9. commits all changes together.
-
-Applying one normal, corrective, or revoked pull repeatedly produces byte-equivalent durable
-projections, results, outbox state, cursor, membership, and status. A conflicting repeat exposes none
-of its candidate changes. After a revoked pull commits, the coordinator removes the SecureStore
-credential; it never removes it before the blocked-outbox transaction succeeds.
-
-Revocation is terminal for the stored credential key. Replaying the same revoked join or pull is
-idempotent; replaying an older active join response or snapshot after revocation preserves the revoked
-binding and blocked rows and returns `membership-reactivation-conflict`.
-
-## Bridge Correlation
-
-Shared bridge parsing has two stages:
-
-1. Decode JSON and capture `requestId` only when it is a valid non-empty canonical string.
-2. Validate envelope type/version/direction and operation payload.
-
-Semantic failure returns `host.error` with the captured ID. Only invalid JSON or invalid/missing ID uses
-`unknown`. The App never fabricates an error before routing; a missing session is a handler error so the
-router preserves request correlation.
-
-## Clean Break and Deferrals
-
-Fresh/provider-free databases install pending-join storage and immutable-binding guards and recover
-only rows written by this corrected state machine. Database open does not inspect, rewrite, or
-migrate superseded shapes. An incompatible schema fails with explicit reset/reinstall guidance and is
-never silently dropped. Within the corrected schema, interrupted `submitting` rows and complete pending
-join attempts remain fully recoverable. Multiple bindings, run/release mismatch, or changed service
-origin becomes explicit recovery-required/conflict and no projection is exposed.
-
-This feature intentionally does not add background sync, WebSockets, delta feeds, multi-process leases, service
-rebinding, credential rotation/recovery, active-session release migration, multi-device membership, or
-terminal-report provenance reconstruction after loss of both local evidence sources.
+Background sync, WebSockets, delta feeds, multi-process leases, service rebinding, credential rotation,
+active-session release migration, multi-device membership, and report reconstruction after loss of all
+local evidence remain out of scope.

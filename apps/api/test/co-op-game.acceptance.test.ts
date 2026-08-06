@@ -570,7 +570,7 @@ describe("co-op game acceptance", () => {
     try {
       await playerDatabase.runAsync(
         `INSERT INTO shared_sessions
-         (session_id,run_id,release_id,participant_id,team_id,service_origin,credential_key,
+         (session_id,run_id,release_id,participant_id,team_id,service_origin,envelope_key,
           membership_status,transport_status,sync_status,cursor,confirmed_at)
          VALUES (?,?,?,?,?,?,?,'active','online','current','0',?)`,
         first.session.sessionId,
@@ -602,7 +602,7 @@ describe("co-op game acceptance", () => {
           runId: "co-op-report-run",
           expectedReleaseId: firstReleaseId,
           serviceOrigin: origin,
-          credentialKey: "co-op-report-envelope",
+          envelopeKey: "co-op-report-envelope",
         },
         committedPull,
       );
@@ -769,21 +769,6 @@ describe("co-op game acceptance", () => {
     const credentials = {
       generateJoinRequestId: () => "co-op-controller-join",
       generateCredential: () => controllerCredential,
-      putCredential: async (key: string, value: string) => void envelopes.set(key, value),
-      getCredential: async (key: string) => {
-        const value = envelopes.get(key);
-        if (typeof value === "string") return value;
-        return isObject(value) && typeof value.participantCredential === "string"
-          ? value.participantCredential
-          : null;
-      },
-      removeCredential: async (key: string) => void envelopes.delete(key),
-      putInvitation: async (key: string, value: string) => void envelopes.set(key, value),
-      getInvitation: async (key: string) => {
-        const value = envelopes.get(key);
-        return typeof value === "string" ? value : null;
-      },
-      removeInvitation: async (key: string) => void envelopes.delete(key),
       putEnvelope: async (key: string, value: unknown) => void envelopes.set(key, value),
       getEnvelope: async (key: string) => envelopes.get(key) ?? null,
       removeEnvelope: async (key: string) => void envelopes.delete(key),

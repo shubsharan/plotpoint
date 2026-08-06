@@ -127,6 +127,7 @@ describe("trusted mechanic registry", () => {
       authority: "server",
     });
     expect(adapter.model).not.toHaveProperty("progression");
+    expect(adapter).not.toHaveProperty("authorize");
 
     expect(
       resolveTrustedMechanic({

@@ -293,7 +293,7 @@ The co-op game acceptance is one report-driven two-release journey:
 8. overlaps enqueue/foreground/reconnect/retry triggers, observes one active plus at most one trailing
    pass, and awaits the trailing pass from a trigger issued after the active batch claim;
 9. handles authenticated revocation atomically, retains blocked outbox evidence, and rejects stale
-   active snapshots or changed credential keys without reactivation;
+   active snapshots or changed envelope keys without reactivation;
 10. reaches a completed confirmed team view after every configured target is discovered;
 11. exports Game Play Report containing only generic rejected command and expired capability evidence,
     with no target, coordinate, payload, outcome code, configuration value, or service identity;
@@ -301,7 +301,7 @@ The co-op game acceptance is one report-driven two-release journey:
     fresh run/session without active-session migration; and
 13. completes every configured target in the revised session.
 
-Wrong release, run, session, participant, team, credential key, membership transition, or origin leaves
+Wrong release, run, session, participant, team, envelope key, membership transition, or origin leaves
 the prior binding/projection unchanged.
 Invalid trusted outcome shapes are rejected rather than truncated. Every well-formed bridge failure
 echoes its request ID.

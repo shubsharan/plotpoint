@@ -269,17 +269,18 @@ placeholder result exists.
 ### Pending Shared Join
 
 Before the first join attempt, SQLite stores run, expected release, canonical service origin, request
-identity/digest, invitation digest, SecureStore key references, and status
+identity/digest, invitation digest, one immutable SecureStore envelope key, and status
 `preparing | ready | submitting`. A unique run constraint plus cross-table guards permits at most one
 pending-or-bound session per run. Exact reuse resumes; changed reuse conflicts before network send.
 
-Raw invitation and participant credential remain in SecureStore. Successful immutable binding and
-initial snapshot commit delete the pending row atomically; invitation cleanup happens afterward.
-Response mismatch retains the complete attempt for exact retry and exposes no projection.
+The one pending envelope contains immutable join identity, invitation, and participant credential and
+is written before SQLite reservation. Successful immutable binding and initial snapshot commit delete
+the pending row atomically; the same envelope is then reduced to bound credential form. Response
+mismatch retains the complete attempt for exact retry and exposes no projection.
 
 ### Shared Session Binding
 
-Immutable fields are run/release, session, participant, team, canonical service origin, and credential
+Immutable fields are run/release, session, participant, team, canonical service origin, and envelope
 key. Mutable recovery fields are membership, transport, synchronization status, cursor, confirmed time,
 projections, results, and redacted sync events. Exact retry updates recovery fields only; changed
 identity is a conflict.
@@ -291,7 +292,7 @@ active -> revoked
 revoked -> active  (invalid reactivation conflict)
 ```
 
-An exact retry must match the stored credential key. Once the binding is revoked, a stale active join
+An exact retry must match the stored envelope key. Once the binding is revoked, a stale active join
 response or snapshot cannot reactivate it or make blocked actions eligible.
 
 Before join commit or pull application:
@@ -329,8 +330,9 @@ provide restart recovery.
 ### Authorized Snapshot and Reconciliation
 
 Authorized Snapshot is the complete current participant view: immutable identities, membership,
-confirmed time, and unique validated projections. Sync Pull adds unique exact command results and
-next cursor.
+confirmed time, and unique validated projections. Sync Pull adds unique exact command results and next
+cursor. Decision positions and cursors are opaque numeric strings ordered only within the authenticated
+participant.
 
 One exclusive transaction validates identities and schemas, compares or inserts immutable terminals,
 replaces the complete projection set, removes only terminal-matched outbox rows, handles revocation or

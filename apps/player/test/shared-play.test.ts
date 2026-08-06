@@ -24,7 +24,7 @@ const bindingContext: SharedBindingContext = {
   runId: "run-1",
   expectedReleaseId: releaseId,
   serviceOrigin: "https://example.test",
-  credentialKey: "plotpoint.shared.session-1.credential",
+  envelopeKey: "plotpoint.shared.session-1.envelope",
 };
 const command = {
   commandId: "command-1",
@@ -590,7 +590,7 @@ describe("shared player architecture", () => {
               participant_id: "participant-1",
               team_id: "team-1",
               service_origin: bindingContext.serviceOrigin,
-              credential_key: bindingContext.credentialKey,
+              envelope_key: bindingContext.envelopeKey,
               membership_status: "active",
             },
       ),
@@ -632,7 +632,7 @@ describe("shared player architecture", () => {
               participant_id: "participant-1",
               team_id: "team-1",
               service_origin: bindingContext.serviceOrigin,
-              credential_key: bindingContext.credentialKey,
+              envelope_key: bindingContext.envelopeKey,
               membership_status: "revoked",
             },
       ),
@@ -659,7 +659,7 @@ describe("shared player architecture", () => {
         participantId: "participant-1",
         teamId: "team-1",
         serviceOrigin: "https://example.test",
-        credentialKey: bindingContext.credentialKey,
+        envelopeKey: bindingContext.envelopeKey,
         cursor: "0",
         membershipStatus: "active" as const,
       })),
@@ -673,14 +673,14 @@ describe("shared player architecture", () => {
     const credentials = {
       generateJoinRequestId: vi.fn(() => "unused"),
       generateCredential: vi.fn(() => "unused"),
-      putCredential: vi.fn(async () => undefined),
-      getCredential: vi.fn(async () => "participant-secret"),
-      removeCredential: vi.fn(async () => {
+      putEnvelope: vi.fn(async () => undefined),
+      getEnvelope: vi.fn(async () => ({
+        kind: "bound" as const,
+        participantCredential: "participant-secret",
+      })),
+      removeEnvelope: vi.fn(async () => {
         order.push("credential-delete");
       }),
-      putInvitation: vi.fn(async () => undefined),
-      getInvitation: vi.fn(async () => "unused"),
-      removeInvitation: vi.fn(async () => undefined),
     };
     const fetcher = vi.fn(
       async () =>
@@ -709,7 +709,7 @@ describe("shared player architecture", () => {
         participantId: "participant-1",
         teamId: "team-1",
         serviceOrigin: "https://example.test",
-        credentialKey: bindingContext.credentialKey,
+        envelopeKey: bindingContext.envelopeKey,
         cursor: "0",
         membershipStatus: "active" as const,
       })),
@@ -720,16 +720,16 @@ describe("shared player architecture", () => {
         throw new Error("revocation-commit-interrupted");
       }),
     } as unknown as SharedSyncStore;
-    const removeCredential = vi.fn(async () => undefined);
+    const removeEnvelope = vi.fn(async () => undefined);
     const credentials = {
       generateJoinRequestId: vi.fn(() => "unused"),
       generateCredential: vi.fn(() => "unused"),
-      putCredential: vi.fn(async () => undefined),
-      getCredential: vi.fn(async () => "participant-secret"),
-      removeCredential,
-      putInvitation: vi.fn(async () => undefined),
-      getInvitation: vi.fn(async () => "unused"),
-      removeInvitation: vi.fn(async () => undefined),
+      putEnvelope: vi.fn(async () => undefined),
+      getEnvelope: vi.fn(async () => ({
+        kind: "bound" as const,
+        participantCredential: "participant-secret",
+      })),
+      removeEnvelope,
     };
     const fetcher = vi.fn(
       async () =>
@@ -747,7 +747,7 @@ describe("shared player architecture", () => {
     await expect(coordinator.request("session-1", "retry")).rejects.toThrow(
       "revocation-commit-interrupted",
     );
-    expect(removeCredential).not.toHaveBeenCalled();
+    expect(removeEnvelope).not.toHaveBeenCalled();
   });
 
   it("deletes the credential only after a revoked snapshot commits", async () => {
@@ -760,7 +760,7 @@ describe("shared player architecture", () => {
         participantId: "participant-1",
         teamId: "team-1",
         serviceOrigin: "https://example.test",
-        credentialKey: bindingContext.credentialKey,
+        envelopeKey: bindingContext.envelopeKey,
         cursor: "0",
         membershipStatus: "active" as const,
       })),
@@ -777,14 +777,14 @@ describe("shared player architecture", () => {
     const credentials = {
       generateJoinRequestId: vi.fn(() => "unused"),
       generateCredential: vi.fn(() => "unused"),
-      putCredential: vi.fn(async () => undefined),
-      getCredential: vi.fn(async () => "participant-secret"),
-      removeCredential: vi.fn(async () => {
+      putEnvelope: vi.fn(async () => undefined),
+      getEnvelope: vi.fn(async () => ({
+        kind: "bound" as const,
+        participantCredential: "participant-secret",
+      })),
+      removeEnvelope: vi.fn(async () => {
         order.push("credential-delete");
       }),
-      putInvitation: vi.fn(async () => undefined),
-      getInvitation: vi.fn(async () => "unused"),
-      removeInvitation: vi.fn(async () => undefined),
     };
     const fetcher = vi.fn(
       async () =>
@@ -832,7 +832,7 @@ describe("shared player architecture", () => {
                 participant_id: "participant-1",
                 team_id: "team-1",
                 service_origin: bindingContext.serviceOrigin,
-                credential_key: bindingContext.credentialKey,
+                envelope_key: bindingContext.envelopeKey,
                 membership_status: "active",
                 sync_status: "syncing",
               };

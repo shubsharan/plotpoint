@@ -12,7 +12,7 @@ const bindingContext: SharedBindingContext = {
   runId: "run-1",
   expectedReleaseId: releaseId,
   serviceOrigin: "https://service.example",
-  credentialKey: "plotpoint.shared.session-1.credential",
+  envelopeKey: "plotpoint.shared.session-1.envelope",
 };
 const sharedComposition = {
   application: { components: [] },
@@ -127,7 +127,7 @@ describe("shared recovery acceptance", () => {
     try {
       await database.runAsync(
         `INSERT INTO shared_sessions
-         (session_id,run_id,release_id,participant_id,team_id,service_origin,credential_key,membership_status,
+         (session_id,run_id,release_id,participant_id,team_id,service_origin,envelope_key,membership_status,
           transport_status,sync_status,cursor,confirmed_at)
          VALUES (?,?,?,?,?,?,?,'active','online','current','0',?)`,
         "session-1",
@@ -136,7 +136,7 @@ describe("shared recovery acceptance", () => {
         "participant-1",
         "team-1",
         "https://service.example",
-        bindingContext.credentialKey,
+        bindingContext.envelopeKey,
         "2030-01-01T00:00:00.000Z",
       );
       const store = new SharedSyncStore(database, validatesProjection);
@@ -203,7 +203,7 @@ describe("shared recovery acceptance", () => {
       const store = new SharedSyncStore(database);
       await database.runAsync(
         `INSERT INTO shared_sessions
-         (session_id,run_id,release_id,participant_id,team_id,service_origin,credential_key,membership_status,
+         (session_id,run_id,release_id,participant_id,team_id,service_origin,envelope_key,membership_status,
           transport_status,sync_status,cursor,confirmed_at)
          VALUES (?,?,?,?,?,?,?,'active','online','current','0',?)`,
         "session-1",
@@ -212,7 +212,7 @@ describe("shared recovery acceptance", () => {
         "participant-1",
         "team-1",
         "https://service.example",
-        bindingContext.credentialKey,
+        bindingContext.envelopeKey,
         "2030-01-01T00:00:00.000Z",
       );
 

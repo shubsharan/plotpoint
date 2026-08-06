@@ -23,12 +23,12 @@ function view(membership: "active" | "revoked" = "active"): SharedPlayView {
 function harness(initialMembership: "active" | "revoked" = "active") {
   let current = view(initialMembership);
   const request = vi.fn(async () => undefined);
-  const removeCredential = vi.fn(async () => undefined);
+  const removeEnvelope = vi.fn(async () => undefined);
   const store = {
     sessionForRun: vi.fn(async () => "session-1"),
     pendingJoinForRun: vi.fn(async () => null),
     view: vi.fn(async () => current),
-    session: vi.fn(async () => ({ credentialKey: "run-envelope" })),
+    session: vi.fn(async () => ({ envelopeKey: "run-envelope" })),
     enqueue: vi.fn(async () => ({
       commandId: "command-1",
       disposition: "enqueued" as const,
@@ -36,7 +36,14 @@ function harness(initialMembership: "active" | "revoked" = "active") {
     })),
   };
   const credentials = {
-    removeCredential,
+    generateJoinRequestId: vi.fn(() => "join-unused"),
+    generateCredential: vi.fn(() => "credential-unused"),
+    putEnvelope: vi.fn(async () => undefined),
+    getEnvelope: vi.fn(async () => ({
+      kind: "bound" as const,
+      participantCredential: "credential-original",
+    })),
+    removeEnvelope,
   };
   const controller = new SharedPlayController(
     { runId: "run-1", releaseId, sharedRequired: true },
@@ -47,7 +54,7 @@ function harness(initialMembership: "active" | "revoked" = "active") {
   return {
     controller,
     request,
-    removeCredential,
+    removeEnvelope,
     revoke: () => {
       current = view("revoked");
     },
@@ -91,9 +98,8 @@ describe("run-scoped shared play controller", () => {
         invitation: "invitation-original",
         participantCredential: "credential-original",
       })),
-      getCredential: vi.fn(async () => "credential-original"),
       putEnvelope: vi.fn(async () => undefined),
-      removeCredential: vi.fn(async () => undefined),
+      removeEnvelope: vi.fn(async () => undefined),
     };
     const joinResult = {
       participantId: "participant-1",
@@ -222,14 +228,14 @@ describe("run-scoped shared play controller", () => {
   });
 
   it("publishes revocation, removes credentials, and blocks another command", async () => {
-    const { controller, removeCredential, revoke } = harness();
+    const { controller, removeEnvelope, revoke } = harness();
     await controller.start();
     revoke();
 
     await controller.retry();
 
     expect(controller.snapshot()).toEqual({ status: "revoked", sessionId: "session-1" });
-    expect(removeCredential).toHaveBeenCalledWith("run-envelope");
+    expect(removeEnvelope).toHaveBeenCalledWith("run-envelope");
     await expect(
       controller.enqueue({
         commandId: "command-1",

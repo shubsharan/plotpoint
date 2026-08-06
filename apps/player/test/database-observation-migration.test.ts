@@ -129,8 +129,7 @@ describe("corrected player database schema", () => {
       "service_origin",
       "join_request_id",
       "invitation_digest",
-      "invitation_key",
-      "credential_key",
+      "envelope_key",
       "request_digest",
       "status",
     ]);
@@ -141,7 +140,7 @@ describe("corrected player database schema", () => {
       "participant_id",
       "team_id",
       "service_origin",
-      "credential_key",
+      "envelope_key",
       "membership_status",
       "transport_status",
       "sync_status",

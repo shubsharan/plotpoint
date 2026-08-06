@@ -315,7 +315,7 @@ reads, honest durable sync status, compare-or-insert terminal reconciliation, du
 rejection, durable pending-join provenance before network submission, immutable SQLite binding guards,
 one pending-or-bound session per run, release equality on join/pull, atomic local revocation, and
 request-ID preservation. The coordinator exposes one per-session drain promise that includes the active
-or trailing pass covering each trigger. Immutable binding guards include the credential key, and
+or trailing pass covering each trigger. Immutable binding guards include the envelope key, and
 membership transitions only from active to revoked; stale active retries and snapshots fail without
 reactivation. Test parallel joins plus every join/claim/submit/pull/commit interruption and
 corrective repeat, 100 queued-action response-loss retries with one immutable terminal each, and 100
@@ -362,7 +362,7 @@ Game Play Report export, plain public naming, and the clean rejection of obsolet
 - [shared-session-api.md](contracts/shared-session-api.md) defines generic release-pinned `/v1` routes,
   join, and mechanic dispatch.
 - [shared-recovery.md](contracts/shared-recovery.md) defines finite batches, keyed single-flight,
-  per-trigger drain promises, durable pending join, atomic terminal revocation, credential-key-inclusive
+  per-trigger drain promises, durable pending join, atomic terminal revocation, envelope-key-inclusive
   immutable binding, idempotent snapshots, clean database rejection, and correlated bridge errors.
 - [quickstart.md](quickstart.md) exercises both games as an external author/operator/player would.
 - The Spec Kit block in `AGENTS.md` points to this plan.

@@ -173,7 +173,7 @@ exact or safely recoverable bindings persist and that revocation never reverses.
 3. **Given** an existing shared-session binding, **When** an exact join response is replayed, **Then**
    it returns the original binding without rewriting immutable identity fields.
 4. **Given** an existing binding and changed run, release, session, participant, team, service, or
-   credential-key identity, **When** a conflicting response is processed, **Then** the prior binding
+   envelope-key identity, **When** a conflicting response is processed, **Then** the prior binding
    remains unchanged and an explicit conflict is reported.
 5. **Given** a locally revoked binding, **When** an exact retry or stale authenticated snapshot reports
    active membership, **Then** the prior revoked binding and blocked actions remain unchanged and an
@@ -279,7 +279,7 @@ truthful nonzero synchronization chronology, stable bytes, and no private values
 - A corrective pull repeats retained terminal results whose original outbox rows are already gone.
 - Several UI actions request synchronization concurrently, including while the device changes between
   offline, degraded, and online states.
-- A join response or later snapshot changes release, run, session, participant, team, credential key,
+- A join response or later snapshot changes release, run, session, participant, team, envelope key,
   membership, or service binding unexpectedly, including an attempt to reactivate revoked membership.
 - A local-only release, shared release, and future player-specific release are installed in succession
   without rebuilding the player.
@@ -383,7 +383,7 @@ truthful nonzero synchronization chronology, stable bytes, and no private values
   among the installed run release, join response release, authorized snapshot release, and persisted
   shared-session release before exposing the view.
 - **FR-023**: Exact join retries MUST preserve the original immutable run, release, session, participant,
-  team, service, and credential-key binding; changed reuse MUST fail without partially updating it.
+  team, service, and envelope-key binding; changed reuse MUST fail without partially updating it.
   Binding and initial pull MUST commit atomically. Later envelope cleanup failure MUST be diagnostic and
   MUST NOT convert the committed join into failure.
 - **FR-024**: Shared bridge errors for a well-formed request MUST preserve its request identity so the
@@ -442,7 +442,8 @@ truthful nonzero synchronization chronology, stable bytes, and no private values
 - **Trusted Mechanic Binding**: Declaration connecting a release to one supported
   platform-owned authoritative mechanic and its configuration, aggregate, commands, and projection.
 - **Shared Session Binding**: Relationship among one game run, release, service session, participant,
-  team, credential-key reference, service location, monotonic membership, and recovery cursor.
+  team, envelope-key reference, service location, monotonic membership, and participant-scoped recovery
+  cursor.
 - **Shared Action**: One durable game intent with stable identity, target, expected state version,
   observations, lifecycle status, and eventual exact terminal.
 - **Authorized Snapshot**: Complete current shared view plus participant terminal results and recovery

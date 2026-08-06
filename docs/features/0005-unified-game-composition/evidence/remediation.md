@@ -106,3 +106,24 @@ remain local to their tests. The bounded runner completed 94 files and 657 tests
 - PostgreSQL now increments `hunt_participants.receipt_position` under the participant row lock in the same
   transaction as the receipt. Repeatable-read pull uses that participant's committed counter; an earlier
   pre-release schema is rejected with reset-or-reinstall guidance rather than migrated.
+
+## Phase 14 Checkpoint 4: Mechanic And Secret Authority
+
+- Status: **PASS** on 2026-08-06.
+- Red evidence: the public mechanic adapter exposed a separable `authorize` result; SecureStore exposed
+  optional envelope methods beside six raw invitation/credential methods; and pending SQLite storage
+  retained separate invitation and credential keys.
+- `pnpm --filter @plotpoint/modules test`: **PASS**, 2 files and 17 tests. Every authority, stale,
+  already-satisfied, observation, and terminal-evidence case crosses only the complete `execute` result.
+- `pnpm --filter @plotpoint/player test`: **PASS**, 24 files and 182 tests. Recovery tests prove the
+  pending envelope is written before reservation, reduced only after atomic binding/pull commit, resumes
+  after interruption, and leaves a committed join successful with durable recovery evidence if reduction
+  must resume.
+- Installed co-op PostgreSQL/Testcontainers acceptance: **PASS**, 1 file and 1 test, after migrating the
+  cross-package player harness to the mandatory envelope and `envelope_key` schema.
+- Module, player, and API type checks: **PASS**.
+- `pnpm format`, `pnpm lint`, and `git diff --check`: **PASS**; lint retains the pre-existing generated
+  harness unused-helper warning and reports no error.
+- `TrustedMechanicAdapter` now exposes only binding validation, complete execution, and projection. The
+  player has one mandatory envelope protocol and one immutable pending/bound key, with no fallback reader,
+  schema migration, alias, or compatibility adapter. The governing contracts are single current documents.

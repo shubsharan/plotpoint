@@ -33,14 +33,14 @@ END;
 CREATE TABLE IF NOT EXISTS pending_shared_joins (
   session_id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE REFERENCES runs(run_id),
   expected_release_id TEXT NOT NULL, service_origin TEXT NOT NULL, join_request_id TEXT NOT NULL,
-  invitation_digest TEXT NOT NULL, invitation_key TEXT NOT NULL, credential_key TEXT NOT NULL,
+  invitation_digest TEXT NOT NULL, envelope_key TEXT NOT NULL,
   request_digest TEXT NOT NULL,
   status TEXT NOT NULL CHECK(status IN ('preparing','ready','submitting'))
 );
 CREATE TABLE IF NOT EXISTS shared_sessions (
   session_id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE REFERENCES runs(run_id), release_id TEXT NOT NULL,
   participant_id TEXT NOT NULL, team_id TEXT NOT NULL, service_origin TEXT NOT NULL,
-  credential_key TEXT NOT NULL,
+  envelope_key TEXT NOT NULL,
   membership_status TEXT NOT NULL CHECK(membership_status IN ('active','revoked')),
   transport_status TEXT NOT NULL CHECK(transport_status IN ('offline','connecting','online','degraded')),
   sync_status TEXT NOT NULL CHECK(sync_status IN ('current','syncing','recovery-required','revoked')),
@@ -82,15 +82,14 @@ BEGIN
 END;
 CREATE TRIGGER IF NOT EXISTS pending_shared_join_immutable
 BEFORE UPDATE OF session_id,run_id,expected_release_id,service_origin,join_request_id,
-  invitation_digest,invitation_key,credential_key,request_digest ON pending_shared_joins
+  invitation_digest,envelope_key,request_digest ON pending_shared_joins
 WHEN OLD.session_id IS NOT NEW.session_id
   OR OLD.run_id IS NOT NEW.run_id
   OR OLD.expected_release_id IS NOT NEW.expected_release_id
   OR OLD.service_origin IS NOT NEW.service_origin
   OR OLD.join_request_id IS NOT NEW.join_request_id
   OR OLD.invitation_digest IS NOT NEW.invitation_digest
-  OR OLD.invitation_key IS NOT NEW.invitation_key
-  OR OLD.credential_key IS NOT NEW.credential_key
+  OR OLD.envelope_key IS NOT NEW.envelope_key
   OR OLD.request_digest IS NOT NEW.request_digest
 BEGIN
   SELECT RAISE(ABORT, 'shared-pending-join-immutable');
@@ -102,7 +101,7 @@ BEGIN
   SELECT RAISE(ABORT, 'shared-run-binding-conflict');
 END;
 CREATE TRIGGER IF NOT EXISTS shared_session_binding_immutable
-BEFORE UPDATE OF session_id,run_id,release_id,participant_id,team_id,service_origin,credential_key
+BEFORE UPDATE OF session_id,run_id,release_id,participant_id,team_id,service_origin,envelope_key
 ON shared_sessions
 WHEN OLD.session_id IS NOT NEW.session_id
   OR OLD.run_id IS NOT NEW.run_id
@@ -110,7 +109,7 @@ WHEN OLD.session_id IS NOT NEW.session_id
   OR OLD.participant_id IS NOT NEW.participant_id
   OR OLD.team_id IS NOT NEW.team_id
   OR OLD.service_origin IS NOT NEW.service_origin
-  OR OLD.credential_key IS NOT NEW.credential_key
+  OR OLD.envelope_key IS NOT NEW.envelope_key
 BEGIN
   SELECT RAISE(ABORT, 'shared-session-binding-immutable');
 END;
@@ -130,8 +129,7 @@ const SHARED_SCHEMA_COLUMNS = Object.freeze({
     "service_origin",
     "join_request_id",
     "invitation_digest",
-    "invitation_key",
-    "credential_key",
+    "envelope_key",
     "request_digest",
     "status",
   ],
@@ -142,7 +140,7 @@ const SHARED_SCHEMA_COLUMNS = Object.freeze({
     "participant_id",
     "team_id",
     "service_origin",
-    "credential_key",
+    "envelope_key",
     "membership_status",
     "transport_status",
     "sync_status",
@@ -220,8 +218,7 @@ export interface PendingSharedJoin {
   readonly serviceOrigin: string;
   readonly joinRequestId: string;
   readonly invitationDigest: string;
-  readonly invitationKey: string;
-  readonly credentialKey: string;
+  readonly envelopeKey: string;
   readonly requestDigest: string;
   readonly status: "preparing" | "ready" | "submitting";
 }
@@ -233,7 +230,7 @@ export interface SharedBindingContext {
   readonly runId: string;
   readonly expectedReleaseId: `sha256:${string}`;
   readonly serviceOrigin: string;
-  readonly credentialKey: string;
+  readonly envelopeKey: string;
 }
 
 export interface SharedJoinResponseIdentity {
@@ -249,7 +246,7 @@ export interface SharedSessionRecord {
   readonly participantId: string;
   readonly teamId: string;
   readonly serviceOrigin: string;
-  readonly credentialKey: string;
+  readonly envelopeKey: string;
 }
 
 export type SharedOutboxStatus = "queued" | "submitting" | "blocked-revoked";
@@ -278,7 +275,7 @@ interface StoredSessionBinding {
   readonly participant_id: string;
   readonly team_id: string;
   readonly service_origin: string;
-  readonly credential_key: string;
+  readonly envelope_key: string;
   readonly membership_status: "active" | "revoked";
   readonly sync_status: SharedPlayView["synchronization"];
 }
@@ -290,8 +287,7 @@ interface StoredPendingSharedJoin {
   readonly service_origin: string;
   readonly join_request_id: string;
   readonly invitation_digest: string;
-  readonly invitation_key: string;
-  readonly credential_key: string;
+  readonly envelope_key: string;
   readonly request_digest: string;
   readonly status: PendingSharedJoin["status"];
 }
@@ -365,8 +361,7 @@ function parsePendingSharedJoin(row: StoredPendingSharedJoin): PendingSharedJoin
     serviceOrigin: row.service_origin,
     joinRequestId: row.join_request_id,
     invitationDigest: row.invitation_digest,
-    invitationKey: row.invitation_key,
-    credentialKey: row.credential_key,
+    envelopeKey: row.envelope_key,
     requestDigest: row.request_digest,
     status: row.status,
   });
@@ -380,8 +375,7 @@ function pendingJoinMatches(row: StoredPendingSharedJoin, input: PendingSharedJo
     row.service_origin === input.serviceOrigin &&
     row.join_request_id === input.joinRequestId &&
     row.invitation_digest === input.invitationDigest &&
-    row.invitation_key === input.invitationKey &&
-    row.credential_key === input.credentialKey &&
+    row.envelope_key === input.envelopeKey &&
     row.request_digest === input.requestDigest
   );
 }
@@ -396,7 +390,7 @@ function bindingMatches(
     row.run_id === context.runId &&
     row.release_id === context.expectedReleaseId &&
     row.service_origin === context.serviceOrigin &&
-    row.credential_key === context.credentialKey &&
+    row.envelope_key === context.envelopeKey &&
     (response === undefined ||
       (row.release_id === response.releaseId &&
         row.participant_id === response.participantId &&
@@ -550,16 +544,15 @@ export class SharedSyncStore {
       await tx.runAsync(
         `INSERT INTO pending_shared_joins
          (session_id,run_id,expected_release_id,service_origin,join_request_id,
-          invitation_digest,invitation_key,credential_key,request_digest,status)
-         VALUES (?,?,?,?,?,?,?,?,?,'preparing')`,
+          invitation_digest,envelope_key,request_digest,status)
+         VALUES (?,?,?,?,?,?,?,?,'preparing')`,
         candidate.sessionId,
         candidate.runId,
         candidate.expectedReleaseId,
         candidate.serviceOrigin,
         candidate.joinRequestId,
         candidate.invitationDigest,
-        candidate.invitationKey,
-        candidate.credentialKey,
+        candidate.envelopeKey,
         candidate.requestDigest,
       );
       output = deepFreeze({ ...candidate, status: "preparing" });
@@ -654,8 +647,7 @@ export class SharedSyncStore {
           serviceOrigin: joinContext.serviceOrigin,
           joinRequestId: pending.join_request_id,
           invitationDigest: pending.invitation_digest,
-          invitationKey: pending.invitation_key,
-          credentialKey: joinContext.credentialKey,
+          envelopeKey: joinContext.envelopeKey,
           requestDigest: pending.request_digest,
         })
       ) {
@@ -672,7 +664,7 @@ export class SharedSyncStore {
       }
       await tx.runAsync(
         `INSERT INTO shared_sessions
-         (session_id,run_id,release_id,participant_id,team_id,service_origin,credential_key,
+         (session_id,run_id,release_id,participant_id,team_id,service_origin,envelope_key,
           membership_status,transport_status,sync_status,cursor,confirmed_at)
          VALUES (?,?,?,?,?,?,?,?,'offline','recovery-required','0',NULL)`,
         joinContext.sessionId,
@@ -681,7 +673,7 @@ export class SharedSyncStore {
         input.response.participantId,
         input.response.teamId,
         joinContext.serviceOrigin,
-        joinContext.credentialKey,
+        joinContext.envelopeKey,
         input.pull.snapshot.membershipStatus,
       );
       await this.replaceSnapshot(tx, joinContext, input.pull);
@@ -1249,7 +1241,7 @@ export class SharedSyncStore {
       participant_id: string;
       team_id: string;
       service_origin: string;
-      credential_key: string;
+      envelope_key: string;
       cursor: string;
       membership_status: "active" | "revoked";
     }>("SELECT * FROM shared_sessions WHERE session_id=?", sessionId);
@@ -1262,7 +1254,7 @@ export class SharedSyncStore {
           participantId: row.participant_id,
           teamId: row.team_id,
           serviceOrigin: row.service_origin,
-          credentialKey: row.credential_key,
+          envelopeKey: row.envelope_key,
           cursor: row.cursor,
           membershipStatus: row.membership_status,
         };

@@ -488,9 +488,10 @@ A release can declare one trusted-mechanic binding containing only data:
 - required capabilities.
 
 The API resolves that binding through a closed registry of platform-owned adapters. An adapter owns
-the executable server model, schema validators, authorization policy, observation transformation,
-initialization, domain conflict rules, and projection function. The API never imports or executes
-release-authored server JavaScript.
+the executable server model, schema validators, private target discovery and observation
+transformation, initialization, domain conflict rules, and projection function. Its single public
+`execute` operation returns the complete terminal decision against the locked current aggregate. The
+API never imports or executes release-authored server JavaScript.
 
 This keeps the Host API and synchronization protocol game-neutral while allowing a mechanic to define
 domain-aware behavior—for example, accepting a stale team version when a different objective is still
@@ -504,19 +505,21 @@ A shared session is pinned to one immutable release and contains membership plus
 team or session aggregate. Join establishes an immutable binding across:
 
 ```text
-run + release + service origin + session + participant + team + credential
+run + release + service origin + session + participant + team + envelope key
 ```
 
 Before exposing a shared view, the player requires equality among the installed run, expected release,
 join response, authorized snapshot, and any existing binding. Raw invitations and credentials use one
-deterministic per-run SecureStore envelope. Pending form contains immutable join identity, invitation,
-and participant credential; bound form retains only the credential. Secret write precedes SQLite
-reservation so startup can recover every crash window; SQLite stores request provenance for exact retry.
+deterministic per-run SecureStore envelope named by one immutable `envelope_key` in pending and bound
+storage. Pending form contains immutable join identity, invitation, and participant credential; bound
+form retains only the credential. Secret write precedes SQLite reservation so startup can recover every
+crash window; SQLite stores request provenance for exact retry.
 
 Shared commands and projections are generic schema-identified envelopes:
 
 - a command names target aggregate, expected state version, type, canonical payload, and observations;
-- a terminal result names command ID, terminal, outcome code, resulting version, and decision position;
+- a terminal result names command ID, terminal, outcome code, resulting version, and participant-scoped
+  decision position;
 - a projection names aggregate/schema identity, state version, and authorized value; and
 - a pull contains one complete authorized snapshot, participant-visible results, and the next cursor.
 
@@ -527,11 +530,14 @@ Exact HTTP routes and envelopes are defined by the
 
 One `SharedPlayController` exists per installed run and is the only owner of join, synchronization,
 revocation, recovery, and shared UI state. It exposes `local-only`, `join-required`, `joining`,
-`synchronizing`, `bound`, `revoked`, or `recovery-required`. `start()` completes recoverable secret
-preparation, resumes pending joins, and schedules immediate synchronization for an active binding.
-Foreground, explicit retry, and unreachable-to-reachable connectivity enter the same keyed single-flight.
-The App renders only controller state. Revocation commits blocked work and state, removes credentials,
-and unmounts the WebView before another game message can be accepted.
+`synchronizing`, `bound`, `revoked`, or `recovery-required`; recovery state explicitly says whether
+retry is possible and exposes no cached projection. `start()` completes recoverable secret preparation,
+resumes pending joins, and schedules immediate synchronization for an active binding. Foreground,
+explicit retry, and unreachable-to-reachable connectivity enter the same keyed single-flight. The App
+renders only controller state. The controller subscription alone publishes `shared.sync.changed` when
+it publishes a fresh bound view; foreground, reconnect, and retry never publish parallel notifications.
+Revocation commits blocked work and state, removes credentials, and unmounts the WebView before another
+game message can be accepted.
 
 ```mermaid
 stateDiagram-v2
@@ -560,10 +566,20 @@ coordinator permits one active pass and at most one coalesced trailing pass per 
 the per-session drain through the active or trailing pass covering its trigger. Durable rows, not
 in-memory promises, provide restart recovery.
 
+The claim cutoff is marked immediately before the durable batch claim begins. Triggers before it
+coalesce into the active pass; a trigger after it requests the same single trailing pass, including the
+commit-to-continuation window.
+
 Terminal results are immutable compare-or-insert facts. Reapplying the same normal, corrective, or
 revoked snapshot is byte-equivalent. A conflicting repeat rolls back without exposing candidate
 projections. Revocation atomically blocks queued work before the host removes the credential and is
-terminal for that credential key; stale active snapshots cannot reactivate the binding.
+terminal for that envelope key; stale active snapshots cannot reactivate the binding.
+
+Receipt order is scoped to the authenticated participant. PostgreSQL increments that participant's
+committed counter in the same row-locked transaction that inserts a new terminal. Repeatable-read pull
+uses the committed counter as its high-water mark and returns only that participant's receipts through
+it, so rollback creates no cursor gap and concurrent participants remain independent. Wire cursors and
+decision positions remain opaque numeric strings.
 
 The platform uses complete authorized snapshots rather than deltas, WebSockets, participant projection
 stores, or background workers. This intentionally trades small repeated payloads for failure-atomic

@@ -163,6 +163,20 @@ describe("runtime view lifecycle", () => {
     ).resolves.toEqual([false, false, false]);
   });
 
+  it("has one mandatory envelope contract and no two-secret compatibility path", async () => {
+    const [credentials, sharedDatabase] = await Promise.all([
+      readFile(new URL("../src/shared/credentials.ts", import.meta.url), "utf8"),
+      readFile(new URL("../src/shared/database.ts", import.meta.url), "utf8"),
+    ]);
+
+    expect(credentials).toContain("putEnvelope(key: string");
+    expect(credentials).toContain("getEnvelope(key: string");
+    expect(credentials).toContain("removeEnvelope(key: string");
+    expect(credentials).not.toMatch(/putCredential|getCredential|putInvitation|getInvitation/);
+    expect(sharedDatabase).toContain("envelope_key TEXT NOT NULL");
+    expect(sharedDatabase).not.toMatch(/invitation_key|credential_key/);
+  });
+
   it("has no superseded local or game-specific report reader", async () => {
     await expect(
       Promise.all(

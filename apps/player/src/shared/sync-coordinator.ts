@@ -75,18 +75,19 @@ export class SharedSyncCoordinator {
     const session = await this.store.session(sessionId);
     if (session === null) throw new Error("shared-session-missing");
     if (session.membershipStatus === "revoked") {
-      await this.credentials.removeCredential(session.credentialKey);
+      await this.credentials.removeEnvelope(session.envelopeKey);
       return "revoked";
     }
-    const credential = await this.credentials.getCredential(session.credentialKey);
-    if (credential === null) throw new Error("shared-credential-missing");
+    const envelope = await this.credentials.getEnvelope(session.envelopeKey);
+    if (envelope?.kind !== "bound") throw new Error("shared-bound-envelope-missing");
+    const credential = envelope.participantCredential;
     const client = this.clientFactory(session.serviceOrigin);
     const context: SharedBindingContext = {
       sessionId: session.sessionId,
       runId: session.runId,
       expectedReleaseId: session.releaseId,
       serviceOrigin: session.serviceOrigin,
-      credentialKey: session.credentialKey,
+      envelopeKey: session.envelopeKey,
     };
     let batchClaimed = false;
     try {
@@ -113,7 +114,7 @@ export class SharedSyncCoordinator {
       const pull = await client.pull(sessionId, credential, session.cursor);
       await this.store.applyPull(context, pull);
       if (pull.snapshot.membershipStatus === "revoked") {
-        await this.credentials.removeCredential(session.credentialKey);
+        await this.credentials.removeEnvelope(session.envelopeKey);
         return "revoked";
       }
       await this.store.recordSyncEvent(sessionId, 0, "current", "snapshot-replaced");
@@ -121,7 +122,7 @@ export class SharedSyncCoordinator {
     } catch (error) {
       if (error instanceof SharedHttpError && error.code === "participant-revoked") {
         await this.store.markRevoked(sessionId);
-        await this.credentials.removeCredential(session.credentialKey);
+        await this.credentials.removeEnvelope(session.envelopeKey);
         return "revoked";
       }
       if (batchClaimed) await this.store.failSubmissionBatch(sessionId);

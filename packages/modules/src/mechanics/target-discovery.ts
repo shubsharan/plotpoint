@@ -5,6 +5,8 @@ import {
   resolveCommandBinding,
   type Diagnostic,
   type JsonObject,
+  type Observation,
+  type RuntimeCommand,
   type RuntimeSchema,
   type SchemaValidationResult,
 } from "@plotpoint/runtime";
@@ -13,6 +15,7 @@ import {
   type GameCapabilityRequirement,
   type GameComposition,
   type LocationObservation,
+  type SyncCommand,
   type TrustedMechanicBinding,
 } from "@plotpoint/protocol";
 
@@ -76,6 +79,23 @@ interface TeamState extends JsonObject {
   readonly targets: readonly TeamTargetState[];
   readonly completedTargets: number;
   readonly complete: boolean;
+}
+
+type TargetDiscoveryResolution =
+  | {
+      readonly kind: "authorized";
+      readonly command: RuntimeCommand<JsonObject, "team">;
+      readonly observations: readonly Observation[];
+    }
+  | { readonly kind: "rejected"; readonly outcome: TargetDiscoveryOutcome }
+  | { readonly kind: "invalid"; readonly diagnostics: readonly Diagnostic[] };
+
+interface TargetDiscoveryImplementation extends TrustedMechanicAdapter<"team"> {
+  discoverTarget(input: {
+    readonly participant: AuthorizedParticipant;
+    readonly command: SyncCommand;
+    readonly observations: readonly PersistedObservation[];
+  }): TargetDiscoveryResolution;
 }
 
 interface TargetDiscoveryPayload extends JsonObject {
@@ -607,7 +627,7 @@ export function createTargetDiscoveryAdapter(
   capturedConfiguration: unknown,
 ): TrustedMechanicAdapter<"team"> {
   const captured = canonicalConfig(capturedConfiguration);
-  const adapter: TrustedMechanicAdapter<"team"> = {
+  const implementation: TargetDiscoveryImplementation = {
     id: TARGET_DISCOVERY_MECHANIC,
     model,
     configurationSchema,
@@ -627,7 +647,7 @@ export function createTargetDiscoveryAdapter(
           ])
         : validation;
     },
-    authorize({ participant, command, observations }) {
+    discoverTarget({ participant, command, observations }) {
       if (
         !authorizedParticipant(participant) ||
         command.type !== TARGET_DISCOVERY_COMMAND ||
@@ -709,7 +729,7 @@ export function createTargetDiscoveryAdapter(
       });
     },
     execute({ participant, aggregate, command, observations }) {
-      const authorization = adapter.authorize({ participant, command, observations });
+      const discovery = implementation.discoverTarget({ participant, command, observations });
       const capabilityEvidence = (disposition: "consumed" | "denied" | "expired") =>
         Object.freeze(
           command.observations.map(({ observationId }) =>
@@ -720,21 +740,21 @@ export function createTargetDiscoveryAdapter(
             }),
           ),
         );
-      if (authorization.kind === "rejected") {
+      if (discovery.kind === "rejected") {
         const disposition =
-          authorization.outcome.code === "location-stale"
+          discovery.outcome.code === "location-stale"
             ? "expired"
-            : authorization.outcome.code === "location-denied" ||
-                authorization.outcome.code === "location-unavailable"
+            : discovery.outcome.code === "location-denied" ||
+                discovery.outcome.code === "location-unavailable"
               ? "denied"
-              : authorization.outcome.code === "location-future" ||
-                  authorization.outcome.code === "location-inaccurate" ||
-                  authorization.outcome.code === "location-outside-zone"
+              : discovery.outcome.code === "location-future" ||
+                  discovery.outcome.code === "location-inaccurate" ||
+                  discovery.outcome.code === "location-outside-zone"
                 ? "consumed"
                 : null;
         return Object.freeze({
           terminal: "rejected",
-          outcomeCode: authorization.outcome.code,
+          outcomeCode: discovery.outcome.code,
           aggregateBefore: aggregate,
           aggregateAfter: aggregate,
           domainEvents: Object.freeze([]),
@@ -742,10 +762,10 @@ export function createTargetDiscoveryAdapter(
             disposition === null ? Object.freeze([]) : capabilityEvidence(disposition),
         });
       }
-      if (authorization.kind === "invalid") {
+      if (discovery.kind === "invalid") {
         return Object.freeze({
           terminal: "invalid",
-          outcomeCode: authorization.diagnostics[0]?.code ?? "execution-invalid",
+          outcomeCode: discovery.diagnostics[0]?.code ?? "execution-invalid",
           aggregateBefore: aggregate,
           aggregateAfter: aggregate,
           domainEvents: Object.freeze([]),
@@ -755,10 +775,10 @@ export function createTargetDiscoveryAdapter(
       const execution = model.execute({
         aggregate,
         command: Object.freeze({
-          ...authorization.command,
+          ...discovery.command,
           expectedStateVersion: aggregate.stateVersion,
         }),
-        observations: authorization.observations,
+        observations: discovery.observations,
       });
       if (execution.kind === "preflight-invalid") {
         return Object.freeze({
@@ -820,7 +840,15 @@ export function createTargetDiscoveryAdapter(
       });
     },
   };
-  return Object.freeze(adapter);
+  return Object.freeze({
+    id: implementation.id,
+    model: implementation.model,
+    configurationSchema: implementation.configurationSchema,
+    projectionSchema: implementation.projectionSchema,
+    validateBinding: implementation.validateBinding,
+    execute: implementation.execute,
+    project: implementation.project,
+  }) satisfies TrustedMechanicAdapter<"team">;
 }
 
 export function targetDiscoveryConfigReleasePath(binding: TrustedMechanicBinding): string {

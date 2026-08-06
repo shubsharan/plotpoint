@@ -351,7 +351,7 @@ pending-or-bound invariant makes parallel changed joins conflict before network 
 exact reuse resumes the same keys and request. Restart can therefore resend the same request after
 response loss; a successful immutable session/snapshot commit deletes the pending row atomically,
 while a mismatch retains the full attempt. Join and every later pull require equality among active run
-release, response release, snapshot release, session, participant, team, credential key, and canonical
+release, response release, snapshot release, session, participant, team, envelope key, and canonical
 service origin before exposing state. Fresh insert owns immutable identity columns; exact retry updates
 only recovery state. SQLite guards those columns against later mutation and treats multiple sessions
 for one run as corruption. Membership is monotonic from active to revoked: an active candidate applied

@@ -21,7 +21,7 @@ const bindingContext: SharedBindingContext = {
   runId: "run-1",
   expectedReleaseId: releaseId,
   serviceOrigin: "https://example.test",
-  credentialKey: "plotpoint.shared.session-1.credential",
+  envelopeKey: "plotpoint.shared.session-1.envelope",
 };
 
 interface SubmissionBatchRecord {
@@ -122,7 +122,7 @@ async function setup(): Promise<{
   databases.push(database);
   await database.runAsync(
     `INSERT INTO shared_sessions
-     (session_id,run_id,release_id,participant_id,team_id,service_origin,credential_key,membership_status,
+     (session_id,run_id,release_id,participant_id,team_id,service_origin,envelope_key,membership_status,
       transport_status,sync_status,cursor,confirmed_at)
      VALUES (?,?,?,?,?,?,?,'active','offline','current','0',?)`,
     sessionId,
@@ -131,7 +131,7 @@ async function setup(): Promise<{
     "participant-1",
     "team-1",
     "https://example.test",
-    bindingContext.credentialKey,
+    bindingContext.envelopeKey,
     "2030-01-01T00:00:00.000Z",
   );
   const store = new SharedSyncStore(database) as SharedSyncStore & Phase6SubmissionStore;

@@ -43,7 +43,7 @@ interface SchedulerStore {
     readonly participantId: string;
     readonly teamId: string;
     readonly serviceOrigin: string;
-    readonly credentialKey: string;
+    readonly envelopeKey: string;
     readonly cursor: string;
     readonly membershipStatus: "active" | "revoked";
   } | null>;
@@ -91,7 +91,7 @@ function session(sessionId: string): SchedulerSession {
     participantId: `participant-${sessionId}`,
     teamId: `team-${sessionId}`,
     serviceOrigin: `https://${sessionId}.example.test`,
-    credentialKey: `credential-key-${sessionId}`,
+    envelopeKey: `envelope-key-${sessionId}`,
     cursor: "0",
     membershipStatus: "active" as const,
   };
@@ -173,12 +173,12 @@ function createHarness(
   const credentials = {
     generateJoinRequestId: vi.fn(() => "join-request"),
     generateCredential: vi.fn(() => "credential"),
-    putCredential: vi.fn(async () => undefined),
-    getCredential: vi.fn(async (key: string) => key.replace("credential-key-", "credential-")),
-    removeCredential: vi.fn(async () => undefined),
-    putInvitation: vi.fn(async () => undefined),
-    getInvitation: vi.fn(async () => "invitation"),
-    removeInvitation: vi.fn(async () => undefined),
+    putEnvelope: vi.fn(async () => undefined),
+    getEnvelope: vi.fn(async (key: string) => ({
+      kind: "bound" as const,
+      participantCredential: key.replace("envelope-key-", "credential-"),
+    })),
+    removeEnvelope: vi.fn(async () => undefined),
   } satisfies ParticipantCredentialStore;
   const clientFactory = vi.fn(() => client as unknown as SharedHttpClient);
   const coordinator = new SharedSyncCoordinator(
@@ -224,7 +224,7 @@ describe("shared sync coordinator", () => {
         runId: "run-session-1",
         expectedReleaseId: releaseId,
         serviceOrigin: "https://session-1.example.test",
-        credentialKey: "credential-key-session-1",
+        envelopeKey: "envelope-key-session-1",
       },
       pull("session-1"),
     );
@@ -333,7 +333,7 @@ describe("shared sync coordinator", () => {
 
     await request(harness.coordinator, "session-1", "retry");
 
-    expect(harness.credentials.removeCredential).toHaveBeenCalledWith("credential-key-session-1");
+    expect(harness.credentials.removeEnvelope).toHaveBeenCalledWith("envelope-key-session-1");
     expect(harness.store.beginSubmissionBatch).not.toHaveBeenCalled();
     expect(harness.clientFactory).not.toHaveBeenCalled();
   });
@@ -369,12 +369,12 @@ describe("shared sync coordinator", () => {
       {
         generateJoinRequestId: vi.fn(() => "join-request"),
         generateCredential: vi.fn(() => "credential"),
-        putCredential: vi.fn(async () => undefined),
-        getCredential: vi.fn(async () => "credential"),
-        removeCredential: vi.fn(async () => undefined),
-        putInvitation: vi.fn(async () => undefined),
-        getInvitation: vi.fn(async () => "invitation"),
-        removeInvitation: vi.fn(async () => undefined),
+        putEnvelope: vi.fn(async () => undefined),
+        getEnvelope: vi.fn(async () => ({
+          kind: "bound" as const,
+          participantCredential: "credential",
+        })),
+        removeEnvelope: vi.fn(async () => undefined),
       },
       clientFactory,
     );

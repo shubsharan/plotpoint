@@ -3,15 +3,9 @@ import * as SecureStore from "expo-secure-store";
 export interface ParticipantCredentialStore {
   generateJoinRequestId(): string;
   generateCredential(): string;
-  putCredential(key: string, credential: string): Promise<void>;
-  getCredential(key: string): Promise<string | null>;
-  removeCredential(key: string): Promise<void>;
-  putInvitation(key: string, invitation: string): Promise<void>;
-  getInvitation(key: string): Promise<string | null>;
-  removeInvitation(key: string): Promise<void>;
-  putEnvelope?(key: string, envelope: SharedSecretEnvelope): Promise<void>;
-  getEnvelope?(key: string): Promise<SharedSecretEnvelope | null>;
-  removeEnvelope?(key: string): Promise<void>;
+  putEnvelope(key: string, envelope: SharedSecretEnvelope): Promise<void>;
+  getEnvelope(key: string): Promise<SharedSecretEnvelope | null>;
+  removeEnvelope(key: string): Promise<void>;
 }
 
 export type SharedSecretEnvelope =
@@ -41,23 +35,6 @@ export function createParticipantCredentialStore(): ParticipantCredentialStore {
   return {
     generateJoinRequestId: () => `join-${randomSecret()}`,
     generateCredential: randomSecret,
-    putCredential: put,
-    getCredential: async (key) => {
-      const stored = await SecureStore.getItemAsync(key);
-      if (stored === null || !stored.startsWith("{")) return stored;
-      try {
-        const envelope = JSON.parse(stored) as { readonly participantCredential?: unknown };
-        return typeof envelope.participantCredential === "string"
-          ? envelope.participantCredential
-          : stored;
-      } catch {
-        return stored;
-      }
-    },
-    removeCredential: (key) => SecureStore.deleteItemAsync(key),
-    putInvitation: put,
-    getInvitation: (key) => SecureStore.getItemAsync(key),
-    removeInvitation: (key) => SecureStore.deleteItemAsync(key),
     putEnvelope: (key, envelope) => put(key, JSON.stringify(envelope)),
     getEnvelope: async (key) => {
       const stored = await SecureStore.getItemAsync(key);

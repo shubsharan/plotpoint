@@ -194,7 +194,7 @@ terminal per action and byte-equivalent final SQLite state.
 - [x] T057 [US4] Implement duplicate-free validated compare-or-insert results, full projection replacement, matched outbox removal, cursor/member/status commit, idempotent corrective/revoked application, and rejection of `revoked -> active` candidates in `apps/player/src/shared/database.ts`
 - [x] T058 [US4] Replace the unbounded loop with a long-lived keyed single-flight scheduler whose stable per-session drain promise submits each claimed command once, pulls once per pass, and includes the coalesced trailing pass covering any trigger after claim in `apps/player/src/shared/sync-coordinator.ts`
 - [x] T059 [US4] Route post-commit enqueue, foreground, offline-to-reachable reconnect, and explicit retry through the stable scheduler while keeping shared view reads pure in `apps/player/App.tsx`, `apps/player/src/shared/host-bridge.ts`, and `apps/player/src/shared/session-controller.ts`
-- [x] T060 [US4] Apply terminal error/snapshot revocation atomically before removing SecureStore credentials, reject stale active reactivation for the same credential key, and emit only redacted durable notifications after commit in `apps/player/src/shared/database.ts`, `apps/player/src/shared/sync-coordinator.ts`, and `apps/player/src/shared/credentials.ts`
+- [x] T060 [US4] Apply terminal error/snapshot revocation atomically before removing the SecureStore envelope, reject stale active reactivation for the same envelope key, and emit only redacted durable notifications after commit in `apps/player/src/shared/database.ts`, `apps/player/src/shared/sync-coordinator.ts`, and `apps/player/src/shared/credentials.ts`
 - [x] T061 [US4] Implement two-stage envelope-then-semantic parsing in the shared host bridge, preserve a valid request ID on every semantic error, and route all shared bridge failures through the same correlated response path in `apps/player/src/shared/host-bridge.ts` and `apps/player/App.tsx`
 
 **Checkpoint**: Every finite sync pass terminates, concurrent triggers coalesce, restart recovers durable
@@ -215,16 +215,16 @@ joins/pulls; only exact retries persist and prior playable state remains unchang
 ### Failing Tests for User Story 5
 
 - [x] T062 [P] [US5] Extend the existing `packages/protocol/test/shared-play.test.ts` fixture and add failing protocol/API tests for plain request/response names without repeated body versions, complete `/v1/...` paths, `expectedReleaseId`, release check before invitation consumption, exact join digest retry, internally coherent join/snapshot identity, and safe mismatch errors in `apps/api/test/shared-session.test.ts` and `apps/api/test/postgres.integration.test.ts`
-- [x] T063 [P] [US5] Add failing SQLite tests for pending join states, one pending-or-bound row per run, immutable run/release/session/participant/team/origin/credential-key guards, exact pending reuse, parallel conflict before submission, irreversible revocation, stale active retries, and incompatible identity rollback in `apps/player/test/shared-join-recovery.test.ts`
+- [x] T063 [P] [US5] Add failing SQLite tests for pending join states, one pending-or-bound row per run, immutable run/release/session/participant/team/origin/envelope-key guards, exact pending reuse, parallel conflict before submission, irreversible revocation, stale active retries, and incompatible identity rollback in `apps/player/test/shared-join-recovery.test.ts`
 - [x] T064 [P] [US5] Add failing SecureStore/controller interruption tests for reserve-before-secret, secret-before-send, ready/submitting exact retry, response loss, invitation cleanup ordering, and retained mismatch attempts in `apps/player/test/shared-session-controller.test.ts`
 - [x] T065 [P] [US5] Add failing join/pull acceptance fixtures for every run/release/session/participant/team/origin/credential mismatch, revoked-to-active attempt, and fresh-release/fresh-session behavior in `apps/player/test/release-pinned-shared-play.test.ts`
 
 ### Implementation for User Story 5
 
 - [x] T066 [P] [US5] Add `expectedReleaseId` and exact release-pinned plain join request/response validation to Shared Session API, remove repeated request/response/Sync version fields while keeping `/v1` as the centralized route boundary, and reject mismatch before invitation mutation in `packages/protocol/src/shared/types.ts`, `packages/protocol/src/shared/validation.ts`, `apps/api/src/shared-session-service.ts`, and `apps/api/src/server.ts`
-- [x] T067 [P] [US5] Add pending-join storage, unique run reservation, pending-versus-binding guards, immutable run/release/session/participant/team/origin/credential-key triggers, and monotonic active-to-revoked membership guards in `apps/player/src/shared/database.ts`
-- [x] T068 [US5] Persist exact request provenance and SecureStore key references before send, resume the same ready/submitting request after restart, and clean invitation secrets only after atomic binding commit in `apps/player/src/shared/session-controller.ts`, `apps/player/src/shared/credentials.ts`, and `apps/player/src/shared/http-client.ts`
-- [x] T069 [US5] Enforce run/release/session/participant/team/origin/credential-key equality before fresh join commit and every pull, preserve immutable binding fields on exact retry, reject stale active candidates after revocation, and expose no projection on conflict in `apps/player/src/shared/database.ts` and `apps/player/src/shared/session-controller.ts`
+- [x] T067 [P] [US5] Add pending-join storage, unique run reservation, pending-versus-binding guards, immutable run/release/session/participant/team/origin/envelope-key triggers, and monotonic active-to-revoked membership guards in `apps/player/src/shared/database.ts`
+- [x] T068 [US5] Persist the exact pending envelope and request provenance before send, resume the same ready/submitting request after restart, and reduce the envelope only after atomic binding commit in `apps/player/src/shared/session-controller.ts`, `apps/player/src/shared/credentials.ts`, and `apps/player/src/shared/http-client.ts`
+- [x] T069 [US5] Enforce run/release/session/participant/team/origin/envelope-key equality before fresh join commit and every pull, preserve immutable binding fields on exact retry, reject stale active candidates after revocation, and expose no projection on conflict in `apps/player/src/shared/database.ts` and `apps/player/src/shared/session-controller.ts`
 
 **Checkpoint**: Shared play is release-pinned, exact retry is recoverable, and no changed identity can
 rebind or partially mutate an installed run.
@@ -358,9 +358,9 @@ without adding compatibility paths or a second owner for any boundary.
       that same-participant ordering is contiguous while different participants remain independent
 - [x] T111 Replace the global receipt sequence with one transactionally incremented participant position,
       preserve opaque cursor/result strings, and update server pull plus report ordering consistently
-- [ ] T112 Add failing mechanic and secret-recovery tests proving `execute` is the sole authoritative decision
+- [x] T112 Add failing mechanic and secret-recovery tests proving `execute` is the sole authoritative decision
       operation and one mandatory per-run envelope is the sole SecureStore representation
-- [ ] T113 Remove public mechanic authorization and two-secret fallbacks, collapse pending/bound storage to one
+- [x] T113 Remove public mechanic authorization and two-secret fallbacks, collapse pending/bound storage to one
       immutable envelope key, update exact schema digests, and rewrite the trusted-mechanic/shared-recovery
       contracts plus architecture around the implemented boundaries
 - [ ] T114 Run focused adversarial suites, PostgreSQL/Testcontainers, four-release byte reproduction,

@@ -13,7 +13,6 @@ export {
 export { hasTrustedMechanic, resolveTrustedMechanic } from "./trusted-mechanics.js";
 export type {
   AuthorizedParticipant,
-  MechanicAuthorization,
   MechanicBindingValidation,
   MechanicDiagnostic,
   MechanicDiagnosticCode,
@@ -22,6 +21,5 @@ export type {
   PersistedObservation,
   TrustedMechanicAdapter,
   TrustedMechanicResolution,
-  TrustedOutcome,
   ValidatedMechanicBinding,
 } from "./trusted-mechanics.js";

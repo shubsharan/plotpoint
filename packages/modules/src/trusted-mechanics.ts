@@ -1,10 +1,7 @@
 import type {
   Aggregate,
-  Diagnostic,
   ExecutableAggregateModel,
   JsonObject,
-  Observation,
-  RuntimeCommand,
   RuntimeSchema,
 } from "@plotpoint/runtime";
 import type {
@@ -49,19 +46,6 @@ export interface AuthorizedParticipant {
 
 export type PersistedObservation = LocationObservation;
 
-export interface TrustedOutcome extends JsonObject {
-  readonly code: string;
-}
-
-export type MechanicAuthorization<Kind extends "team" | "session"> =
-  | {
-      readonly kind: "authorized";
-      readonly command: RuntimeCommand<JsonObject, Kind>;
-      readonly observations: readonly Observation[];
-    }
-  | { readonly kind: "rejected"; readonly outcome: TrustedOutcome }
-  | { readonly kind: "invalid"; readonly diagnostics: readonly Diagnostic[] };
-
 export type MechanicProjection =
   | { readonly kind: "projected"; readonly projection: SharedProjection }
   | { readonly kind: "invalid"; readonly diagnostic: MechanicDiagnostic };
@@ -85,11 +69,6 @@ export interface TrustedMechanicAdapter<Kind extends "team" | "session"> {
     readonly composition: GameComposition;
     readonly configuration: unknown;
   }): MechanicBindingValidation;
-  authorize(input: {
-    readonly participant: AuthorizedParticipant;
-    readonly command: SyncCommand;
-    readonly observations: readonly PersistedObservation[];
-  }): MechanicAuthorization<Kind>;
   execute(input: {
     readonly participant: AuthorizedParticipant;
     readonly aggregate: Aggregate<JsonObject, Kind>;

@@ -57,15 +57,13 @@ function pendingInput(
   invitationDigest: `sha256:${string}`,
   joinRequestId: string,
   credentialDigest: `sha256:${string}`,
-  invitationKey: string,
-  credentialKey: string,
+  envelopeKey: string,
 ): PendingSharedJoinInput {
   const requestDigest = digest({
     credentialDigest,
-    credentialKey,
+    envelopeKey,
     expectedReleaseId: input.expectedReleaseId,
     invitationDigest,
-    invitationKey,
     joinRequestId,
     runId: input.runId,
     serviceOrigin,
@@ -78,8 +76,7 @@ function pendingInput(
     serviceOrigin,
     joinRequestId,
     invitationDigest,
-    invitationKey,
-    credentialKey,
+    envelopeKey,
     requestDigest,
   };
 }
@@ -100,8 +97,7 @@ function existingAttemptInput(
     serviceOrigin,
     joinRequestId: attempt.joinRequestId,
     invitationDigest,
-    invitationKey: attempt.invitationKey,
-    credentialKey: attempt.credentialKey,
+    envelopeKey: attempt.envelopeKey,
     requestDigest: attempt.requestDigest,
   };
 }
@@ -146,7 +142,7 @@ export class SharedSessionController {
     const invitationDigest = digest(input.invitation);
     const existing = await this.store.pendingJoinForRun(input.runId);
     const orphanKey = secureStoreKey(input.runId);
-    const orphan = existing === null ? await this.credentials.getEnvelope?.(orphanKey) : null;
+    const orphan = existing === null ? await this.credentials.getEnvelope(orphanKey) : null;
     let attempt: PendingSharedJoin;
     let credential: string;
     let invitation: string;
@@ -170,7 +166,6 @@ export class SharedSessionController {
           orphan.joinRequestId,
           digest(credential),
           orphanKey,
-          orphanKey,
         ),
       );
       attempt = await this.store.markPendingJoinReady(input.runId, attempt.requestDigest);
@@ -185,7 +180,6 @@ export class SharedSessionController {
         joinRequestId,
         digest(credential),
         envelopeKey,
-        envelopeKey,
       );
       const envelope: SharedSecretEnvelope = {
         kind: "pending",
@@ -196,19 +190,11 @@ export class SharedSessionController {
         invitation: input.invitation,
         participantCredential: credential,
       };
-      if (this.credentials.putEnvelope === undefined) {
-        await this.credentials.putCredential(candidate.credentialKey, credential);
-        await this.credentials.putInvitation(candidate.invitationKey, input.invitation);
-      } else await this.credentials.putEnvelope(envelopeKey, envelope);
+      await this.credentials.putEnvelope(envelopeKey, envelope);
       try {
         attempt = await this.store.reservePendingJoin(candidate);
       } catch (error) {
-        if (this.credentials.removeEnvelope !== undefined)
-          await this.credentials.removeEnvelope(envelopeKey);
-        else {
-          await this.credentials.removeCredential(candidate.credentialKey);
-          await this.credentials.removeInvitation(candidate.invitationKey);
-        }
+        await this.credentials.removeEnvelope(envelopeKey);
         throw error;
       }
       attempt = await this.store.markPendingJoinReady(input.runId, attempt.requestDigest);
@@ -217,15 +203,14 @@ export class SharedSessionController {
       attempt = await this.store.reservePendingJoin(
         existingAttemptInput(existing, input, serviceOrigin, invitationDigest),
       );
-      const storedEnvelope = await this.credentials.getEnvelope?.(attempt.credentialKey);
-      const storedCredential =
-        storedEnvelope?.participantCredential ??
-        (await this.credentials.getCredential(attempt.credentialKey));
-      if (storedCredential === null) throw new Error("shared-pending-join-credential-missing");
+      const storedEnvelope = await this.credentials.getEnvelope(attempt.envelopeKey);
+      if (storedEnvelope?.kind !== "pending") {
+        throw new Error("shared-pending-join-envelope-missing");
+      }
       if (!isReleaseId(attempt.invitationDigest)) {
         throw new Error("shared-pending-join-invitation-digest-invalid");
       }
-      credential = storedCredential;
+      credential = storedEnvelope.participantCredential;
       const exactRequest = pendingInput(
         {
           sessionId: attempt.sessionId,
@@ -236,28 +221,15 @@ export class SharedSessionController {
         attempt.invitationDigest,
         attempt.joinRequestId,
         digest(credential),
-        attempt.invitationKey,
-        attempt.credentialKey,
+        attempt.envelopeKey,
       );
       if (exactRequest.requestDigest !== attempt.requestDigest) {
         throw new Error("shared-pending-join-credential-conflict");
       }
-      const storedInvitation =
-        storedEnvelope?.kind === "pending"
-          ? storedEnvelope.invitation
-          : await this.credentials.getInvitation(attempt.invitationKey);
-      if (storedInvitation === null) {
-        if (attempt.status !== "preparing") {
-          throw new Error("shared-pending-join-invitation-missing");
-        }
-        await this.credentials.putInvitation(attempt.invitationKey, input.invitation);
-        invitation = input.invitation;
-      } else {
-        if (digest(storedInvitation) !== attempt.invitationDigest) {
-          throw new Error("shared-pending-join-invitation-conflict");
-        }
-        invitation = storedInvitation;
+      if (digest(storedEnvelope.invitation) !== attempt.invitationDigest) {
+        throw new Error("shared-pending-join-invitation-conflict");
       }
+      invitation = storedEnvelope.invitation;
       if (attempt.status === "preparing") {
         attempt = await this.store.markPendingJoinReady(input.runId, attempt.requestDigest);
       }
@@ -280,7 +252,7 @@ export class SharedSessionController {
       runId: attempt.runId,
       expectedReleaseId: attempt.expectedReleaseId,
       serviceOrigin: attempt.serviceOrigin,
-      credentialKey: attempt.credentialKey,
+      envelopeKey: attempt.envelopeKey,
     };
     await this.store.commitJoinedSession({
       context,
@@ -291,17 +263,18 @@ export class SharedSessionController {
       },
       pull: result.sync,
     });
-    if (this.credentials.putEnvelope === undefined) {
-      await this.credentials.removeInvitation(attempt.invitationKey);
-    } else {
-      try {
-        await this.credentials.putEnvelope(attempt.credentialKey, {
-          kind: "bound",
-          participantCredential: credential,
-        });
-      } catch {
-        // The binding is already committed. Startup can retry this envelope cleanup.
-      }
+    try {
+      await this.credentials.putEnvelope(attempt.envelopeKey, {
+        kind: "bound",
+        participantCredential: credential,
+      });
+    } catch {
+      await this.store.recordSyncEvent(
+        attempt.sessionId,
+        0,
+        "recovery",
+        "envelope-reduction-failed",
+      );
     }
     return result.sync;
   }
@@ -372,12 +345,40 @@ export class SharedPlayController {
     if (this.disposed) throw new Error("shared-controller-disposed");
     const sessionId = await this.store.sessionForRun(this.context.runId);
     if (sessionId !== null) {
+      const session = await this.store.session(sessionId);
+      if (session === null) {
+        this.publish({
+          status: "recovery-required",
+          sessionId,
+          code: "shared-session-binding-missing",
+          retryable: false,
+        });
+        return;
+      }
+      try {
+        const envelope = await this.credentials.getEnvelope(session.envelopeKey);
+        if (envelope === null) throw new Error("shared-bound-envelope-missing");
+        if (envelope.kind === "pending") {
+          await this.credentials.putEnvelope(session.envelopeKey, {
+            kind: "bound",
+            participantCredential: envelope.participantCredential,
+          });
+        }
+      } catch (error) {
+        this.publish({
+          status: "recovery-required",
+          sessionId,
+          code: error instanceof Error ? error.message : "shared-bound-envelope-recovery-failed",
+          retryable: true,
+        });
+        return;
+      }
       await this.synchronize(sessionId, "startup");
       return;
     }
     const pending = await this.store.pendingJoinForRun(this.context.runId);
-    const envelopeKey = pending?.credentialKey ?? secureStoreKey(this.context.runId);
-    const envelope = await this.credentials.getEnvelope?.(envelopeKey);
+    const envelopeKey = pending?.envelopeKey ?? secureStoreKey(this.context.runId);
+    const envelope = await this.credentials.getEnvelope(envelopeKey);
     if (pending === null && envelope?.kind === "bound") {
       this.publish({
         status: "recovery-required",
@@ -534,7 +535,7 @@ export class SharedPlayController {
     const view = await this.store.view(sessionId);
     if (view.membership.status === "revoked") {
       const session = await this.store.session(sessionId);
-      if (session !== null) await this.credentials.removeCredential(session.credentialKey);
+      if (session !== null) await this.credentials.removeEnvelope(session.envelopeKey);
       this.publish({ status: "revoked", sessionId });
     } else if (view.synchronization === "recovery-required") {
       this.publish({

@@ -37,6 +37,10 @@ stays bounded at 256 KiB and release upload at 64 MiB.
 - `GET /v1/shared-sessions/{sessionId}/sync?after=<cursor>`: authenticated participant receives one
   complete Sync Pull.
 
+`after`, `nextCursor`, and every result's `decisionPosition` remain opaque numeric strings. Their
+ordering scope is the authenticated participant: a pull reads that participant's committed receipt
+counter as its high-water mark and returns only that participant's receipts through it.
+
 No player route, request, or response contains target, clue, or other example-game vocabulary.
 
 ## Join
@@ -62,7 +66,7 @@ The server compares `expectedReleaseId` with the immutable session release befor
 invitation or creating a participant. A mismatch returns `session-release-mismatch`. The exact join
 request digest includes expected release, invitation binding, generated credential digest, and session
 scope. Before sending, the player durably stores the exact pending request provenance in SQLite and its
-invitation/credential secrets in SecureStore as defined by Shared Recovery. Response-loss retry with
+single pending invitation/credential envelope in SecureStore as defined by Shared Recovery. Response-loss retry with
 the same request returns the original response; changed reuse fails.
 
 The response must agree internally:

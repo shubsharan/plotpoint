@@ -1,7 +1,7 @@
 import { computeReleaseId, type SyncPull } from "@plotpoint/protocol";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ParticipantCredentialStore } from "../src/shared/credentials";
+import type { ParticipantCredentialStore, SharedSecretEnvelope } from "../src/shared/credentials";
 import type { SharedSyncStore } from "../src/shared/database";
 import type { SharedHttpClient } from "../src/shared/http-client";
 import { SharedSessionController } from "../src/shared/session-controller";
@@ -22,8 +22,7 @@ interface PendingJoinRecord {
   readonly serviceOrigin: string;
   readonly joinRequestId: string;
   readonly invitationDigest: string;
-  readonly invitationKey: string;
-  readonly credentialKey: string;
+  readonly envelopeKey: string;
   readonly requestDigest: string;
   readonly status: "preparing" | "ready" | "submitting";
 }
@@ -33,7 +32,7 @@ interface BindingContext {
   readonly runId: string;
   readonly expectedReleaseId: `sha256:${string}`;
   readonly serviceOrigin: string;
-  readonly credentialKey: string;
+  readonly envelopeKey: string;
 }
 
 interface JoinResponse {
@@ -90,14 +89,12 @@ function joinResponse(overrides: Partial<JoinResponse> = {}): JoinResponse {
 
 function pending(status: PendingJoinRecord["status"]): PendingJoinRecord {
   const invitationDigest = digest("invitation-a");
-  const credentialKey = "plotpoint.shared.run-a.credential";
-  const invitationKey = "plotpoint.shared.run-a.invitation";
+  const envelopeKey = "plotpoint.shared.run-a.envelope";
   const requestDigest = digest({
     credentialDigest: digest("credential-a"),
-    credentialKey,
+    envelopeKey,
     expectedReleaseId: releaseA,
     invitationDigest,
-    invitationKey,
     joinRequestId: "join-request-a",
     runId: "run-a",
     serviceOrigin,
@@ -110,8 +107,7 @@ function pending(status: PendingJoinRecord["status"]): PendingJoinRecord {
     serviceOrigin,
     joinRequestId: "join-request-a",
     invitationDigest,
-    invitationKey,
-    credentialKey,
+    envelopeKey,
     requestDigest,
     status,
   };
@@ -122,6 +118,15 @@ class PendingJoinStoreHarness {
   bound = false;
   commitError: Error | null = null;
   readonly order: string[] = [];
+
+  async recordSyncEvent(
+    _sessionId: string,
+    _elapsedMs: number,
+    phase: string,
+    disposition: string,
+  ): Promise<void> {
+    this.order.push(`${phase}-${disposition}`);
+  }
 
   async pendingJoinForRun(runId: string): Promise<PendingJoinRecord | null> {
     this.order.push("pending-read");
@@ -190,7 +195,7 @@ class PendingJoinStoreHarness {
       input.context.runId !== attempt.runId ||
       input.context.expectedReleaseId !== attempt.expectedReleaseId ||
       input.context.serviceOrigin !== attempt.serviceOrigin ||
-      input.context.credentialKey !== attempt.credentialKey ||
+      input.context.envelopeKey !== attempt.envelopeKey ||
       input.response.releaseId !== attempt.expectedReleaseId ||
       input.pull.snapshot.sessionId !== attempt.sessionId ||
       input.pull.snapshot.releaseId !== input.response.releaseId ||
@@ -206,9 +211,9 @@ class PendingJoinStoreHarness {
 
 class JoinSecretHarness {
   readonly order: string[];
-  readonly values = new Map<string, string>();
+  readonly values = new Map<string, SharedSecretEnvelope>();
   generatedCredentials = 0;
-  invitationDeletes = 0;
+  failBoundWrite = false;
 
   constructor(order: string[]) {
     this.order = order;
@@ -223,31 +228,20 @@ class JoinSecretHarness {
     return "join-request-a";
   }
 
-  async putCredential(key: string, value: string): Promise<void> {
-    this.order.push("credential-secret");
+  async putEnvelope(key: string, value: SharedSecretEnvelope): Promise<void> {
+    this.order.push(`envelope-${value.kind}`);
+    if (value.kind === "bound" && this.failBoundWrite) {
+      throw new Error("secure-store-unavailable");
+    }
     this.values.set(key, value);
   }
 
-  async getCredential(key: string): Promise<string | null> {
+  async getEnvelope(key: string): Promise<SharedSecretEnvelope | null> {
     return this.values.get(key) ?? null;
   }
 
-  async putInvitation(key: string, value: string): Promise<void> {
-    this.order.push("invitation-secret");
-    this.values.set(key, value);
-  }
-
-  async getInvitation(key: string): Promise<string | null> {
-    return this.values.get(key) ?? null;
-  }
-
-  async removeInvitation(key: string): Promise<void> {
-    this.order.push("invitation-delete");
-    this.invitationDeletes += 1;
-    this.values.delete(key);
-  }
-
-  async removeCredential(key: string): Promise<void> {
+  async removeEnvelope(key: string): Promise<void> {
+    this.order.push("envelope-delete");
     this.values.delete(key);
   }
 }
@@ -302,26 +296,31 @@ const joinInput = {
 function seedRecoverableAttempt(harness: Harness, status: "ready" | "submitting"): void {
   const attempt = pending(status);
   harness.store.pending = attempt;
-  harness.secrets.values.set(attempt.invitationKey, "invitation-a");
-  harness.secrets.values.set(attempt.credentialKey, "credential-a");
+  harness.secrets.values.set(attempt.envelopeKey, {
+    kind: "pending",
+    sessionId: attempt.sessionId,
+    expectedReleaseId: attempt.expectedReleaseId,
+    serviceOrigin: attempt.serviceOrigin,
+    joinRequestId: attempt.joinRequestId,
+    invitation: "invitation-a",
+    participantCredential: "credential-a",
+  });
 }
 
 describe("shared session controller recovery", () => {
-  it("persists recoverable secrets before reservation, sends only after readiness, and cleans up after commit", async () => {
+  it("persists one recoverable envelope before reservation and reduces it after commit", async () => {
     const harness = createHarness();
 
     await expect(harness.controller.join(joinInput)).resolves.toEqual(pull());
 
     const position = (event: string) => harness.order.indexOf(event);
     expect(position("reserve")).toBeGreaterThanOrEqual(0);
-    expect(position("invitation-secret")).toBeLessThan(position("reserve"));
-    expect(position("credential-secret")).toBeLessThan(position("reserve"));
-    expect(position("invitation-secret")).toBeLessThan(position("ready"));
-    expect(position("credential-secret")).toBeLessThan(position("ready"));
+    expect(position("envelope-pending")).toBeLessThan(position("reserve"));
+    expect(position("envelope-pending")).toBeLessThan(position("ready"));
     expect(position("ready")).toBeLessThan(position("submitting"));
     expect(position("submitting")).toBeLessThan(position("send"));
     expect(position("send")).toBeLessThan(position("binding-commit"));
-    expect(position("binding-commit")).toBeLessThan(position("invitation-delete"));
+    expect(position("binding-commit")).toBeLessThan(position("envelope-bound"));
     expect(harness.requests).toEqual([
       {
         sessionId: "session-a",
@@ -333,6 +332,26 @@ describe("shared session controller recovery", () => {
     ]);
     expect(harness.store.pending).toBeNull();
     expect(harness.store.bound).toBe(true);
+    expect(harness.secrets.values.get(pending("submitting").envelopeKey)).toEqual({
+      kind: "bound",
+      participantCredential: "credential-a",
+    });
+  });
+
+  it("keeps a committed join successful when bound-envelope reduction must resume", async () => {
+    const harness = createHarness();
+    harness.secrets.failBoundWrite = true;
+
+    await expect(harness.controller.join(joinInput)).resolves.toEqual(pull());
+
+    expect(harness.store.bound).toBe(true);
+    expect(harness.store.pending).toBeNull();
+    expect(harness.secrets.values.get(pending("submitting").envelopeKey)).toMatchObject({
+      kind: "pending",
+      invitation: "invitation-a",
+      participantCredential: "credential-a",
+    });
+    expect(harness.order).toContain("recovery-envelope-reduction-failed");
   });
 
   it("resumes a complete ready attempt without allocating a new request or secret", async () => {
@@ -342,8 +361,7 @@ describe("shared session controller recovery", () => {
     await expect(harness.controller.join(joinInput)).resolves.toEqual(pull());
 
     expect(harness.secrets.generatedCredentials).toBe(0);
-    expect(harness.order).not.toContain("credential-secret");
-    expect(harness.order).not.toContain("invitation-secret");
+    expect(harness.order).not.toContain("envelope-pending");
     expect(harness.order.indexOf("submitting")).toBeLessThan(harness.order.indexOf("send"));
     expect(harness.requests[0]).toEqual({
       sessionId: "session-a",
@@ -362,17 +380,23 @@ describe("shared session controller recovery", () => {
 
     await expect(harness.controller.join(joinInput)).rejects.toThrow("response-lost");
     expect(harness.store.pending).toEqual(pending("submitting"));
-    expect(harness.secrets.values.get(pending("submitting").invitationKey)).toBe("invitation-a");
-    expect(harness.secrets.invitationDeletes).toBe(0);
+    expect(harness.secrets.values.get(pending("submitting").envelopeKey)).toMatchObject({
+      kind: "pending",
+      invitation: "invitation-a",
+      participantCredential: "credential-a",
+    });
 
     await expect(harness.controller.join(joinInput)).resolves.toEqual(duplicate.sync);
     expect(harness.requests).toHaveLength(2);
     expect(harness.requests[1]).toEqual(harness.requests[0]);
     expect(harness.store.pending).toBeNull();
-    expect(harness.secrets.invitationDeletes).toBe(1);
+    expect(harness.secrets.values.get(pending("submitting").envelopeKey)).toEqual({
+      kind: "bound",
+      participantCredential: "credential-a",
+    });
   });
 
-  it("retains the complete attempt when binding commit is interrupted and cleans invitation only after retry", async () => {
+  it("retains the complete attempt when binding commit is interrupted and reduces only after retry", async () => {
     const harness = createHarness([joinResponse(), joinResponse({ disposition: "duplicate" })]);
     seedRecoverableAttempt(harness, "submitting");
     harness.store.commitError = new Error("sqlite-interrupted-before-commit");
@@ -382,18 +406,22 @@ describe("shared session controller recovery", () => {
     );
     expect(harness.store.pending).toEqual(pending("submitting"));
     expect(harness.store.bound).toBe(false);
-    expect(harness.secrets.invitationDeletes).toBe(0);
+    expect(harness.secrets.values.get(pending("submitting").envelopeKey)).toMatchObject({
+      kind: "pending",
+    });
 
     await expect(harness.controller.join(joinInput)).resolves.toEqual(pull());
     expect(harness.store.pending).toBeNull();
     expect(harness.store.bound).toBe(true);
-    expect(harness.secrets.invitationDeletes).toBe(1);
+    expect(harness.secrets.values.get(pending("submitting").envelopeKey)).toMatchObject({
+      kind: "bound",
+    });
     expect(harness.order.lastIndexOf("binding-commit")).toBeLessThan(
-      harness.order.lastIndexOf("invitation-delete"),
+      harness.order.lastIndexOf("envelope-bound"),
     );
   });
 
-  it("retains pending provenance and both secrets when a response mismatches the pinned release", async () => {
+  it("retains the pending envelope when a response mismatches the pinned release", async () => {
     const mismatch = joinResponse({ releaseId: releaseB, sync: pull({ releaseId: releaseB }) });
     const harness = createHarness([mismatch]);
     seedRecoverableAttempt(harness, "submitting");
@@ -403,8 +431,10 @@ describe("shared session controller recovery", () => {
     );
     expect(harness.store.pending).toEqual(pending("submitting"));
     expect(harness.store.bound).toBe(false);
-    expect(harness.secrets.values.get(pending("submitting").invitationKey)).toBe("invitation-a");
-    expect(harness.secrets.values.get(pending("submitting").credentialKey)).toBe("credential-a");
-    expect(harness.secrets.invitationDeletes).toBe(0);
+    expect(harness.secrets.values.get(pending("submitting").envelopeKey)).toMatchObject({
+      kind: "pending",
+      invitation: "invitation-a",
+      participantCredential: "credential-a",
+    });
   });
 });
