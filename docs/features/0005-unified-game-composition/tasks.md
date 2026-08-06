@@ -337,6 +337,38 @@ generations, and make the corrected storage contracts executable before story wo
 
 ---
 
+## Phase 14: Post-Review Cohesion Remediation
+
+**Purpose**: Close the surviving runtime, recovery, receipt-ordering, and contract-fragmentation defects
+without adding compatibility paths or a second owner for any boundary.
+
+- [x] T105 Add failing generated-runtime and installed field-journey tests for invalid-element child
+      cleanup plus component-driven check-in, solve, second check-in, recreation, recovery, and report export
+- [x] T106 Fix generated child rollback, make the field component fully playable through scoped local and
+      capability clients, delete the shadow runtime/mount/local-adapter implementations, and route their
+      durable tests through the generated production kernel
+- [x] T107 Run the sole-runtime and complete field-journey checkpoint and record its exact focused results
+- [ ] T108 Add failing controller, projection, and scheduler tests for startup recovery controls, pending-join
+      retry, centralized bound-view notification, detached enqueue failure ownership, exact pre-mutation
+      projection binding, and the claim-start/trailing-pass boundary
+- [ ] T109 Make verified runtime preparation independent of synchronization success, render only controller
+      state, resolve operational sync failure into retryable recovery, centralize bound-view notification,
+      share one exact projection resolver, and close the scheduler claim boundary
+- [ ] T110 Add failing PostgreSQL tests proving a participant cursor cannot pass an uncommitted receipt and
+      that same-participant ordering is contiguous while different participants remain independent
+- [ ] T111 Replace the global receipt sequence with one transactionally incremented participant position,
+      preserve opaque cursor/result strings, and update server pull plus report ordering consistently
+- [ ] T112 Add failing mechanic and secret-recovery tests proving `execute` is the sole authoritative decision
+      operation and one mandatory per-run envelope is the sole SecureStore representation
+- [ ] T113 Remove public mechanic authorization and two-secret fallbacks, collapse pending/bound storage to one
+      immutable envelope key, update exact schema digests, and rewrite the trusted-mechanic/shared-recovery
+      contracts plus architecture around the implemented boundaries
+- [ ] T114 Run focused adversarial suites, PostgreSQL/Testcontainers, four-release byte reproduction,
+      `pnpm verify`, workflow validation, and `git diff --check`; then run fresh iOS simulator and Android
+      emulator build/install/launch gates, record exact evidence, and retain physical devices as `NOT RUN`
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase Dependencies
@@ -354,8 +386,9 @@ US4 + US5 + US3 -> Phase 8 Historical Evidence (superseded)
   -> Phase 9 Contract Reset
       -> Phase 10 US6 Single Runtime + Authority
           -> Phase 11 US7 Shared Controller
-              -> Phase 12 US8 Committed Evidence + Installed Journeys
+                  -> Phase 12 US8 Committed Evidence + Installed Journeys
                   -> Phase 13 Fresh Verification
+                      -> Phase 14 Post-Review Cohesion Remediation
 ```
 
 - **Setup (Phase 1)** has no dependency; T002-T004 begin only after the rename in T001.

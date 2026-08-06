@@ -1,19 +1,30 @@
 export class GeneratedRuntimeElement {
   readonly dataset: Record<string, string> = {};
+  readonly attributes: Record<string, string> = {};
   readonly children: GeneratedRuntimeElement[] = [];
-  private readonly listeners = new Map<string, Set<() => void>>();
+  private readonly listeners = new Map<string, Set<() => unknown>>();
+  disabled = false;
   textContent: string | null = null;
   parent: GeneratedRuntimeElement | null = null;
   type = "";
+  value = "";
 
-  addEventListener(type: string, listener: () => void): void {
+  addEventListener(type: string, listener: () => unknown): void {
     const registered = this.listeners.get(type) ?? new Set();
     registered.add(listener);
     this.listeners.set(type, registered);
   }
 
-  removeEventListener(type: string, listener: () => void): void {
+  removeEventListener(type: string, listener: () => unknown): void {
     this.listeners.get(type)?.delete(listener);
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes[name] = value;
+  }
+
+  async dispatchEvent(type: string): Promise<void> {
+    for (const listener of this.listeners.get(type) ?? []) await listener();
   }
 
   append(...children: GeneratedRuntimeElement[]): void {
@@ -114,28 +125,29 @@ export async function mountGeneratedWebRuntime(
       return this.input.detail;
     }
   }
-  const vmModuleName = "node:vm";
-  const vmModule: unknown = await import(vmModuleName);
-  if (!isRecord(vmModule) || typeof vmModule.runInNewContext !== "function") {
-    throw new Error("generated-runtime-vm-missing");
-  }
-  const runInNewContext = vmModule.runInNewContext as (code: string, context: object) => unknown;
-  await runInNewContext(executableScript, {
-    Blob: RuntimeBlob,
-    console,
-    crypto: globalThis.crypto,
-    CustomEvent: RuntimeCustomEvent,
-    document: runtimeDocument,
-    HTMLElement: GeneratedRuntimeElement,
-    __importModule: (specifier: string) => import(specifier),
-    setTimeout,
-    URL: {
+  const execute = new Function(
+    "Blob",
+    "CustomEvent",
+    "document",
+    "HTMLElement",
+    "__importModule",
+    "URL",
+    "window",
+    executableScript,
+  );
+  execute(
+    RuntimeBlob,
+    RuntimeCustomEvent,
+    runtimeDocument,
+    GeneratedRuntimeElement,
+    (specifier: string) => import(specifier),
+    {
       createObjectURL(blob: RuntimeBlob) {
         return `data:text/javascript,${encodeURIComponent(blob.parts.join(""))}`;
       },
     },
-    window: runtimeWindow,
-  });
+    runtimeWindow,
+  );
   for (let attempt = 0; attempt < 100 && root.children.length === 0; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }

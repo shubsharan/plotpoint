@@ -124,7 +124,7 @@ describe("runtime view lifecycle", () => {
   it("keeps player routing independent of example games and mechanics", async () => {
     const files = [
       "../App.tsx",
-      "../src/runtime/composition.ts",
+      "../src/runtime/web-runtime-kernel.ts",
       "../src/runtime/production-handlers.ts",
       "../src/shared/host-bridge.ts",
       "../src/shared/session-controller.ts",
@@ -136,6 +136,18 @@ describe("runtime view lifecycle", () => {
     expect(sources.join("\n")).not.toMatch(
       /field-puzzle|co-op-game|target-discovery|SharedHunt|HuntReport|hunt-sessions/,
     );
+  });
+
+  it("has no shadow composition, mount-scope, or local adapter implementation", async () => {
+    await expect(
+      Promise.all(
+        [
+          "../src/runtime/composition.ts",
+          "../src/runtime/mount-scope.ts",
+          "../src/runtime/local-model-adapter.ts",
+        ].map((file) => exists(new URL(file, import.meta.url))),
+      ),
+    ).resolves.toEqual([false, false, false]);
   });
 
   it("has no superseded local or game-specific report reader", async () => {

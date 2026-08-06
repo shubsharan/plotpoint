@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { GameComposition, SharedProjection } from "@plotpoint/protocol";
 
 import { buildRuntimeBootstrap, deriveSharedCommandIntent } from "../src/runtime/bootstrap";
-import { mountGameComposition, type ComponentContext } from "../src/runtime/composition";
 
 const composition = {
   application: { components: ["field-map"] },
@@ -116,254 +115,8 @@ const sharedProjection = {
   value: { ready: true },
 } satisfies SharedProjection;
 
-describe("runtime composition lifecycle", () => {
-  it("mounts __proto__ component and dependency keys without prototype loss", async () => {
-    const adversarialComposition = {
-      application: { components: ["__proto__"] },
-      aggregateModels: [
-        {
-          id: "player",
-          authority: "local",
-          kind: "player",
-          stateSchema: { id: "state" },
-          initializationSchema: { id: "initialization" },
-          events: [],
-          effects: [],
-        },
-      ],
-      commands: [
-        {
-          id: "__proto__",
-          type: "__proto__",
-          aggregateModel: "player",
-          payloadSchema: { id: "payload" },
-          outcomeSchema: { id: "outcome" },
-          execution: "local",
-        },
-      ],
-      progressions: [],
-      components: [
-        {
-          id: "__proto__",
-          commands: ["__proto__"],
-          content: ["__proto__"],
-          assets: ["__proto__"],
-          capabilities: [{ id: "__proto__", major: 1, minimumMinor: 0 }],
-        },
-      ],
-      resources: [],
-    } satisfies GameComposition;
-    const root = {} as HTMLElement;
-    const element = {} as HTMLElement;
-    let mountedContext: ComponentContext | undefined;
-    const handle = await mountGameComposition({
-      root,
-      composition: adversarialComposition,
-      application: Object.freeze({
-        mount({
-          components,
-        }: {
-          readonly components: Readonly<Record<string, () => HTMLElement>>;
-        }) {
-          expect(Object.keys(components)).toEqual(["__proto__"]);
-          expect(components["__proto__"]?.()).toBe(element);
-          return Object.freeze({ unmount() {} });
-        },
-      }),
-      components: Object.freeze({
-        ["__proto__"]: (context: ComponentContext) => {
-          mountedContext = context;
-          return element;
-        },
-      }),
-      providers: {
-        local: {
-          async getView() {
-            throw new Error("not invoked");
-          },
-          onChanged() {
-            return () => {};
-          },
-          commands: Object.freeze({
-            ["__proto__"]: Object.freeze({
-              async execute() {
-                throw new Error("not invoked");
-              },
-            }),
-          }),
-        },
-        content: Object.freeze({ ["__proto__"]: Object.freeze({ value: "content" }) }),
-        assets: Object.freeze({ ["__proto__"]: Object.freeze({ value: "asset" }) }),
-        capabilities: Object.freeze({
-          ["__proto__"]: Object.freeze({
-            async request() {
-              throw new Error("not invoked");
-            },
-          }),
-        }),
-      },
-      isElement: (value): value is HTMLElement => value === element,
-    });
-
-    expect(mountedContext).toBeDefined();
-    for (const selected of [
-      mountedContext?.local.commands,
-      mountedContext?.content,
-      mountedContext?.assets,
-      mountedContext?.capabilities,
-    ]) {
-      expect(Object.keys(selected ?? {})).toEqual(["__proto__"]);
-    }
-    await handle.unmount();
-  });
-
-  it("rolls component cleanup back in reverse order exactly once", async () => {
-    const cleanup: string[] = [];
-    const element = {} as HTMLElement;
-
-    await expect(
-      mountGameComposition({
-        root: {} as HTMLElement,
-        composition,
-        application: {
-          mount({
-            components,
-          }: {
-            readonly components: Readonly<Record<string, () => HTMLElement>>;
-          }) {
-            components["field-map"]?.();
-            throw new Error("application-mount-failed");
-          },
-        },
-        components: {
-          "field-map": ({ lifecycle }) => {
-            lifecycle.defer(() => {
-              cleanup.push("first");
-            });
-            lifecycle.defer(() => {
-              cleanup.push("second");
-            });
-            return element;
-          },
-        },
-        providers: {
-          local: {
-            async getView() {
-              throw new Error("not invoked");
-            },
-            onChanged() {
-              return () => {};
-            },
-            commands: {
-              "complete-checkpoint": {
-                async execute(input) {
-                  return {
-                    commandId: input.commandId,
-                    disposition: "not-recorded",
-                    terminal: "invalid",
-                    phase: "preflight",
-                    diagnosticCodes: ["not-invoked"],
-                  };
-                },
-              },
-            },
-          },
-          content: { "field-copy": {} },
-          assets: { "field-map-image": {} },
-          capabilities: {
-            "plotpoint.location.foreground": {
-              async request() {
-                return {};
-              },
-            },
-          },
-        },
-        isElement: (value): value is HTMLElement => value === element,
-      }),
-    ).rejects.toThrow("application-mount-failed");
-    expect(cleanup).toEqual(["second", "first"]);
-
-    const html = runtimeGlue();
-    expect(html).toContain(
-      "lifecycle.defer(() => window.removeEventListener('plotpoint-host', onSharedSyncChanged))",
-    );
-    expect(html).toContain("window.__plotpointDispose = disposeRuntime");
-  });
-
-  it("scopes Shared Play to declared projections and trusted commands", async () => {
-    const element = {} as HTMLElement;
-    let mounted: ComponentContext | undefined;
-    const handle = await mountGameComposition({
-      root: {} as HTMLElement,
-      composition: sharedComposition,
-      application: {
-        mount({
-          components,
-        }: {
-          readonly components: Readonly<Record<string, () => HTMLElement>>;
-        }) {
-          components["field-map"]?.();
-          return { unmount() {} };
-        },
-      },
-      components: {
-        "field-map": (context) => {
-          mounted = context;
-          return element;
-        },
-      },
-      providers: {
-        local: {
-          async getView() {
-            throw new Error("not invoked");
-          },
-          onChanged() {
-            return () => {};
-          },
-          commands: {
-            "complete-checkpoint": {
-              async execute(input) {
-                return {
-                  commandId: input.commandId,
-                  disposition: "not-recorded",
-                  terminal: "invalid",
-                  phase: "preflight",
-                  diagnosticCodes: ["not-invoked"],
-                };
-              },
-            },
-          },
-        },
-        shared: {
-          async getView() {
-            throw new Error("not invoked");
-          },
-          onSyncChanged() {
-            return () => {};
-          },
-          commands: {
-            "shared-action": { async execute() {} },
-            undeclared: { async execute() {} },
-          },
-        },
-        content: { "field-copy": {} },
-        assets: { "field-map-image": {} },
-        capabilities: {
-          "plotpoint.location.foreground": {
-            async request() {
-              return {};
-            },
-          },
-        },
-      },
-      isElement: (value): value is HTMLElement => value === element,
-    });
-
-    expect(Object.keys(mounted?.shared?.commands ?? {})).toEqual(["shared-action"]);
-    await handle.unmount();
-  });
-
-  it("derives shared authority fields and rejects author-supplied target, type, or version", () => {
+describe("generated runtime composition", () => {
+  it("derives shared authority fields and rejects author-supplied authority", () => {
     const command = sharedComposition.commands.find(({ id }) => id === "shared-action");
     const model = sharedComposition.aggregateModels.find(({ id }) => id === "shared-model");
     if (command === undefined || model?.authority !== "server") {
@@ -429,5 +182,14 @@ describe("runtime composition lifecycle", () => {
       "application.mount({ root, components })",
     );
     expect(html).not.toMatch(/application\.mount\([^)]*(?:bootstrap|aggregate|state|host)/);
+  });
+
+  it("owns duplicate reconciliation and version validation in the generated kernel", () => {
+    const html = runtimeGlue();
+
+    expect(html).toContain(
+      "result.disposition !== 'committed' && result.disposition !== 'duplicate'",
+    );
+    expect(html).toContain("runtime-local-transition-version-invalid");
   });
 });

@@ -518,7 +518,12 @@ window.__plotpointReceive = (message) => {
         });
       }
       let element;
-      try { element = implementation(Object.freeze(context)); }
+      try {
+        element = implementation(Object.freeze(context));
+        if (!(element instanceof HTMLElement)) {
+          throw new Error('runtime-component-element-invalid:' + componentId);
+        }
+      }
       catch (error) {
         for (const cleanup of componentCleanup.reverse()) {
           try {
@@ -528,7 +533,6 @@ window.__plotpointReceive = (message) => {
         }
         throw error;
       } finally { componentMounting = false; }
-      if (!(element instanceof HTMLElement)) throw new Error('runtime-component-element-invalid:' + componentId);
       for (const cleanup of componentCleanup) lifecycle.defer(cleanup);
       return element;
     };

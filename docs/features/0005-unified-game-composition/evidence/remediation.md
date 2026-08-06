@@ -59,3 +59,18 @@ remain local to their tests. The bounded runner completed 94 files and 657 tests
 
 - Physical iOS: **NOT RUN**.
 - Physical Android: **NOT RUN**.
+
+## Phase 14 Checkpoint 1: Sole Runtime And Field Journey
+
+- Status: **PASS** on 2026-08-06.
+- Red evidence: the installed field test first observed missing reverse child cleanup, then the absence of
+  component actions before the generated kernel and component implementation changed.
+- `pnpm --filter @plotpoint/player runtime:check`: **PASS**.
+- `pnpm exec vitest run apps/player/test/field-puzzle-acceptance.test.ts apps/player/test/runtime-composition.test.ts apps/player/test/runtime-lifecycle.test.ts examples/releases/field-puzzle/test/field-puzzle.test.ts`:
+  **PASS**, 4 files and 17 tests.
+- `pnpm --filter @plotpoint/player check-types`: **PASS**.
+- `pnpm --filter @plotpoint-example/field-puzzle check-types`: **PASS**.
+- `git diff --check`: **PASS**.
+- The installed journey used mounted DOM actions for check-in, solve, and second check-in, reached state
+  version 3, recreated the generated runtime over recovered SQLite state, and exported three command plus
+  two captured/two consumed capability events. No test imports a shadow runtime implementation.

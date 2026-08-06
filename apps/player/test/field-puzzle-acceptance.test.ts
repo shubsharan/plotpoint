@@ -1,21 +1,12 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
 import {
-  FOREGROUND_LOCATION_CAPABILITY,
   inspectGameRelease,
   openRelease,
   type CanonicalJsonObject,
   type LocalAggregateView,
-  type TransitionCandidate,
-  type TypedRecord,
 } from "@plotpoint/protocol";
-import {
-  type Aggregate,
-  type ExecutableAggregateModel,
-  type ExecutionResult,
-  type JsonObject,
-  type Observation,
-} from "@plotpoint/runtime";
+import { type ExecutableAggregateModel } from "@plotpoint/runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { compileProject, validateProject } from "../../../packages/compiler/dist/index.js";
@@ -24,11 +15,6 @@ import { installReleaseFromDescriptor } from "../src/install/install-release";
 import { PlayerDatabase } from "../src/persistence/database";
 import { createGamePlayReport } from "../src/reports/create-game-play-report";
 import { buildRuntimeBootstrap } from "../src/runtime/bootstrap";
-import {
-  createLocalModelAdapter,
-  type HostObservationReference,
-  type LocalCommandBinding,
-} from "../src/runtime/local-model-adapter";
 import { deriveHostSupportFromManifest } from "../src/runtime/host-support";
 import { createProductionHostBridgeHandlers } from "../src/runtime/production-handlers";
 import { recoverRun, verifyRecoveryArtifact } from "../src/runtime/recovery";
@@ -179,118 +165,30 @@ function canonicalContent(bytes: Uint8Array): CanonicalJsonObject {
   return value as CanonicalJsonObject;
 }
 
-function typedRecords(records: readonly JsonObject[] | undefined): readonly TypedRecord[] {
-  return (records ?? []).map((record) => {
-    if (typeof record.type !== "string") throw new Error("runtime-record-type-invalid");
-    return { ...record, type: record.type };
-  });
+function findByAction(root: TestElement, action: string): TestElement {
+  const pending = [root];
+  while (pending.length > 0) {
+    const current = pending.shift();
+    if (current?.dataset.action === action) return current;
+    if (current !== undefined) pending.push(...current.children);
+  }
+  throw new Error(`field-action-missing:${action}`);
 }
 
-function runtimeObservations(
-  observations: readonly HostObservationReference[],
-): readonly Observation[] {
-  return observations.map((observation) => {
-    const kind = observation.kind;
-    const key = observation.key;
-    const value = observation.value;
-    if (typeof kind !== "string" || typeof key !== "string" || value === undefined) {
-      throw new Error("runtime-observation-reference-invalid");
-    }
-    return { kind, key, value } as Observation;
-  });
-}
-
-function candidateFromExecution(
-  result: ExecutionResult<JsonObject, JsonObject, JsonObject, "player">,
-  observationIds: readonly string[],
-): TransitionCandidate | null {
-  if (result.kind === "preflight-invalid") return null;
-  const record = result.record;
-  const base = {
-    commandId: record.command.id,
-    modelId: record.aggregateBefore.modelId,
-    commandType: record.command.type,
-    payload: record.command.payload,
-    target: {
-      aggregateId: record.aggregateBefore.aggregateId,
-      aggregateKind: record.aggregateBefore.aggregateKind,
-      schemaId: record.aggregateBefore.schemaId,
-    },
-    expectedStateVersion: record.aggregateBefore.stateVersion,
-    observationIds,
-  } as const;
-  if (record.terminal === "invalid") {
-    return {
-      ...base,
-      terminal: "invalid",
-      phase: "execution",
-      diagnosticCodes: record.diagnostics.map(({ code }) => code),
-      attemptedProgressionTrace: record.progressionTrace.map((entry) => ({ ...entry })),
-    };
+async function waitForDataset(element: TestElement, key: string, expected: string): Promise<void> {
+  for (let attempt = 0; attempt < 100 && element.dataset[key] !== expected; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
-  if (record.outcome === undefined) throw new Error("runtime-outcome-missing");
-  if (record.terminal === "no-op" || record.terminal === "rejected") {
-    return { ...base, terminal: record.terminal, outcome: record.outcome };
-  }
-  if (record.aggregateAfter === undefined) throw new Error("runtime-aggregate-after-missing");
-  return {
-    ...base,
-    terminal: "accepted",
-    nextState: record.aggregateAfter.state,
-    ...(record.aggregateAfter.progression === undefined
-      ? {}
-      : { nextProgression: record.aggregateAfter.progression }),
-    outcome: record.outcome,
-    domainEvents: typedRecords(record.domainEvents),
-    effectIntents: typedRecords(record.effectIntents),
-    progressionTrace: record.progressionTrace.map((entry) => ({ ...entry })),
-  };
-}
-
-function fieldBinding(model: ExecutableAggregateModel<"player">): LocalCommandBinding {
-  if (model.commandContracts.advance === undefined) {
-    throw new Error("generated-field-command-missing");
-  }
-  return {
-    prepare({ view, commandId, payload, observations }) {
-      const aggregate: Aggregate<JsonObject, "player"> = {
-        aggregateId: view.aggregateId,
-        modelId: view.modelId,
-        aggregateKind: "player",
-        schemaId: view.schemaId,
-        stateVersion: view.stateVersion,
-        state: view.state,
-        ...(view.progression === undefined ? {} : { progression: view.progression }),
-      };
-      const result = model.execute({
-        aggregate,
-        command: {
-          id: commandId,
-          type: "advance",
-          target: { kind: "player", id: view.aggregateId },
-          expectedStateVersion: view.stateVersion,
-          payload,
-        },
-        observations: runtimeObservations(observations),
-      });
-      const candidate = candidateFromExecution(
-        result,
-        observations.map(({ observationId }) => observationId),
-      );
-      return (
-        candidate ?? {
-          commandId,
-          disposition: "not-recorded",
-          terminal: "invalid",
-          phase: "preflight",
-          diagnosticCodes:
-            result.kind === "preflight-invalid"
-              ? result.diagnostics.map(({ code }) => code)
-              : ["runtime-preflight-invalid"],
-        }
-      );
-    },
-  };
+  expect(
+    element.dataset[key],
+    JSON.stringify({
+      dataset: element.dataset,
+      children: element.children.map((child) => ({
+        action: child.dataset.action,
+        textContent: child.textContent,
+      })),
+    }),
+  ).toBe(expected);
 }
 
 describe("installed field puzzle vertical journey", () => {
@@ -404,6 +302,11 @@ describe("installed field puzzle vertical journey", () => {
       if (verifiedArtifact.kind !== "valid") {
         throw new Error(`field-recovery-artifact-invalid:${verifiedArtifact.code}`);
       }
+      const capturedLocations = [
+        { latitude: 37.76942, longitude: -122.48621 },
+        { latitude: 37.76815, longitude: -122.48372 },
+      ];
+      let captureIndex = 0;
       const handlers = createProductionHostBridgeHandlers({
         store: database,
         runtime: {
@@ -423,56 +326,68 @@ describe("installed field puzzle vertical journey", () => {
           startedAt,
           adapter: {
             requestPermission: async () => "granted",
-            capture: async () => ({
-              timestamp: Date.parse("2020-01-01T00:00:04.000Z"),
-              latitude: 37.76942,
-              longitude: -122.48621,
-              horizontalAccuracy: 8,
-            }),
+            capture: async () => {
+              const location = capturedLocations[captureIndex];
+              if (location === undefined) throw new Error("field-location-fixture-exhausted");
+              captureIndex += 1;
+              return {
+                timestamp: Date.parse("2020-01-01T00:00:04.000Z"),
+                ...location,
+                horizontalAccuracy: 8,
+              };
+            },
           },
           now: () => new Date("2020-01-01T00:00:05.000Z"),
-          createObservationId: () => "field-location-1",
+          createObservationId: () => `field-location-${captureIndex}`,
         },
       });
-      const local = createLocalModelAdapter({
-        initialView,
-        bindings: { "field.advance": fieldBinding(model) },
-        commit: (candidate) => handlers.commitTransition({ candidate }),
+
+      const invalidCleanup: string[] = [];
+      vi.stubGlobal("__plotpointInvalidCleanup", invalidCleanup);
+      const invalidRuntimeHtml = buildRuntimeBootstrap({
+        logicSource: new TextDecoder().decode(logicEntry.bytes),
+        presentationSource: `
+          export const components = Object.freeze({
+            "field.puzzle": (context) => {
+              context.lifecycle.defer(() => globalThis.__plotpointInvalidCleanup.push("first"));
+              context.lifecycle.defer(() => globalThis.__plotpointInvalidCleanup.push("second"));
+              return {};
+            }
+          });
+          export const application = Object.freeze({
+            mount({ components }) {
+              components["field.puzzle"]();
+              return Object.freeze({ unmount() {} });
+            }
+          });
+        `,
+        gameComposition: inspection.gameComposition,
+        content: { "field.game": content },
+        assets: {},
       });
-      const requestCapability = async (requestInput: object) =>
-        (
-          await handlers.requestCapability({
-            capability: FOREGROUND_LOCATION_CAPABILITY,
-            input: requestInput as CanonicalJsonObject,
-          })
-        ).output;
+      await expect(
+        mountGeneratedWebRuntime(invalidRuntimeHtml, (message) =>
+          routeHostBridgeMessage(message, handlers),
+        ),
+      ).rejects.toThrow("runtime-component-element-invalid:field.puzzle");
+      expect(invalidCleanup).toEqual(["second", "first"]);
 
       const firstMount = await mountGeneratedWebRuntime(runtimeHtml, (message) =>
         routeHostBridgeMessage(message, handlers),
       );
       expect(firstMount.root.children).toHaveLength(1);
-      const observation = await requestCapability({});
-      if (!isRecord(observation) || typeof observation.observationId !== "string") {
-        throw new Error("field-observation-invalid");
-      }
-      await expect(
-        local.commands["field.advance"]?.execute({
-          commandId: "field-check-in",
-          payload: { action: "check-in" },
-          observations: [
-            {
-              observationId: observation.observationId,
-              kind: "location.foreground",
-              key: "current",
-              value: observation,
-            },
-          ],
-        }),
-      ).resolves.toMatchObject({
-        disposition: "committed",
-        terminal: "accepted",
-        resultingStateVersion: 1,
-      });
+      const field = firstMount.root.children[0];
+      if (field === undefined) throw new Error("field-component-missing");
+      await waitForDataset(field, "stateVersion", "0");
+      await findByAction(field, "check-in").dispatchEvent("click");
+      await waitForDataset(field, "stateVersion", "1");
+      const answer = findByAction(field, "answer");
+      answer.value = "map";
+      await findByAction(field, "solve").dispatchEvent("click");
+      await waitForDataset(field, "stateVersion", "2");
+      await findByAction(field, "check-in").dispatchEvent("click");
+      await waitForDataset(field, "stateVersion", "3");
+      expect(field.dataset.complete).toBe("true");
       await firstMount.unmount();
       expect(firstMount.root.children).toHaveLength(0);
 
@@ -489,20 +404,16 @@ describe("installed field puzzle vertical journey", () => {
         aggregate: {
           modelId: "field.player",
           schemaId: "field.player-state",
-          stateVersion: 1,
-          state: { visitedCheckpoints: ["first-checkpoint"], puzzleSolved: false },
+          stateVersion: 3,
+          state: {
+            visitedCheckpoints: ["first-checkpoint", "second-checkpoint"],
+            puzzleSolved: true,
+          },
         },
       });
       if (recovered === null || recovered.aggregate === null) {
         throw new Error("field-recovery-missing");
       }
-      expect(recovered.aggregate.progression).toEqual((await local.getView()).progression);
-
-      const recreatedLocal = createLocalModelAdapter({
-        initialView: recovered.aggregate,
-        bindings: { "field.advance": fieldBinding(model) },
-        commit: (candidate) => handlers.commitTransition({ candidate }),
-      });
       const recreatedHandlers = createProductionHostBridgeHandlers({
         store: database,
         runtime: {
@@ -537,7 +448,10 @@ describe("installed field puzzle vertical journey", () => {
         routeHostBridgeMessage(message, recreatedHandlers),
       );
       expect(recreatedMount.root.children).toHaveLength(1);
-      expect(await recreatedLocal.getView()).toEqual(recovered.aggregate);
+      const recreatedField = recreatedMount.root.children[0];
+      if (recreatedField === undefined) throw new Error("recreated-field-component-missing");
+      await waitForDataset(recreatedField, "stateVersion", "3");
+      expect(recreatedField.dataset.complete).toBe("true");
       await recreatedMount.unmount();
 
       const journalColumns = (
@@ -554,11 +468,22 @@ describe("installed field puzzle vertical journey", () => {
           expect.objectContaining({
             kind: "command",
             terminal: "accepted",
-            resultingStateVersion: 1,
+            resultingStateVersion: 3,
           }),
           expect.objectContaining({ kind: "recovery", disposition: "run-restored" }),
         ]),
       });
+      expect(report.events.filter(({ kind }) => kind === "command")).toHaveLength(3);
+      expect(
+        report.events.filter(
+          (event) => event.kind === "capability" && event.disposition === "captured",
+        ),
+      ).toHaveLength(2);
+      expect(
+        report.events.filter(
+          (event) => event.kind === "capability" && event.disposition === "consumed",
+        ),
+      ).toHaveLength(2);
       expect(report).not.toHaveProperty("version");
       expect(report).not.toHaveProperty("runId");
       expect(JSON.stringify(report)).not.toMatch(
