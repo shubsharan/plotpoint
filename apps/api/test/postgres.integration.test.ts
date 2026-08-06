@@ -1,60 +1,70 @@
+import { readFile, rm } from "node:fs/promises";
+
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import { TARGET_DISCOVERY_COMMAND, TARGET_DISCOVERY_STATE_SCHEMA } from "@plotpoint/modules";
 import { createPostgresPool, migrateAuthoritativeHunt, type PostgresPool } from "@plotpoint/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { HuntService } from "../src/hunt-service.js";
+import { compileProject } from "../../../packages/compiler/dist/index.js";
 import { createSecret } from "../src/security.js";
+import { SharedSessionService } from "../src/shared-session-service.js";
 
 let container: StartedPostgreSqlContainer;
 let pool: PostgresPool;
-let service: HuntService;
+let service: SharedSessionService;
+let releaseId: `sha256:${string}`;
+const outputFile = `/tmp/plotpoint-api-co-op-${globalThis.crypto.randomUUID()}.pprelease`;
 
-const releaseId = `sha256:${"a".repeat(64)}`;
-const target = (targetId: string, latitude: number) => ({
-  targetId,
-  prompt: targetId,
-  zone: targetId,
-  latitude,
-  longitude: -122,
-  radiusMeters: 100,
-  maximumAgeMs: 15_000,
-  maximumAccuracyMeters: 30,
-});
-const available = (observationId: string, latitude: number) => ({
-  version: 1 as const,
+const available = (observationId: string, latitude: number, longitude: number) => ({
   observationId,
   recordedAt: "2030-01-01T00:00:01.000Z",
   capturedAt: "2030-01-01T00:00:00.000Z",
   ageMs: 1000,
   availability: "available" as const,
   latitude,
-  longitude: -122,
+  longitude,
   horizontalAccuracy: 5,
 });
 
-describe("authoritative hunt PostgreSQL integration", () => {
+describe("generic shared-session PostgreSQL integration", () => {
   beforeAll(async () => {
     container = await new PostgreSqlContainer("postgres:17-alpine").start();
     pool = createPostgresPool({ connectionString: container.getConnectionUri() });
     await migrateAuthoritativeHunt(pool);
-    await pool.query(
-      "INSERT INTO release_registrations(release_id,manifest_json,mechanic_config_json) VALUES ($1,'{}',$2)",
-      [releaseId, JSON.stringify({ targets: [target("alpha", 37), target("beta", 37.001)] })],
-    );
-    service = new HuntService(pool, "integration-pepper-with-sufficient-length");
+
+    const compilation = await compileProject({
+      projectRoot: new URL("../../../examples/releases/co-op-game/", import.meta.url).pathname,
+      outputFile,
+    });
+    if (compilation.kind !== "compiled") {
+      throw new Error(`co-op-compilation-failed:${JSON.stringify(compilation.diagnostics)}`);
+    }
+    releaseId = compilation.releaseId;
+    service = new SharedSessionService(pool, "integration-pepper-with-sufficient-length");
+    await service.registerRelease(await readFile(outputFile), releaseId);
   }, 120_000);
 
   afterAll(async () => {
     await pool?.end();
     await container?.stop();
+    await rm(outputFile, { force: true });
   });
 
-  it("proves join retry, locked stale acceptance, duplicate no-op, receipt identity, and revocation", async () => {
-    const session = await service.createSession({
+  it("joins three participants and confirms one persisted-location discovery", async () => {
+    const creation = {
       creationId: "creation-1",
       releaseId,
       teamLabel: "Team",
-    });
+    };
+    const created = await Promise.all([
+      service.createSession(creation),
+      service.createSession(creation),
+    ]);
+    expect(new Set(created.map(({ disposition }) => disposition))).toEqual(
+      new Set(["created", "duplicate"]),
+    );
+    expect(new Set(created.map(({ sessionId }) => sessionId))).toHaveLength(1);
+    const session = created[0]!;
     const invitations = await Promise.all(
       ["one", "two", "three"].map((name) =>
         service.createInvitation(
@@ -86,59 +96,80 @@ describe("authoritative hunt PostgreSQL integration", () => {
       participantCredential: credentials[2]!,
     });
 
-    const command = (
-      commandId: string,
-      targetId: string,
-      latitude: number,
-      expectedStateVersion: number,
-    ) => ({
-      version: 1 as const,
+    const command = (commandId: string, targetId: string, expectedStateVersion: number) => ({
       commandId,
       target: {
         aggregateKind: "team" as const,
         aggregateId: session.teamId,
-        schemaId: "plotpoint.hunt.team-state",
+        schemaId: TARGET_DISCOVERY_STATE_SCHEMA,
         schemaVersion: 1,
       },
       expectedStateVersion,
-      type: "plotpoint.hunt.target-discovery",
+      type: TARGET_DISCOVERY_COMMAND,
       payload: { targetId },
-      observations: [available(`observation-${commandId}`, latitude)],
+      observations: [available(`observation-${commandId}`, 37.7955, -122.3937)],
     });
-    const [alpha, beta] = await Promise.all([
-      service.submit(session.sessionId, credentials[0]!, command("alpha-command", "alpha", 37, 0)),
+    const exactRetries = await Promise.all([
+      service.submit(
+        session.sessionId,
+        credentials[0]!,
+        command("ferry-command", "ferry-building", 0),
+      ),
+      service.submit(
+        session.sessionId,
+        credentials[0]!,
+        command("ferry-command", "ferry-building", 0),
+      ),
+    ]);
+    expect(new Set(exactRetries.map(({ disposition }) => disposition))).toEqual(
+      new Set(["decided", "duplicate"]),
+    );
+    expect(exactRetries).toEqual([
+      expect.objectContaining({
+        terminal: "accepted",
+        outcomeCode: "target-discovered",
+        resultingStateVersion: 1,
+      }),
+      expect.objectContaining({
+        terminal: "accepted",
+        outcomeCode: "target-discovered",
+        resultingStateVersion: 1,
+      }),
+    ]);
+    await expect(
       service.submit(
         session.sessionId,
         credentials[1]!,
-        command("beta-command", "beta", 37.001, 0),
+        command("ferry-repeat", "ferry-building", 1),
       ),
-    ]);
-    expect([alpha.terminal, beta.terminal].sort()).toEqual(["accepted", "accepted"]);
-    expect(new Set([alpha.resultingStateVersion, beta.resultingStateVersion])).toEqual(
-      new Set([1, 2]),
-    );
-    await expect(
-      service.submit(session.sessionId, credentials[2]!, command("alpha-repeat", "alpha", 37, 0)),
     ).resolves.toMatchObject({
       terminal: "no-op",
       outcomeCode: "target-already-discovered",
-      resultingStateVersion: 2,
+      resultingStateVersion: 1,
     });
     await expect(
-      service.submit(session.sessionId, credentials[0]!, command("alpha-command", "alpha", 37, 0)),
+      service.submit(
+        session.sessionId,
+        credentials[0]!,
+        command("ferry-command", "ferry-building", 0),
+      ),
     ).resolves.toMatchObject({ disposition: "duplicate", terminal: "accepted" });
     await expect(
-      service.submit(session.sessionId, credentials[0]!, {
-        ...command("alpha-command", "alpha", 37, 0),
-        payload: { targetId: "beta" },
-      }),
+      service.submit(
+        session.sessionId,
+        credentials[0]!,
+        command("ferry-command", "rincon-park", 0),
+      ),
     ).rejects.toMatchObject({ code: "command-identity-conflict", status: 409 });
 
     const pull = await service.pull(session.sessionId, credentials[0]!, "0");
-    expect(pull.snapshot.projections[0]).toMatchObject({
-      stateVersion: 2,
-      value: { completedTargets: 2, complete: true },
-    });
+    expect(pull.snapshot.projections).toEqual([
+      expect.objectContaining({
+        schemaId: "plotpoint.location.team-projection",
+        stateVersion: 1,
+        value: expect.objectContaining({ completedTargets: 1, complete: false }),
+      }),
+    ]);
     await service.revoke(session.sessionId, teammateThree.participantId, "revoke-1");
     await service.revoke(session.sessionId, teammateThree.participantId, "revoke-1");
     await expect(
@@ -173,18 +204,17 @@ describe("authoritative hunt PostgreSQL integration", () => {
       "CREATE TRIGGER injected_fault BEFORE INSERT ON authoritative_operational_events FOR EACH ROW EXECUTE FUNCTION fail_operational_event() ",
     );
     const input = {
-      version: 1 as const,
       commandId: "fault-command",
       target: {
         aggregateKind: "team" as const,
         aggregateId: session.teamId,
-        schemaId: "plotpoint.hunt.team-state",
+        schemaId: TARGET_DISCOVERY_STATE_SCHEMA,
         schemaVersion: 1,
       },
       expectedStateVersion: 0,
-      type: "plotpoint.hunt.target-discovery",
-      payload: { targetId: "alpha" },
-      observations: [available("observation-fault", 37)],
+      type: TARGET_DISCOVERY_COMMAND,
+      payload: { targetId: "ferry-building" },
+      observations: [available("observation-fault", 37.7955, -122.3937)],
     };
     await expect(service.submit(session.sessionId, credential, input)).rejects.toThrow("fault");
     await pool.query("DROP TRIGGER injected_fault ON authoritative_operational_events");

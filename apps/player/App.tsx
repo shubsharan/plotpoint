@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button, Platform, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as FileSystem from "expo-file-system/legacy";
@@ -7,7 +7,14 @@ import { StatusBar } from "expo-status-bar";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
 
-import { openRelease, type ReleaseManifest } from "@plotpoint/protocol";
+import {
+  inspectGameRelease,
+  openRelease,
+  type CanonicalJsonValue,
+  type GameComposition,
+  type ReleaseManifest,
+  type SharedPlayView,
+} from "@plotpoint/protocol";
 
 import { routeHostBridgeMessage } from "./src/bridge/host-bridge";
 import { installReleaseFromDescriptor } from "./src/install/install-release";
@@ -24,7 +31,13 @@ import { createProductionHostBridgeHandlers } from "./src/runtime/production-han
 import { recoverLatestRun, recoverRun, type RecoveryBootstrap } from "./src/runtime/recovery";
 import { playerRunLifecycleStore, selectReleaseRun } from "./src/runtime/run-lifecycle";
 import { SharedSyncStore } from "./src/shared/database";
-import { routeSharedBridgeMessage } from "./src/shared/host-bridge";
+import {
+  createCompositionSharedBridgeHandlers,
+  deriveSharedRuntimeSurface,
+  type SharedProjectionContract,
+  routeSharedBridgeMessage,
+  type SharedRuntimeSurface,
+} from "./src/shared/host-bridge";
 import { createParticipantCredentialStore } from "./src/shared/credentials";
 import { SharedSyncCoordinator } from "./src/shared/sync-coordinator";
 import { SharedSessionController } from "./src/shared/session-controller";
@@ -36,6 +49,10 @@ type ActiveRecovery = RecoveryBootstrap & {
 interface ActiveRuntime {
   readonly recovery: ActiveRecovery;
   readonly html: string;
+  readonly composition: GameComposition;
+  readonly aggregateSchemaVersions: Readonly<Record<string, number>>;
+  readonly projectionContract: SharedProjectionContract | null;
+  readonly sharedSurface: SharedRuntimeSurface;
   readonly aggregateSchemaId: string;
   readonly validateAggregate: ValidateFunction;
 }
@@ -59,6 +76,49 @@ function base64ToBytes(value: string): Uint8Array {
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   return bytes;
+}
+
+function bytesToBase64(value: Uint8Array): string {
+  let binary = "";
+  for (const byte of value) binary += String.fromCharCode(byte);
+  return globalThis.btoa(binary);
+}
+
+function assetMediaType(path: string): string {
+  const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+  switch (extension) {
+    case "svg":
+      return "image/svg+xml";
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "gif":
+      return "image/gif";
+    case "webp":
+      return "image/webp";
+    case "mp3":
+      return "audio/mpeg";
+    case "wav":
+      return "audio/wav";
+    case "mp4":
+      return "video/mp4";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+function canonicalValue(value: unknown): value is CanonicalJsonValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value) && !Object.is(value, -0);
+  if (Array.isArray(value)) return value.every(canonicalValue);
+  if (value === null || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (
+    (prototype === Object.prototype || prototype === null) &&
+    Object.values(value).every(canonicalValue)
+  );
 }
 
 async function readArtifactBytes(uri: string): Promise<Uint8Array> {
@@ -171,17 +231,31 @@ export default function App() {
     const activeRecovery: ActiveRecovery = { ...recovery, aggregate: recovery.aggregate };
     const installation = await db.installedRelease(recovery.releaseId);
     if (installation === null) throw new Error("recovery-installation-missing");
-    const opened = await openRelease(await readArtifactBytes(installation.artifactUri));
+    const artifactBytes = await readArtifactBytes(installation.artifactUri);
+    const [opened, inspection] = await Promise.all([
+      openRelease(artifactBytes),
+      inspectGameRelease(artifactBytes),
+    ]);
     if (opened.kind === "invalid")
       throw new Error(opened.diagnostics[0]?.code ?? "release-open-failed");
+    if ("kind" in inspection)
+      throw new Error(inspection.diagnostics[0]?.code ?? "game-composition-invalid");
+    if (inspection.release.releaseId !== opened.releaseId) {
+      throw new Error("game-composition-release-mismatch");
+    }
+    const composition = inspection.gameComposition;
     const logicPath = opened.manifest.entrypoints.logic;
     const presentationPath = opened.manifest.entrypoints.presentation;
     const logic = opened.entries.find((entry) => entry.path === logicPath);
     const presentation = opened.entries.find((entry) => entry.path === presentationPath);
     if (logic === undefined || presentation === undefined)
       throw new Error("release-entrypoint-missing");
+    const localModel = composition.aggregateModels.find(
+      (model) => model.authority === "local" && model.id === recovery.aggregate?.modelId,
+    );
+    if (localModel?.authority !== "local") throw new Error("release-player-model-missing");
     const aggregateRequirement = opened.manifest.aggregateSchemas.find(
-      (schema) => schema.kind === "player",
+      (schema) => schema.kind === "player" && schema.id === localModel.stateSchema.id,
     );
     if (aggregateRequirement === undefined) throw new Error("release-player-schema-missing");
     const aggregateSchema = opened.entries.find(
@@ -193,19 +267,99 @@ export default function App() {
       allErrors: true,
       strict: true,
     }).compile(JSON.parse(decoder.decode(aggregateSchema.bytes)) as object);
+    if (!validateAggregate(activeRecovery.aggregate.state)) {
+      throw new Error("runtime-aggregate-schema-invalid");
+    }
+    const content: Record<string, CanonicalJsonValue> = Object.create(null);
+    const assets: Record<string, CanonicalJsonValue> = Object.create(null);
+    for (const resource of composition.resources) {
+      if (resource.role !== "content" && resource.role !== "asset") continue;
+      const entry = opened.entries.find(({ path }) => path === resource.path);
+      if (entry === undefined) throw new Error(`runtime-resource-entry-missing:${resource.id}`);
+      if (resource.role === "content") {
+        const value: unknown = JSON.parse(decoder.decode(entry.bytes));
+        if (!canonicalValue(value)) throw new Error(`runtime-content-invalid:${resource.id}`);
+        content[resource.id] = value;
+      } else {
+        const mediaType = assetMediaType(resource.path);
+        assets[resource.id] = {
+          uri: `data:${mediaType};base64,${bytesToBase64(entry.bytes)}`,
+          mediaType,
+        };
+      }
+    }
+    const aggregateSchemaVersions = Object.freeze(
+      Object.fromEntries(opened.manifest.aggregateSchemas.map(({ id, version }) => [id, version])),
+    );
+    let projectionContract: SharedProjectionContract | null = null;
+    if (composition.trustedMechanic !== undefined) {
+      const serverModel = composition.aggregateModels.find(
+        ({ id }) => id === composition.trustedMechanic?.aggregateModel,
+      );
+      if (serverModel?.authority !== "server") throw new Error("release-server-model-missing");
+      const serverSchema = opened.manifest.aggregateSchemas.find(
+        ({ id, kind }) => id === serverModel.stateSchema.id && kind === serverModel.kind,
+      );
+      const projectionResource = composition.resources.find(
+        ({ id, role }) =>
+          id === composition.trustedMechanic?.projectionSchema.id && role === "schema",
+      );
+      const projectionEntry = opened.entries.find(({ path }) => path === projectionResource?.path);
+      if (
+        serverSchema === undefined ||
+        projectionResource === undefined ||
+        projectionEntry === undefined
+      ) {
+        throw new Error("release-projection-schema-missing");
+      }
+      const validateProjection = new Ajv2020({ allErrors: true, strict: true }).compile(
+        JSON.parse(decoder.decode(projectionEntry.bytes)) as object,
+      );
+      projectionContract = Object.freeze({
+        schemaId: composition.trustedMechanic.projectionSchema.id,
+        schemaVersion: serverSchema.version,
+        validate: (value: SharedPlayView["projections"][number]["value"]) =>
+          validateProjection(value),
+      });
+    }
+    let sessionId: string | null = null;
+    let sharedView: SharedPlayView | null = null;
+    if (composition.trustedMechanic !== undefined) {
+      const sharedStore = new SharedSyncStore(db.raw());
+      sessionId = await sharedStore.sessionForRun(recovery.runId);
+      if (sessionId !== null) sharedView = await sharedStore.view(sessionId);
+    }
+    const sharedSurface = deriveSharedRuntimeSurface(
+      composition,
+      sharedView,
+      activeRecovery.releaseId,
+      projectionContract,
+    );
     setRuntime({
       recovery: activeRecovery,
+      composition,
+      aggregateSchemaVersions,
+      projectionContract,
+      sharedSurface,
       aggregateSchemaId: aggregateRequirement.id,
       validateAggregate,
       html: buildRuntimeBootstrap({
         logicSource: decoder.decode(logic.bytes),
         presentationSource: decoder.decode(presentation.bytes),
+        gameComposition: composition,
+        content,
+        assets,
+        aggregateSchemaVersions,
+        sharedBindingAvailable: sharedSurface.sharedBindingAvailable,
       }),
     });
-    setSharedSessionId(await new SharedSyncStore(db.raw()).sessionForRun(recovery.runId));
+    setSharedSessionId(sessionId);
     setReleaseDetails(describeRequirements(opened.releaseId, opened.manifest, publication));
     setInstallFailure(null);
-    setStatus("Release ready for offline play.");
+    if (sharedSurface.kind === "join") setStatus("Release ready to join shared play.");
+    else if (sharedSurface.kind === "bound") setStatus("Shared play ready.");
+    else if (sharedSurface.kind === "recovery") setStatus(sharedSurface.code);
+    else setStatus("Release ready for offline play.");
   };
 
   useEffect(() => {
@@ -276,7 +430,7 @@ export default function App() {
       decodedType = undefined;
     }
     if (typeof decodedType === "string" && decodedType.startsWith("shared.")) {
-      if (sharedSessionId === null) {
+      if (sharedSessionId === null || runtime.sharedSurface.kind !== "bound") {
         reply({
           version: 1,
           requestId: "unknown",
@@ -286,10 +440,21 @@ export default function App() {
         return;
       }
       const store = new SharedSyncStore(database.raw());
-      const response = await routeSharedBridgeMessage(event.nativeEvent.data, {
-        getView: () => store.view(sharedSessionId),
-        enqueue: (command) => store.enqueue(sharedSessionId, command, new Date().toISOString()),
-      });
+      const response = await routeSharedBridgeMessage(
+        event.nativeEvent.data,
+        createCompositionSharedBridgeHandlers({
+          composition: runtime.composition,
+          expectedReleaseId: runtime.recovery.releaseId,
+          aggregateSchemaVersions: runtime.aggregateSchemaVersions,
+          projectionContract:
+            runtime.projectionContract ??
+            (() => {
+              throw new Error("shared-projection-contract-missing");
+            })(),
+          getView: () => store.view(sharedSessionId),
+          enqueue: (command) => store.enqueue(sharedSessionId, command, new Date().toISOString()),
+        }),
+      );
       reply(response);
       void new SharedSyncCoordinator(store, createParticipantCredentialStore())
         .synchronize(sharedSessionId)
@@ -322,6 +487,7 @@ export default function App() {
             releaseId: runtime.recovery.releaseId,
             aggregate: runtime.recovery.aggregate,
           },
+          composition: runtime.composition,
           aggregateSchemaId: runtime.aggregateSchemaId,
           validateAggregate: runtime.validateAggregate,
         },
@@ -334,12 +500,24 @@ export default function App() {
           const recovered = await recoverRun(database, runtime.recovery, {
             readArtifact: readArtifactBytes,
           });
-          if (recovered !== null) setRuntime({ ...runtime, recovery: recovered });
+          if (recovered !== null && recovered.aggregate !== null) {
+            setRuntime({
+              ...runtime,
+              recovery: { ...recovered, aggregate: recovered.aggregate },
+            });
+          }
         },
       }),
     );
     reply(response);
   };
+
+  useLayoutEffect(() => {
+    const mounted = webView.current;
+    return () => {
+      mounted?.injectJavaScript("void window.__plotpointDispose?.(); true;");
+    };
+  }, [runtime?.html, runtime?.sharedSurface.kind, scanning]);
 
   const exportReport = async () => {
     if (database === null || runtime === null || FileSystem.cacheDirectory === null) return;
@@ -360,9 +538,9 @@ export default function App() {
     }
   };
 
-  const joinSharedHunt = async () => {
-    if (database === null || runtime === null) return;
-    setStatus("Joining shared hunt…");
+  const joinSharedSession = async () => {
+    if (database === null || runtime === null || runtime.sharedSurface.kind !== "join") return;
+    setStatus("Joining shared play…");
     try {
       const store = new SharedSyncStore(database.raw());
       await new SharedSessionController(store, createParticipantCredentialStore()).join({
@@ -372,10 +550,9 @@ export default function App() {
         invitation,
       });
       setInvitation("");
-      setSharedSessionId(sessionCode);
-      setStatus("Shared hunt joined and synchronized.");
+      await loadRun(database, runtime.recovery, "Verified shared-session binding opened.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Shared hunt join failed");
+      setStatus(error instanceof Error ? error.message : "Shared join failed");
     }
   };
 
@@ -410,9 +587,9 @@ export default function App() {
           <Text style={styles.failureAction}>{installFailure.action}</Text>
         </View>
       )}
-      {runtime !== null && sharedSessionId === null ? (
+      {runtime?.sharedSurface.kind === "join" ? (
         <View style={styles.joinPanel}>
-          <Text style={styles.detailLabel}>JOIN COOPERATIVE HUNT</Text>
+          <Text style={styles.detailLabel}>JOIN SHARED PLAY</Text>
           <TextInput
             value={serviceUrl}
             onChangeText={setServiceUrl}
@@ -439,12 +616,23 @@ export default function App() {
             style={styles.input}
           />
           <Button
-            title="Join hunt"
+            title="Join session"
             disabled={
               serviceUrl.length === 0 || sessionCode.length === 0 || invitation.length === 0
             }
-            onPress={() => void joinSharedHunt()}
+            onPress={() => void joinSharedSession()}
           />
+        </View>
+      ) : null}
+      {runtime?.sharedSurface.kind === "recovery" ? (
+        <View style={styles.failurePanel}>
+          <Text style={styles.detailLabel}>SHARED PLAY RECOVERY</Text>
+          <Text selectable style={styles.failureCode}>
+            {runtime.sharedSurface.code}
+          </Text>
+          <Text style={styles.failureAction}>
+            Retry synchronization or reinstall the matching immutable release before continuing.
+          </Text>
         </View>
       ) : null}
       {releaseDetails === null ? null : (
@@ -485,6 +673,15 @@ export default function App() {
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>Player ready, release-free.</Text>
           <Text>Serve a verified puzzle on your private network and scan its QR code.</Text>
+        </View>
+      ) : runtime.sharedSurface.kind === "join" || runtime.sharedSurface.kind === "recovery" ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>
+            {runtime.sharedSurface.kind === "join"
+              ? "Shared session required."
+              : "Shared binding unavailable."}
+          </Text>
+          <Text>The verified application mounts after the native shared boundary is ready.</Text>
         </View>
       ) : (
         <WebView

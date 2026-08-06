@@ -1,7 +1,12 @@
 import {
   HOST_BRIDGE_VERSION,
+  type CanonicalJsonObject,
   type CanonicalJsonValue,
+  type CommandDescriptor,
   type GameComposition,
+  type ServerAggregateModelDescriptor,
+  type SharedCommandIntent,
+  type SharedProjection,
 } from "@plotpoint/protocol";
 
 export interface RuntimeBootstrapInput {
@@ -10,7 +15,77 @@ export interface RuntimeBootstrapInput {
   readonly gameComposition?: GameComposition;
   readonly content?: Readonly<Record<string, CanonicalJsonValue>>;
   readonly assets?: Readonly<Record<string, CanonicalJsonValue>>;
+  readonly aggregateSchemaVersions?: Readonly<Record<string, number>>;
   readonly sharedBindingAvailable?: boolean;
+}
+
+export function deriveSharedCommandIntent(
+  input: unknown,
+  descriptor: CommandDescriptor,
+  model: ServerAggregateModelDescriptor,
+  projectionSchemaId: string,
+  targetSchemaVersion: number,
+  projection: SharedProjection,
+): SharedCommandIntent {
+  const canonical = (value: unknown): boolean => {
+    if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+    if (typeof value === "number") return Number.isFinite(value) && !Object.is(value, -0);
+    if (Array.isArray(value)) return value.every(canonical);
+    if (value === null || typeof value !== "object") return false;
+    const prototype = Object.getPrototypeOf(value);
+    return (
+      (prototype === Object.prototype || prototype === null) &&
+      Object.values(value).every(canonical)
+    );
+  };
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("runtime-shared-command-input-invalid");
+  }
+  const commandInput = input as Record<string, unknown>;
+  const required = ["commandId", "payload"];
+  const allowed = new Set([...required, "observationIds"]);
+  const observationIds = commandInput.observationIds ?? [];
+  if (
+    required.some((key) => !Object.hasOwn(commandInput, key)) ||
+    Object.keys(commandInput).some((key) => !allowed.has(key)) ||
+    typeof commandInput.commandId !== "string" ||
+    commandInput.commandId.length === 0 ||
+    commandInput.payload === null ||
+    typeof commandInput.payload !== "object" ||
+    Array.isArray(commandInput.payload) ||
+    !canonical(commandInput.payload) ||
+    !Array.isArray(observationIds) ||
+    observationIds.some((id) => typeof id !== "string" || id.length === 0) ||
+    new Set(observationIds).size !== observationIds.length
+  ) {
+    throw new Error("runtime-shared-command-input-invalid");
+  }
+  if (
+    descriptor.execution !== "trusted-mechanic" ||
+    descriptor.aggregateModel !== model.id ||
+    model.authority !== "server" ||
+    projection.schemaId !== projectionSchemaId ||
+    projection.aggregateKind !== model.kind ||
+    !Number.isSafeInteger(targetSchemaVersion) ||
+    targetSchemaVersion <= 0 ||
+    !Number.isSafeInteger(projection.stateVersion) ||
+    projection.stateVersion < 0
+  ) {
+    throw new Error("runtime-shared-command-binding-invalid");
+  }
+  return Object.freeze({
+    commandId: commandInput.commandId,
+    target: Object.freeze({
+      aggregateKind: projection.aggregateKind,
+      aggregateId: projection.aggregateId,
+      schemaId: model.stateSchema.id,
+      schemaVersion: targetSchemaVersion,
+    }),
+    expectedStateVersion: projection.stateVersion,
+    type: descriptor.type,
+    payload: commandInput.payload as CanonicalJsonObject,
+    observationIds: Object.freeze([...observationIds] as string[]),
+  });
 }
 
 function scriptString(value: string): string {
@@ -23,6 +98,8 @@ export function buildRuntimeBootstrap(input: RuntimeBootstrapInput): string {
   const gameComposition = scriptString(JSON.stringify(input.gameComposition ?? null));
   const content = scriptString(JSON.stringify(input.content ?? {}));
   const assets = scriptString(JSON.stringify(input.assets ?? {}));
+  const aggregateSchemaVersions = scriptString(JSON.stringify(input.aggregateSchemaVersions ?? {}));
+  const sharedCommandIntentDeriver = deriveSharedCommandIntent.toString();
   const sharedBindingAvailable = input.sharedBindingAvailable === true ? "true" : "false";
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -60,6 +137,7 @@ window.__plotpointReceive = (message) => {
     for (const nested of Object.values(value)) deepFreeze(nested);
     return Object.freeze(value);
   };
+  const deriveSharedCommandIntent = ${sharedCommandIntentDeriver};
   const schemaRegistryMatches = (descriptors, registry) =>
     Array.isArray(descriptors) && isRecord(registry) &&
     JSON.stringify(Object.keys(registry).sort()) ===
@@ -327,7 +405,8 @@ window.__plotpointReceive = (message) => {
   })));
   const contentRegistry = deepFreeze(JSON.parse(${content}));
   const assetRegistry = deepFreeze(JSON.parse(${assets}));
-  if (!isRecord(contentRegistry) || !isRecord(assetRegistry)) {
+  const aggregateSchemaVersions = deepFreeze(JSON.parse(${aggregateSchemaVersions}));
+  if (!isRecord(contentRegistry) || !isRecord(assetRegistry) || !isRecord(aggregateSchemaVersions)) {
     throw new Error('runtime-resource-registry-invalid');
   }
   const capabilityRegistry = Object.fromEntries(composition.components.flatMap((componentDescriptor) =>
@@ -345,11 +424,13 @@ window.__plotpointReceive = (message) => {
     })])
   ));
   const sharedListeners = new Set();
-  window.addEventListener('plotpoint-host', (event) => {
+  const onSharedSyncChanged = (event) => {
     if (event.detail && event.detail.type === 'shared.sync.changed') {
       for (const listener of [...sharedListeners]) listener();
     }
-  });
+  };
+  window.addEventListener('plotpoint-host', onSharedSyncChanged);
+  lifecycle.defer(() => window.removeEventListener('plotpoint-host', onSharedSyncChanged));
   const componentFactories = Object.create(null);
   for (const componentId of composition.application.components) {
     const componentDescriptor = composition.components.find(({ id }) => id === componentId);
@@ -383,15 +464,54 @@ window.__plotpointReceive = (message) => {
         capabilities: select(capabilityRegistry, componentDescriptor.capabilities.map(({ id }) => id), 'runtime-component-capability-missing')
       };
       if (componentDescriptor.sharedProjection !== undefined && ${sharedBindingAvailable}) {
+        const mechanic = composition.trustedMechanic;
+        const sharedModel = mechanic && composition.aggregateModels.find(({ id }) => id === mechanic.aggregateModel);
+        if (!isRecord(mechanic) || !isRecord(sharedModel) || sharedModel.authority !== 'server' ||
+            mechanic.projectionSchema.id !== componentDescriptor.sharedProjection.id) {
+          throw new Error('runtime-component-shared-binding-invalid:' + componentId);
+        }
+        const targetSchemaVersion = aggregateSchemaVersions[sharedModel.stateSchema.id];
+        if (!Number.isSafeInteger(targetSchemaVersion) || targetSchemaVersion <= 0) {
+          throw new Error('runtime-component-shared-schema-version-missing:' + componentId);
+        }
         context.shared = Object.freeze({
           getView: () => send('shared.view.get', {}),
           onSyncChanged(listener) {
             sharedListeners.add(listener); let subscribed = true;
             return () => { if (subscribed) { subscribed = false; sharedListeners.delete(listener); } };
           },
-          commands: Object.freeze(Object.fromEntries(sharedCommandIds.map((commandId) => [commandId, Object.freeze({
-            execute: (command) => send('shared.command.enqueue', { command })
-          })])))
+          commands: Object.freeze(Object.fromEntries(sharedCommandIds.map((commandId) => {
+            const descriptor = composition.commands.find(({ id }) => id === commandId);
+            if (!descriptor || !mechanic.commands.includes(commandId) ||
+                descriptor.execution !== 'trusted-mechanic' || descriptor.aggregateModel !== sharedModel.id) {
+              throw new Error('runtime-component-shared-command-missing:' + componentId + ':' + commandId);
+            }
+            return [commandId, Object.freeze({
+              async execute(commandInput) {
+                if (!allowedKeys(commandInput, ['commandId', 'payload'], ['observationIds'])) {
+                  throw new Error('runtime-shared-command-input-invalid');
+                }
+                const view = await send('shared.view.get', {});
+                if (!isRecord(view) || !Array.isArray(view.projections)) {
+                  throw new Error('runtime-shared-view-invalid');
+                }
+                const projections = view.projections.filter((projection) =>
+                  isRecord(projection) && projection.schemaId === componentDescriptor.sharedProjection.id &&
+                  projection.aggregateKind === sharedModel.kind
+                );
+                if (projections.length !== 1) throw new Error('runtime-shared-projection-invalid');
+                const command = deriveSharedCommandIntent(
+                  commandInput,
+                  descriptor,
+                  sharedModel,
+                  componentDescriptor.sharedProjection.id,
+                  targetSchemaVersion,
+                  projections[0]
+                );
+                return send('shared.command.enqueue', { command });
+              }
+            })];
+          })))
         });
       }
       let element;

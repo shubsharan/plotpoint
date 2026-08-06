@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { GameComposition } from "@plotpoint/protocol";
+import type { GameComposition, SharedProjection } from "@plotpoint/protocol";
 
-import { buildRuntimeBootstrap } from "../src/runtime/bootstrap";
+import { buildRuntimeBootstrap, deriveSharedCommandIntent } from "../src/runtime/bootstrap";
 import { mountGameComposition, type ComponentContext } from "../src/runtime/composition";
 
 const composition = {
@@ -62,8 +62,60 @@ function runtimeGlue(): string {
     logicSource: "export const aggregateModels = Object.freeze({});",
     presentationSource:
       "export const application = Object.freeze({ mount({ root, components }) { root.replaceChildren(components['field-map']()); return { unmount() {} }; } }); export const components = Object.freeze({});",
+    gameComposition: composition,
   });
 }
+
+const sharedComposition = {
+  ...composition,
+  aggregateModels: [
+    ...composition.aggregateModels,
+    {
+      id: "shared-model",
+      authority: "server",
+      kind: "team",
+      stateSchema: { id: "shared-state" },
+      initializationSchema: { id: "shared-initialization" },
+      events: [],
+      effects: [],
+    },
+  ],
+  commands: [
+    ...composition.commands,
+    {
+      id: "shared-action",
+      type: "shared.action",
+      aggregateModel: "shared-model",
+      payloadSchema: { id: "shared-action-payload" },
+      outcomeSchema: { id: "shared-action-outcome" },
+      execution: "trusted-mechanic",
+    },
+  ],
+  components: [
+    {
+      ...composition.components[0]!,
+      commands: ["complete-checkpoint", "shared-action"],
+      sharedProjection: { id: "shared-projection" },
+    },
+  ],
+  trustedMechanic: {
+    id: "shared-adapter",
+    aggregateModel: "shared-model",
+    commands: ["shared-action"],
+    configuration: "field-copy",
+    projectionSchema: { id: "shared-projection" },
+    capabilities: [],
+  },
+} satisfies GameComposition;
+
+const sharedProjection = {
+  aggregateKind: "team",
+  aggregateId: "team-1",
+  schemaId: "shared-projection",
+  schemaVersion: 1,
+  stateVersion: 3,
+  value: { ready: true },
+} satisfies SharedProjection;
 
 describe("runtime composition lifecycle", () => {
   it("mounts __proto__ component and dependency keys without prototype loss", async () => {
@@ -166,15 +218,197 @@ describe("runtime composition lifecycle", () => {
     await handle.unmount();
   });
 
-  it("rolls component cleanup back in reverse order exactly once", () => {
-    const html = runtimeGlue();
+  it("rolls component cleanup back in reverse order exactly once", async () => {
+    const cleanup: string[] = [];
+    const element = {} as HTMLElement;
 
-    expect(html, "runtime-composition-reverse-cleanup-missing").toMatch(
-      /cleanup[^\n]*\.reverse\(\)/,
+    await expect(
+      mountGameComposition({
+        root: {} as HTMLElement,
+        composition,
+        application: {
+          mount({
+            components,
+          }: {
+            readonly components: Readonly<Record<string, () => HTMLElement>>;
+          }) {
+            components["field-map"]?.();
+            throw new Error("application-mount-failed");
+          },
+        },
+        components: {
+          "field-map": ({ lifecycle }) => {
+            lifecycle.defer(() => {
+              cleanup.push("first");
+            });
+            lifecycle.defer(() => {
+              cleanup.push("second");
+            });
+            return element;
+          },
+        },
+        providers: {
+          local: {
+            async getView() {
+              throw new Error("not invoked");
+            },
+            onChanged() {
+              return () => {};
+            },
+            commands: {
+              "complete-checkpoint": {
+                async execute(input) {
+                  return {
+                    commandId: input.commandId,
+                    disposition: "not-recorded",
+                    terminal: "invalid",
+                    phase: "preflight",
+                    diagnosticCodes: ["not-invoked"],
+                  };
+                },
+              },
+            },
+          },
+          content: { "field-copy": {} },
+          assets: { "field-map-image": {} },
+          capabilities: {
+            "plotpoint.location.foreground": {
+              async request() {
+                return {};
+              },
+            },
+          },
+        },
+        isElement: (value): value is HTMLElement => value === element,
+      }),
+    ).rejects.toThrow("application-mount-failed");
+    expect(cleanup).toEqual(["second", "first"]);
+
+    const html = runtimeGlue();
+    expect(html).toContain(
+      "lifecycle.defer(() => window.removeEventListener('plotpoint-host', onSharedSyncChanged))",
     );
-    expect(html, "runtime-composition-exactly-once-cleanup-missing").toContain(
-      "runtime-component-cleanup-already-invoked",
-    );
+    expect(html).toContain("window.__plotpointDispose = disposeRuntime");
+  });
+
+  it("scopes Shared Play to declared projections and trusted commands", async () => {
+    const element = {} as HTMLElement;
+    let mounted: ComponentContext | undefined;
+    const handle = await mountGameComposition({
+      root: {} as HTMLElement,
+      composition: sharedComposition,
+      application: {
+        mount({
+          components,
+        }: {
+          readonly components: Readonly<Record<string, () => HTMLElement>>;
+        }) {
+          components["field-map"]?.();
+          return { unmount() {} };
+        },
+      },
+      components: {
+        "field-map": (context) => {
+          mounted = context;
+          return element;
+        },
+      },
+      providers: {
+        local: {
+          async getView() {
+            throw new Error("not invoked");
+          },
+          onChanged() {
+            return () => {};
+          },
+          commands: {
+            "complete-checkpoint": {
+              async execute(input) {
+                return {
+                  commandId: input.commandId,
+                  disposition: "not-recorded",
+                  terminal: "invalid",
+                  phase: "preflight",
+                  diagnosticCodes: ["not-invoked"],
+                };
+              },
+            },
+          },
+        },
+        shared: {
+          async getView() {
+            throw new Error("not invoked");
+          },
+          onSyncChanged() {
+            return () => {};
+          },
+          commands: {
+            "shared-action": { async execute() {} },
+            undeclared: { async execute() {} },
+          },
+        },
+        content: { "field-copy": {} },
+        assets: { "field-map-image": {} },
+        capabilities: {
+          "plotpoint.location.foreground": {
+            async request() {
+              return {};
+            },
+          },
+        },
+      },
+      isElement: (value): value is HTMLElement => value === element,
+    });
+
+    expect(Object.keys(mounted?.shared?.commands ?? {})).toEqual(["shared-action"]);
+    await handle.unmount();
+  });
+
+  it("derives shared authority fields and rejects author-supplied target, type, or version", () => {
+    const command = sharedComposition.commands.find(({ id }) => id === "shared-action");
+    const model = sharedComposition.aggregateModels.find(({ id }) => id === "shared-model");
+    if (command === undefined || model?.authority !== "server") {
+      throw new Error("runtime-shared-fixture-invalid");
+    }
+
+    expect(
+      deriveSharedCommandIntent(
+        { commandId: "action-1", payload: { choice: "alpha" }, observationIds: ["proof-1"] },
+        command,
+        model,
+        "shared-projection",
+        1,
+        sharedProjection,
+      ),
+    ).toEqual({
+      commandId: "action-1",
+      payload: { choice: "alpha" },
+      observationIds: ["proof-1"],
+      expectedStateVersion: 3,
+      type: "shared.action",
+      target: {
+        aggregateKind: "team",
+        aggregateId: "team-1",
+        schemaId: "shared-state",
+        schemaVersion: 1,
+      },
+    });
+    for (const authorityField of [
+      { target: sharedProjection },
+      { type: "another.action" },
+      { expectedStateVersion: 99 },
+    ]) {
+      expect(() =>
+        deriveSharedCommandIntent(
+          { commandId: "action-2", payload: {}, ...authorityField },
+          command,
+          model,
+          "shared-projection",
+          1,
+          sharedProjection,
+        ),
+      ).toThrow("runtime-shared-command-input-invalid");
+    }
   });
 
   it("constructs each component map from only its declared dependencies", () => {

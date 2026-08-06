@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { openRelease, type OpenedRelease } from "@plotpoint/protocol";
+import { openRelease, parseGameComposition, type OpenedRelease } from "@plotpoint/protocol";
 
 import { compileProject, validateProject } from "../../../packages/compiler/dist/index.js";
 import {
@@ -12,15 +12,6 @@ import { deriveHostSupportFromManifest } from "../src/runtime/host-support";
 const installedGames = ["field-puzzle", "co-op-game"] as const;
 const descriptorUrl = "http://127.0.0.1:4000/install.json";
 const releaseUrl = "http://127.0.0.1:4000/game.pprelease";
-
-interface GameCompositionFixture {
-  readonly application: { readonly components: readonly string[] };
-  readonly aggregateModels: readonly {
-    readonly id: string;
-    readonly authority: "local" | "server";
-  }[];
-  readonly components: readonly { readonly id: string }[];
-}
 
 interface TestElement {
   readonly componentId: string;
@@ -62,30 +53,6 @@ function nodeFileSystem(): TestFileSystem {
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function isStringArray(value: unknown): value is readonly string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
-}
-
-function isGameComposition(value: unknown): value is GameCompositionFixture {
-  if (!isRecord(value) || !isRecord(value.application)) return false;
-  if (!isStringArray(value.application.components)) return false;
-  if (
-    !Array.isArray(value.aggregateModels) ||
-    !value.aggregateModels.every(
-      (model) =>
-        isRecord(model) &&
-        typeof model.id === "string" &&
-        (model.authority === "local" || model.authority === "server"),
-    )
-  ) {
-    return false;
-  }
-  return (
-    Array.isArray(value.components) &&
-    value.components.every((component) => isRecord(component) && typeof component.id === "string")
-  );
 }
 
 function isGeneratedApplication(value: unknown): value is GeneratedApplication {
@@ -254,7 +221,22 @@ describe.each(installedGames)("installed %s", (fixture) => {
       const composition = requireGameComposition(opened);
       expect(composition.kind).toBe("content");
       const decoded: unknown = JSON.parse(new TextDecoder().decode(composition.bytes));
-      if (!isGameComposition(decoded)) throw new Error("game-composition-invalid");
+      const parsedComposition = parseGameComposition(decoded);
+      if (parsedComposition.kind !== "valid") throw new Error("game-composition-invalid");
+      const gameComposition = parsedComposition.gameComposition;
+      if (fixture === "co-op-game") {
+        expect(gameComposition.trustedMechanic).toEqual({
+          id: "plotpoint.location.target-discovery",
+          aggregateModel: "plotpoint.location.team",
+          commands: ["plotpoint.location.target-discovery"],
+          configuration: "co-op.targets",
+          projectionSchema: { id: "plotpoint.location.team-projection" },
+          capabilities: [{ id: "plotpoint.location.foreground", major: 1, minimumMinor: 0 }],
+        });
+        expect(gameComposition.progressions).toEqual([]);
+      } else {
+        expect(gameComposition.trustedMechanic).toBeUndefined();
+      }
 
       const logicModule = await importBundle(
         requireBundleEntry(opened, opened.manifest.entrypoints.logic).bytes,
@@ -275,24 +257,24 @@ describe.each(installedGames)("installed %s", (fixture) => {
       const application = requireApplicationExport(presentationModule);
       expectExactKeys(
         aggregateModels,
-        decoded.aggregateModels
+        gameComposition.aggregateModels
           .filter(({ authority }) => authority === "local")
           .map(({ id }) => id),
         "generated-aggregate-model-keys-mismatch",
       );
       expectExactKeys(
         generatedComponents,
-        decoded.components.map(({ id }) => id),
+        gameComposition.components.map(({ id }) => id),
         "generated-component-keys-mismatch",
       );
 
-      const mount = createMountFixture(decoded.application.components);
+      const mount = createMountFixture(gameComposition.application.components);
       const handle = requireApplicationHandle(
         await application.mount({ root: mount.root, components: mount.components }),
       );
       if (
         JSON.stringify([...mount.mountedComponentIds].sort(ordinal)) !==
-        JSON.stringify([...decoded.application.components].sort(ordinal))
+        JSON.stringify([...gameComposition.application.components].sort(ordinal))
       ) {
         throw new Error("generated-application-component-selection-mismatch");
       }

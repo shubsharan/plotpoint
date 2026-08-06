@@ -468,6 +468,7 @@ describe("installed field puzzle vertical journey", () => {
             releaseId: selected.run.releaseId,
             aggregate: initialView,
           },
+          composition: inspection.gameComposition,
           aggregateSchemaId: model.stateSchema.id,
           validateAggregate: (state) =>
             isRecord(state) &&

@@ -67,7 +67,7 @@ export class SharedHttpClient {
     readonly participantCredential: string;
   }): Promise<JoinResult> {
     const value = await requestJson(
-      `${this.baseUrl}/hunt-sessions/${encodeURIComponent(input.sessionId)}/participants`,
+      `${this.baseUrl}/v1/shared-sessions/${encodeURIComponent(input.sessionId)}/participants`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -101,7 +101,7 @@ export class SharedHttpClient {
     command: SyncCommand,
   ): Promise<SyncCommandResult> {
     const value = await requestJson(
-      `${this.baseUrl}/hunt-sessions/${encodeURIComponent(sessionId)}/commands`,
+      `${this.baseUrl}/v1/shared-sessions/${encodeURIComponent(sessionId)}/commands`,
       {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${credential}` },
@@ -116,7 +116,7 @@ export class SharedHttpClient {
 
   async pull(sessionId: string, credential: string, cursor: string): Promise<SyncPull> {
     const value = await requestJson(
-      `${this.baseUrl}/hunt-sessions/${encodeURIComponent(sessionId)}/sync?after=${encodeURIComponent(cursor)}`,
+      `${this.baseUrl}/v1/shared-sessions/${encodeURIComponent(sessionId)}/sync?after=${encodeURIComponent(cursor)}`,
       {
         method: "GET",
         headers: { authorization: `Bearer ${credential}` },
