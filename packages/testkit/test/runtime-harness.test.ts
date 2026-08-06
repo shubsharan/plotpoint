@@ -8,7 +8,12 @@ import {
   type CommandDefinition,
   type JsonObject,
 } from "@plotpoint/runtime";
-import { clock, createRuntimeHarness } from "@plotpoint/testkit";
+import {
+  assertAccepted,
+  clock,
+  createRuntimeHarness,
+  PlotpointAssertionError,
+} from "@plotpoint/testkit";
 import { isJsonObject, modelFixture, runtimeSchema } from "./runtime-model.js";
 
 type State = JsonObject & { readonly count: number };
@@ -124,6 +129,65 @@ describe("runtime harness", () => {
         observations: [],
       }),
     ).toThrow(/\/aggregate\/state\/count/);
+  });
+
+  it("compares complete records even when repeated aggregate state is identical", () => {
+    const { aggregate, command } = fixture();
+    let run = 0;
+    const definition = defineCommand<"player", State, JsonObject, JsonObject>({
+      definitionId: "vary-outcome",
+      commandType: "change",
+      aggregateKind: "player",
+      handle() {
+        run += 1;
+        return {
+          kind: "accepted",
+          nextState: { count: 1 },
+          outcome: { run },
+          domainEvents: [],
+          effectIntents: [],
+          progressionIntents: [],
+        };
+      },
+    });
+
+    expect(() =>
+      createRuntimeHarness({ repeat: 2 }).run({
+        name: "outcome-varies",
+        model: executable(definition),
+        aggregate,
+        command,
+        observations: [],
+      }),
+    ).toThrow(/\/record\/outcome\/run/);
+  });
+
+  it("rejects an incomplete accepted record instead of asserting from its terminal alone", () => {
+    const { aggregate, command } = fixture();
+    const incomplete = {
+      kind: "recorded",
+      aggregate,
+      record: {
+        definitionId: "incomplete",
+        policy: {
+          maxCanonicalDepth: 64,
+          maxCanonicalNodes: 10_000,
+          maxAutomaticTransitions: 100,
+        },
+        aggregateBefore: aggregate,
+        command,
+        observations: [],
+        observationTrace: [],
+        terminal: "accepted",
+        outcome: {},
+        domainEvents: [],
+        effectIntents: [],
+        progressionTrace: [],
+        diagnostics: [],
+      },
+    } as never;
+
+    expect(() => assertAccepted(incomplete)).toThrow(PlotpointAssertionError);
   });
 
   it("detects caller and non-target mutation", () => {

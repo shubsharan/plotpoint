@@ -417,16 +417,6 @@ describe("installed field puzzle vertical journey", () => {
         descriptor: { expectedReleaseId: compilation.releaseId },
       });
 
-      const selected = await selectReleaseRun(
-        playerRunLifecycleStore(database),
-        compilation.releaseId,
-        {
-          createRunId: () => "field-puzzle-acceptance-run",
-          now: () => startedAt,
-        },
-      );
-      expect(selected.kind).toBe("created");
-
       const logicEntry = opened.entries.find(
         ({ path }) => path === opened.manifest.entrypoints.logic,
       );
@@ -452,6 +442,16 @@ describe("installed field puzzle vertical journey", () => {
       expect(initialized.kind).toBe("initialized");
       if (initialized.kind !== "initialized") throw new Error("field-initialization-invalid");
       const initialView: LocalAggregateView = initialized.aggregate;
+      const selected = await selectReleaseRun(
+        playerRunLifecycleStore(database),
+        compilation.releaseId,
+        initialView,
+        {
+          createRunId: () => "field-puzzle-acceptance-run",
+          now: () => startedAt,
+        },
+      );
+      expect(selected.kind).toBe("created");
       const verifiedArtifact = await verifyRecoveryArtifact({
         bytes,
         expectedReleaseId: compilation.releaseId,
@@ -470,12 +470,8 @@ describe("installed field puzzle vertical journey", () => {
           },
           composition: inspection.gameComposition,
           aggregateSchemaId: model.stateSchema.id,
-          validateAggregate: (state) =>
-            isRecord(state) &&
-            verifiedArtifact.validateState({
-              schemaId: model.stateSchema.id,
-              state: state as CanonicalJsonObject,
-            }),
+          validateSchema: verifiedArtifact.validateSchema,
+          validateProgression: verifiedArtifact.validateProgression,
         },
         location: {
           database,
@@ -554,7 +550,7 @@ describe("installed field puzzle vertical journey", () => {
           modelId: "field.player",
           schemaId: "field.player-state",
           stateVersion: 1,
-          state: { phase: "puzzle" },
+          state: { visitedCheckpoints: ["first-checkpoint"], puzzleSolved: false },
         },
       });
       if (recovered === null || recovered.aggregate === null) {

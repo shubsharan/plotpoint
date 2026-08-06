@@ -1,6 +1,6 @@
 import type { JsonObject } from "@plotpoint/runtime";
 
-export type FieldPhase = "first-checkpoint" | "puzzle" | "second-checkpoint" | "complete";
+export type FieldCheckpointId = "first-checkpoint" | "second-checkpoint";
 
 export type FieldCheckpoint = JsonObject & {
   readonly name: string;
@@ -23,7 +23,8 @@ export type FieldGameContent = JsonObject & {
 
 export type FieldState = JsonObject & {
   readonly attempts: number;
-  readonly phase: FieldPhase;
+  readonly visitedCheckpoints: readonly FieldCheckpointId[];
+  readonly puzzleSolved: boolean;
   readonly firstCheckpoint: FieldCheckpoint;
   readonly puzzleAnswer: string;
   readonly secondCheckpoint: FieldCheckpoint;
@@ -43,7 +44,8 @@ function copyCheckpoint(checkpoint: FieldCheckpoint): FieldCheckpoint {
 export function initializeField(content: FieldGameContent): FieldState {
   return {
     attempts: 0,
-    phase: "first-checkpoint",
+    visitedCheckpoints: [],
+    puzzleSolved: false,
     firstCheckpoint: copyCheckpoint(content.firstCheckpoint),
     puzzleAnswer: content.puzzle.answer,
     secondCheckpoint: copyCheckpoint(content.secondCheckpoint),

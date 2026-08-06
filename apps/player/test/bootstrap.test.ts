@@ -39,4 +39,17 @@ describe("trusted runtime bootstrap", () => {
     );
     expect(html).toContain("applicationHandle.unmount");
   });
+
+  it("reconciles an accepted duplicate after response loss", () => {
+    const html = buildRuntimeBootstrap({
+      logicSource: "export const aggregateModels = Object.freeze({});",
+      presentationSource:
+        "export const application = Object.freeze({ mount() { return { unmount() {} }; } }); export const components = Object.freeze({});",
+    });
+
+    expect(html).toContain("if (result.terminal === 'accepted')");
+    expect(html).not.toContain(
+      "if (result.disposition === 'committed' && result.terminal === 'accepted')",
+    );
+  });
 });

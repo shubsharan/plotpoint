@@ -2,12 +2,15 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   defineCommand,
-  executeCommand,
   type Aggregate,
   type AggregateKind,
   type Command,
+  type CommandDefinition,
+  type ExecutionResult,
   type JsonObject,
+  type Observation,
 } from "@plotpoint/runtime";
+import { executeCommandWithEvaluator } from "../src/execute-command.js";
 
 type State = JsonObject & { readonly nested: { readonly value: number } };
 type Outcome = JsonObject & { readonly result: string };
@@ -37,6 +40,33 @@ function commandFor<Kind extends AggregateKind>(
     expectedStateVersion,
     payload: {},
   };
+}
+
+function executeCommand<
+  Kind extends AggregateKind,
+  StateValue extends JsonObject,
+  PayloadValue extends JsonObject,
+  OutcomeValue extends JsonObject,
+>(input: {
+  readonly definition: CommandDefinition<StateValue, PayloadValue, OutcomeValue, Kind>;
+  readonly aggregate: Aggregate<StateValue, Kind>;
+  readonly command: Command<PayloadValue, Kind>;
+  readonly observations: readonly Observation[];
+}): ExecutionResult<StateValue, OutcomeValue, PayloadValue, Kind> {
+  return executeCommandWithEvaluator({
+    definitionId: input.definition.definitionId,
+    commandType: input.definition.commandType,
+    aggregateKind: input.definition.aggregateKind,
+    aggregate: input.aggregate,
+    command: input.command,
+    observations: input.observations,
+    evaluate(target, runtimeCommand, context) {
+      return {
+        kind: "decision",
+        decision: input.definition.handle(target, runtimeCommand, context),
+      };
+    },
+  });
 }
 
 describe("aggregate isolation", () => {

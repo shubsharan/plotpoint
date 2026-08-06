@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   defineCommand,
-  executeCommand,
   resolveCommandBinding,
   type Aggregate,
   type Command,
@@ -77,9 +76,33 @@ describe("scripted observations", () => {
       },
     });
 
-    const missing = executeCommand({ definition, aggregate, command, observations: [] });
-    const wrongOrder = executeCommand({
-      definition,
+    const jsonSchema = runtimeSchema("observation.json", isJsonObject);
+    const stateSchema = runtimeSchema(
+      "observation.state",
+      (value): value is State =>
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        "value" in value &&
+        typeof value.value === "string",
+    );
+    const observedModel = modelFixture({
+      modelId: "observation.player",
+      aggregateKind: "player",
+      authority: "local",
+      stateSchema,
+      initializeState: () => ({ value: "" }),
+      commandsByType: {
+        observe: resolveCommandBinding({
+          registrationId: "observe",
+          definition,
+          payloadSchema: jsonSchema,
+          outcomeSchema: jsonSchema,
+        }),
+      },
+    });
+    const missing = observedModel.execute({ aggregate, command, observations: [] });
+    const wrongOrder = observedModel.execute({
       aggregate,
       command,
       observations: [identifier("id-1")],
@@ -116,7 +139,6 @@ describe("scripted observations", () => {
         };
       },
     });
-    const jsonSchema = runtimeSchema("observation.json", isJsonObject);
     const unusedBinding = resolveCommandBinding({
       registrationId: "unused",
       definition: unusedDefinition,
@@ -127,15 +149,7 @@ describe("scripted observations", () => {
       modelId: "observation.player",
       aggregateKind: "player",
       authority: "local",
-      stateSchema: runtimeSchema(
-        "observation.state",
-        (value): value is State =>
-          value !== null &&
-          typeof value === "object" &&
-          !Array.isArray(value) &&
-          "value" in value &&
-          typeof value.value === "string",
-      ),
+      stateSchema,
       initializeState: () => ({ value: "" }),
       commandsByType: { observe: unusedBinding },
     });

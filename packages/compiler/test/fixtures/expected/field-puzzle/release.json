@@ -1,5 +1,5 @@
 {
-  "releaseId": "sha256:bd48c5e768d8384113e0db86bb3b651798986b82a713baded7542b1f21d0f41b",
+  "releaseId": "sha256:ae834cb605b177cb9d2a1c1a94469abf88f2da1768f99f2ac7f87e1b04fc6568",
   "manifest": {
     "aggregateSchemas": [
       {
@@ -26,8 +26,8 @@
     },
     "inventory": [
       {
-        "byteLength": 121564,
-        "digest": "sha256:ca71670d34611fd9a6a067c9eb1c91a8a2c20ddba2795e5d21722956cf3ef610",
+        "byteLength": 130356,
+        "digest": "sha256:8c611c77bd66f8929e6321b961ba017e0b4c12bc8cf0ad1ad7a81cad8b68c3c7",
         "kind": "logic-bundle",
         "path": "bundles/logic.js"
       },
@@ -62,14 +62,14 @@
         "path": "progressions/6669656c642e726f757465.json"
       },
       {
-        "byteLength": 1014,
-        "digest": "sha256:28ced49128afd72ccb3191dc3bc2db397ec2217901187bb6813a7b39a4bf3ce6",
+        "byteLength": 1113,
+        "digest": "sha256:d40078412319fbb8bad725e3e965eb942bd74a57b6b92c8379cc2b8921f125db",
         "kind": "aggregate-schema",
         "path": "schemas/aggregate/6669656c642e706c617965722d7374617465.json"
       },
       {
-        "byteLength": 310,
-        "digest": "sha256:3b73d0b22be9e41fcebfaa46d7a903ee959fca6fc705373c3228a84817d768bf",
+        "byteLength": 329,
+        "digest": "sha256:44ac3d6b175e6855b9a37ec5c6e34f52f23bd505b9a638b2e3fa8a3572bcab7c",
         "kind": "command-schema",
         "path": "schemas/general/6669656c642e616476616e63652d6f7574636f6d65.json"
       },

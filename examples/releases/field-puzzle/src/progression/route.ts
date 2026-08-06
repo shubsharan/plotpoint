@@ -19,7 +19,7 @@ export const fieldProgression = defineProgression<"player", FieldState>({
       to: "completed",
       priority: 0,
       trigger: "automatic",
-      when: ({ aggregateState }) => aggregateState.phase !== "first-checkpoint",
+      when: ({ aggregateState }) => aggregateState.visitedCheckpoints.includes("first-checkpoint"),
     },
     {
       transitionId: "unlock-puzzle",
@@ -28,7 +28,7 @@ export const fieldProgression = defineProgression<"player", FieldState>({
       to: "available",
       priority: 0,
       trigger: "automatic",
-      when: ({ aggregateState }) => aggregateState.phase !== "first-checkpoint",
+      when: ({ aggregateState }) => aggregateState.visitedCheckpoints.includes("first-checkpoint"),
     },
     {
       transitionId: "complete-puzzle",
@@ -37,8 +37,7 @@ export const fieldProgression = defineProgression<"player", FieldState>({
       to: "completed",
       priority: 0,
       trigger: "automatic",
-      when: ({ aggregateState }) =>
-        aggregateState.phase === "second-checkpoint" || aggregateState.phase === "complete",
+      when: ({ aggregateState }) => aggregateState.puzzleSolved,
     },
     {
       transitionId: "unlock-second-checkpoint",
@@ -47,8 +46,7 @@ export const fieldProgression = defineProgression<"player", FieldState>({
       to: "available",
       priority: 0,
       trigger: "automatic",
-      when: ({ aggregateState }) =>
-        aggregateState.phase === "second-checkpoint" || aggregateState.phase === "complete",
+      when: ({ aggregateState }) => aggregateState.puzzleSolved,
     },
     {
       transitionId: "complete-second-checkpoint",
@@ -57,7 +55,7 @@ export const fieldProgression = defineProgression<"player", FieldState>({
       to: "completed",
       priority: 0,
       trigger: "automatic",
-      when: ({ aggregateState }) => aggregateState.phase === "complete",
+      when: ({ aggregateState }) => aggregateState.visitedCheckpoints.includes("second-checkpoint"),
     },
     {
       transitionId: "unlock-complete",
@@ -66,7 +64,7 @@ export const fieldProgression = defineProgression<"player", FieldState>({
       to: "available",
       priority: 0,
       trigger: "automatic",
-      when: ({ aggregateState }) => aggregateState.phase === "complete",
+      when: ({ aggregateState }) => aggregateState.visitedCheckpoints.includes("second-checkpoint"),
     },
   ],
 });

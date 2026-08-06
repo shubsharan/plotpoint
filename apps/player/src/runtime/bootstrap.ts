@@ -266,7 +266,11 @@ window.__plotpointReceive = (message) => {
         record.command.target.kind !== 'player' ||
         record.command.target.id !== currentLocalView.aggregateId ||
         record.command.expectedStateVersion !== currentLocalView.stateVersion ||
-        !isRecord(record.command.payload)) {
+        !isRecord(record.command.payload) ||
+        !Number.isSafeInteger(record.priorStateVersion) ||
+        !Number.isSafeInteger(record.resultingStateVersion) ||
+        record.priorStateVersion !== currentLocalView.stateVersion ||
+        record.resultingStateVersion !== execution.aggregate.stateVersion) {
       throw new Error('runtime-local-execution-record-invalid');
     }
     const base = {
@@ -279,7 +283,7 @@ window.__plotpointReceive = (message) => {
         aggregateKind: 'player',
         schemaId: currentLocalView.schemaId
       }),
-      expectedStateVersion: currentLocalView.stateVersion,
+      expectedStateVersion: record.priorStateVersion,
       observationIds: Object.freeze(observations.map(({ observationId }) => observationId))
     };
     if (record.terminal === 'accepted') {
@@ -342,7 +346,7 @@ window.__plotpointReceive = (message) => {
               !Number.isSafeInteger(result.resultingStateVersion)) {
             throw new Error('runtime-local-transition-result-invalid');
           }
-          if (result.disposition === 'committed' && result.terminal === 'accepted') {
+          if (result.terminal === 'accepted') {
             if (result.resultingStateVersion !== currentLocalView.stateVersion + 1) {
               throw new Error('runtime-local-transition-version-invalid');
             }

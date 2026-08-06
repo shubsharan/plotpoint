@@ -24,6 +24,8 @@ export interface ExecutionRecord<
   readonly observations: readonly Observation[];
   readonly observationTrace: readonly ObservationConsumption[];
   readonly terminal: "accepted" | "no-op" | "rejected" | "invalid";
+  readonly priorStateVersion: number;
+  readonly resultingStateVersion: number;
   readonly aggregateAfter?: Aggregate<State, Kind>;
   readonly outcome?: Outcome;
   readonly domainEvents?: readonly DomainEvent[];

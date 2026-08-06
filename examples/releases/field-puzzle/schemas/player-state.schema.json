@@ -5,7 +5,8 @@
   "additionalProperties": false,
   "required": [
     "attempts",
-    "phase",
+    "visitedCheckpoints",
+    "puzzleSolved",
     "firstCheckpoint",
     "puzzleAnswer",
     "secondCheckpoint",
@@ -13,7 +14,12 @@
   ],
   "properties": {
     "attempts": { "type": "integer", "minimum": 0 },
-    "phase": { "enum": ["first-checkpoint", "puzzle", "second-checkpoint", "complete"] },
+    "visitedCheckpoints": {
+      "type": "array",
+      "items": { "enum": ["first-checkpoint", "second-checkpoint"] },
+      "uniqueItems": true
+    },
+    "puzzleSolved": { "type": "boolean" },
     "firstCheckpoint": { "$ref": "#/$defs/checkpoint" },
     "puzzleAnswer": { "type": "string", "minLength": 1 },
     "secondCheckpoint": { "$ref": "#/$defs/checkpoint" },

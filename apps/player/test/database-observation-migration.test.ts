@@ -76,6 +76,8 @@ describe("corrected player database schema", () => {
       "state_version",
       "state_json",
       "progression_json",
+      "initial_state_json",
+      "initial_progression_json",
       "journal_position",
     ]);
     await expect(columns("journal")).resolves.toEqual([

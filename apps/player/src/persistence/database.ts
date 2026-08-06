@@ -1,4 +1,5 @@
 import * as SQLite from "expo-sqlite";
+import type { LocalAggregateView } from "@plotpoint/protocol";
 
 import type {
   DurableCommandRecord,
@@ -10,6 +11,13 @@ import type {
 } from "../model";
 import type { TransitionStore, TransitionTransaction } from "./commit-transition";
 import { PLAYER_DATABASE_INCOMPATIBLE } from "./schema-policy";
+import type {
+  RecoveryJournalRow,
+  RecoveryObservationLinkRow,
+  RecoveryReceiptRow,
+  RecoveryRecords,
+  RecoverySnapshotRow,
+} from "../runtime/recovery";
 import {
   assertSharedDatabaseSchema,
   migrateSharedDatabase,
@@ -31,6 +39,7 @@ CREATE TABLE IF NOT EXISTS snapshots (
   run_id TEXT PRIMARY KEY REFERENCES runs(run_id), model_id TEXT NOT NULL,
   aggregate_id TEXT NOT NULL, aggregate_kind TEXT NOT NULL, schema_id TEXT NOT NULL,
   state_version INTEGER NOT NULL, state_json TEXT NOT NULL, progression_json TEXT,
+  initial_state_json TEXT NOT NULL, initial_progression_json TEXT,
   journal_position INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS command_receipts (
@@ -77,6 +86,8 @@ const LOCAL_SCHEMA_COLUMNS = Object.freeze({
     "state_version",
     "state_json",
     "progression_json",
+    "initial_state_json",
+    "initial_progression_json",
     "journal_position",
   ],
   command_receipts: [
@@ -198,6 +209,56 @@ function rowToSnapshot(row: {
   };
 }
 
+async function insertInitialSnapshot(
+  database: SQLite.SQLiteDatabase,
+  runId: string,
+  aggregate: LocalAggregateView,
+): Promise<void> {
+  if (aggregate.stateVersion !== 0) throw new Error("release-run-initial-aggregate-invalid");
+  await database.runAsync(
+    `INSERT INTO snapshots
+     (run_id, model_id, aggregate_id, aggregate_kind, schema_id, state_version,
+      state_json, progression_json, initial_state_json, initial_progression_json,
+      journal_position) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 0)`,
+    runId,
+    aggregate.modelId,
+    aggregate.aggregateId,
+    aggregate.aggregateKind,
+    aggregate.schemaId,
+    JSON.stringify(aggregate.state),
+    aggregate.progression === undefined ? null : JSON.stringify(aggregate.progression),
+    JSON.stringify(aggregate.state),
+    aggregate.progression === undefined ? null : JSON.stringify(aggregate.progression),
+  );
+}
+
+async function assertRunSnapshot(
+  database: SQLite.SQLiteDatabase,
+  runId: string,
+  initialAggregate: LocalAggregateView,
+): Promise<void> {
+  const snapshot = await database.getFirstAsync<
+    Parameters<typeof rowToSnapshot>[0] & {
+      readonly initial_state_json: string;
+      readonly initial_progression_json: string | null;
+    }
+  >("SELECT * FROM snapshots WHERE run_id = ?", runId);
+  if (
+    snapshot === null ||
+    snapshot.model_id !== initialAggregate.modelId ||
+    snapshot.aggregate_id !== initialAggregate.aggregateId ||
+    snapshot.aggregate_kind !== initialAggregate.aggregateKind ||
+    snapshot.schema_id !== initialAggregate.schemaId ||
+    snapshot.initial_state_json !== JSON.stringify(initialAggregate.state) ||
+    snapshot.initial_progression_json !==
+      (initialAggregate.progression === undefined
+        ? null
+        : JSON.stringify(initialAggregate.progression))
+  ) {
+    throw new Error("release-run-snapshot-mismatch");
+  }
+}
+
 export class PlayerDatabase implements TransitionStore {
   private constructor(private readonly database: SQLite.SQLiteDatabase) {}
 
@@ -231,17 +292,23 @@ export class PlayerDatabase implements TransitionStore {
     }
   }
 
-  async createRun(record: RunRecord): Promise<void> {
-    await this.database.runAsync(
-      "INSERT INTO runs (run_id, release_id, started_at, status) VALUES (?, ?, ?, ?)",
-      record.runId,
-      record.releaseId,
-      record.startedAt,
-      record.status,
-    );
+  async createRun(record: RunRecord, initialAggregate: LocalAggregateView): Promise<void> {
+    await this.database.withExclusiveTransactionAsync(async (transaction) => {
+      await transaction.runAsync(
+        "INSERT INTO runs (run_id, release_id, started_at, status) VALUES (?, ?, ?, ?)",
+        record.runId,
+        record.releaseId,
+        record.startedAt,
+        record.status,
+      );
+      await insertInitialSnapshot(transaction, record.runId, initialAggregate);
+    });
   }
 
-  async selectOrCreateActiveRun(candidate: RunRecord): Promise<{
+  async selectOrCreateActiveRun(
+    candidate: RunRecord,
+    initialAggregate: LocalAggregateView,
+  ): Promise<{
     readonly created: boolean;
     readonly run: RunRecord;
   }> {
@@ -258,6 +325,7 @@ export class PlayerDatabase implements TransitionStore {
         candidate.releaseId,
       );
       if (active !== null) {
+        await assertRunSnapshot(transaction, active.run_id, initialAggregate);
         selection = {
           created: false,
           run: {
@@ -277,6 +345,7 @@ export class PlayerDatabase implements TransitionStore {
           candidate.startedAt,
           candidate.status,
         );
+        await insertInitialSnapshot(transaction, candidate.runId, initialAggregate);
         selection = { created: true, run: candidate };
       } catch (error) {
         const winner = await transaction.getFirstAsync<{
@@ -290,6 +359,7 @@ export class PlayerDatabase implements TransitionStore {
           candidate.releaseId,
         );
         if (winner === null) throw error;
+        await assertRunSnapshot(transaction, winner.run_id, initialAggregate);
         selection = {
           created: false,
           run: {
@@ -507,8 +577,11 @@ export class PlayerDatabase implements TransitionStore {
           journal_position: number;
           state_json: string;
           progression_json: string | null;
+          initial_state_json: string;
+          initial_progression_json: string | null;
         }>(
-          `SELECT journal_position, state_json, progression_json FROM snapshots
+          `SELECT journal_position, state_json, progression_json,
+                  initial_state_json, initial_progression_json FROM snapshots
            WHERE run_id = ?`,
           runId,
         );
@@ -522,10 +595,12 @@ export class PlayerDatabase implements TransitionStore {
           candidate.nextProgression === undefined
             ? (prior?.progression_json ?? null)
             : JSON.stringify(candidate.nextProgression);
+        if (prior === null) throw new Error("transition-initial-snapshot-missing");
         await database.runAsync(
           `INSERT INTO snapshots
            (run_id, model_id, aggregate_id, aggregate_kind, schema_id, state_version,
-            state_json, progression_json, journal_position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            state_json, progression_json, initial_state_json, initial_progression_json,
+            journal_position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(run_id) DO UPDATE SET model_id=excluded.model_id,
             aggregate_id=excluded.aggregate_id, aggregate_kind=excluded.aggregate_kind,
             schema_id=excluded.schema_id, state_version=excluded.state_version,
@@ -539,6 +614,8 @@ export class PlayerDatabase implements TransitionStore {
           resultingStateVersion,
           stateJson,
           progressionJson,
+          prior.initial_state_json,
+          prior.initial_progression_json,
           sequence,
         );
         await database.runAsync(
@@ -552,6 +629,42 @@ export class PlayerDatabase implements TransitionStore {
         return result;
       },
     };
+  }
+
+  async readRecoveryRecords(runId: string): Promise<RecoveryRecords> {
+    let records: RecoveryRecords | undefined;
+    await this.database.withExclusiveTransactionAsync(async (transaction) => {
+      records = {
+        snapshot: await transaction.getFirstAsync<RecoverySnapshotRow>(
+          `SELECT model_id, aggregate_id, aggregate_kind, schema_id, state_version,
+                  state_json, progression_json, initial_state_json, initial_progression_json,
+                  journal_position FROM snapshots WHERE run_id = ?`,
+          runId,
+        ),
+        journals: await transaction.getAllAsync<RecoveryJournalRow>(
+          `SELECT sequence, command_id, record_json
+           FROM journal WHERE run_id = ? ORDER BY sequence`,
+          runId,
+        ),
+        receipts: await transaction.getAllAsync<RecoveryReceiptRow>(
+          `SELECT command_id, expected_state_version, candidate_json, result_json,
+                  resulting_state_version
+           FROM command_receipts WHERE run_id = ?`,
+          runId,
+        ),
+        observationLinks: await transaction.getAllAsync<RecoveryObservationLinkRow>(
+          `SELECT links.command_id, links.observation_id,
+                  CASE WHEN observations.observation_id IS NULL THEN 0 ELSE 1 END AS observation_exists
+           FROM command_observations AS links
+           LEFT JOIN observations ON observations.run_id = links.run_id
+            AND observations.observation_id = links.observation_id
+           WHERE links.run_id = ?`,
+          runId,
+        ),
+      };
+    });
+    if (records === undefined) throw new Error("recovery-transaction-result-missing");
+    return records;
   }
 
   raw(): SQLite.SQLiteDatabase {

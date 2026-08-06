@@ -8,6 +8,7 @@
     "result": {
       "enum": [
         "advanced",
+        "already-complete",
         "incorrect",
         "permission-denied",
         "unavailable",

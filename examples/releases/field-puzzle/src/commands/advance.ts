@@ -1,6 +1,6 @@
 import { defineCommand, type JsonObject } from "@plotpoint/runtime";
 
-import type { FieldCheckpoint, FieldState } from "../initial-state.js";
+import type { FieldCheckpoint, FieldCheckpointId, FieldState } from "../initial-state.js";
 
 export type AdvancePayload = JsonObject & {
   readonly action: "check-in" | "solve";
@@ -10,6 +10,7 @@ export type AdvancePayload = JsonObject & {
 export type AdvanceOutcome = JsonObject & {
   readonly result:
     | "advanced"
+    | "already-complete"
     | "incorrect"
     | "permission-denied"
     | "unavailable"
@@ -36,7 +37,8 @@ function distanceMeters(aLat: number, aLon: number, bLat: number, bLon: number):
   const value =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(radians(aLat)) * Math.cos(radians(bLat)) * Math.sin(dLon / 2) ** 2;
-  return 6_371_000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+  const bounded = Math.min(1, Math.max(0, value));
+  return 6_371_000 * 2 * Math.atan2(Math.sqrt(bounded), Math.sqrt(1 - bounded));
 }
 
 function outsideCheckpoint(
@@ -56,7 +58,13 @@ export const advanceCommand = defineCommand<"player", FieldState, AdvancePayload
   aggregateKind: "player",
   handle(aggregate, command, context) {
     if (command.payload.action === "solve") {
-      if (aggregate.state.phase !== "puzzle") {
+      if (aggregate.state.puzzleSolved) {
+        return { kind: "no-op", outcome: { result: "already-complete" } };
+      }
+      const puzzleStatus = aggregate.progression?.nodes.find(
+        (node) => node.nodeId === "puzzle",
+      )?.status;
+      if (puzzleStatus !== "available" && puzzleStatus !== "active") {
         return { kind: "rejected", outcome: { result: "wrong-phase" } };
       }
       const correct =
@@ -70,7 +78,7 @@ export const advanceCommand = defineCommand<"player", FieldState, AdvancePayload
         nextState: {
           ...aggregate.state,
           attempts: aggregate.state.attempts + 1,
-          phase: "second-checkpoint",
+          puzzleSolved: true,
         },
         outcome: { result: "advanced" },
         domainEvents: [{ type: "field.advanced", payload: {} }],
@@ -79,10 +87,16 @@ export const advanceCommand = defineCommand<"player", FieldState, AdvancePayload
       };
     }
 
-    if (
-      aggregate.state.phase !== "first-checkpoint" &&
-      aggregate.state.phase !== "second-checkpoint"
-    ) {
+    const playable = (nodeId: FieldCheckpointId): boolean => {
+      const status = aggregate.progression?.nodes.find((node) => node.nodeId === nodeId)?.status;
+      return status === "active" || status === "available";
+    };
+    const checkpointId: FieldCheckpointId | undefined = playable("first-checkpoint")
+      ? "first-checkpoint"
+      : playable("second-checkpoint")
+        ? "second-checkpoint"
+        : undefined;
+    if (checkpointId === undefined || aggregate.state.visitedCheckpoints.includes(checkpointId)) {
       return { kind: "rejected", outcome: { result: "wrong-phase" } };
     }
     const location = context.take<LocationValue>("location.foreground", "current");
@@ -106,7 +120,7 @@ export const advanceCommand = defineCommand<"player", FieldState, AdvancePayload
       return { kind: "rejected", outcome: { result: "future" } };
     }
     const checkpoint =
-      aggregate.state.phase === "first-checkpoint"
+      checkpointId === "first-checkpoint"
         ? aggregate.state.firstCheckpoint
         : aggregate.state.secondCheckpoint;
     if (
@@ -122,7 +136,7 @@ export const advanceCommand = defineCommand<"player", FieldState, AdvancePayload
       kind: "accepted",
       nextState: {
         ...aggregate.state,
-        phase: aggregate.state.phase === "first-checkpoint" ? "puzzle" : "complete",
+        visitedCheckpoints: [...aggregate.state.visitedCheckpoints, checkpointId],
       },
       outcome: { result: "advanced" },
       domainEvents: [{ type: "field.advanced", payload: {} }],

@@ -29,8 +29,10 @@ const definition = defineProgression({
 
 describe("progression definition and instance validation", () => {
   it("normalizes plain definitions and initial state with ordinal ordering", () => {
+    const initial = initialProgression(definition);
+
     expect(definition.nodes.map((node) => node.nodeId)).toEqual(["A", "b"]);
-    expect(initialProgression(definition)).toEqual({
+    expect(initial).toEqual({
       graphId: "graph",
       nodes: [
         { nodeId: "A", status: "active" },
@@ -40,6 +42,10 @@ describe("progression definition and instance validation", () => {
     expect(definition).not.toHaveProperty("graphVersion");
     expect(Object.isFrozen(definition.nodes)).toBe(true);
     expect(Object.isFrozen(definition)).toBe(true);
+    expect(Object.isFrozen(initial)).toBe(true);
+    expect(Object.isFrozen(initial.nodes)).toBe(true);
+    expect(initial.nodes.every(Object.isFrozen)).toBe(true);
+    expect(initialProgression(definition)).not.toBe(initial);
   });
 
   it("orders mixed case and punctuation by ordinal code units", () => {
@@ -68,6 +74,91 @@ describe("progression definition and instance validation", () => {
         transitions: [],
       }),
     ).toThrow("Invalid or duplicate progression node");
+  });
+
+  it("requires every legal edge to have one stable name and declared target", () => {
+    expect(() =>
+      defineProgression({
+        aggregateKind: "player",
+        graphId: "duplicate-edge",
+        nodes: [
+          { nodeId: "a", initialStatus: "locked" },
+          { nodeId: "b", initialStatus: "locked" },
+        ],
+        transitions: [
+          {
+            transitionId: "unlock",
+            targetNodeId: "a",
+            from: ["locked"],
+            to: "available",
+            priority: 0,
+            trigger: "intent",
+          },
+          {
+            transitionId: "unlock",
+            targetNodeId: "b",
+            from: ["locked"],
+            to: "available",
+            priority: 0,
+            trigger: "intent",
+          },
+        ],
+      }),
+    ).toThrow("Invalid progression transition");
+    expect(() =>
+      defineProgression({
+        aggregateKind: "player",
+        graphId: "unknown-target",
+        nodes: [{ nodeId: "known", initialStatus: "locked" }],
+        transitions: [
+          {
+            transitionId: "unlock-missing",
+            targetNodeId: "missing",
+            from: ["locked"],
+            to: "available",
+            priority: 0,
+            trigger: "intent",
+          },
+        ],
+      }),
+    ).toThrow("Invalid progression transition");
+  });
+
+  it("rejects unnamed behavior and illegal lifecycle edges at construction", () => {
+    expect(() =>
+      defineProgression({
+        aggregateKind: "player",
+        graphId: "automatic-without-predicate",
+        nodes: [{ nodeId: "a", initialStatus: "locked" }],
+        transitions: [
+          {
+            transitionId: "unlock",
+            targetNodeId: "a",
+            from: ["locked"],
+            to: "available",
+            priority: 0,
+            trigger: "automatic",
+          } as never,
+        ],
+      }),
+    ).toThrow("Invalid progression transition");
+    expect(() =>
+      defineProgression({
+        aggregateKind: "player",
+        graphId: "illegal-edge",
+        nodes: [{ nodeId: "a", initialStatus: "locked" }],
+        transitions: [
+          {
+            transitionId: "complete",
+            targetNodeId: "a",
+            from: ["locked"],
+            to: "completed",
+            priority: 0,
+            trigger: "intent",
+          },
+        ],
+      }),
+    ).toThrow("Illegal progression transition");
   });
 
   it("validates dynamic instance shape and named command intents", () => {

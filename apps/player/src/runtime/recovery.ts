@@ -1,9 +1,12 @@
 import {
   HOST_BRIDGE_VERSION,
+  inspectGameRelease,
   openRelease,
   parseHostBridgeEnvelope,
   verifyRelease,
   type CanonicalJsonObject,
+  type GameComposition,
+  type ProgressionInstance,
   type ReleaseId,
   type ReleaseManifest,
 } from "@plotpoint/protocol";
@@ -38,6 +41,8 @@ export interface RecoverySnapshotRow {
   readonly state_version: number;
   readonly state_json: string;
   readonly progression_json: string | null;
+  readonly initial_state_json: string;
+  readonly initial_progression_json: string | null;
   readonly journal_position: number;
 }
 
@@ -76,6 +81,12 @@ export type RecoveryStateValidator = (input: {
   readonly schemaId: string;
   readonly state: CanonicalJsonObject;
 }) => boolean;
+
+export interface RecoveryValidators {
+  readonly validateState: RecoveryStateValidator;
+  validateSchema(schemaId: string, value: CanonicalJsonObject): boolean;
+  validateProgression(progressionId: string, value: ProgressionInstance): boolean;
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
@@ -166,6 +177,9 @@ export async function verifyRecoveryArtifact(input: {
   | {
       readonly kind: "valid";
       readonly manifest: ReleaseManifest;
+      readonly composition: GameComposition;
+      validateSchema(schemaId: string, value: CanonicalJsonObject): boolean;
+      validateProgression(progressionId: string, value: ProgressionInstance): boolean;
       readonly validateState: RecoveryStateValidator;
     }
   | { readonly kind: "invalid"; readonly code: string }
@@ -190,38 +204,79 @@ export async function verifyRecoveryArtifact(input: {
   }
   const opened = await openRelease(input.bytes);
   if (opened.kind === "invalid") return { kind: "invalid", code: "recovery-release-open-invalid" };
+  const inspection = await inspectGameRelease(input.bytes);
+  if ("kind" in inspection) {
+    return {
+      kind: "invalid",
+      code: inspection.diagnostics[0]?.code ?? "recovery-game-composition-invalid",
+    };
+  }
   try {
     const decoder = new TextDecoder();
     const validators = new Map<string, ValidateFunction>();
-    for (const requirement of opened.manifest.aggregateSchemas) {
-      const entry = opened.entries.find(({ path }) => path === requirement.path);
+    for (const resource of inspection.gameComposition.resources) {
+      if (resource.role !== "schema") continue;
+      const entry = opened.entries.find(({ path }) => path === resource.path);
       if (entry === undefined) {
-        return { kind: "invalid", code: "recovery-aggregate-schema-missing" };
+        return { kind: "invalid", code: "recovery-schema-missing" };
       }
-      if (validators.has(requirement.id)) {
-        return { kind: "invalid", code: "recovery-aggregate-schema-duplicate" };
+      if (validators.has(resource.id)) {
+        return { kind: "invalid", code: "recovery-schema-duplicate" };
       }
       validators.set(
-        requirement.id,
+        resource.id,
         new Ajv2020({ allErrors: true, strict: true }).compile(
           JSON.parse(decoder.decode(entry.bytes)) as object,
         ),
       );
     }
+    const progressionIds = new Set<string>();
+    for (const descriptor of inspection.gameComposition.progressions) {
+      const resource = inspection.gameComposition.resources.find(
+        (candidate) =>
+          candidate.role === "progression-descriptor" && candidate.id === descriptor.id,
+      );
+      const entry = opened.entries.find(({ path }) => path === resource?.path);
+      const value = entry === undefined ? null : JSON.parse(decoder.decode(entry.bytes));
+      if (
+        !isPlainObject(value) ||
+        !hasExactFields(value, ["aggregateModel", "id"]) ||
+        value.id !== descriptor.id ||
+        value.aggregateModel !== descriptor.aggregateModel
+      ) {
+        return { kind: "invalid", code: "recovery-progression-descriptor-invalid" };
+      }
+      progressionIds.add(descriptor.id);
+    }
+    const validateSchema = (schemaId: string, value: CanonicalJsonObject) =>
+      validators.get(schemaId)?.(value) === true;
+    const validateProgression = (progressionId: string, value: ProgressionInstance) => {
+      if (!progressionIds.has(progressionId) || value.graphId !== progressionId) return false;
+      let previousNodeId: string | undefined;
+      for (const node of value.nodes) {
+        if (previousNodeId !== undefined && previousNodeId >= node.nodeId) return false;
+        previousNodeId = node.nodeId;
+      }
+      return true;
+    };
     return {
       kind: "valid",
       manifest: verified.manifest,
-      validateState: ({ schemaId, state }) => validators.get(schemaId)?.(state) === true,
+      composition: inspection.gameComposition,
+      validateSchema,
+      validateProgression,
+      validateState: ({ schemaId, state }) => validateSchema(schemaId, state),
     };
   } catch {
-    return { kind: "invalid", code: "recovery-aggregate-schema-invalid" };
+    return { kind: "invalid", code: "recovery-schema-or-progression-invalid" };
   }
 }
 
 export function validateRecoveryRecords(
   manifest: ReleaseManifest,
+  composition: GameComposition,
   records: RecoveryRecords,
-  validateState: RecoveryStateValidator,
+  validators: RecoveryValidators,
 ): RecoveryRecordsResult {
   if (records.snapshot === null) {
     return records.journals.length === 0 &&
@@ -236,6 +291,8 @@ export function validateRecoveryRecords(
     !hasExactFields(snapshot as unknown as Record<string, unknown>, [
       "aggregate_id",
       "aggregate_kind",
+      "initial_progression_json",
+      "initial_state_json",
       "journal_position",
       "model_id",
       "progression_json",
@@ -275,12 +332,19 @@ export function validateRecoveryRecords(
   const state = parsedObject(snapshot.state_json);
   const progression =
     snapshot.progression_json === null ? undefined : parseJson(snapshot.progression_json);
+  const initialState = parsedObject(snapshot.initial_state_json);
+  const initialProgression =
+    snapshot.initial_progression_json === null
+      ? undefined
+      : parseJson(snapshot.initial_progression_json);
   if (
     state === null ||
+    initialState === null ||
     snapshot.model_id.length === 0 ||
     snapshot.aggregate_id.length === 0 ||
     snapshot.aggregate_kind !== "player" ||
     (snapshot.progression_json !== null && progression === null) ||
+    (snapshot.initial_progression_json !== null && initialProgression === null) ||
     !Number.isSafeInteger(snapshot.state_version) ||
     snapshot.state_version < 0 ||
     !Number.isSafeInteger(snapshot.journal_position) ||
@@ -296,8 +360,18 @@ export function validateRecoveryRecords(
   if (schema === undefined) {
     return { kind: "invalid", code: "recovery-snapshot-schema-mismatch" };
   }
-  if (!validateState({ schemaId: snapshot.schema_id, state })) {
+  const localModel = composition.aggregateModels.find(
+    (model) =>
+      model.authority === "local" && model.kind === "player" && model.id === snapshot.model_id,
+  );
+  if (localModel === undefined || localModel.stateSchema.id !== snapshot.schema_id) {
+    return { kind: "invalid", code: "recovery-model-composition-mismatch" };
+  }
+  if (!validators.validateState({ schemaId: snapshot.schema_id, state })) {
     return { kind: "invalid", code: "recovery-snapshot-state-schema-invalid" };
+  }
+  if (!validators.validateState({ schemaId: snapshot.schema_id, state: initialState })) {
+    return { kind: "invalid", code: "recovery-initial-state-schema-invalid" };
   }
   const bootstrapEnvelope = parseHostBridgeEnvelope(
     {
@@ -325,6 +399,53 @@ export function validateRecoveryRecords(
     bootstrapEnvelope.envelope.type !== "runtime.bootstrap"
   ) {
     return { kind: "invalid", code: "recovery-snapshot-invalid" };
+  }
+  const initialBootstrapEnvelope = parseHostBridgeEnvelope(
+    {
+      version: HOST_BRIDGE_VERSION,
+      requestId: "recovery-initial",
+      type: "runtime.bootstrap",
+      payload: {
+        runId: "recovery-initial",
+        releaseId: `sha256:${"0".repeat(64)}`,
+        aggregate: {
+          modelId: snapshot.model_id,
+          aggregateId: snapshot.aggregate_id,
+          aggregateKind: snapshot.aggregate_kind,
+          schemaId: snapshot.schema_id,
+          stateVersion: 0,
+          state: initialState,
+          ...(initialProgression === undefined ? {} : { progression: initialProgression }),
+        },
+      },
+    },
+    "host-to-web",
+  );
+  if (
+    initialBootstrapEnvelope.kind === "invalid" ||
+    initialBootstrapEnvelope.envelope.type !== "runtime.bootstrap"
+  ) {
+    return { kind: "invalid", code: "recovery-initial-snapshot-invalid" };
+  }
+  const recoveredProgression = bootstrapEnvelope.envelope.payload.aggregate.progression;
+  const recoveredInitialProgression =
+    initialBootstrapEnvelope.envelope.payload.aggregate.progression;
+  const progressionDescriptor = composition.progressions.find(
+    ({ aggregateModel }) => aggregateModel === localModel.id,
+  );
+  if (
+    (recoveredProgression === undefined) !== (progressionDescriptor === undefined) ||
+    (recoveredInitialProgression === undefined) !== (progressionDescriptor === undefined) ||
+    (recoveredProgression !== undefined &&
+      progressionDescriptor !== undefined &&
+      (recoveredProgression.graphId !== progressionDescriptor.id ||
+        !validators.validateProgression(progressionDescriptor.id, recoveredProgression))) ||
+    (recoveredInitialProgression !== undefined &&
+      progressionDescriptor !== undefined &&
+      (recoveredInitialProgression.graphId !== progressionDescriptor.id ||
+        !validators.validateProgression(progressionDescriptor.id, recoveredInitialProgression)))
+  ) {
+    return { kind: "invalid", code: "recovery-progression-composition-mismatch" };
   }
   if (
     snapshot.journal_position !== records.journals.length ||
@@ -367,6 +488,58 @@ export function validateRecoveryRecords(
     ) {
       return { kind: "invalid", code: "recovery-receipt-invalid" };
     }
+    const command = composition.commands.find(
+      (descriptor) =>
+        descriptor.execution === "local" &&
+        descriptor.aggregateModel === localModel.id &&
+        descriptor.type === candidate.commandType,
+    );
+    if (command === undefined) {
+      return { kind: "invalid", code: "recovery-command-composition-mismatch" };
+    }
+    if (!validators.validateSchema(command.payloadSchema.id, candidate.payload)) {
+      return { kind: "invalid", code: "recovery-command-schema-mismatch" };
+    }
+    if (
+      candidate.terminal !== "invalid" &&
+      !validators.validateSchema(command.outcomeSchema.id, candidate.outcome)
+    ) {
+      return { kind: "invalid", code: "recovery-command-schema-mismatch" };
+    }
+    if (candidate.terminal === "accepted") {
+      if (
+        candidate.nextState !== undefined &&
+        !validators.validateState({
+          schemaId: localModel.stateSchema.id,
+          state: candidate.nextState,
+        })
+      ) {
+        return { kind: "invalid", code: "recovery-journal-state-schema-mismatch" };
+      }
+      for (const event of candidate.domainEvents) {
+        const descriptor = localModel.events.find(({ type }) => type === event.type);
+        if (descriptor === undefined || !validators.validateSchema(descriptor.schema.id, event)) {
+          return { kind: "invalid", code: "recovery-event-composition-mismatch" };
+        }
+      }
+      for (const effect of candidate.effectIntents) {
+        const descriptor = localModel.effects.find(({ type }) => type === effect.type);
+        if (descriptor === undefined || !validators.validateSchema(descriptor.schema.id, effect)) {
+          return { kind: "invalid", code: "recovery-effect-composition-mismatch" };
+        }
+      }
+      if (
+        candidate.nextProgression !== undefined &&
+        (progressionDescriptor === undefined ||
+          candidate.nextProgression.graphId !== progressionDescriptor.id ||
+          !validators.validateProgression(progressionDescriptor.id, candidate.nextProgression))
+      ) {
+        return { kind: "invalid", code: "recovery-progression-composition-mismatch" };
+      }
+      if (progressionDescriptor === undefined && candidate.progressionTrace.length > 0) {
+        return { kind: "invalid", code: "recovery-progression-composition-mismatch" };
+      }
+    }
     parsedReceipts.set(receipt.command_id, { candidate, result });
     if (candidate.terminal === "accepted") acceptedCommands.add(receipt.command_id);
 
@@ -393,6 +566,8 @@ export function validateRecoveryRecords(
     return { kind: "invalid", code: "recovery-journal-receipt-mismatch" };
   }
 
+  let replayedState: CanonicalJsonObject = initialState;
+  let replayedProgression: ProgressionInstance | undefined = recoveredInitialProgression;
   for (const [index, journal] of records.journals.entries()) {
     const sequence = index + 1;
     const receipt = receipts.get(journal.command_id);
@@ -414,6 +589,22 @@ export function validateRecoveryRecords(
     ) {
       return { kind: "invalid", code: "recovery-journal-receipt-mismatch" };
     }
+    const acceptedCandidate = receiptRecord.candidate;
+    if (acceptedCandidate.nextState !== undefined) replayedState = acceptedCandidate.nextState;
+    if (acceptedCandidate.nextProgression !== undefined) {
+      replayedProgression = acceptedCandidate.nextProgression;
+    }
+  }
+  if (!canonicalEqual(replayedState, state)) {
+    return { kind: "invalid", code: "recovery-journal-state-mismatch" };
+  }
+  if (
+    (replayedProgression === undefined) !== (recoveredProgression === undefined) ||
+    (replayedProgression !== undefined &&
+      recoveredProgression !== undefined &&
+      !canonicalEqual(replayedProgression, recoveredProgression))
+  ) {
+    return { kind: "invalid", code: "recovery-journal-progression-mismatch" };
   }
 
   return {
@@ -425,9 +616,7 @@ export function validateRecoveryRecords(
       schemaId: snapshot.schema_id,
       state,
       stateVersion: snapshot.state_version,
-      ...(bootstrapEnvelope.envelope.payload.aggregate.progression === undefined
-        ? {}
-        : { progression: bootstrapEnvelope.envelope.payload.aggregate.progression }),
+      ...(recoveredProgression === undefined ? {} : { progression: recoveredProgression }),
     },
   };
 }
@@ -468,35 +657,13 @@ export async function recoverRun(
   }
   if (artifact.kind === "invalid") return failClosed(database, run.runId, artifact.code);
 
-  const transaction = database.raw();
-  const records: RecoveryRecords = {
-    snapshot: await transaction.getFirstAsync<RecoverySnapshotRow>(
-      `SELECT model_id, aggregate_id, aggregate_kind, schema_id, state_version,
-              state_json, progression_json, journal_position FROM snapshots WHERE run_id = ?`,
-      run.runId,
-    ),
-    journals: await transaction.getAllAsync<RecoveryJournalRow>(
-      `SELECT sequence, command_id, record_json
-       FROM journal WHERE run_id = ? ORDER BY sequence`,
-      run.runId,
-    ),
-    receipts: await transaction.getAllAsync<RecoveryReceiptRow>(
-      `SELECT command_id, expected_state_version, candidate_json, result_json,
-              resulting_state_version
-       FROM command_receipts WHERE run_id = ?`,
-      run.runId,
-    ),
-    observationLinks: await transaction.getAllAsync<RecoveryObservationLinkRow>(
-      `SELECT links.command_id, links.observation_id,
-              CASE WHEN observations.observation_id IS NULL THEN 0 ELSE 1 END AS observation_exists
-       FROM command_observations AS links
-       LEFT JOIN observations ON observations.run_id = links.run_id
-        AND observations.observation_id = links.observation_id
-       WHERE links.run_id = ?`,
-      run.runId,
-    ),
-  };
-  const recovered = validateRecoveryRecords(artifact.manifest, records, artifact.validateState);
+  const records = await database.readRecoveryRecords(run.runId);
+  const recovered = validateRecoveryRecords(
+    artifact.manifest,
+    artifact.composition,
+    records,
+    artifact,
+  );
   if (recovered.kind === "invalid") return failClosed(database, run.runId, recovered.code);
 
   if (options.recordRestore === true) {

@@ -208,7 +208,13 @@ function productionHandlers(
       bootstrap,
       composition: gameComposition,
       aggregateSchemaId: target.schemaId,
-      validateAggregate: () => true,
+      validateSchema: (schemaId, value) => {
+        if (schemaId === "local-state") return typeof value.count === "number";
+        if (schemaId === "local-action-payload") return typeof value.amount === "number";
+        if (schemaId === "local-action-outcome") return typeof value.result === "string";
+        return false;
+      },
+      validateProgression: () => false,
     },
     location: {
       database: observations,
@@ -264,6 +270,41 @@ describe("production host bridge handlers", () => {
       payload: { code: "transition-command-mismatch" },
     });
     expect(store.receipts).toHaveLength(4);
+  });
+
+  it("rejects payloads and outputs outside the verified composition contracts", async () => {
+    const store = new MemoryTransitionStore();
+    store.snapshot = {
+      runId,
+      modelId: bootstrap.aggregate.modelId,
+      ...target,
+      stateVersion: 1,
+      state: { count: 1 },
+      journalPosition: 1,
+    };
+    const handlers = productionHandlers(store);
+    const valid = candidate("schema-probe", "accepted");
+    const probes = [
+      [{ ...valid, payload: { amount: "one" } }, "transition-payload-schema-invalid"],
+      [{ ...valid, outcome: { result: 7 } }, "transition-outcome-schema-invalid"],
+      [{ ...valid, nextState: { count: "one" } }, "transition-state-schema-invalid"],
+      [
+        { ...valid, domainEvents: [{ type: "counter.undeclared", count: 1 }] },
+        "transition-event-schema-invalid",
+      ],
+      [
+        { ...valid, effectIntents: [{ type: "counter.undeclared", count: 1 }] },
+        "transition-effect-schema-invalid",
+      ],
+      [{ ...valid, nextState: undefined }, "bridge-payload-fields-invalid"],
+    ] as const;
+
+    for (const [probe, code] of probes) {
+      await expect(
+        routeHostBridgeMessage(request(probe as unknown as TransitionCandidate), handlers),
+      ).resolves.toMatchObject({ type: "host.error", payload: { code } });
+    }
+    expect(store.receipts).toHaveLength(0);
   });
 
   it("registers native capabilities only when Game Composition declares them", async () => {

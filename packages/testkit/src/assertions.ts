@@ -3,6 +3,7 @@ import {
   type DiagnosticCode,
   type ExecutionRecord,
   type ExecutionResult,
+  type Aggregate,
   type AggregateKind,
   type JsonObject,
   type JsonValue,
@@ -63,6 +64,13 @@ function canonicalValue(value: unknown): JsonValue {
   return canonical.canonical.value;
 }
 
+export function canonicalRecordDifference(
+  expected: ExecutionRecord,
+  actual: ExecutionRecord,
+): string | null {
+  return firstDifference(canonicalValue(expected), canonicalValue(actual));
+}
+
 type RecordedWithTerminal<
   State extends JsonObject,
   Outcome extends JsonObject,
@@ -75,6 +83,46 @@ type RecordedWithTerminal<
   };
 };
 
+type AcceptedRecorded<
+  State extends JsonObject,
+  Outcome extends JsonObject,
+  Payload extends JsonObject,
+  Kind extends AggregateKind,
+> = RecordedWithTerminal<State, Outcome, Payload, Kind, "accepted"> & {
+  readonly record: { readonly aggregateAfter: Aggregate<State, Kind> };
+};
+
+function assertPriorVersion(record: ExecutionRecord, terminal: ExecutionRecord["terminal"]): void {
+  const beforeVersion = record.aggregateBefore.stateVersion;
+  if (record.priorStateVersion !== beforeVersion) {
+    throw new PlotpointAssertionError(
+      `expected-${terminal}:prior-version-mismatch:${record.priorStateVersion}:${beforeVersion}`,
+    );
+  }
+}
+
+function assertUncommittedRecord(
+  result: RecordedExecution<JsonObject, JsonObject, JsonObject, AggregateKind>,
+  terminal: "invalid" | "no-op" | "rejected",
+): void {
+  if (result.record.aggregateAfter !== undefined) {
+    throw new PlotpointAssertionError(`expected-${terminal}:unexpected-aggregate-after`);
+  }
+  assertPriorVersion(result.record, terminal);
+  if (result.record.resultingStateVersion !== result.record.priorStateVersion) {
+    throw new PlotpointAssertionError(
+      `expected-${terminal}:version-changed:${result.record.priorStateVersion}:${result.record.resultingStateVersion}`,
+    );
+  }
+  const difference = firstDifference(
+    canonicalValue(result.record.aggregateBefore),
+    canonicalValue(result.aggregate),
+  );
+  if (difference !== null) {
+    throw new PlotpointAssertionError(`expected-${terminal}:aggregate-mismatch:${difference}`);
+  }
+}
+
 export function assertAccepted<
   State extends JsonObject,
   Outcome extends JsonObject,
@@ -82,10 +130,32 @@ export function assertAccepted<
   Kind extends AggregateKind,
 >(
   result: ExecutionResult<State, Outcome, Payload, Kind>,
-): asserts result is RecordedWithTerminal<State, Outcome, Payload, Kind, "accepted"> {
+): asserts result is AcceptedRecorded<State, Outcome, Payload, Kind> {
   if (result.kind !== "recorded" || result.record.terminal !== "accepted") {
     const actual = result.kind === "recorded" ? result.record.terminal : result.kind;
     throw new PlotpointAssertionError(`expected-accepted:${actual}`);
+  }
+  if (result.record.aggregateAfter === undefined) {
+    throw new PlotpointAssertionError("expected-accepted:record-incomplete");
+  }
+  assertPriorVersion(result.record, "accepted");
+  const afterVersion = result.record.aggregateAfter.stateVersion;
+  if (result.record.resultingStateVersion !== afterVersion) {
+    throw new PlotpointAssertionError(
+      `expected-accepted:resulting-version-mismatch:${result.record.resultingStateVersion}:${afterVersion}`,
+    );
+  }
+  if (result.record.resultingStateVersion !== result.record.priorStateVersion + 1) {
+    throw new PlotpointAssertionError(
+      `expected-accepted:version-not-incremented:${result.record.priorStateVersion}:${result.record.resultingStateVersion}`,
+    );
+  }
+  const difference = firstDifference(
+    canonicalValue(result.record.aggregateAfter),
+    canonicalValue(result.aggregate),
+  );
+  if (difference !== null) {
+    throw new PlotpointAssertionError(`expected-accepted:aggregate-mismatch:${difference}`);
   }
 }
 
@@ -101,6 +171,7 @@ export function assertRejected<
     const actual = result.kind === "recorded" ? result.record.terminal : result.kind;
     throw new PlotpointAssertionError(`expected-rejected:${actual}`);
   }
+  assertUncommittedRecord(result, "rejected");
 }
 
 export function assertNoOp<
@@ -115,6 +186,7 @@ export function assertNoOp<
     const actual = result.kind === "recorded" ? result.record.terminal : result.kind;
     throw new PlotpointAssertionError(`expected-no-op:${actual}`);
   }
+  assertUncommittedRecord(result, "no-op");
 }
 
 export function assertInvalid<
@@ -137,6 +209,7 @@ export function assertInvalid<
   if (result.record.terminal !== "invalid") {
     throw new PlotpointAssertionError(`expected-invalid:${result.record.terminal}`);
   }
+  assertUncommittedRecord(result, "invalid");
   if (
     code !== undefined &&
     !result.record.diagnostics.some((diagnostic) => diagnostic.code === code)
@@ -146,7 +219,7 @@ export function assertInvalid<
 }
 
 export function assertCanonicalRecordEqual(left: ExecutionRecord, right: ExecutionRecord): void {
-  const difference = firstDifference(canonicalValue(left), canonicalValue(right));
+  const difference = canonicalRecordDifference(left, right);
   if (difference !== null) throw new PlotpointAssertionError(`record-mismatch:${difference}`);
 }
 

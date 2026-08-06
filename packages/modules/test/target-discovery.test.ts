@@ -208,6 +208,7 @@ describe("trusted target discovery", () => {
     const mechanic = adapter();
     const initialized = mechanic.model.initialize(config);
     if (initialized.kind !== "initialized") throw new Error(initialized.diagnostics[0]?.code);
+    expect(initialized.aggregate).not.toHaveProperty("progression");
     const aggregate: Aggregate<JsonObject, "team"> = {
       ...initialized.aggregate,
       aggregateId: participant.teamId,

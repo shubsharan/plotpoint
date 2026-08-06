@@ -1,5 +1,5 @@
 {
-  "releaseId": "sha256:1ba2628808e6053b2ad5e1175aa9dda374dbe1e263152321ce51164c30647e82",
+  "releaseId": "sha256:f20a39cce2d5ef93eb75b49bc8767bdb81dedf284126ef36afe6ffb40b91b00c",
   "manifest": {
     "aggregateSchemas": [
       {
@@ -26,8 +26,8 @@
         "path": "assets/clue.svg"
       },
       {
-        "byteLength": 71569,
-        "digest": "sha256:d02f06e6f3f1e7c295335bff0f904251c07d5044a45992fba1e7cd85c9ffa05f",
+        "byteLength": 77517,
+        "digest": "sha256:3ea1b1353217eb6c89c65e0052bfe4db385c8d2a22b3a9e3ebe0cd2921722cca",
         "kind": "logic-bundle",
         "path": "bundles/logic.js"
       },

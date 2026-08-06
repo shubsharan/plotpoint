@@ -92,6 +92,23 @@ function snapshotSchema<Value extends JsonObject>(
   });
 }
 
+function snapshotSchemaMap(
+  schemas: Readonly<Record<string, RuntimeSchema<JsonObject>>>,
+): Readonly<Record<string, RuntimeSchema<JsonObject>>> {
+  const snapshots: Record<string, RuntimeSchema<JsonObject>> = Object.create(null);
+  for (const [type, schema] of Object.entries(schemas)) {
+    snapshots[type] = eraseSchema(schema);
+  }
+  return Object.freeze(snapshots);
+}
+
+function ownSchema(
+  schemas: Readonly<Record<string, RuntimeSchema<JsonObject>>>,
+  type: string,
+): RuntimeSchema<JsonObject> | undefined {
+  return Object.hasOwn(schemas, type) ? schemas[type] : undefined;
+}
+
 function invalidPayload<State extends JsonObject>(
   registrationId: string,
   commandId: string,
@@ -106,6 +123,204 @@ function invalidPayload<State extends JsonObject>(
         schemaId: schema.id,
       }),
     ],
+  };
+}
+
+function invalidOutput<State extends JsonObject>(input: {
+  readonly commandId: string;
+  readonly registrationId: string;
+  readonly output: "state" | "outcome" | "domain-event" | "effect-intent";
+  readonly reason: "schema-missing" | "schema-rejected" | "schema-output-type-mismatch";
+  readonly schemaId?: string;
+  readonly type?: string;
+}): EvaluatedCommand<State, JsonObject> {
+  return {
+    kind: "invalid",
+    diagnostics: [
+      createDiagnostic("handler-result-invalid", {
+        commandId: input.commandId,
+        registrationId: input.registrationId,
+        output: input.output,
+        reason: input.reason,
+        ...(input.schemaId === undefined ? {} : { schemaId: input.schemaId }),
+        ...(input.type === undefined ? {} : { type: input.type }),
+      }),
+    ],
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function validateResolvedDecisionOutputs<
+  State extends JsonObject,
+  Kind extends AggregateKind,
+>(input: {
+  readonly decision: HandlerDecision<State, JsonObject>;
+  readonly commandId: string;
+  readonly binding: ConstructedCommandBinding<State, Kind>;
+  readonly stateSchema: RuntimeSchema<State>;
+  readonly eventSchemas: Readonly<Record<string, RuntimeSchema<JsonObject>>>;
+  readonly effectSchemas: Readonly<Record<string, RuntimeSchema<JsonObject>>>;
+}): EvaluatedCommand<State, JsonObject> {
+  const decision = input.decision;
+  if (
+    !isRecord(decision) ||
+    (decision.kind !== "accepted" && decision.kind !== "no-op" && decision.kind !== "rejected") ||
+    !Object.hasOwn(decision, "outcome")
+  ) {
+    return { kind: "decision", decision };
+  }
+  const decisionFields = Object.keys(decision);
+  if (decision.kind === "no-op" || decision.kind === "rejected") {
+    if (
+      decisionFields.length !== 2 ||
+      !decisionFields.includes("kind") ||
+      !decisionFields.includes("outcome")
+    ) {
+      return { kind: "decision", decision };
+    }
+  } else {
+    const requiredFields = [
+      "kind",
+      "outcome",
+      "domainEvents",
+      "effectIntents",
+      "progressionIntents",
+    ];
+    if (
+      requiredFields.some((field) => !decisionFields.includes(field)) ||
+      decisionFields.some((field) => !requiredFields.includes(field) && field !== "nextState")
+    ) {
+      return { kind: "decision", decision };
+    }
+  }
+
+  const outcome = input.binding.outcomeSchema.validate(decision.outcome);
+  if (!outcome.valid) {
+    return invalidOutput({
+      commandId: input.commandId,
+      registrationId: input.binding.registrationId,
+      output: "outcome",
+      reason: "schema-rejected",
+      schemaId: input.binding.outcomeSchema.id,
+    });
+  }
+  if (decision.kind === "no-op" || decision.kind === "rejected") {
+    return { kind: "decision", decision: { kind: decision.kind, outcome: outcome.value } };
+  }
+  if (
+    !Array.isArray(decision.domainEvents) ||
+    !Array.isArray(decision.effectIntents) ||
+    !Array.isArray(decision.progressionIntents)
+  ) {
+    return { kind: "decision", decision };
+  }
+
+  let nextState: State | undefined;
+  if (decision.nextState !== undefined) {
+    const state = input.stateSchema.validate(decision.nextState);
+    if (!state.valid) {
+      return invalidOutput({
+        commandId: input.commandId,
+        registrationId: input.binding.registrationId,
+        output: "state",
+        reason: "schema-rejected",
+        schemaId: input.stateSchema.id,
+      });
+    }
+    nextState = state.value;
+  }
+
+  const domainEvents: JsonObject[] = [];
+  for (const event of decision.domainEvents) {
+    if (!isRecord(event) || typeof event.type !== "string" || event.type.length === 0) {
+      return { kind: "decision", decision };
+    }
+    const schema = ownSchema(input.eventSchemas, event.type);
+    if (schema === undefined) {
+      return invalidOutput({
+        commandId: input.commandId,
+        registrationId: input.binding.registrationId,
+        output: "domain-event",
+        reason: "schema-missing",
+        type: event.type,
+      });
+    }
+    const validated = schema.validate(event);
+    if (!validated.valid) {
+      return invalidOutput({
+        commandId: input.commandId,
+        registrationId: input.binding.registrationId,
+        output: "domain-event",
+        reason: "schema-rejected",
+        schemaId: schema.id,
+        type: event.type,
+      });
+    }
+    if (validated.value.type !== event.type) {
+      return invalidOutput({
+        commandId: input.commandId,
+        registrationId: input.binding.registrationId,
+        output: "domain-event",
+        reason: "schema-output-type-mismatch",
+        schemaId: schema.id,
+        type: event.type,
+      });
+    }
+    domainEvents.push(validated.value);
+  }
+
+  const effectIntents: JsonObject[] = [];
+  for (const effect of decision.effectIntents) {
+    if (!isRecord(effect) || typeof effect.type !== "string" || effect.type.length === 0) {
+      return { kind: "decision", decision };
+    }
+    const schema = ownSchema(input.effectSchemas, effect.type);
+    if (schema === undefined) {
+      return invalidOutput({
+        commandId: input.commandId,
+        registrationId: input.binding.registrationId,
+        output: "effect-intent",
+        reason: "schema-missing",
+        type: effect.type,
+      });
+    }
+    const validated = schema.validate(effect);
+    if (!validated.valid) {
+      return invalidOutput({
+        commandId: input.commandId,
+        registrationId: input.binding.registrationId,
+        output: "effect-intent",
+        reason: "schema-rejected",
+        schemaId: schema.id,
+        type: effect.type,
+      });
+    }
+    if (validated.value.type !== effect.type) {
+      return invalidOutput({
+        commandId: input.commandId,
+        registrationId: input.binding.registrationId,
+        output: "effect-intent",
+        reason: "schema-output-type-mismatch",
+        schemaId: schema.id,
+        type: effect.type,
+      });
+    }
+    effectIntents.push(validated.value);
+  }
+
+  return {
+    kind: "decision",
+    decision: {
+      kind: "accepted",
+      ...(nextState === undefined ? {} : { nextState }),
+      outcome: outcome.value,
+      domainEvents,
+      effectIntents,
+      progressionIntents: decision.progressionIntents,
+    },
   };
 }
 
@@ -206,6 +421,9 @@ export function bindExecutableAggregateModel<Kind extends AggregateKind, State e
   if (model.aggregateKind !== "player" && model.progression !== undefined) {
     throw new TypeError("Server aggregate models cannot own progression");
   }
+  if (model.progression !== undefined && model.progression.aggregateKind !== model.aggregateKind) {
+    throw new TypeError("Aggregate model progression kind must match the model kind");
+  }
   const modelFields = new Set([
     "modelId",
     "aggregateKind",
@@ -237,22 +455,8 @@ export function bindExecutableAggregateModel<Kind extends AggregateKind, State e
   const initializationSchema = snapshotSchema(model.initializationSchema);
   const initializeState = model.initializeState;
   const progression = model.progression;
-  const eventSchemas = Object.freeze(
-    Object.fromEntries(
-      Object.entries(model.eventSchemas).map(([eventType, schema]) => [
-        eventType,
-        eraseSchema(schema),
-      ]),
-    ),
-  );
-  const effectSchemas = Object.freeze(
-    Object.fromEntries(
-      Object.entries(model.effectSchemas).map(([effectType, schema]) => [
-        effectType,
-        eraseSchema(schema),
-      ]),
-    ),
-  );
+  const eventSchemas = snapshotSchemaMap(model.eventSchemas);
+  const effectSchemas = snapshotSchemaMap(model.effectSchemas);
 
   const commandContracts: Record<
     string,
@@ -410,7 +614,17 @@ export function bindExecutableAggregateModel<Kind extends AggregateKind, State e
         observations: input.observations,
         ...(progression === undefined ? {} : { progression }),
         evaluate(target, command, context) {
-          return binding[commandBindingEvaluator](target, command, context);
+          const evaluated = binding[commandBindingEvaluator](target, command, context);
+          return evaluated.kind === "invalid"
+            ? evaluated
+            : validateResolvedDecisionOutputs({
+                decision: evaluated.decision,
+                commandId: command.id,
+                binding,
+                stateSchema,
+                eventSchemas,
+                effectSchemas,
+              });
         },
       });
     },

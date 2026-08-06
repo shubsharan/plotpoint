@@ -3,17 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   defineCommand,
   defineProgression,
-  initialProgression,
   resolveCommandBinding,
   type JsonObject,
 } from "@plotpoint/runtime";
-import {
-  assertAccepted,
-  clock,
-  createRuntimeHarness,
-  playerFixture,
-  replayScenario,
-} from "@plotpoint/testkit";
+import { assertAccepted, clock, createRuntimeHarness, replayScenario } from "@plotpoint/testkit";
 import { isJsonObject, modelFixture, runtimeSchema } from "./runtime-model.js";
 
 type ClueState = JsonObject & { readonly discovered: readonly string[] };
@@ -114,13 +107,9 @@ describe("quickstart acceptance", () => {
       },
       progression,
     });
-    const aggregate = playerFixture<ClueState>({
-      model,
-      aggregateId: "player-1",
-      stateVersion: 4,
-      state: { discovered: [] },
-      progression: initialProgression(progression),
-    });
+    const initialized = model.initialize({});
+    if (initialized.kind !== "initialized") throw new Error("quickstart-initialization-failed");
+    const aggregate = initialized.aggregate;
 
     const result = createRuntimeHarness({ repeat: 100 }).run({
       name: "recording alpha unlocks both branches",
@@ -129,15 +118,15 @@ describe("quickstart acceptance", () => {
       command: {
         id: "command-1",
         type: "record-clue",
-        target: { kind: "player", id: "player-1" },
-        expectedStateVersion: 4,
+        target: { kind: "player", id: aggregate.aggregateId },
+        expectedStateVersion: 0,
         payload: { clueId: "alpha" },
       },
       observations: [clock("2030-01-01T00:00:00.000Z")],
     });
 
     assertAccepted(result);
-    expect(result.aggregate.stateVersion).toBe(5);
+    expect(result.aggregate.stateVersion).toBe(1);
     expect(result.aggregate.progression?.nodes.map((node) => node.status)).toEqual([
       "active",
       "available",

@@ -22,13 +22,32 @@ function aggregateFixture<State extends JsonObject, Kind extends AggregateKind>(
   if (overrides.model.aggregateKind !== kind) {
     throw new TypeError(`Invalid ${kind} fixture: aggregate-model-kind-mismatch`);
   }
+  const aggregateId = overrides.aggregateId ?? `${kind}-fixture`;
+  if (aggregateId.length === 0) {
+    throw new TypeError(`Invalid ${kind} fixture: aggregate-id-invalid`);
+  }
+  const stateVersion = overrides.stateVersion ?? 0;
+  if (!Number.isSafeInteger(stateVersion) || stateVersion < 0) {
+    throw new TypeError(`Invalid ${kind} fixture: state-version-invalid`);
+  }
+  const validatedState = overrides.model.stateSchema.validate(overrides.state);
+  if (!validatedState.valid) {
+    throw new TypeError(`Invalid ${kind} fixture: state-invalid`);
+  }
+  if (
+    (overrides.model.progression === undefined) !== (overrides.progression === undefined) ||
+    (overrides.model.progression !== undefined &&
+      overrides.progression?.graphId !== overrides.model.progression.graphId)
+  ) {
+    throw new TypeError(`Invalid ${kind} fixture: progression-model-mismatch`);
+  }
   const candidate = {
-    aggregateId: overrides.aggregateId ?? `${kind}-fixture`,
+    aggregateId,
     modelId: overrides.model.modelId,
     aggregateKind: kind,
     schemaId: overrides.model.stateSchema.id,
-    stateVersion: overrides.stateVersion ?? 0,
-    state: overrides.state,
+    stateVersion,
+    state: validatedState.value,
     ...(overrides.progression === undefined ? {} : { progression: overrides.progression }),
   };
   const canonical = canonicalizeValue(candidate);

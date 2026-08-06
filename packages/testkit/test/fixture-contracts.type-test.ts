@@ -1,8 +1,14 @@
-import { type Aggregate, type JsonObject } from "@plotpoint/runtime";
+import {
+  defineCommand,
+  type Aggregate,
+  type CommandDefinition,
+  type JsonObject,
+} from "@plotpoint/runtime";
 import { playerFixture, teamFixture } from "@plotpoint/testkit";
 import { modelFixture, runtimeSchema } from "./runtime-model.js";
 
 type State = JsonObject & { readonly value: number };
+type Payload = JsonObject & { readonly amount: number };
 
 const stateSchema = runtimeSchema(
   "fixture.state",
@@ -28,6 +34,26 @@ const teamModel = modelFixture({
   initializeState: () => ({ value: 0 }),
 });
 
+const typedDefinition = defineCommand<"player", State, Payload, JsonObject>({
+  definitionId: "fixture.increment",
+  commandType: "increment",
+  aggregateKind: "player",
+  handle(target, command) {
+    return {
+      kind: "accepted",
+      nextState: { value: target.state.value + command.payload.amount },
+      outcome: {},
+      domainEvents: [],
+      effectIntents: [],
+      progressionIntents: [],
+    };
+  },
+});
+
+// @ts-expect-error typed handlers cannot enter an erased registry before payload narrowing
+const unsafelyErasedDefinition: CommandDefinition<State, JsonObject, JsonObject, "player"> =
+  typedDefinition;
+
 const player = playerFixture<State>({ model: playerModel, state: { value: 1 } });
 const team = teamFixture<State>({ model: teamModel, state: { value: 1 } });
 
@@ -40,3 +66,4 @@ const wrongPlayer: Aggregate<State, "player"> = team;
 
 void exactPlayer;
 void wrongPlayer;
+void unsafelyErasedDefinition;

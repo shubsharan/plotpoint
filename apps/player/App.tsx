@@ -5,13 +5,15 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { StatusBar } from "expo-status-bar";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
-import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
+import { Ajv2020 } from "ajv/dist/2020.js";
 
 import {
   inspectGameRelease,
   openRelease,
+  type CanonicalJsonObject,
   type CanonicalJsonValue,
   type GameComposition,
+  type ProgressionInstance,
   type ReleaseManifest,
   type SharedPlayView,
 } from "@plotpoint/protocol";
@@ -28,7 +30,12 @@ import { createSharedHuntReport } from "./src/reports/create-shared-hunt-report"
 import { allowRuntimeNavigation, buildRuntimeBootstrap } from "./src/runtime/bootstrap";
 import { deriveHostSupportFromManifest } from "./src/runtime/host-support";
 import { createProductionHostBridgeHandlers } from "./src/runtime/production-handlers";
-import { recoverLatestRun, recoverRun, type RecoveryBootstrap } from "./src/runtime/recovery";
+import {
+  recoverLatestRun,
+  recoverRun,
+  verifyRecoveryArtifact,
+  type RecoveryBootstrap,
+} from "./src/runtime/recovery";
 import { playerRunLifecycleStore, selectReleaseRun } from "./src/runtime/run-lifecycle";
 import { SharedSyncStore } from "./src/shared/database";
 import {
@@ -54,7 +61,8 @@ interface ActiveRuntime {
   readonly projectionContract: SharedProjectionContract | null;
   readonly sharedSurface: SharedRuntimeSurface;
   readonly aggregateSchemaId: string;
-  readonly validateAggregate: ValidateFunction;
+  validateSchema(schemaId: string, value: CanonicalJsonObject): boolean;
+  validateProgression(progressionId: string, value: ProgressionInstance): boolean;
 }
 
 interface ReleaseDetails {
@@ -232,6 +240,12 @@ export default function App() {
     const installation = await db.installedRelease(recovery.releaseId);
     if (installation === null) throw new Error("recovery-installation-missing");
     const artifactBytes = await readArtifactBytes(installation.artifactUri);
+    const verifiedArtifact = await verifyRecoveryArtifact({
+      bytes: artifactBytes,
+      expectedReleaseId: recovery.releaseId,
+      manifestJson: installation.manifestJson,
+    });
+    if (verifiedArtifact.kind === "invalid") throw new Error(verifiedArtifact.code);
     const [opened, inspection] = await Promise.all([
       openRelease(artifactBytes),
       inspectGameRelease(artifactBytes),
@@ -263,11 +277,7 @@ export default function App() {
     );
     if (aggregateSchema === undefined) throw new Error("release-player-schema-entry-missing");
     const decoder = new TextDecoder();
-    const validateAggregate = new Ajv2020({
-      allErrors: true,
-      strict: true,
-    }).compile(JSON.parse(decoder.decode(aggregateSchema.bytes)) as object);
-    if (!validateAggregate(activeRecovery.aggregate.state)) {
+    if (!verifiedArtifact.validateSchema(aggregateRequirement.id, activeRecovery.aggregate.state)) {
       throw new Error("runtime-aggregate-schema-invalid");
     }
     const content: Record<string, CanonicalJsonValue> = Object.create(null);
@@ -342,7 +352,8 @@ export default function App() {
       projectionContract,
       sharedSurface,
       aggregateSchemaId: aggregateRequirement.id,
-      validateAggregate,
+      validateSchema: verifiedArtifact.validateSchema,
+      validateProgression: verifiedArtifact.validateProgression,
       html: buildRuntimeBootstrap({
         logicSource: decoder.decode(logic.bytes),
         presentationSource: decoder.decode(presentation.bytes),
@@ -489,7 +500,8 @@ export default function App() {
           },
           composition: runtime.composition,
           aggregateSchemaId: runtime.aggregateSchemaId,
-          validateAggregate: runtime.validateAggregate,
+          validateSchema: runtime.validateSchema,
+          validateProgression: runtime.validateProgression,
         },
         location: {
           database,

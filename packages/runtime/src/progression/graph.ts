@@ -34,7 +34,10 @@ export interface ProgressionFacts<State extends JsonObject> {
   readonly progression: ProgressionInstance;
 }
 
-export interface ProgressionTransition<State extends JsonObject = JsonObject> {
+export interface ProgressionTransition<
+  State extends JsonObject = JsonObject,
+  _Kind extends AggregateKind = AggregateKind,
+> {
   readonly transitionId: string;
   readonly targetNodeId: string;
   readonly from: readonly ProgressionStatus[];
@@ -51,7 +54,7 @@ export interface ProgressionDefinition<
   readonly aggregateKind: Kind;
   readonly graphId: string;
   readonly nodes: readonly ProgressionNodeDefinition[];
-  readonly transitions: readonly ProgressionTransition<State>[];
+  readonly transitions: readonly ProgressionTransition<State, Kind>[];
 }
 
 export function defineProgression<Kind extends AggregateKind, State extends JsonObject>(

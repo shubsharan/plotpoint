@@ -142,4 +142,45 @@ describe("record replay", () => {
     expect(replay.kind).toBe("mismatch");
     if (replay.kind === "mismatch") expect(replay.path).toBe("/aggregateAfter/state/value");
   });
+
+  it("compares terminal evidence even when aggregate state is identical", () => {
+    const definition = (result: string) =>
+      defineCommand<"player", State, JsonObject, JsonObject>({
+        definitionId: "replay",
+        commandType: "change",
+        aggregateKind: "player",
+        handle() {
+          return {
+            kind: "accepted",
+            nextState: { value: 1 },
+            outcome: { result },
+            domainEvents: [],
+            effectIntents: [],
+            progressionIntents: [],
+          };
+        },
+      });
+    const model = (result: string) =>
+      modelFixture({
+        modelId: "replay.player",
+        aggregateKind: "player",
+        authority: "local",
+        stateSchema,
+        initializeState: () => ({ value: 0 }),
+        commandsByType: {
+          change: resolveCommandBinding({
+            registrationId: "replay",
+            definition: definition(result),
+            payloadSchema: jsonSchema,
+            outcomeSchema: jsonSchema,
+          }),
+        },
+      });
+    const original = model("original").execute({ aggregate, command, observations: [] });
+    if (original.kind !== "recorded") throw new Error("expected recorded result");
+
+    const replay = replayScenario({ record: original.record, model: model("changed") });
+
+    expect(replay).toMatchObject({ kind: "mismatch", path: "/outcome/result" });
+  });
 });

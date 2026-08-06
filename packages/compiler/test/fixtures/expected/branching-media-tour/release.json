@@ -1,5 +1,5 @@
 {
-  "releaseId": "sha256:14ed65b295629bb5cf56e14b29bf14b30dcd0c2281fe139dacd06c9197a8ff71",
+  "releaseId": "sha256:1ac4013511e3019b1c84fe46af3f86d003fbf1ffc0477c5144eadebac02aab9e",
   "manifest": {
     "aggregateSchemas": [
       {
@@ -43,8 +43,8 @@
         "path": "assets/tour-map.svg"
       },
       {
-        "byteLength": 88286,
-        "digest": "sha256:3b34009eed7c832205047239993380cac44f241cf986e9824bea1e470959575a",
+        "byteLength": 94234,
+        "digest": "sha256:89afd4048dbe0760ec4a78d3ff385195c2bcaca499011e65c86572dc9c5046e3",
         "kind": "logic-bundle",
         "path": "bundles/logic.js"
       },

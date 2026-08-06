@@ -3,11 +3,11 @@ import { bench, describe } from "vitest";
 import {
   defineCommand,
   defineProgression,
-  executeCommand,
   type Aggregate,
   type Command,
   type JsonObject,
 } from "@plotpoint/runtime";
+import { executeCommandWithEvaluator } from "../src/execute-command.js";
 
 type State = JsonObject & { readonly count: number };
 
@@ -68,13 +68,21 @@ const progression = defineProgression<"player", State>({
 
 describe("representative Gate 1 baselines", () => {
   bench("command with a twenty-node parallel progression batch", () => {
-    executeCommand({
-      definition,
+    executeCommandWithEvaluator({
+      definitionId: definition.definitionId,
+      commandType: definition.commandType,
+      aggregateKind: definition.aggregateKind,
       aggregate,
       command,
       observations: [],
       progression,
       policy: { maxAutomaticTransitions: 20 },
+      evaluate(target, runtimeCommand, context) {
+        return {
+          kind: "decision",
+          decision: definition.handle(target, runtimeCommand, context),
+        };
+      },
     });
   });
 });

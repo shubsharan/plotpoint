@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type Aggregate, type JsonObject } from "@plotpoint/runtime";
+import { type Aggregate, type JsonObject, type ProgressionInstance } from "@plotpoint/runtime";
 import { playerFixture, sessionFixture, teamFixture } from "@plotpoint/testkit";
 import { modelFixture, runtimeSchema } from "./runtime-model.js";
 
@@ -80,5 +80,27 @@ describe("aggregate fixtures", () => {
     const second = playerFixture({ model: playerModel, state: { nested } });
 
     expect(first.state.nested).not.toBe(second.state.nested);
+  });
+
+  it("rejects state, version, and progression that disagree with the complete model", () => {
+    expect(() =>
+      playerFixture({
+        model: playerModel,
+        state: { nested: { value: "invalid" } } as never,
+      }),
+    ).toThrow(/state-invalid/);
+    expect(() =>
+      playerFixture({ model: playerModel, state: initialState, stateVersion: -1 }),
+    ).toThrow(/state-version-invalid/);
+    expect(() =>
+      playerFixture({
+        model: playerModel,
+        state: initialState,
+        progression: {
+          graphId: "undeclared",
+          nodes: [],
+        } satisfies ProgressionInstance,
+      }),
+    ).toThrow(/progression-model-mismatch/);
   });
 });

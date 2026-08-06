@@ -4,14 +4,23 @@ import {
   bindExecutableAggregateModel,
   canonicalizeValue,
   defineCommand,
-  executeCommand,
+  defineProgression,
+  executeCommand as executeResolvedCommand,
+  initialProgression,
   resolveCommandBinding,
   type Aggregate,
+  type AggregateKind,
   type Command,
+  type CommandDefinition,
+  type ExecutionResult,
   type JsonObject,
+  type Observation,
+  type ProgressionDefinition,
   type ResolvedAggregateModel,
+  type RuntimePolicy,
   type RuntimeSchema,
 } from "@plotpoint/runtime";
+import { executeCommandWithEvaluator } from "../src/execute-command.js";
 
 type State = JsonObject & { readonly count: number };
 type Payload = JsonObject & { readonly amount: number };
@@ -34,6 +43,37 @@ const command: Command<Payload, "player"> = {
   payload: { amount: 2 },
 };
 
+function executeCommand<
+  Kind extends AggregateKind,
+  State extends JsonObject,
+  PayloadValue extends JsonObject,
+  OutcomeValue extends JsonObject,
+>(input: {
+  readonly definition: CommandDefinition<State, PayloadValue, OutcomeValue, Kind>;
+  readonly aggregate: Aggregate<State, Kind>;
+  readonly command: Command<PayloadValue, Kind>;
+  readonly observations: readonly Observation[];
+  readonly policy?: Partial<RuntimePolicy>;
+  readonly progression?: ProgressionDefinition<State, Kind>;
+}): ExecutionResult<State, OutcomeValue, PayloadValue, Kind> {
+  return executeCommandWithEvaluator({
+    definitionId: input.definition.definitionId,
+    commandType: input.definition.commandType,
+    aggregateKind: input.definition.aggregateKind,
+    aggregate: input.aggregate,
+    command: input.command,
+    observations: input.observations,
+    ...(input.policy === undefined ? {} : { policy: input.policy }),
+    ...(input.progression === undefined ? {} : { progression: input.progression }),
+    evaluate(target, runtimeCommand, context) {
+      return {
+        kind: "decision",
+        decision: input.definition.handle(target, runtimeCommand, context),
+      };
+    },
+  });
+}
+
 describe("executeCommand", () => {
   it("returns an accepted deterministic state change", () => {
     const definition = defineCommand<"player", State, Payload, Outcome>({
@@ -45,8 +85,8 @@ describe("executeCommand", () => {
           kind: "accepted",
           nextState: { count: target.state.count + input.payload.amount },
           outcome: { result: "incremented" },
-          domainEvents: [{ type: "count-incremented" }],
-          effectIntents: [{ type: "notify" }],
+          domainEvents: [],
+          effectIntents: [],
           progressionIntents: [],
         };
       },
@@ -63,6 +103,10 @@ describe("executeCommand", () => {
     if (result.kind !== "recorded") throw new Error("expected recorded acceptance");
     expect(result.aggregate.stateVersion).toBe(5);
     expect(result.aggregate.state).toEqual({ count: 3 });
+    expect(result.record).toMatchObject({
+      priorStateVersion: 4,
+      resultingStateVersion: 5,
+    });
     expect(aggregate.stateVersion).toBe(4);
   });
 
@@ -86,6 +130,11 @@ describe("executeCommand", () => {
     expect(result).toMatchObject({ kind: "recorded", record: { terminal: "rejected" } });
     if (result.kind !== "recorded") throw new Error("expected recorded rejection");
     expect(result.aggregate).toEqual(aggregate);
+    expect(result.record).toMatchObject({
+      priorStateVersion: 4,
+      resultingStateVersion: 4,
+    });
+    expect(result.record).not.toHaveProperty("aggregateAfter");
   });
 
   it("returns a true no-op without advancing the version", () => {
@@ -108,6 +157,72 @@ describe("executeCommand", () => {
     expect(result).toMatchObject({ kind: "recorded", record: { terminal: "no-op" } });
     if (result.kind !== "recorded") throw new Error("expected recorded no-op");
     expect(result.aggregate.stateVersion).toBe(4);
+    expect(result.record).toMatchObject({
+      priorStateVersion: 4,
+      resultingStateVersion: 4,
+    });
+    expect(result.record).not.toHaveProperty("aggregateAfter");
+  });
+
+  it("accepts a progression-only fact and advances the version exactly once", () => {
+    const progression = defineProgression<"player", State>({
+      aggregateKind: "player",
+      graphId: "counter.progression",
+      nodes: [{ nodeId: "counter", initialStatus: "active" }],
+      transitions: [
+        {
+          transitionId: "counter-complete",
+          targetNodeId: "counter",
+          from: ["active"],
+          to: "completed",
+          priority: 0,
+          trigger: "intent",
+        },
+      ],
+    });
+    const aggregateWithProgression: Aggregate<State, "player"> = {
+      ...aggregate,
+      progression: initialProgression(progression),
+    };
+    const definition = defineCommand<"player", State, Payload, Outcome>({
+      definitionId: "progression-only",
+      commandType: "increment",
+      aggregateKind: "player",
+      handle() {
+        return {
+          kind: "accepted",
+          outcome: { result: "progressed" },
+          domainEvents: [],
+          effectIntents: [],
+          progressionIntents: [{ transitionId: "counter-complete" }],
+        };
+      },
+    });
+
+    const result = executeCommand({
+      definition,
+      aggregate: aggregateWithProgression,
+      command,
+      observations: [],
+      progression,
+    });
+
+    expect(result).toMatchObject({
+      kind: "recorded",
+      aggregate: {
+        state: aggregate.state,
+        stateVersion: 5,
+        progression: {
+          graphId: "counter.progression",
+          nodes: [{ nodeId: "counter", status: "completed" }],
+        },
+      },
+      record: {
+        terminal: "accepted",
+        priorStateVersion: 4,
+        resultingStateVersion: 5,
+      },
+    });
   });
 
   it.each([
@@ -139,7 +254,13 @@ describe("executeCommand", () => {
     });
 
     expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
-    if (result.kind === "recorded") expect(result.record.diagnostics[0]?.code).toBe(code);
+    if (result.kind === "recorded") {
+      expect(result.record.diagnostics[0]?.code).toBe(code);
+      expect(result.record).toMatchObject({
+        priorStateVersion: 4,
+        resultingStateVersion: 4,
+      });
+    }
     expect(JSON.stringify(result)).not.toContain("host prose");
   });
 
@@ -533,4 +654,172 @@ describe("executable aggregate model initialization", () => {
     });
     expect(handlerCalls).toBe(1);
   });
+});
+
+describe("resolved output schema validation", () => {
+  type ValidationPayload = JsonObject & {
+    readonly output: "outcome" | "event" | "effect" | "prototype-event" | "prototype-effect";
+  };
+  type ValidationEvent = JsonObject & { readonly type: "counter.changed"; readonly count: number };
+  type ValidationEffect = JsonObject & {
+    readonly type: "counter.notify";
+    readonly channel: string;
+  };
+
+  const schema = <Value extends JsonObject>(input: {
+    readonly id: string;
+    readonly digest: RuntimeSchema<Value>["schemaDigest"];
+    readonly accepts: (value: unknown) => value is Value;
+  }): RuntimeSchema<Value> => ({
+    id: input.id,
+    schemaDigest: input.digest,
+    validate(value) {
+      return input.accepts(value) ? { valid: true, value } : { valid: false, diagnostics: [] };
+    },
+  });
+  const isObject = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === "object" && !Array.isArray(value);
+  const stateSchema = schema<State>({
+    id: "counter.state",
+    digest: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    accepts: (value): value is State => isObject(value) && typeof value.count === "number",
+  });
+  const initializationSchema = schema<JsonObject>({
+    id: "counter.initialization",
+    digest: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    accepts: (value): value is JsonObject => isObject(value),
+  });
+  const payloadSchema = schema<ValidationPayload>({
+    id: "counter.validate.payload",
+    digest: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    accepts: (value): value is ValidationPayload =>
+      isObject(value) &&
+      ["outcome", "event", "effect", "prototype-event", "prototype-effect"].includes(
+        String(value.output),
+      ),
+  });
+  const outcomeSchema = schema<Outcome>({
+    id: "counter.validate.outcome",
+    digest: "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    accepts: (value): value is Outcome => isObject(value) && typeof value.result === "string",
+  });
+  const eventSchema = schema<ValidationEvent>({
+    id: "counter.changed",
+    digest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    accepts: (value): value is ValidationEvent =>
+      isObject(value) && value.type === "counter.changed" && typeof value.count === "number",
+  });
+  const effectSchema = schema<ValidationEffect>({
+    id: "counter.notify",
+    digest: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    accepts: (value): value is ValidationEffect =>
+      isObject(value) && value.type === "counter.notify" && typeof value.channel === "string",
+  });
+  const binding = resolveCommandBinding({
+    registrationId: "counter.validate",
+    definition: defineCommand<"player", State, ValidationPayload, Outcome>({
+      definitionId: "counter.validate",
+      commandType: "validate-output",
+      aggregateKind: "player",
+      handle(target, input) {
+        return {
+          kind: "accepted",
+          nextState: { count: target.state.count + 1 },
+          outcome:
+            input.payload.output === "outcome" ? ({ result: 7 } as never) : { result: "validated" },
+          domainEvents:
+            input.payload.output === "event"
+              ? [{ type: "counter.changed", count: "invalid" }]
+              : input.payload.output === "prototype-event"
+                ? [{ type: "constructor" }]
+                : [],
+          effectIntents:
+            input.payload.output === "effect"
+              ? [{ type: "counter.notify", channel: 7 }]
+              : input.payload.output === "prototype-effect"
+                ? [{ type: "toString" }]
+                : [],
+          progressionIntents: [],
+        };
+      },
+    }),
+    payloadSchema,
+    outcomeSchema,
+  });
+  const executable = bindExecutableAggregateModel({
+    modelId: "counter.player",
+    aggregateKind: "player",
+    authority: "local",
+    stateSchema,
+    initializationSchema,
+    initializeState: () => ({ count: 0 }),
+    commandsByType: { "validate-output": binding },
+    eventSchemas: { "counter.changed": eventSchema },
+    effectSchemas: { "counter.notify": effectSchema },
+  });
+
+  it.each([
+    ["outcome", "counter.validate.outcome"],
+    ["event", "counter.changed"],
+    ["effect", "counter.notify"],
+  ] as const)("records invalid %s output before exposing an aggregate", (output, schemaId) => {
+    const result = executeResolvedCommand({
+      model: executable,
+      aggregate,
+      command: {
+        id: `validate-${output}`,
+        type: "validate-output",
+        target: { kind: "player", id: aggregate.aggregateId },
+        expectedStateVersion: aggregate.stateVersion,
+        payload: { output },
+      },
+      observations: [],
+    });
+
+    expect(result).toMatchObject({
+      kind: "recorded",
+      aggregate,
+      record: {
+        terminal: "invalid",
+        priorStateVersion: 4,
+        resultingStateVersion: 4,
+        diagnostics: [{ details: { schemaId } }],
+      },
+    });
+  });
+
+  it.each([
+    ["prototype-event", "domain-event", "constructor"],
+    ["prototype-effect", "effect-intent", "toString"],
+  ] as const)(
+    "treats inherited object key %s as an undeclared output schema",
+    (output, outputKind, type) => {
+      const result = executeResolvedCommand({
+        model: executable,
+        aggregate,
+        command: {
+          id: `validate-${output}`,
+          type: "validate-output",
+          target: { kind: "player", id: aggregate.aggregateId },
+          expectedStateVersion: aggregate.stateVersion,
+          payload: { output },
+        },
+        observations: [],
+      });
+
+      expect(result).toMatchObject({
+        kind: "recorded",
+        aggregate,
+        record: {
+          terminal: "invalid",
+          diagnostics: [
+            {
+              code: "handler-result-invalid",
+              details: { output: outputKind, reason: "schema-missing", type },
+            },
+          ],
+        },
+      });
+    },
+  );
 });

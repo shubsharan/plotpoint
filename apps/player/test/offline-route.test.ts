@@ -266,7 +266,10 @@ describe("disconnected trusted-host route", () => {
 
       expect(result).toMatchObject({
         kind: "recorded",
-        aggregate: { stateVersion: 1, state: { phase: "puzzle" } },
+        aggregate: {
+          stateVersion: 1,
+          state: { visitedCheckpoints: ["first-checkpoint"], puzzleSolved: false },
+        },
         record: {
           definitionId: "field.advance",
           terminal: "accepted",

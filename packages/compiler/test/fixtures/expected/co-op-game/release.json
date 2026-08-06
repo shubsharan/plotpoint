@@ -1,5 +1,5 @@
 {
-  "releaseId": "sha256:6f6a709bc606d447b231166c396f9efafca927c95fb433975a24fff1c0a8c404",
+  "releaseId": "sha256:3878ab58a4e3b90eb95f60b63e95d13e0aca821e7353c2feeb8cf7b53d063822",
   "manifest": {
     "aggregateSchemas": [
       {
@@ -38,14 +38,14 @@
         "path": "assets/city-map.svg"
       },
       {
-        "byteLength": 52107,
-        "digest": "sha256:730b952fb57e0bd3f50895bd7907c59b5665baee709378a3ab53bf2ea171d7ac",
+        "byteLength": 58055,
+        "digest": "sha256:b5c9b7f91d082291dc67f68a46ee6427224431ebaff8f8f6656130b5c9d732ba",
         "kind": "logic-bundle",
         "path": "bundles/logic.js"
       },
       {
-        "byteLength": 2531,
-        "digest": "sha256:63a0496110a3b1f1da3e09e535ea7d104e2907bfcd087f3985c1cd537dac5274",
+        "byteLength": 4741,
+        "digest": "sha256:dc4a879a2ea2d7b1534fbcf109fde7cc559af71d5e949614301b003a3b6b309d",
         "kind": "presentation-bundle",
         "path": "bundles/presentation.js"
       },

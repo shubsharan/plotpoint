@@ -20,6 +20,51 @@ export interface TransitionTransaction {
   record(runId: string, candidate: CandidateTransition): Promise<DurableTransitionResult>;
 }
 
+function canonicalEqual(left: unknown, right: unknown): boolean {
+  const leftCanonical = canonicalizeValue(left);
+  const rightCanonical = canonicalizeValue(right);
+  return (
+    leftCanonical.kind === "valid" &&
+    rightCanonical.kind === "valid" &&
+    JSON.stringify(leftCanonical.canonical.value) === JSON.stringify(rightCanonical.canonical.value)
+  );
+}
+
+function progressionTransitionIsCoherent(
+  prior: NonNullable<SnapshotRecord["progression"]>,
+  next: NonNullable<SnapshotRecord["progression"]>,
+  trace: readonly Readonly<Record<string, unknown>>[],
+): boolean {
+  if (
+    prior.graphId !== next.graphId ||
+    prior.nodes.length !== next.nodes.length ||
+    prior.nodes.some((node, index) => node.nodeId !== next.nodes[index]?.nodeId)
+  ) {
+    return false;
+  }
+  const statuses = new Map(prior.nodes.map((node) => [node.nodeId, node.status]));
+  for (const [index, transition] of trace.entries()) {
+    const fields = Object.keys(transition).sort();
+    if (
+      JSON.stringify(fields) !==
+        JSON.stringify(["from", "nodeId", "round", "sequence", "source", "to", "transitionId"]) ||
+      transition.sequence !== index ||
+      !Number.isSafeInteger(transition.round) ||
+      (transition.round as number) < 0 ||
+      (transition.source !== "command" && transition.source !== "automatic") ||
+      typeof transition.transitionId !== "string" ||
+      transition.transitionId.length === 0 ||
+      typeof transition.nodeId !== "string" ||
+      statuses.get(transition.nodeId) !== transition.from ||
+      typeof transition.to !== "string"
+    ) {
+      return false;
+    }
+    statuses.set(transition.nodeId, transition.to as (typeof prior.nodes)[number]["status"]);
+  }
+  return next.nodes.every((node) => statuses.get(node.nodeId) === node.status);
+}
+
 export async function commitCandidateTransition(input: {
   readonly store: TransitionStore;
   readonly runId: string;
@@ -78,6 +123,42 @@ export async function commitCandidateTransition(input: {
         commandId: candidate.commandId,
         code: "transition-observation-missing",
       };
+    }
+    if (candidate.terminal === "accepted") {
+      if (
+        (candidate.nextProgression === undefined && candidate.progressionTrace.length > 0) ||
+        (candidate.nextProgression !== undefined &&
+          (snapshot?.progression === undefined ||
+            !progressionTransitionIsCoherent(
+              snapshot.progression,
+              candidate.nextProgression,
+              candidate.progressionTrace,
+            )))
+      ) {
+        return {
+          kind: "invalid",
+          commandId: candidate.commandId,
+          code: "transition-progression-snapshot-mismatch",
+        };
+      }
+      const stateChanged =
+        candidate.nextState !== undefined &&
+        (snapshot === null || !canonicalEqual(candidate.nextState, snapshot.state));
+      const progressionChanged =
+        candidate.nextProgression !== undefined &&
+        (snapshot === null || !canonicalEqual(candidate.nextProgression, snapshot.progression));
+      if (
+        !stateChanged &&
+        !progressionChanged &&
+        candidate.domainEvents.length === 0 &&
+        candidate.effectIntents.length === 0
+      ) {
+        return {
+          kind: "invalid",
+          commandId: candidate.commandId,
+          code: "transition-accepted-fact-missing",
+        };
+      }
     }
     return transaction.record(input.runId, candidate);
   });

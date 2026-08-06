@@ -80,11 +80,7 @@ function committedView(
   candidate: TransitionCandidate,
   result: TransitionResult,
 ): LocalAggregateView {
-  if (
-    result.disposition !== "committed" ||
-    candidate.terminal !== "accepted" ||
-    result.terminal !== "accepted"
-  ) {
+  if (candidate.terminal !== "accepted" || result.terminal !== "accepted") {
     return current;
   }
   return Object.freeze({
@@ -131,11 +127,9 @@ export function createLocalModelAdapter(input: {
           if (result.terminal !== prepared.terminal) {
             throw new Error("runtime-local-command-terminal-mismatch");
           }
-          if (
-            result.disposition === "committed" &&
-            result.resultingStateVersion !==
-              view.stateVersion + (result.terminal === "accepted" ? 1 : 0)
-          ) {
+          const expectedResultingStateVersion =
+            view.stateVersion + (result.terminal === "accepted" ? 1 : 0);
+          if (result.resultingStateVersion !== expectedResultingStateVersion) {
             throw new Error("runtime-local-command-version-mismatch");
           }
           const next = committedView(view, prepared, result);

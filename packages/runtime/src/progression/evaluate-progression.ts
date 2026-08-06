@@ -144,7 +144,7 @@ export function evaluateProgression<State extends JsonObject, Kind extends Aggre
       );
     }
     const frozenFacts = canonicalFacts.canonical.value as unknown as ProgressionFacts<State>;
-    const enabled: ProgressionTransition<State>[] = [];
+    const enabled: ProgressionTransition<State, Kind>[] = [];
     for (const transition of input.definition.transitions) {
       if (transition.trigger !== "automatic") continue;
       const current = statuses.get(transition.targetNodeId);
@@ -177,13 +177,13 @@ export function evaluateProgression<State extends JsonObject, Kind extends Aggre
       if (selected) enabled.push(transition);
     }
 
-    const byTarget = new Map<string, ProgressionTransition<State>[]>();
+    const byTarget = new Map<string, ProgressionTransition<State, Kind>[]>();
     for (const transition of enabled) {
       const group = byTarget.get(transition.targetNodeId) ?? [];
       group.push(transition);
       byTarget.set(transition.targetNodeId, group);
     }
-    const winners: ProgressionTransition<State>[] = [];
+    const winners: ProgressionTransition<State, Kind>[] = [];
     for (const [nodeId, transitions] of byTarget) {
       const lowestPriority = Math.min(...transitions.map((transition) => transition.priority));
       const lowest = transitions.filter((transition) => transition.priority === lowestPriority);
@@ -199,7 +199,7 @@ export function evaluateProgression<State extends JsonObject, Kind extends Aggre
           trace,
         );
       }
-      winners.push(lowest[0] as ProgressionTransition<State>);
+      winners.push(lowest[0] as ProgressionTransition<State, Kind>);
     }
     winners.sort(
       (left, right) =>

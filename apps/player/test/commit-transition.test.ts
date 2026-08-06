@@ -19,10 +19,12 @@ class MemoryStore implements TransitionStore, TransitionTransaction {
   observationLinks = new Set<string>();
   observations = new Set(["location-1"]);
   records = 0;
+  transactions = 0;
   failDuringRecord = false;
   loseAfterCommit = false;
 
   async transaction<T>(operation: (transaction: TransitionTransaction) => Promise<T>): Promise<T> {
+    this.transactions += 1;
     const before = {
       receipts: new Map(this.receipts),
       snapshot: this.snapshot,
@@ -148,9 +150,10 @@ function candidate(terminal: "accepted" | "no-op" | "rejected" | "invalid"): Can
       effectIntents: [{ type: "field.notify", payload: { message: "Complete" } }],
       progressionTrace: [
         {
-          sequence: 1,
-          round: 1,
+          sequence: 0,
+          round: 0,
           source: "command",
+          transitionId: "finish",
           nodeId: "finish",
           from: "active",
           to: "completed",
@@ -183,6 +186,10 @@ function currentSnapshot(overrides: Partial<SnapshotRecord> = {}): SnapshotRecor
     schemaId: base.target.schemaId,
     stateVersion: 0,
     state: { phase: "puzzle", attempts: 0 },
+    progression: {
+      graphId: "field.progression",
+      nodes: [{ nodeId: "finish", status: "active" }],
+    },
     journalPosition: 0,
     ...overrides,
   };
@@ -242,6 +249,95 @@ describe("atomic transition policy", () => {
     });
   });
 
+  it.each([
+    [
+      "state",
+      {
+        ...base,
+        terminal: "accepted",
+        nextState: { phase: "complete", attempts: 1 },
+        outcome: { result: "state-recorded" },
+        domainEvents: [],
+        effectIntents: [],
+        progressionTrace: [],
+      } satisfies CandidateTransition,
+    ],
+    [
+      "progression",
+      {
+        ...base,
+        terminal: "accepted",
+        nextProgression: {
+          graphId: "field.progression",
+          nodes: [{ nodeId: "finish", status: "completed" as const }],
+        },
+        outcome: { result: "progression-recorded" },
+        domainEvents: [],
+        effectIntents: [],
+        progressionTrace: [
+          {
+            sequence: 0,
+            round: 0,
+            source: "command",
+            transitionId: "finish",
+            nodeId: "finish",
+            from: "active",
+            to: "completed",
+          },
+        ],
+      } satisfies CandidateTransition,
+    ],
+    [
+      "event",
+      {
+        ...base,
+        terminal: "accepted",
+        outcome: { result: "event-recorded" },
+        domainEvents: [{ type: "field.noted", payload: { phase: "puzzle" } }],
+        effectIntents: [],
+        progressionTrace: [],
+      } satisfies CandidateTransition,
+    ],
+    [
+      "effect",
+      {
+        ...base,
+        terminal: "accepted",
+        outcome: { result: "effect-recorded" },
+        domainEvents: [],
+        effectIntents: [{ type: "field.notify", payload: { message: "Ready" } }],
+        progressionTrace: [],
+      } satisfies CandidateTransition,
+    ],
+  ] as const)(
+    "commits an accepted %s-only fact as one complete versioned record",
+    async (_kind, fact) => {
+      const store = new MemoryStore();
+      store.snapshot = currentSnapshot();
+
+      const result = await commitCandidateTransition({
+        store,
+        runId: "run-1",
+        candidate: fact,
+      });
+
+      expect(result).toMatchObject({
+        disposition: "committed",
+        terminal: "accepted",
+        resultingStateVersion: 1,
+      });
+      expect(store.receipts.get(fact.commandId)).toEqual({ candidate: fact, result });
+      expect(store.journals).toEqual([{ candidate: fact, result }]);
+      expect(store.snapshot).toMatchObject({
+        modelId: fact.modelId,
+        aggregateId: fact.target.aggregateId,
+        schemaId: fact.target.schemaId,
+        stateVersion: 1,
+        journalPosition: 1,
+      });
+    },
+  );
+
   it("returns stale and missing-observation host errors without recording", async () => {
     const store = new MemoryStore();
     store.snapshot = currentSnapshot({ stateVersion: 2, journalPosition: 2 });
@@ -279,6 +375,97 @@ describe("atomic transition policy", () => {
     ).resolves.toMatchObject({ kind: "invalid", code: "transition-aggregate-mismatch" });
     expect(store.receipts).toHaveLength(0);
   });
+
+  it.each(["state", "progression", "both"] as const)(
+    "rejects accepted %s equality without an event or effect",
+    async (kind) => {
+      const existingProgression = candidate("accepted").nextProgression;
+      const store = new MemoryStore();
+      store.snapshot = currentSnapshot({ progression: existingProgression });
+      const {
+        nextState: _nextState,
+        nextProgression: _nextProgression,
+        domainEvents: _domainEvents,
+        effectIntents: _effectIntents,
+        progressionTrace: _progressionTrace,
+        ...acceptedBase
+      } = candidate("accepted");
+      void _nextState;
+      void _nextProgression;
+      void _domainEvents;
+      void _effectIntents;
+      void _progressionTrace;
+      const equalCandidate = {
+        ...acceptedBase,
+        ...(kind === "progression" ? {} : { nextState: store.snapshot.state }),
+        ...(kind === "state" ? {} : { nextProgression: existingProgression }),
+        domainEvents: [],
+        effectIntents: [],
+        progressionTrace: [],
+      } satisfies CandidateTransition;
+
+      await expect(
+        commitCandidateTransition({ store, runId: "run-1", candidate: equalCandidate }),
+      ).resolves.toEqual({
+        kind: "invalid",
+        commandId: equalCandidate.commandId,
+        code: "transition-accepted-fact-missing",
+      });
+      expect(store.receipts).toHaveLength(0);
+      expect(store.journals).toHaveLength(0);
+      expect(store.records).toBe(0);
+    },
+  );
+
+  it.each([
+    [
+      "graph",
+      {
+        graphId: "other.progression",
+        nodes: [{ nodeId: "finish", status: "completed" as const }],
+      },
+      candidate("accepted").progressionTrace,
+    ],
+    [
+      "node set",
+      {
+        graphId: "field.progression",
+        nodes: [{ nodeId: "other", status: "completed" as const }],
+      },
+      [
+        {
+          sequence: 0,
+          round: 0,
+          source: "command",
+          transitionId: "finish",
+          nodeId: "other",
+          from: "active",
+          to: "completed",
+        },
+      ],
+    ],
+    ["unexplained status", candidate("accepted").nextProgression!, []],
+  ] as const)(
+    "rejects a progression %s mismatch against the durable snapshot",
+    async (_, next, trace) => {
+      const store = new MemoryStore();
+      store.snapshot = currentSnapshot();
+      const invalid = {
+        ...candidate("accepted"),
+        nextProgression: next,
+        progressionTrace: trace,
+      } satisfies CandidateTransition;
+
+      await expect(
+        commitCandidateTransition({ store, runId: "run-1", candidate: invalid }),
+      ).resolves.toEqual({
+        kind: "invalid",
+        commandId: invalid.commandId,
+        code: "transition-progression-snapshot-mismatch",
+      });
+      expect(store.receipts).toHaveLength(0);
+    },
+  );
 
   it("rolls back receipt, snapshot, journal, and links when the transaction faults", async () => {
     const store = new MemoryStore();
@@ -334,5 +521,46 @@ describe("atomic transition policy", () => {
     ).toBe(true);
     expect(store.records).toBe(1);
     expect(store.journals).toHaveLength(1);
+  });
+
+  it("performs no transaction or durable mutation across one hundred malformed host candidates", async () => {
+    const store = new MemoryStore();
+    store.snapshot = currentSnapshot();
+    const snapshotBefore = store.snapshot;
+    const invalidCandidate = {
+      ...base,
+      terminal: "accepted",
+      outcome: { result: "not-a-durable-fact" },
+      domainEvents: [],
+      effectIntents: [],
+      progressionTrace: [],
+    } as CandidateTransition;
+
+    const results = [];
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      results.push(
+        await commitCandidateTransition({
+          store,
+          runId: "run-1",
+          candidate: invalidCandidate,
+        }),
+      );
+    }
+
+    expect(results).toHaveLength(100);
+    expect(
+      results.every(
+        (result) =>
+          "kind" in result &&
+          result.kind === "invalid" &&
+          result.code === "transition-candidate-invalid",
+      ),
+    ).toBe(true);
+    expect(store.transactions).toBe(0);
+    expect(store.records).toBe(0);
+    expect(store.receipts).toHaveLength(0);
+    expect(store.observationLinks).toHaveLength(0);
+    expect(store.journals).toHaveLength(0);
+    expect(store.snapshot).toBe(snapshotBefore);
   });
 });

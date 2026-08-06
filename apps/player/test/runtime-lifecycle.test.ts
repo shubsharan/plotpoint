@@ -6,7 +6,12 @@ import {
   type TransitionStore,
   type TransitionTransaction,
 } from "../src/persistence/commit-transition";
-import type { CandidateTransition, DurableTransitionResult, SnapshotRecord } from "../src/model";
+import type {
+  CandidateTransition,
+  DurableCommandRecord,
+  DurableTransitionResult,
+  SnapshotRecord,
+} from "../src/model";
 import { transitionResultFromDurable } from "../src/runtime/transition-result";
 
 interface SerializedDatabase {
@@ -22,9 +27,9 @@ class ReloadedTransitionStore implements TransitionStore, TransitionTransaction 
     return operation(this);
   }
 
-  async getReceipt(_runId: string, commandId: string): Promise<DurableTransitionResult | null> {
+  async getReceipt(_runId: string, commandId: string): Promise<DurableCommandRecord | null> {
     const value = this.serialized.receipts.get(commandId);
-    return value === undefined ? null : (JSON.parse(value) as DurableTransitionResult);
+    return value === undefined ? null : (JSON.parse(value) as DurableCommandRecord);
   }
 
   async getSnapshot(): Promise<SnapshotRecord | null> {
@@ -38,104 +43,99 @@ class ReloadedTransitionStore implements TransitionStore, TransitionTransaction 
   }
 
   async record(runId: string, candidate: CandidateTransition): Promise<DurableTransitionResult> {
-    if (candidate.commandOutcome !== "accepted") throw new Error("fixture-terminal-invalid");
+    if (candidate.terminal !== "accepted") throw new Error("fixture-terminal-invalid");
     this.serialized.records += 1;
     const result = {
-      kind: "accepted",
       commandId: candidate.commandId,
-      commandOutcome: candidate.commandOutcome,
-      aggregateId: candidate.aggregateId,
-      aggregateKind: candidate.aggregateKind,
-      schemaId: candidate.schemaId,
-      schemaVersion: candidate.schemaVersion,
-      expectedVersion: candidate.expectedVersion,
-      resultingVersion: candidate.expectedVersion + 1,
+      disposition: "committed",
+      terminal: candidate.terminal,
+      resultingStateVersion: candidate.expectedStateVersion + 1,
       outcome: candidate.outcome,
-      observationIds: candidate.observationIds,
     } satisfies DurableTransitionResult;
-    this.serialized.receipts.set(candidate.commandId, JSON.stringify(result));
+    this.serialized.receipts.set(
+      candidate.commandId,
+      JSON.stringify({ candidate, result } satisfies DurableCommandRecord),
+    );
     this.serialized.snapshot = JSON.stringify({
       runId,
-      aggregateId: candidate.aggregateId,
-      aggregateKind: candidate.aggregateKind,
-      schemaId: candidate.schemaId,
-      schemaVersion: candidate.schemaVersion,
-      stateVersion: candidate.expectedVersion + 1,
-      state: candidate.nextState,
+      modelId: candidate.modelId,
+      aggregateId: candidate.target.aggregateId,
+      aggregateKind: candidate.target.aggregateKind,
+      schemaId: candidate.target.schemaId,
+      stateVersion: result.resultingStateVersion,
+      state: candidate.nextState ?? {},
+      ...(candidate.nextProgression === undefined
+        ? {}
+        : { progression: candidate.nextProgression }),
       journalPosition: 1,
     } satisfies SnapshotRecord);
     return result;
   }
 }
 
+const originalCandidate = {
+  commandId: "command-reloaded",
+  modelId: "field.player",
+  commandType: "advance",
+  payload: { action: "check-in" },
+  target: {
+    aggregateId: "player-1",
+    aggregateKind: "player",
+    schemaId: "field.player-state",
+  },
+  expectedStateVersion: 0,
+  terminal: "accepted",
+  outcome: { result: "original-advanced" },
+  nextState: { visitedCheckpoints: ["first-checkpoint"] },
+  domainEvents: [{ type: "field.advanced", payload: {} }],
+  effectIntents: [],
+  progressionTrace: [],
+  observationIds: [],
+} satisfies CandidateTransition;
+
 describe("runtime view lifecycle", () => {
   it("redelivers the original durable result after view recreation", () => {
     const original = {
-      kind: "accepted",
-      commandId: "command-1",
-      commandOutcome: "accepted",
-      resultingVersion: 3,
-      outcome: { result: "original-advanced" },
-      observationIds: ["location-1"],
-    } satisfies DurableTransitionResult;
-    const duplicate = { ...original, kind: "duplicate" } satisfies DurableTransitionResult;
-
-    expect(transitionResultFromDurable(original)).toEqual({
       commandId: "command-1",
       disposition: "committed",
       terminal: "accepted",
-      resultingVersion: 3,
+      resultingStateVersion: 3,
       outcome: { result: "original-advanced" },
-    });
-    expect(transitionResultFromDurable(duplicate)).toEqual({
-      commandId: "command-1",
-      disposition: "duplicate",
-      terminal: "accepted",
-      resultingVersion: 3,
-      outcome: { result: "original-advanced" },
-    });
+    } satisfies DurableTransitionResult;
+    const duplicate = { ...original, disposition: "duplicate" } satisfies DurableTransitionResult;
+
+    expect(transitionResultFromDurable(original)).toEqual(original);
+    expect(transitionResultFromDurable(duplicate)).toEqual(duplicate);
   });
 
   it("redelivers durable non-changing and invalid terminals exactly", () => {
     expect(
       transitionResultFromDurable({
-        kind: "duplicate",
         commandId: "command-rejected",
-        commandOutcome: "rejected",
-        resultingVersion: 3,
+        disposition: "duplicate",
+        terminal: "rejected",
+        resultingStateVersion: 3,
         outcome: { result: "outside" },
       }),
     ).toMatchObject({ terminal: "rejected", outcome: { result: "outside" } });
     expect(
       transitionResultFromDurable({
-        kind: "duplicate",
         commandId: "command-invalid",
-        commandOutcome: "invalid",
-        resultingVersion: 3,
+        disposition: "duplicate",
+        terminal: "invalid",
+        phase: "execution",
+        resultingStateVersion: 3,
         diagnosticCodes: ["release-command-failed"],
       }),
     ).toMatchObject({ terminal: "invalid", diagnosticCodes: ["release-command-failed"] });
   });
 
-  it("routes the serialized original result after database and view recreation", async () => {
+  it("redelivers the serialized original result after database and view recreation", async () => {
     const serialized: SerializedDatabase = {
       receipts: new Map(),
       snapshot: null,
       records: 0,
     };
-    const originalCandidate = {
-      commandId: "command-reloaded",
-      aggregateId: "player-1",
-      aggregateKind: "player",
-      schemaId: "field.player-state",
-      schemaVersion: 1,
-      expectedVersion: 0,
-      commandOutcome: "accepted",
-      outcome: { result: "original-advanced" },
-      nextState: { phase: "puzzle" },
-      progressionChanges: ["puzzle"],
-      observationIds: [],
-    } satisfies CandidateTransition;
     await commitCandidateTransition({
       store: new ReloadedTransitionStore(serialized),
       runId: "run-1",
@@ -148,23 +148,7 @@ describe("runtime view lifecycle", () => {
         version: 1,
         requestId: "request-after-view-recreation",
         type: "transition.commit",
-        payload: {
-          candidate: {
-            commandId: originalCandidate.commandId,
-            target: {
-              aggregateId: originalCandidate.aggregateId,
-              aggregateKind: originalCandidate.aggregateKind,
-              schemaId: originalCandidate.schemaId,
-              schemaVersion: originalCandidate.schemaVersion,
-            },
-            expectedVersion: 0,
-            terminal: "accepted",
-            outcome: { result: "retry-payload-must-not-win" },
-            nextState: { phase: "different" },
-            progressionChanges: ["different"],
-            observationIds: [],
-          },
-        },
+        payload: { candidate: originalCandidate },
       }),
       {
         runtimeReady: async () => {
@@ -173,20 +157,13 @@ describe("runtime view lifecycle", () => {
         requestCapability: async () => {
           throw new Error("unexpected-capability-request");
         },
-        commitTransition: async (payload) => {
-          if (payload.candidate.terminal !== "accepted") {
-            throw new Error("fixture-terminal-invalid");
-          }
+        commitTransition: async ({ candidate }) => {
           const result = await commitCandidateTransition({
             store: reloadedStore,
             runId: "run-1",
-            candidate: {
-              ...originalCandidate,
-              outcome: payload.candidate.outcome,
-              nextState: payload.candidate.nextState,
-              progressionChanges: payload.candidate.progressionChanges,
-            },
+            candidate,
           });
+          if ("code" in result) throw new Error(result.code);
           return transitionResultFromDurable(result);
         },
       },
@@ -197,7 +174,7 @@ describe("runtime view lifecycle", () => {
       payload: {
         disposition: "duplicate",
         outcome: { result: "original-advanced" },
-        resultingVersion: 1,
+        resultingStateVersion: 1,
       },
     });
     expect(serialized.records).toBe(1);

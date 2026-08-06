@@ -1,12 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   defineCommand,
-  executeCommand,
   type Aggregate,
+  type AggregateKind,
   type Command,
+  type CommandDefinition,
+  type ExecutionResult,
   type JsonObject,
+  type Observation,
 } from "@plotpoint/runtime";
+import { executeCommandWithEvaluator } from "../src/execute-command.js";
 
 type State = JsonObject & { readonly seen: string };
 type Payload = JsonObject;
@@ -43,6 +47,33 @@ const definition = defineCommand<"player", State, Payload, Outcome>({
     };
   },
 });
+
+function executeCommand<
+  Kind extends AggregateKind,
+  StateValue extends JsonObject,
+  PayloadValue extends JsonObject,
+  OutcomeValue extends JsonObject,
+>(input: {
+  readonly definition: CommandDefinition<StateValue, PayloadValue, OutcomeValue, Kind>;
+  readonly aggregate: Aggregate<StateValue, Kind>;
+  readonly command: Command<PayloadValue, Kind>;
+  readonly observations: readonly Observation[];
+}): ExecutionResult<StateValue, OutcomeValue, PayloadValue, Kind> {
+  return executeCommandWithEvaluator({
+    definitionId: input.definition.definitionId,
+    commandType: input.definition.commandType,
+    aggregateKind: input.definition.aggregateKind,
+    aggregate: input.aggregate,
+    command: input.command,
+    observations: input.observations,
+    evaluate(target, runtimeCommand, context) {
+      return {
+        kind: "decision",
+        decision: input.definition.handle(target, runtimeCommand, context),
+      };
+    },
+  });
+}
 
 describe("ordered observation consumption", () => {
   it("consumes the exact next identity and records its canonical value", () => {
@@ -89,5 +120,37 @@ describe("ordered observation consumption", () => {
     expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
     if (result.kind === "recorded")
       expect(result.record.diagnostics[0]?.code).toBe("observation-order-mismatch");
+  });
+
+  it("performs no handler call, observation consumption, or record creation across 100 preflight failures", () => {
+    const handle = vi.fn(definition.handle);
+    const guardedDefinition = defineCommand<"player", State, Payload, Outcome>({
+      ...definition,
+      definitionId: "observe-preflight",
+      handle,
+    });
+    const malformedObservation = { kind: "clock", key: "now" } as never;
+
+    const results = Array.from({ length: 100 }, () =>
+      executeCommand({
+        definition: guardedDefinition,
+        aggregate,
+        command,
+        observations: [malformedObservation],
+      }),
+    );
+
+    expect(results).toHaveLength(100);
+    expect(results.every((result) => result.kind === "preflight-invalid")).toBe(true);
+    expect(results.every((result) => !("record" in result) && !("aggregate" in result))).toBe(true);
+    expect(handle).not.toHaveBeenCalled();
+    expect(aggregate).toEqual({
+      aggregateId: "p1",
+      modelId: "player.model",
+      aggregateKind: "player",
+      schemaId: "player.state",
+      stateVersion: 0,
+      state: { seen: "" },
+    });
   });
 });

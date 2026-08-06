@@ -1,5 +1,4 @@
 import {
-  canonicalizeValue,
   type AggregateKind,
   type ExecutableAggregateModel,
   type ExecutionRecord,
@@ -7,7 +6,7 @@ import {
   type RecordedExecution,
 } from "@plotpoint/runtime";
 
-import { firstDifference } from "./assertions.js";
+import { canonicalRecordDifference } from "./assertions.js";
 
 export interface ReplayInput<
   State extends JsonObject,
@@ -42,11 +41,6 @@ export function replayScenario<
     observations: input.record.observations,
   });
   if (result.kind !== "recorded") return { kind: "mismatch", path: "/preflight" };
-  const expected = canonicalizeValue(input.record);
-  const actual = canonicalizeValue(result.record);
-  if (expected.kind === "invalid" || actual.kind === "invalid") {
-    throw new TypeError("Replay records must be canonical");
-  }
-  const path = firstDifference(expected.canonical.value, actual.canonical.value);
+  const path = canonicalRecordDifference(input.record, result.record);
   return path === null ? { kind: "match", result } : { kind: "mismatch", path, result };
 }

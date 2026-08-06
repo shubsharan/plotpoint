@@ -4,6 +4,7 @@ import {
   type Aggregate,
   type AggregateKind,
 } from "./aggregates.js";
+import type { ExecutableAggregateModel } from "./aggregate-model.js";
 import {
   canonicalEquals,
   canonicalizeValue,
@@ -11,13 +12,7 @@ import {
   type JsonObject,
   type JsonValue,
 } from "./canonical-json.js";
-import type {
-  Command,
-  CommandDefinition,
-  DomainEvent,
-  EffectIntent,
-  HandlerDecision,
-} from "./commands.js";
+import type { Command, DomainEvent, EffectIntent, HandlerDecision } from "./commands.js";
 import { createDiagnostic, type Diagnostic } from "./diagnostics.js";
 import type {
   ExecutionRecord,
@@ -36,19 +31,13 @@ import {
 import { evaluateProgression } from "./progression/evaluate-progression.js";
 import type { ProgressionDefinition } from "./progression/graph.js";
 import type { ProgressionTraceEntry } from "./progression/state.js";
+import { validateProgressionGraph } from "./progression/validate-graph.js";
 
-export interface ExecuteCommandInput<
-  State extends JsonObject,
-  Payload extends JsonObject,
-  Outcome extends JsonObject,
-  Kind extends AggregateKind = AggregateKind,
-> {
-  readonly definition: CommandDefinition<State, Payload, Outcome, Kind>;
-  readonly aggregate: Aggregate<State, Kind>;
-  readonly command: Command<Payload, Kind>;
+export interface ExecuteCommandInput<Kind extends AggregateKind = AggregateKind> {
+  readonly model: ExecutableAggregateModel<Kind>;
+  readonly aggregate: Aggregate<JsonObject, Kind>;
+  readonly command: Command<JsonObject, Kind>;
   readonly observations: readonly Observation[];
-  readonly policy?: Partial<RuntimePolicy>;
-  readonly progression?: ProgressionDefinition<State, Kind>;
 }
 
 export type EvaluatedCommand<State extends JsonObject, Outcome extends JsonObject> =
@@ -176,6 +165,8 @@ function invalidResult<
     observations: context.observations,
     observationTrace: context.observationTrace,
     terminal: "invalid",
+    priorStateVersion: context.aggregate.stateVersion,
+    resultingStateVersion: context.aggregate.stateVersion,
     progressionTrace: attemptedProgressionTrace,
     diagnostics,
   });
@@ -385,6 +376,38 @@ export function executeCommandWithEvaluator<
     ]);
   }
 
+  if ((input.progression === undefined) !== (aggregateClone.progression === undefined)) {
+    return invalidResult<State, Payload, Outcome, Kind>(contextBase, [
+      createDiagnostic("progression-graph-invalid", {
+        commandId: commandClone.id,
+        reason: "definition-instance-pair-required",
+      }),
+    ]);
+  }
+  if (input.progression !== undefined && aggregateClone.progression !== undefined) {
+    if (input.progression.aggregateKind !== aggregateClone.aggregateKind) {
+      return invalidResult<State, Payload, Outcome, Kind>(contextBase, [
+        createDiagnostic("progression-graph-invalid", {
+          actualAggregateKind: input.progression.aggregateKind,
+          commandId: commandClone.id,
+          expectedAggregateKind: aggregateClone.aggregateKind,
+          graphId: input.progression.graphId,
+          reason: "aggregate-kind-mismatch",
+        }),
+      ]);
+    }
+    const progressionValidation = validateProgressionGraph({
+      definition: input.progression,
+      progression: aggregateClone.progression,
+      commandId: commandClone.id,
+    });
+    if (progressionValidation.kind === "invalid") {
+      return invalidResult<State, Payload, Outcome, Kind>(contextBase, [
+        progressionValidation.diagnostic,
+      ]);
+    }
+  }
+
   const cursor = createObservationCursor(canonicalObservationScript);
   let evaluated: EvaluatedCommand<State, Outcome>;
   try {
@@ -433,7 +456,8 @@ export function executeCommandWithEvaluator<
       observations: canonicalObservationScript,
       observationTrace: cursor.trace,
       terminal: decisionClone.kind,
-      aggregateAfter: aggregateClone,
+      priorStateVersion: aggregateClone.stateVersion,
+      resultingStateVersion: aggregateClone.stateVersion,
       outcome: decisionClone.outcome,
       progressionTrace: [],
       diagnostics: [],
@@ -441,29 +465,10 @@ export function executeCommandWithEvaluator<
     return recordedResult(aggregateClone, record);
   }
 
-  if ((input.progression === undefined) !== (aggregateClone.progression === undefined)) {
-    return invalidResult<State, Payload, Outcome, Kind>(recordContext, [
-      createDiagnostic("progression-graph-invalid", {
-        commandId: commandClone.id,
-        reason: "definition-instance-pair-required",
-      }),
-    ]);
-  }
   const nextState = decisionClone.nextState ?? aggregateClone.state;
   let progressionAfter = aggregateClone.progression;
   let progressionTrace: readonly ProgressionTraceEntry[] = [];
   if (input.progression !== undefined && aggregateClone.progression !== undefined) {
-    if (input.progression.aggregateKind !== aggregateClone.aggregateKind) {
-      return invalidResult<State, Payload, Outcome, Kind>(recordContext, [
-        createDiagnostic("progression-graph-invalid", {
-          actualAggregateKind: input.progression.aggregateKind,
-          commandId: commandClone.id,
-          expectedAggregateKind: aggregateClone.aggregateKind,
-          graphId: input.progression.graphId,
-          reason: "aggregate-kind-mismatch",
-        }),
-      ]);
-    }
     const evaluation = evaluateProgression({
       definition: input.progression,
       progression: aggregateClone.progression,
@@ -548,6 +553,8 @@ export function executeCommandWithEvaluator<
     observations: canonicalObservationScript,
     observationTrace: cursor.trace,
     terminal: "accepted",
+    priorStateVersion: aggregateClone.stateVersion,
+    resultingStateVersion: aggregateAfter.stateVersion,
     aggregateAfter,
     outcome: decisionClone.outcome,
     domainEvents,
@@ -558,25 +565,12 @@ export function executeCommandWithEvaluator<
   return recordedResult(aggregateAfter, record);
 }
 
-export function executeCommand<
-  State extends JsonObject,
-  Payload extends JsonObject,
-  Outcome extends JsonObject,
-  Kind extends AggregateKind,
->(
-  input: ExecuteCommandInput<State, Payload, Outcome, Kind>,
-): ExecutionResult<State, Outcome, Payload, Kind> {
-  return executeCommandWithEvaluator({
-    definitionId: input.definition.definitionId,
-    commandType: input.definition.commandType,
-    aggregateKind: input.definition.aggregateKind,
+export function executeCommand<Kind extends AggregateKind>(
+  input: ExecuteCommandInput<Kind>,
+): ExecutionResult<JsonObject, JsonObject, JsonObject, Kind> {
+  return input.model.execute({
     aggregate: input.aggregate,
     command: input.command,
     observations: input.observations,
-    ...(input.policy === undefined ? {} : { policy: input.policy }),
-    ...(input.progression === undefined ? {} : { progression: input.progression }),
-    evaluate(aggregate, command, context) {
-      return { kind: "decision", decision: input.definition.handle(aggregate, command, context) };
-    },
   });
 }
