@@ -9,11 +9,15 @@ import {
   HOST_API_VERSION,
   inspectGameRelease,
   isReleaseId,
+  isSharedJoinRequest,
+  isSharedJoinResponse,
   isSyncCommand,
   openRelease,
   parseGameComposition,
   type GameComposition,
   type ReleaseManifest,
+  type SharedJoinRequest,
+  type SharedJoinResponse,
   type SyncCommand,
   type SyncCommandResult,
   type SyncPull,
@@ -30,6 +34,7 @@ import {
   createOpaqueId,
   createSecret,
   credentialDigest,
+  equalDigest,
   isSecret,
   requestDigest,
 } from "./security.js";
@@ -124,6 +129,24 @@ function parseCursor(cursor: string | undefined): number | null {
 
 function encodeCursor(position: number): string {
   return Buffer.from(`:${position}`).toString("base64url");
+}
+
+function sharedJoinDigest(input: {
+  readonly sessionId: string;
+  readonly expectedReleaseId: string;
+  readonly invitationId: string;
+  readonly invitationDigest: string;
+  readonly joinRequestId: string;
+  readonly participantDigest: string;
+}): string {
+  return requestDigest({
+    expectedReleaseId: input.expectedReleaseId,
+    invitationDigest: input.invitationDigest,
+    invitationId: input.invitationId,
+    joinRequestId: input.joinRequestId,
+    participantDigest: input.participantDigest,
+    sessionId: input.sessionId,
+  });
 }
 
 function canonicalObject(value: unknown): JsonObject | null {
@@ -677,22 +700,28 @@ export class SharedSessionService {
     return { invitationId, invitation, expiresAt };
   }
 
-  async join(
-    sessionId: string,
-    input: { joinRequestId: string; invitation: string; participantCredential: string },
-  ): Promise<{
-    participantId: string;
-    teamId: string;
-    releaseId: string;
-    disposition: "joined" | "duplicate";
-    sync: SyncPull;
-  }> {
+  async join(sessionId: string, input: SharedJoinRequest): Promise<SharedJoinResponse> {
+    if (!isSharedJoinRequest(input)) {
+      throw new SharedSessionServiceError("join-request-invalid", 400);
+    }
     if (!isSecret(input.invitation) || !isSecret(input.participantCredential)) {
       throw new SharedSessionServiceError("join-not-authorized", 401);
     }
     const invitationDigest = credentialDigest(input.invitation, this.pepper);
     const participantDigest = credentialDigest(input.participantCredential, this.pepper);
     const joined = await withReadCommittedTransaction(this.pool, async (client) => {
+      const session = await queryOne<{ team_id: string; release_id: `sha256:${string}` }>(
+        client,
+        "SELECT team_id, release_id FROM hunt_sessions WHERE session_id = $1 FOR SHARE",
+        [sessionId],
+      );
+      if (session === null) throw new SharedSessionServiceError("join-not-authorized", 401);
+      if (session.release_id !== input.expectedReleaseId) {
+        throw new SharedSessionServiceError("session-release-mismatch", 409);
+      }
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+        `shared-join:${sessionId}:${input.joinRequestId}`,
+      ]);
       const invitation = await queryOne<{
         invitation_id: string;
         session_id: string;
@@ -712,8 +741,26 @@ export class SharedSessionService {
       }
       if (invitation.consumed_at !== null) {
         if (
-          invitation.consumed_join_request_id !== input.joinRequestId ||
-          invitation.consumed_credential_digest !== participantDigest
+          invitation.consumed_join_request_id === null ||
+          invitation.consumed_credential_digest === null ||
+          !equalDigest(
+            sharedJoinDigest({
+              sessionId,
+              expectedReleaseId: input.expectedReleaseId,
+              invitationId: invitation.invitation_id,
+              invitationDigest,
+              joinRequestId: input.joinRequestId,
+              participantDigest,
+            }),
+            sharedJoinDigest({
+              sessionId: invitation.session_id,
+              expectedReleaseId: session.release_id,
+              invitationId: invitation.invitation_id,
+              invitationDigest,
+              joinRequestId: invitation.consumed_join_request_id,
+              participantDigest: invitation.consumed_credential_digest,
+            }),
+          )
         ) {
           throw new SharedSessionServiceError("join-not-authorized", 401);
         }
@@ -723,14 +770,17 @@ export class SharedSessionService {
           [sessionId, input.joinRequestId],
         );
         if (existing === null) throw new Error("join-retry-incoherent");
+        if (existing.team_id !== session.team_id) throw new Error("join-retry-incoherent");
         return { ...existing, disposition: "duplicate" as const };
       }
-      const session = await queryOne<{ team_id: string }>(
+      const conflicting = await queryOne<{ participant_id: string }>(
         client,
-        "SELECT team_id FROM hunt_sessions WHERE session_id = $1",
-        [sessionId],
+        "SELECT participant_id FROM hunt_participants WHERE session_id = $1 AND join_request_id = $2 FOR SHARE",
+        [sessionId, input.joinRequestId],
       );
-      if (session === null) throw new SharedSessionServiceError("join-not-authorized", 401);
+      if (conflicting !== null) {
+        throw new SharedSessionServiceError("join-not-authorized", 401);
+      }
       const participantId = createOpaqueId("participant");
       await client.query(
         "INSERT INTO hunt_participants(participant_id, session_id, team_id, join_request_id, credential_digest, status) VALUES ($1,$2,$3,$4,$5,'active')",
@@ -747,13 +797,17 @@ export class SharedSessionService {
       };
     });
     const sync = await this.pull(sessionId, input.participantCredential, undefined);
-    return {
+    const response: SharedJoinResponse = {
       participantId: joined.participant_id,
       teamId: joined.team_id,
-      releaseId: sync.snapshot.releaseId,
+      releaseId: input.expectedReleaseId,
       disposition: joined.disposition,
       sync,
     };
+    if (sync.snapshot.sessionId !== sessionId || !isSharedJoinResponse(response)) {
+      throw new Error("join-response-incoherent");
+    }
+    return response;
   }
 
   async revoke(sessionId: string, participantId: string, operationId: string): Promise<void> {

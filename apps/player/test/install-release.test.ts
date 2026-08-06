@@ -61,7 +61,6 @@ function transportFor(artifact: ReleaseArtifact, overrides?: { descriptor?: unkn
     fetchJson: vi.fn(async (_url: string, _deadlineMs: number) => ({
       finalUrl: descriptorUrl,
       value: overrides?.descriptor ?? {
-        version: 1,
         releaseUrl,
         expectedReleaseId: artifact.releaseId,
       },
@@ -190,7 +189,6 @@ describe("player installation policy", () => {
     const artifact = await releaseFixture();
     const transport = transportFor(artifact, {
       descriptor: {
-        version: 1,
         releaseUrl: "http://127.0.0.1:5000/release.pprelease",
         expectedReleaseId: artifact.releaseId,
       },
@@ -222,7 +220,7 @@ describe("player installation policy", () => {
     ).resolves.toMatchObject({ kind: "invalid" });
 
     const mismatched = transportFor(artifact, {
-      descriptor: { version: 1, releaseUrl, expectedReleaseId: `sha256:${"0".repeat(64)}` },
+      descriptor: { releaseUrl, expectedReleaseId: `sha256:${"0".repeat(64)}` },
     });
     await expect(
       installReleaseFromDescriptor({
@@ -260,7 +258,7 @@ describe("player installation policy", () => {
     });
     await expect(
       publisher.publish({
-        descriptor: { version: 1, releaseUrl, expectedReleaseId: artifact.releaseId },
+        descriptor: { releaseUrl, expectedReleaseId: artifact.releaseId },
         bytes: artifact.bytes,
         manifest: artifact.manifest,
       }),
@@ -283,7 +281,7 @@ describe("player installation policy", () => {
       installedAt: () => "2026-08-03T00:00:00.000Z",
     });
     const input = {
-      descriptor: { version: 1 as const, releaseUrl, expectedReleaseId: artifact.releaseId },
+      descriptor: { releaseUrl, expectedReleaseId: artifact.releaseId },
       bytes: artifact.bytes,
       manifest: artifact.manifest,
     };
@@ -310,7 +308,7 @@ describe("player installation policy", () => {
     });
     await expect(
       publisher.publish({
-        descriptor: { version: 1, releaseUrl, expectedReleaseId: artifact.releaseId },
+        descriptor: { releaseUrl, expectedReleaseId: artifact.releaseId },
         bytes: artifact.bytes,
         manifest: artifact.manifest,
       }),

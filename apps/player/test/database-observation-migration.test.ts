@@ -118,6 +118,43 @@ describe("corrected player database schema", () => {
       "state_version",
       "value_json",
     ]);
+    await expect(columns("pending_shared_joins")).resolves.toEqual([
+      "session_id",
+      "run_id",
+      "expected_release_id",
+      "service_origin",
+      "join_request_id",
+      "invitation_digest",
+      "invitation_key",
+      "credential_key",
+      "request_digest",
+      "status",
+    ]);
+    await expect(columns("shared_sessions")).resolves.toEqual([
+      "session_id",
+      "run_id",
+      "release_id",
+      "participant_id",
+      "team_id",
+      "service_origin",
+      "credential_key",
+      "membership_status",
+      "transport_status",
+      "sync_status",
+      "cursor",
+      "confirmed_at",
+    ]);
+    await expect(
+      database.getAllAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name",
+      ),
+    ).resolves.toEqual([
+      { name: "pending_shared_join_immutable" },
+      { name: "pending_shared_join_no_bound_insert" },
+      { name: "shared_session_binding_immutable" },
+      { name: "shared_session_membership_monotonic" },
+      { name: "shared_session_no_pending_insert" },
+    ]);
     database.close();
   });
 

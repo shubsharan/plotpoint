@@ -14,9 +14,17 @@ import {
 import { PLAYER_DATABASE_INCOMPATIBLE } from "../persistence/schema-policy";
 
 export const SHARED_MIGRATION = `
+CREATE TABLE IF NOT EXISTS pending_shared_joins (
+  session_id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE REFERENCES runs(run_id),
+  expected_release_id TEXT NOT NULL, service_origin TEXT NOT NULL, join_request_id TEXT NOT NULL,
+  invitation_digest TEXT NOT NULL, invitation_key TEXT NOT NULL, credential_key TEXT NOT NULL,
+  request_digest TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('preparing','ready','submitting'))
+);
 CREATE TABLE IF NOT EXISTS shared_sessions (
-  session_id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(run_id), release_id TEXT NOT NULL,
-  participant_id TEXT NOT NULL, team_id TEXT NOT NULL, service_url TEXT NOT NULL,
+  session_id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE REFERENCES runs(run_id), release_id TEXT NOT NULL,
+  participant_id TEXT NOT NULL, team_id TEXT NOT NULL, service_origin TEXT NOT NULL,
+  credential_key TEXT NOT NULL,
   membership_status TEXT NOT NULL CHECK(membership_status IN ('active','revoked')),
   transport_status TEXT NOT NULL CHECK(transport_status IN ('offline','connecting','online','degraded')),
   sync_status TEXT NOT NULL CHECK(sync_status IN ('current','syncing','recovery-required','revoked')),
@@ -48,16 +56,75 @@ CREATE TABLE IF NOT EXISTS shared_sync_events (
 );
 CREATE INDEX IF NOT EXISTS shared_outbox_status ON shared_outbox(session_id, status, enqueued_at);
 CREATE INDEX IF NOT EXISTS shared_sync_events_session ON shared_sync_events(session_id, sequence);
+CREATE TRIGGER IF NOT EXISTS pending_shared_join_no_bound_insert
+BEFORE INSERT ON pending_shared_joins
+WHEN EXISTS (SELECT 1 FROM shared_sessions WHERE run_id=NEW.run_id OR session_id=NEW.session_id)
+BEGIN
+  SELECT RAISE(ABORT, 'shared-run-binding-conflict');
+END;
+CREATE TRIGGER IF NOT EXISTS pending_shared_join_immutable
+BEFORE UPDATE OF session_id,run_id,expected_release_id,service_origin,join_request_id,
+  invitation_digest,invitation_key,credential_key,request_digest ON pending_shared_joins
+WHEN OLD.session_id IS NOT NEW.session_id
+  OR OLD.run_id IS NOT NEW.run_id
+  OR OLD.expected_release_id IS NOT NEW.expected_release_id
+  OR OLD.service_origin IS NOT NEW.service_origin
+  OR OLD.join_request_id IS NOT NEW.join_request_id
+  OR OLD.invitation_digest IS NOT NEW.invitation_digest
+  OR OLD.invitation_key IS NOT NEW.invitation_key
+  OR OLD.credential_key IS NOT NEW.credential_key
+  OR OLD.request_digest IS NOT NEW.request_digest
+BEGIN
+  SELECT RAISE(ABORT, 'shared-pending-join-immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS shared_session_no_pending_insert
+BEFORE INSERT ON shared_sessions
+WHEN EXISTS (SELECT 1 FROM pending_shared_joins WHERE run_id=NEW.run_id OR session_id=NEW.session_id)
+BEGIN
+  SELECT RAISE(ABORT, 'shared-run-binding-conflict');
+END;
+CREATE TRIGGER IF NOT EXISTS shared_session_binding_immutable
+BEFORE UPDATE OF session_id,run_id,release_id,participant_id,team_id,service_origin,credential_key
+ON shared_sessions
+WHEN OLD.session_id IS NOT NEW.session_id
+  OR OLD.run_id IS NOT NEW.run_id
+  OR OLD.release_id IS NOT NEW.release_id
+  OR OLD.participant_id IS NOT NEW.participant_id
+  OR OLD.team_id IS NOT NEW.team_id
+  OR OLD.service_origin IS NOT NEW.service_origin
+  OR OLD.credential_key IS NOT NEW.credential_key
+BEGIN
+  SELECT RAISE(ABORT, 'shared-session-binding-immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS shared_session_membership_monotonic
+BEFORE UPDATE OF membership_status ON shared_sessions
+WHEN OLD.membership_status='revoked' AND NEW.membership_status='active'
+BEGIN
+  SELECT RAISE(ABORT, 'membership-reactivation-conflict');
+END;
 `;
 
 const SHARED_SCHEMA_COLUMNS = Object.freeze({
+  pending_shared_joins: [
+    "session_id",
+    "run_id",
+    "expected_release_id",
+    "service_origin",
+    "join_request_id",
+    "invitation_digest",
+    "invitation_key",
+    "credential_key",
+    "request_digest",
+    "status",
+  ],
   shared_sessions: [
     "session_id",
     "run_id",
     "release_id",
     "participant_id",
     "team_id",
-    "service_url",
+    "service_origin",
+    "credential_key",
     "membership_status",
     "transport_status",
     "sync_status",
@@ -105,6 +172,14 @@ const SHARED_SCHEMA_COLUMNS = Object.freeze({
   ],
 } as const);
 
+const SHARED_SCHEMA_TRIGGERS = Object.freeze([
+  "pending_shared_join_no_bound_insert",
+  "pending_shared_join_immutable",
+  "shared_session_no_pending_insert",
+  "shared_session_binding_immutable",
+  "shared_session_membership_monotonic",
+]);
+
 export const SHARED_DATABASE_TABLES = Object.freeze(Object.keys(SHARED_SCHEMA_COLUMNS));
 
 export interface SharedSqlDatabase {
@@ -117,13 +192,43 @@ export interface SharedSqlDatabase {
   ): Promise<void>;
 }
 
+export interface PendingSharedJoin {
+  readonly sessionId: string;
+  readonly runId: string;
+  readonly expectedReleaseId: `sha256:${string}`;
+  readonly serviceOrigin: string;
+  readonly joinRequestId: string;
+  readonly invitationDigest: string;
+  readonly invitationKey: string;
+  readonly credentialKey: string;
+  readonly requestDigest: string;
+  readonly status: "preparing" | "ready" | "submitting";
+}
+
+export type PendingSharedJoinInput = Omit<PendingSharedJoin, "status">;
+
+export interface SharedBindingContext {
+  readonly sessionId: string;
+  readonly runId: string;
+  readonly expectedReleaseId: `sha256:${string}`;
+  readonly serviceOrigin: string;
+  readonly credentialKey: string;
+}
+
+export interface SharedJoinResponseIdentity {
+  readonly releaseId: `sha256:${string}`;
+  readonly participantId: string;
+  readonly teamId: string;
+}
+
 export interface SharedSessionRecord {
   readonly sessionId: string;
   readonly runId: string;
   readonly releaseId: `sha256:${string}`;
   readonly participantId: string;
   readonly teamId: string;
-  readonly serviceUrl: string;
+  readonly serviceOrigin: string;
+  readonly credentialKey: string;
 }
 
 export type SharedOutboxStatus = "queued" | "submitting" | "blocked-revoked";
@@ -146,13 +251,33 @@ export interface SubmissionBatch {
 }
 
 interface StoredSessionBinding {
+  readonly session_id: string;
   readonly run_id: string;
   readonly release_id: `sha256:${string}`;
   readonly participant_id: string;
   readonly team_id: string;
-  readonly service_url: string;
+  readonly service_origin: string;
+  readonly credential_key: string;
   readonly membership_status: "active" | "revoked";
   readonly sync_status: SharedPlayView["synchronization"];
+}
+
+interface StoredPendingSharedJoin {
+  readonly session_id: string;
+  readonly run_id: string;
+  readonly expected_release_id: `sha256:${string}`;
+  readonly service_origin: string;
+  readonly join_request_id: string;
+  readonly invitation_digest: string;
+  readonly invitation_key: string;
+  readonly credential_key: string;
+  readonly request_digest: string;
+  readonly status: PendingSharedJoin["status"];
+}
+
+interface StoredRun {
+  readonly release_id: `sha256:${string}`;
+  readonly status: "active" | "completed" | "invalid";
 }
 
 interface StoredOutboxRow {
@@ -184,6 +309,70 @@ function deepFreeze<T>(value: T): T {
     Object.freeze(value);
   }
   return value;
+}
+
+function canonicalServiceOrigin(value: string): string {
+  try {
+    const url = new URL(value);
+    if (
+      (url.protocol !== "https:" && url.protocol !== "http:") ||
+      url.username !== "" ||
+      url.password !== ""
+    ) {
+      throw new Error("shared-service-origin-invalid");
+    }
+    return url.origin;
+  } catch (error) {
+    if (error instanceof Error && error.message === "shared-service-origin-invalid") throw error;
+    throw new Error("shared-service-origin-invalid");
+  }
+}
+
+function parsePendingSharedJoin(row: StoredPendingSharedJoin): PendingSharedJoin {
+  return deepFreeze({
+    sessionId: row.session_id,
+    runId: row.run_id,
+    expectedReleaseId: row.expected_release_id,
+    serviceOrigin: row.service_origin,
+    joinRequestId: row.join_request_id,
+    invitationDigest: row.invitation_digest,
+    invitationKey: row.invitation_key,
+    credentialKey: row.credential_key,
+    requestDigest: row.request_digest,
+    status: row.status,
+  });
+}
+
+function pendingJoinMatches(row: StoredPendingSharedJoin, input: PendingSharedJoinInput): boolean {
+  return (
+    row.session_id === input.sessionId &&
+    row.run_id === input.runId &&
+    row.expected_release_id === input.expectedReleaseId &&
+    row.service_origin === input.serviceOrigin &&
+    row.join_request_id === input.joinRequestId &&
+    row.invitation_digest === input.invitationDigest &&
+    row.invitation_key === input.invitationKey &&
+    row.credential_key === input.credentialKey &&
+    row.request_digest === input.requestDigest
+  );
+}
+
+function bindingMatches(
+  row: StoredSessionBinding,
+  context: SharedBindingContext,
+  response?: SharedJoinResponseIdentity,
+): boolean {
+  return (
+    row.session_id === context.sessionId &&
+    row.run_id === context.runId &&
+    row.release_id === context.expectedReleaseId &&
+    row.service_origin === context.serviceOrigin &&
+    row.credential_key === context.credentialKey &&
+    (response === undefined ||
+      (row.release_id === response.releaseId &&
+        row.participant_id === response.participantId &&
+        row.team_id === response.teamId))
+  );
 }
 
 function parseOutboxRow(row: StoredOutboxRow, status = row.status): SharedOutboxRecord {
@@ -251,7 +440,15 @@ async function hasCorrectedSharedSchema(database: SharedSqlDatabase): Promise<bo
     ).map(({ name }) => name);
     if (!sameColumns(actual, expected)) return false;
   }
-  return true;
+  const triggers = (
+    await database.getAllAsync<{ name: string }>(
+      `SELECT name FROM sqlite_master
+       WHERE type='trigger' AND name IN (${SHARED_SCHEMA_TRIGGERS.map(() => "?").join(",")})
+       ORDER BY name`,
+      ...SHARED_SCHEMA_TRIGGERS,
+    )
+  ).map(({ name }) => name);
+  return sameColumns(triggers, [...SHARED_SCHEMA_TRIGGERS].sort());
 }
 
 export async function assertSharedDatabaseSchema(database: SharedSqlDatabase): Promise<void> {
@@ -277,56 +474,225 @@ export async function migrateSharedDatabase(database: SharedSqlDatabase): Promis
 export class SharedSyncStore {
   constructor(private readonly database: SharedSqlDatabase) {}
 
-  async saveJoinedSession(record: SharedSessionRecord, pull: SyncPull): Promise<void> {
-    const serviceUrl = record.serviceUrl.replace(/\/$/, "");
+  async reservePendingJoin(input: PendingSharedJoinInput): Promise<PendingSharedJoin> {
+    const candidate = {
+      ...input,
+      serviceOrigin: canonicalServiceOrigin(input.serviceOrigin),
+    };
     if (
-      !isSyncPull(pull) ||
-      pull.snapshot.sessionId !== record.sessionId ||
-      pull.snapshot.releaseId !== record.releaseId ||
-      pull.snapshot.participantId !== record.participantId ||
-      pull.snapshot.teamId !== record.teamId
+      Object.entries(candidate).some(
+        ([key, value]) =>
+          key !== "expectedReleaseId" && (typeof value !== "string" || value === ""),
+      ) ||
+      !/^sha256:[0-9a-f]{64}$/.test(candidate.expectedReleaseId)
+    ) {
+      throw new Error("shared-pending-join-invalid");
+    }
+    let output: PendingSharedJoin | undefined;
+    await this.database.withExclusiveTransactionAsync(async (tx) => {
+      const existing = await tx.getFirstAsync<StoredPendingSharedJoin>(
+        "SELECT * FROM pending_shared_joins WHERE run_id=? OR session_id=? LIMIT 1",
+        candidate.runId,
+        candidate.sessionId,
+      );
+      if (existing !== null) {
+        if (!pendingJoinMatches(existing, candidate)) {
+          throw new Error("shared-pending-join-conflict");
+        }
+        output = parsePendingSharedJoin(existing);
+        return;
+      }
+      const run = await tx.getFirstAsync<StoredRun>(
+        "SELECT release_id,status FROM runs WHERE run_id=?",
+        candidate.runId,
+      );
+      if (run === null || run.status !== "active") throw new Error("shared-run-not-active");
+      if (run.release_id !== candidate.expectedReleaseId) {
+        throw new Error("shared-run-release-mismatch");
+      }
+      const bound = await tx.getFirstAsync<{ session_id: string }>(
+        "SELECT session_id FROM shared_sessions WHERE run_id=? OR session_id=? LIMIT 1",
+        candidate.runId,
+        candidate.sessionId,
+      );
+      if (bound !== null) throw new Error("shared-run-binding-conflict");
+      await tx.runAsync(
+        `INSERT INTO pending_shared_joins
+         (session_id,run_id,expected_release_id,service_origin,join_request_id,
+          invitation_digest,invitation_key,credential_key,request_digest,status)
+         VALUES (?,?,?,?,?,?,?,?,?,'preparing')`,
+        candidate.sessionId,
+        candidate.runId,
+        candidate.expectedReleaseId,
+        candidate.serviceOrigin,
+        candidate.joinRequestId,
+        candidate.invitationDigest,
+        candidate.invitationKey,
+        candidate.credentialKey,
+        candidate.requestDigest,
+      );
+      output = deepFreeze({ ...candidate, status: "preparing" });
+    });
+    if (output === undefined) throw new Error("shared-pending-join-reservation-incomplete");
+    return output;
+  }
+
+  async markPendingJoinReady(runId: string, requestDigest: string): Promise<PendingSharedJoin> {
+    return this.advancePendingJoin(runId, requestDigest, "ready");
+  }
+
+  async markPendingJoinSubmitting(
+    runId: string,
+    requestDigest: string,
+  ): Promise<PendingSharedJoin> {
+    return this.advancePendingJoin(runId, requestDigest, "submitting");
+  }
+
+  async pendingJoinForRun(runId: string): Promise<PendingSharedJoin | null> {
+    const row = await this.database.getFirstAsync<StoredPendingSharedJoin>(
+      "SELECT * FROM pending_shared_joins WHERE run_id=?",
+      runId,
+    );
+    return row === null ? null : parsePendingSharedJoin(row);
+  }
+
+  async commitJoinedSession(input: {
+    readonly context: SharedBindingContext;
+    readonly response: SharedJoinResponseIdentity;
+    readonly pull: SyncPull;
+  }): Promise<void> {
+    const joinContext = {
+      ...input.context,
+      serviceOrigin: canonicalServiceOrigin(input.context.serviceOrigin),
+    };
+    if (
+      !isSyncPull(input.pull) ||
+      input.pull.snapshot.sessionId !== joinContext.sessionId ||
+      input.response.releaseId !== joinContext.expectedReleaseId ||
+      input.pull.snapshot.releaseId !== joinContext.expectedReleaseId ||
+      input.pull.snapshot.participantId !== input.response.participantId ||
+      input.pull.snapshot.teamId !== input.response.teamId
     ) {
       throw new Error("shared-join-snapshot-invalid");
     }
-    assertUniquePullCollections(pull);
+    assertUniquePullCollections(input.pull);
     await this.database.withExclusiveTransactionAsync(async (tx) => {
-      const existing = await tx.getFirstAsync<StoredSessionBinding>(
-        "SELECT * FROM shared_sessions WHERE session_id=?",
-        record.sessionId,
+      const run = await tx.getFirstAsync<StoredRun>(
+        "SELECT release_id,status FROM runs WHERE run_id=?",
+        joinContext.runId,
       );
-      if (existing === null) {
-        await tx.runAsync(
-          `INSERT INTO shared_sessions
-           (session_id,run_id,release_id,participant_id,team_id,service_url,membership_status,
-            transport_status,sync_status,cursor,confirmed_at)
-           VALUES (?,?,?,?,?,?,?,'offline','recovery-required','0',NULL)`,
-          record.sessionId,
-          record.runId,
-          record.releaseId,
-          record.participantId,
-          record.teamId,
-          serviceUrl,
-          pull.snapshot.membershipStatus,
-        );
-      } else {
-        if (
-          existing.run_id !== record.runId ||
-          existing.release_id !== record.releaseId ||
-          existing.participant_id !== record.participantId ||
-          existing.team_id !== record.teamId ||
-          existing.service_url !== serviceUrl
-        ) {
+      if (run === null || run.status !== "active") throw new Error("shared-run-not-active");
+      if (run.release_id !== joinContext.expectedReleaseId) {
+        throw new Error("shared-run-release-mismatch");
+      }
+      const existingForSession = await tx.getFirstAsync<StoredSessionBinding>(
+        "SELECT * FROM shared_sessions WHERE session_id=?",
+        joinContext.sessionId,
+      );
+      if (existingForSession !== null) {
+        if (!bindingMatches(existingForSession, joinContext, input.response)) {
           throw new Error("shared-session-binding-conflict");
         }
         if (
-          existing.membership_status === "revoked" &&
-          pull.snapshot.membershipStatus === "active"
+          existingForSession.membership_status === "revoked" &&
+          input.pull.snapshot.membershipStatus === "active"
         ) {
           throw new Error("membership-reactivation-conflict");
         }
+        await this.replaceSnapshot(tx, joinContext, input.pull);
+        return;
       }
-      await this.replaceSnapshot(tx, record.sessionId, pull);
+
+      const existingForRun = await tx.getFirstAsync<{ session_id: string }>(
+        "SELECT session_id FROM shared_sessions WHERE run_id=?",
+        joinContext.runId,
+      );
+      if (existingForRun !== null) throw new Error("shared-run-binding-conflict");
+      const pending = await tx.getFirstAsync<StoredPendingSharedJoin>(
+        "SELECT * FROM pending_shared_joins WHERE run_id=?",
+        joinContext.runId,
+      );
+      if (pending === null) throw new Error("shared-pending-join-missing");
+      if (
+        pending.status !== "submitting" ||
+        !pendingJoinMatches(pending, {
+          sessionId: joinContext.sessionId,
+          runId: joinContext.runId,
+          expectedReleaseId: joinContext.expectedReleaseId,
+          serviceOrigin: joinContext.serviceOrigin,
+          joinRequestId: pending.join_request_id,
+          invitationDigest: pending.invitation_digest,
+          invitationKey: pending.invitation_key,
+          credentialKey: joinContext.credentialKey,
+          requestDigest: pending.request_digest,
+        })
+      ) {
+        throw new Error("shared-pending-join-conflict");
+      }
+      const deleted = await tx.runAsync(
+        `DELETE FROM pending_shared_joins
+         WHERE run_id=? AND request_digest=? AND status='submitting'`,
+        pending.run_id,
+        pending.request_digest,
+      );
+      if (deleted.changes !== undefined && deleted.changes !== 1) {
+        throw new Error("shared-pending-join-conflict");
+      }
+      await tx.runAsync(
+        `INSERT INTO shared_sessions
+         (session_id,run_id,release_id,participant_id,team_id,service_origin,credential_key,
+          membership_status,transport_status,sync_status,cursor,confirmed_at)
+         VALUES (?,?,?,?,?,?,?,?,'offline','recovery-required','0',NULL)`,
+        joinContext.sessionId,
+        joinContext.runId,
+        input.response.releaseId,
+        input.response.participantId,
+        input.response.teamId,
+        joinContext.serviceOrigin,
+        joinContext.credentialKey,
+        input.pull.snapshot.membershipStatus,
+      );
+      await this.replaceSnapshot(tx, joinContext, input.pull);
     });
+  }
+
+  private async advancePendingJoin(
+    runId: string,
+    requestDigest: string,
+    target: "ready" | "submitting",
+  ): Promise<PendingSharedJoin> {
+    let output: PendingSharedJoin | undefined;
+    await this.database.withExclusiveTransactionAsync(async (tx) => {
+      const row = await tx.getFirstAsync<StoredPendingSharedJoin>(
+        "SELECT * FROM pending_shared_joins WHERE run_id=?",
+        runId,
+      );
+      if (row === null) throw new Error("shared-pending-join-missing");
+      if (row.request_digest !== requestDigest) throw new Error("shared-pending-join-conflict");
+      if (target === "ready" && row.status === "preparing") {
+        await tx.runAsync(
+          "UPDATE pending_shared_joins SET status='ready' WHERE run_id=? AND status='preparing'",
+          runId,
+        );
+        output = parsePendingSharedJoin({ ...row, status: "ready" });
+        return;
+      }
+      if (target === "submitting" && row.status === "ready") {
+        await tx.runAsync(
+          "UPDATE pending_shared_joins SET status='submitting' WHERE run_id=? AND status='ready'",
+          runId,
+        );
+        output = parsePendingSharedJoin({ ...row, status: "submitting" });
+        return;
+      }
+      if (row.status === target || (target === "ready" && row.status === "submitting")) {
+        output = parsePendingSharedJoin(row);
+        return;
+      }
+      throw new Error("shared-pending-join-status-conflict");
+    });
+    if (output === undefined) throw new Error("shared-pending-join-update-incomplete");
+    return output;
   }
 
   async enqueue(
@@ -535,27 +901,40 @@ export class SharedSyncStore {
     return output;
   }
 
-  async applyPull(sessionId: string, pull: SyncPull): Promise<void> {
-    if (!isSyncPull(pull) || pull.snapshot.sessionId !== sessionId) {
+  async applyPull(context: SharedBindingContext, pull: SyncPull): Promise<void> {
+    const bindingContext = {
+      ...context,
+      serviceOrigin: canonicalServiceOrigin(context.serviceOrigin),
+    };
+    if (!isSyncPull(pull) || pull.snapshot.sessionId !== bindingContext.sessionId) {
       throw new Error("shared-pull-invalid");
     }
     assertUniquePullCollections(pull);
     await this.database.withExclusiveTransactionAsync((tx) =>
-      this.replaceSnapshot(tx, sessionId, pull),
+      this.replaceSnapshot(tx, bindingContext, pull),
     );
   }
 
   private async replaceSnapshot(
     tx: SharedSqlDatabase,
-    sessionId: string,
+    context: SharedBindingContext,
     pull: SyncPull,
   ): Promise<void> {
+    const run = await tx.getFirstAsync<StoredRun>(
+      "SELECT release_id,status FROM runs WHERE run_id=?",
+      context.runId,
+    );
+    if (run === null || run.status !== "active") throw new Error("shared-run-not-active");
+    if (run.release_id !== context.expectedReleaseId) {
+      throw new Error("shared-run-release-mismatch");
+    }
     const session = await tx.getFirstAsync<StoredSessionBinding>(
       "SELECT * FROM shared_sessions WHERE session_id=?",
-      sessionId,
+      context.sessionId,
     );
     if (session === null) throw new Error("shared-session-missing");
     if (
+      !bindingMatches(session, context) ||
       session.release_id !== pull.snapshot.releaseId ||
       session.participant_id !== pull.snapshot.participantId ||
       session.team_id !== pull.snapshot.teamId
@@ -573,12 +952,12 @@ export class SharedSyncStore {
         observation_ids_json: string;
       }>(
         "SELECT expected_state_version,observation_ids_json FROM shared_outbox WHERE session_id=? AND command_id=?",
-        sessionId,
+        context.sessionId,
         result.commandId,
       );
       const existing = await tx.getFirstAsync<StoredResultRow>(
         "SELECT * FROM shared_results WHERE session_id=? AND command_id=?",
-        sessionId,
+        context.sessionId,
         result.commandId,
       );
       if (existing !== null) {
@@ -599,7 +978,7 @@ export class SharedSyncStore {
            (session_id,command_id,terminal,outcome_code,resulting_state_version,
             expected_state_version,observation_ids_json,decision_position,decided_at)
            VALUES (?,?,?,?,?,?,?,?,?)`,
-          sessionId,
+          context.sessionId,
           result.commandId,
           result.terminal,
           result.outcomeCode,
@@ -613,13 +992,13 @@ export class SharedSyncStore {
       if (source !== null) matchedOutboxIds.push(result.commandId);
     }
 
-    await tx.runAsync("DELETE FROM shared_projections WHERE session_id=?", sessionId);
+    await tx.runAsync("DELETE FROM shared_projections WHERE session_id=?", context.sessionId);
     for (const item of pull.snapshot.projections) {
       await tx.runAsync(
         `INSERT INTO shared_projections
          (session_id,aggregate_kind,aggregate_id,schema_id,schema_version,state_version,value_json)
          VALUES (?,?,?,?,?,?,?)`,
-        sessionId,
+        context.sessionId,
         item.aggregateKind,
         item.aggregateId,
         item.schemaId,
@@ -631,7 +1010,7 @@ export class SharedSyncStore {
     for (const commandId of matchedOutboxIds) {
       await tx.runAsync(
         "DELETE FROM shared_outbox WHERE session_id=? AND command_id=?",
-        sessionId,
+        context.sessionId,
         commandId,
       );
     }
@@ -640,7 +1019,7 @@ export class SharedSyncStore {
       await tx.runAsync(
         `UPDATE shared_outbox SET status='blocked-revoked'
          WHERE session_id=? AND status IN ('queued','submitting')`,
-        sessionId,
+        context.sessionId,
       );
       await tx.runAsync(
         `UPDATE shared_sessions
@@ -648,18 +1027,18 @@ export class SharedSyncStore {
           cursor=?,confirmed_at=? WHERE session_id=?`,
         pull.nextCursor,
         pull.snapshot.confirmedAt,
-        sessionId,
+        context.sessionId,
       );
       return;
     }
 
     await tx.runAsync(
       "UPDATE shared_outbox SET status='queued' WHERE session_id=? AND status='submitting'",
-      sessionId,
+      context.sessionId,
     );
     const remaining = await tx.getFirstAsync<{ command_id: string }>(
       "SELECT command_id FROM shared_outbox WHERE session_id=? LIMIT 1",
-      sessionId,
+      context.sessionId,
     );
     await tx.runAsync(
       `UPDATE shared_sessions
@@ -668,7 +1047,7 @@ export class SharedSyncStore {
       remaining === null ? "current" : "recovery-required",
       pull.nextCursor,
       pull.snapshot.confirmedAt,
-      sessionId,
+      context.sessionId,
     );
   }
 
@@ -735,7 +1114,8 @@ export class SharedSyncStore {
       release_id: `sha256:${string}`;
       participant_id: string;
       team_id: string;
-      service_url: string;
+      service_origin: string;
+      credential_key: string;
       cursor: string;
       membership_status: "active" | "revoked";
     }>("SELECT * FROM shared_sessions WHERE session_id=?", sessionId);
@@ -747,7 +1127,8 @@ export class SharedSyncStore {
           releaseId: row.release_id,
           participantId: row.participant_id,
           teamId: row.team_id,
-          serviceUrl: row.service_url,
+          serviceOrigin: row.service_origin,
+          credentialKey: row.credential_key,
           cursor: row.cursor,
           membershipStatus: row.membership_status,
         };

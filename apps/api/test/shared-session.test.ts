@@ -1,3 +1,5 @@
+import { once } from "node:events";
+
 import {
   TARGET_DISCOVERY_COMMAND,
   TARGET_DISCOVERY_CONFIG_SCHEMA,
@@ -13,9 +15,11 @@ import type { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
 
 import { createSecret } from "../src/security.js";
-import { SharedSessionService } from "../src/shared-session-service.js";
+import { createApiServer } from "../src/server.js";
+import { SharedSessionService, SharedSessionServiceError } from "../src/shared-session-service.js";
 
 const RELEASE_ID = `sha256:${"a".repeat(64)}` as const;
+const OTHER_RELEASE_ID = `sha256:${"b".repeat(64)}` as const;
 const configuration = {
   targets: [
     {
@@ -103,9 +107,17 @@ function rows<Row>(values: readonly Row[]) {
 }
 
 function serviceFixture(options: FixtureOptions = {}) {
-  let teamId = "team-uninitialized";
+  let teamId = "team-1";
+  let participantId = "participant-1";
+  let participantCreated = false;
+  let invitationConsumed = false;
+  let consumedCredentialDigest: string | null = null;
   let stateVersion = 0;
-  let state: unknown;
+  let state: unknown = {
+    complete: false,
+    completedTargets: 0,
+    targets: [{ status: "available", targetId: "alpha" }],
+  };
   const schemaDigests = [
     {
       schemaId: TARGET_DISCOVERY_CONFIG_SCHEMA,
@@ -154,6 +166,21 @@ function serviceFixture(options: FixtureOptions = {}) {
       return rows([]);
     }
     if (text.includes("FROM hunt_sessions WHERE creation_id")) return rows([]);
+    if (text.includes("FROM hunt_invitations WHERE secret_digest")) {
+      return rows([
+        {
+          invitation_id: "invitation-1",
+          session_id: "session-1",
+          expires_at: "2031-01-01T00:00:00.000Z",
+          consumed_at: invitationConsumed ? "2026-08-05T00:00:00.000Z" : null,
+          consumed_join_request_id: invitationConsumed ? "join-1" : null,
+          consumed_credential_digest: consumedCredentialDigest,
+        },
+      ]);
+    }
+    if (text.includes("FROM hunt_sessions") && text.includes("WHERE session_id = $1")) {
+      return rows([{ session_id: "session-1", team_id: teamId, release_id: RELEASE_ID }]);
+    }
     if (text.includes("FROM release_registrations WHERE release_id")) {
       return rows([{ manifest_json: manifestJson, mechanic_config_json: configuration }]);
     }
@@ -169,12 +196,28 @@ function serviceFixture(options: FixtureOptions = {}) {
     if (text.includes("FROM hunt_participants WHERE credential_digest")) {
       return rows([
         {
-          participant_id: "participant-1",
+          participant_id: participantId,
           session_id: "session-1",
           team_id: teamId,
           status: "active",
         },
       ]);
+    }
+    if (
+      text.includes("FROM hunt_participants WHERE session_id") &&
+      text.includes("join_request_id")
+    ) {
+      return rows(participantCreated ? [{ participant_id: participantId, team_id: teamId }] : []);
+    }
+    if (text.startsWith("INSERT INTO hunt_participants")) {
+      participantId = String(values[0]);
+      participantCreated = true;
+      return rows([]);
+    }
+    if (text.startsWith("UPDATE hunt_invitations")) {
+      invitationConsumed = true;
+      consumedCredentialDigest = String(values[2]);
+      return rows([]);
     }
     if (text.includes("FROM authoritative_command_receipts WHERE session_id")) return rows([]);
     if (text.includes("FROM team_aggregates aggregates JOIN hunt_sessions")) {
@@ -220,6 +263,73 @@ function serviceFixture(options: FixtureOptions = {}) {
   };
 }
 
+async function withApiServer<T>(
+  service: Parameters<typeof createApiServer>[0],
+  run: (origin: string) => Promise<T>,
+): Promise<T> {
+  const server = createApiServer(service, { operatorToken: "operator" });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  if (address === null || typeof address === "string") throw new Error("address-invalid");
+  try {
+    return await run(`http://127.0.0.1:${address.port}`);
+  } finally {
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error === undefined ? resolve() : reject(error))),
+    );
+  }
+}
+
+function apiFixture() {
+  const sync = {
+    kind: "snapshot" as const,
+    reset: true,
+    nextCursor: "0",
+    snapshot: {
+      sessionId: "session-1",
+      releaseId: RELEASE_ID,
+      participantId: "participant-1",
+      teamId: "team-1",
+      membershipStatus: "active" as const,
+      confirmedAt: "2026-08-05T00:00:00.000Z",
+      projections: [],
+    },
+    commandResults: [],
+  };
+  return {
+    registerRelease: vi.fn().mockResolvedValue({ releaseId: RELEASE_ID, mechanicId: "mechanic" }),
+    createSession: vi.fn().mockResolvedValue({
+      sessionId: "session-1",
+      teamId: "team-1",
+      releaseId: RELEASE_ID,
+      disposition: "created",
+    }),
+    createInvitation: vi.fn().mockResolvedValue({
+      invitationId: "invitation-1",
+      invitation: "invitation-secret-with-enough-entropy",
+      expiresAt: "2031-01-01T00:00:00.000Z",
+    }),
+    join: vi.fn().mockResolvedValue({
+      participantId: "participant-1",
+      teamId: "team-1",
+      releaseId: RELEASE_ID,
+      disposition: "joined",
+      sync,
+    }),
+    revoke: vi.fn().mockResolvedValue(undefined),
+    submit: vi.fn().mockResolvedValue({
+      commandId: "command-1",
+      disposition: "decided",
+      terminal: "accepted",
+      outcomeCode: "accepted",
+      resultingStateVersion: 1,
+      decisionPosition: "1",
+    }),
+    pull: vi.fn().mockResolvedValue(sync),
+  };
+}
+
 const location: LocationObservation = {
   observationId: "observation-1",
   recordedAt: "2026-08-04T00:00:00.000Z",
@@ -232,6 +342,163 @@ const location: LocationObservation = {
 };
 
 describe("generic shared-session service", () => {
+  it("exposes the complete version-prefixed API with plain release-pinned bodies", async () => {
+    const fake = apiFixture();
+    await withApiServer(fake, async (origin) => {
+      const responses = [
+        await fetch(`${origin}/v1/releases`, {
+          method: "POST",
+          headers: {
+            authorization: "Bearer operator",
+            "content-type": "application/vnd.plotpoint.release",
+            "x-plotpoint-expected-release-id": RELEASE_ID,
+          },
+          body: Uint8Array.of(1, 2, 3),
+        }),
+        await fetch(`${origin}/v1/shared-sessions`, {
+          method: "POST",
+          headers: { authorization: "Bearer operator", "content-type": "application/json" },
+          body: JSON.stringify({
+            creationId: "create-1",
+            releaseId: RELEASE_ID,
+            teamLabel: "Team",
+          }),
+        }),
+        await fetch(`${origin}/v1/shared-sessions/session-1/invitations`, {
+          method: "POST",
+          headers: { authorization: "Bearer operator", "content-type": "application/json" },
+          body: JSON.stringify({
+            invitationId: "invitation-1",
+            expiresAt: "2031-01-01T00:00:00.000Z",
+          }),
+        }),
+        await fetch(`${origin}/v1/shared-sessions/session-1/participants`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            joinRequestId: "join-1",
+            expectedReleaseId: RELEASE_ID,
+            invitation: "invitation-secret-with-enough-entropy",
+            participantCredential: "participant-secret-with-enough-entropy",
+          }),
+        }),
+        await fetch(`${origin}/v1/shared-sessions/session-1/participants/participant-1/revoke`, {
+          method: "POST",
+          headers: { authorization: "Bearer operator", "content-type": "application/json" },
+          body: JSON.stringify({ operationId: "revoke-1" }),
+        }),
+        await fetch(`${origin}/v1/shared-sessions/session-1/commands`, {
+          method: "POST",
+          headers: {
+            authorization: "Bearer participant-secret-with-enough-entropy",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            commandId: "command-1",
+            target: {
+              aggregateKind: "team",
+              aggregateId: "team-1",
+              schemaId: "team-state",
+              schemaVersion: 1,
+            },
+            expectedStateVersion: 0,
+            type: "trusted.command",
+            payload: {},
+            observations: [],
+          }),
+        }),
+        await fetch(`${origin}/v1/shared-sessions/session-1/sync?after=0`, {
+          headers: { authorization: "Bearer participant-secret-with-enough-entropy" },
+        }),
+      ];
+
+      expect(responses.map(({ status }) => status)).toEqual([200, 200, 200, 200, 200, 200, 200]);
+      const bodies = await Promise.all(responses.map((response) => response.json()));
+      expect(JSON.stringify(bodies)).not.toMatch(/"version"\s*:/);
+      expect(fake.join).toHaveBeenCalledWith("session-1", {
+        joinRequestId: "join-1",
+        expectedReleaseId: RELEASE_ID,
+        invitation: "invitation-secret-with-enough-entropy",
+        participantCredential: "participant-secret-with-enough-entropy",
+      });
+    });
+  });
+
+  it("returns a closed safe error for an HTTP join release mismatch", async () => {
+    const fake = apiFixture();
+    fake.join.mockRejectedValueOnce(new SharedSessionServiceError("session-release-mismatch", 409));
+    await withApiServer(fake, async (origin) => {
+      const response = await fetch(`${origin}/v1/shared-sessions/session-1/participants`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          joinRequestId: "join-mismatch",
+          expectedReleaseId: OTHER_RELEASE_ID,
+          invitation: "invitation-secret-with-enough-entropy",
+          participantCredential: "participant-secret-with-enough-entropy",
+        }),
+      });
+      const value = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(value).toEqual({
+        code: "session-release-mismatch",
+        requestId: expect.any(String),
+      });
+      expect(JSON.stringify(value)).not.toMatch(/invitation|credential|sha256:/);
+    });
+  });
+
+  it("checks the expected release before reading or consuming an invitation", async () => {
+    const fixture = serviceFixture();
+    const input = {
+      joinRequestId: "join-1",
+      expectedReleaseId: OTHER_RELEASE_ID,
+      invitation: createSecret(),
+      participantCredential: createSecret(),
+    };
+
+    await expect(fixture.service.join("session-1", input)).rejects.toMatchObject({
+      code: "session-release-mismatch",
+      status: 409,
+    });
+    expect(
+      fixture.query.mock.calls.some(([text]) => String(text).includes("hunt_invitations")),
+    ).toBe(false);
+  });
+
+  it("returns one coherent binding for an exact release-pinned join retry", async () => {
+    const fixture = serviceFixture();
+    const input = {
+      joinRequestId: "join-1",
+      expectedReleaseId: RELEASE_ID,
+      invitation: createSecret(),
+      participantCredential: createSecret(),
+    };
+
+    const joined = await fixture.service.join("session-1", input);
+    const duplicate = await fixture.service.join("session-1", input);
+
+    expect(joined).toMatchObject({ disposition: "joined", releaseId: RELEASE_ID });
+    expect(duplicate).toMatchObject({
+      participantId: joined.participantId,
+      teamId: joined.teamId,
+      releaseId: RELEASE_ID,
+      disposition: "duplicate",
+    });
+    for (const response of [joined, duplicate]) {
+      expect(response.releaseId).toBe(response.sync.snapshot.releaseId);
+      expect(response.participantId).toBe(response.sync.snapshot.participantId);
+      expect(response.teamId).toBe(response.sync.snapshot.teamId);
+      expect(response.sync.snapshot.sessionId).toBe("session-1");
+      expect(response).not.toHaveProperty("version");
+      expect(response.sync).not.toHaveProperty("version");
+    }
+    await expect(
+      fixture.service.join("session-1", { ...input, expectedReleaseId: OTHER_RELEASE_ID }),
+    ).rejects.toMatchObject({ code: "session-release-mismatch", status: 409 });
+  });
+
   it("initializes the selected platform model only from registered configuration", async () => {
     const fixture = serviceFixture();
     const created = await fixture.service.createSession({

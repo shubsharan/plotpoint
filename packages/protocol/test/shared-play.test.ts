@@ -2,13 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createSharedPlayClient,
+  isSharedJoinRequest,
+  isSharedJoinResponse,
   isSharedCommandIntent,
   isSharedPlayView,
   isSyncCommand,
   isSyncPull,
   type SharedCommandIntent,
+  type SharedJoinRequest,
+  type SharedJoinResponse,
   type SharedPlayView,
 } from "../src/index.js";
+
+const releaseId = `sha256:${"a".repeat(64)}` as const;
+const confirmedAt = "2026-08-04T00:00:00.000Z";
 
 const target = {
   aggregateKind: "team",
@@ -28,14 +35,30 @@ const intent: SharedCommandIntent = {
 
 const view: SharedPlayView = {
   sessionId: "session-1",
-  releaseId: `sha256:${"a".repeat(64)}`,
+  releaseId,
   transport: "online",
   synchronization: "current",
-  confirmedAt: "2026-08-04T00:00:00.000Z",
+  confirmedAt,
   membership: { status: "active", teamId: "team-1" },
   projections: [{ ...target, stateVersion: 0, value: { votes: [] } }],
   actions: [],
 };
+
+const initialPull = {
+  kind: "snapshot",
+  reset: true,
+  nextCursor: "0",
+  snapshot: {
+    sessionId: view.sessionId,
+    releaseId,
+    participantId: "participant-1",
+    teamId: "team-1",
+    membershipStatus: "active",
+    confirmedAt,
+    projections: view.projections,
+  },
+  commandResults: [],
+} as const;
 
 describe("generic shared play contracts", () => {
   it("accepts unrelated command and projection schemas without mechanic branches", () => {
@@ -107,6 +130,42 @@ describe("generic shared play contracts", () => {
         ],
       }),
     ).toBe(true);
+  });
+
+  it("uses plain release-pinned join bodies and rejects repeated body versions", () => {
+    const request: SharedJoinRequest = {
+      joinRequestId: "join-1",
+      expectedReleaseId: releaseId,
+      invitation: "invitation-secret-with-enough-entropy",
+      participantCredential: "participant-secret-with-enough-entropy",
+    };
+    const response: SharedJoinResponse = {
+      participantId: initialPull.snapshot.participantId,
+      teamId: initialPull.snapshot.teamId,
+      releaseId,
+      disposition: "joined",
+      sync: initialPull,
+    };
+
+    expect(isSharedJoinRequest(request)).toBe(true);
+    expect(isSharedJoinResponse(response)).toBe(true);
+    expect(isSharedJoinRequest({ version: 1, ...request })).toBe(false);
+    expect(isSharedJoinResponse({ version: 1, ...response })).toBe(false);
+    expect(
+      isSharedJoinResponse({
+        ...response,
+        teamId: "different-team",
+      }),
+    ).toBe(false);
+    expect(
+      isSharedJoinResponse({
+        ...response,
+        sync: {
+          ...response.sync,
+          snapshot: { ...response.sync.snapshot, releaseId: `sha256:${"b".repeat(64)}` },
+        },
+      }),
+    ).toBe(false);
   });
 
   it("validates semantic client responses and correlation", async () => {

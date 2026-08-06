@@ -4,6 +4,8 @@ import type {
   AuthorizedSnapshot,
   SharedAggregateTarget,
   SharedCommandIntent,
+  SharedJoinRequest,
+  SharedJoinResponse,
   SharedCommandStatus,
   SharedPlayView,
   SharedProjection,
@@ -258,5 +260,35 @@ export function isSyncPull(value: unknown): value is SyncPull {
     isAuthorizedSnapshot(value.snapshot) &&
     Array.isArray(value.commandResults) &&
     value.commandResults.every(isSyncCommandResult)
+  );
+}
+
+export function isSharedJoinRequest(value: unknown): value is SharedJoinRequest {
+  return (
+    object(value) &&
+    keys(value, ["joinRequestId", "expectedReleaseId", "invitation", "participantCredential"]) &&
+    nonempty(value.joinRequestId) &&
+    isReleaseId(value.expectedReleaseId) &&
+    nonempty(value.invitation) &&
+    nonempty(value.participantCredential)
+  );
+}
+
+export function isSharedJoinResponse(value: unknown): value is SharedJoinResponse {
+  if (
+    !object(value) ||
+    !keys(value, ["participantId", "teamId", "releaseId", "disposition", "sync"]) ||
+    !nonempty(value.participantId) ||
+    !nonempty(value.teamId) ||
+    !isReleaseId(value.releaseId) ||
+    !["joined", "duplicate"].includes(value.disposition as string) ||
+    !isSyncPull(value.sync)
+  ) {
+    return false;
+  }
+  return (
+    value.releaseId === value.sync.snapshot.releaseId &&
+    value.participantId === value.sync.snapshot.participantId &&
+    value.teamId === value.sync.snapshot.teamId
   );
 }

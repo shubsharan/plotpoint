@@ -4,6 +4,7 @@ import { migrateSharedDatabase, type SharedSqlDatabase } from "../../src/shared/
 
 export const TEST_SQLITE_INTERRUPTED_AFTER_WRITE = "test-sqlite-interrupted-after-write";
 export const TEST_SQLITE_INTERRUPTED_BEFORE_COMMIT = "test-sqlite-interrupted-before-commit";
+export const TEST_SHARED_RELEASE_ID = `sha256:${"a".repeat(64)}` as const;
 
 function sqlValues(parameters: readonly unknown[]): SQLInputValue[] {
   return parameters.map((value) => {
@@ -40,6 +41,7 @@ export class TestSharedSqliteDatabase implements SharedSqlDatabase {
   private activeInterruption: TransactionInterruption | null = null;
   private nextInterruption: TransactionInterruption | null = null;
   private transactionWrites = 0;
+  private transactionTail: Promise<void> = Promise.resolve();
 
   async execAsync(query: string): Promise<void> {
     this.database.exec(query);
@@ -65,23 +67,33 @@ export class TestSharedSqliteDatabase implements SharedSqlDatabase {
   async withExclusiveTransactionAsync(
     operation: (database: SharedSqlDatabase) => Promise<void>,
   ): Promise<void> {
+    const predecessor = this.transactionTail;
+    let releaseTransaction!: () => void;
+    this.transactionTail = new Promise<void>((resolve) => {
+      releaseTransaction = resolve;
+    });
+    await predecessor;
     this.transactionStarts += 1;
     this.activeInterruption = this.nextInterruption;
     this.nextInterruption = null;
     this.transactionWrites = 0;
-    this.database.exec("BEGIN IMMEDIATE");
+    let transactionStarted = false;
     try {
+      this.database.exec("BEGIN IMMEDIATE");
+      transactionStarted = true;
       await operation(this);
       if (this.activeInterruption?.beforeCommit === true) {
         throw new Error(TEST_SQLITE_INTERRUPTED_BEFORE_COMMIT);
       }
       this.database.exec("COMMIT");
+      transactionStarted = false;
     } catch (error) {
-      this.database.exec("ROLLBACK");
+      if (transactionStarted) this.database.exec("ROLLBACK");
       throw error;
     } finally {
       this.activeInterruption = null;
       this.transactionWrites = 0;
+      releaseTransaction();
     }
   }
 
@@ -142,13 +154,26 @@ export class TestSharedSqliteDatabase implements SharedSqlDatabase {
   }
 }
 
-export async function createSharedTestDatabase(runId = "run-1"): Promise<TestSharedSqliteDatabase> {
+export async function createSharedTestDatabase(
+  runId = "run-1",
+  releaseId: `sha256:${string}` = TEST_SHARED_RELEASE_ID,
+): Promise<TestSharedSqliteDatabase> {
   const database = new TestSharedSqliteDatabase();
   await database.execAsync(`
     PRAGMA foreign_keys = ON;
-    CREATE TABLE runs (run_id TEXT PRIMARY KEY);
+    CREATE TABLE runs (
+      run_id TEXT PRIMARY KEY,
+      release_id TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('active','completed','invalid'))
+    );
   `);
-  await database.runAsync("INSERT INTO runs (run_id) VALUES (?)", runId);
+  await database.runAsync(
+    "INSERT INTO runs (run_id,release_id,started_at,status) VALUES (?,?,?,'active')",
+    runId,
+    releaseId,
+    "2030-01-01T00:00:00.000Z",
+  );
   await migrateSharedDatabase(database);
   return database;
 }

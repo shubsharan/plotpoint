@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { SharedPlayView, SyncCommand, SyncCommandResult, SyncPull } from "@plotpoint/protocol";
 
 import type { ParticipantCredentialStore } from "../src/shared/credentials";
-import { SharedSyncStore, type SharedSqlDatabase } from "../src/shared/database";
+import {
+  SharedSyncStore,
+  type SharedBindingContext,
+  type SharedSqlDatabase,
+} from "../src/shared/database";
 import { SharedHttpClient } from "../src/shared/http-client";
 import { SharedSyncCoordinator } from "../src/shared/sync-coordinator";
 
@@ -39,7 +43,8 @@ interface SchedulerStore {
     readonly releaseId: `sha256:${string}`;
     readonly participantId: string;
     readonly teamId: string;
-    readonly serviceUrl: string;
+    readonly serviceOrigin: string;
+    readonly credentialKey: string;
     readonly cursor: string;
     readonly membershipStatus: "active" | "revoked";
   } | null>;
@@ -49,7 +54,7 @@ interface SchedulerStore {
   }>;
   failSubmissionBatch(sessionId: string): Promise<void>;
   observations(runId: string, ids: readonly string[]): Promise<readonly []>;
-  applyPull(sessionId: string, pull: SyncPull): Promise<void>;
+  applyPull(context: SharedBindingContext, pull: SyncPull): Promise<void>;
   markRevoked(sessionId: string): Promise<void>;
   recordSyncEvent(
     sessionId: string,
@@ -65,6 +70,8 @@ interface SchedulerClient {
   pull(sessionId: string, credential: string, cursor: string): Promise<SyncPull>;
 }
 
+type SchedulerSession = Exclude<Awaited<ReturnType<SchedulerStore["session"]>>, null>;
+
 function deferred<T>(): Deferred<T> {
   let resolve!: Deferred<T>["resolve"];
   let reject!: Deferred<T>["reject"];
@@ -77,14 +84,15 @@ function deferred<T>(): Deferred<T> {
 
 const releaseId = `sha256:${"a".repeat(64)}` as const;
 
-function session(sessionId: string) {
+function session(sessionId: string): SchedulerSession {
   return {
     sessionId,
     runId: `run-${sessionId}`,
     releaseId,
     participantId: `participant-${sessionId}`,
     teamId: `team-${sessionId}`,
-    serviceUrl: `https://${sessionId}.example.test`,
+    serviceOrigin: `https://${sessionId}.example.test`,
+    credentialKey: `credential-key-${sessionId}`,
     cursor: "0",
     membershipStatus: "active" as const,
   };
@@ -165,10 +173,14 @@ function createHarness(
     ),
   } satisfies SchedulerClient;
   const credentials = {
-    create: vi.fn(async () => "credential"),
-    get: vi.fn(async (sessionId: string) => `credential-${sessionId}`),
-    remove: vi.fn(async () => undefined),
-    getOrCreateJoinRequestId: vi.fn(async () => "join-request"),
+    generateJoinRequestId: vi.fn(() => "join-request"),
+    generateCredential: vi.fn(() => "credential"),
+    putCredential: vi.fn(async () => undefined),
+    getCredential: vi.fn(async (key: string) => key.replace("credential-key-", "credential-")),
+    removeCredential: vi.fn(async () => undefined),
+    putInvitation: vi.fn(async () => undefined),
+    getInvitation: vi.fn(async () => "invitation"),
+    removeInvitation: vi.fn(async () => undefined),
   } satisfies ParticipantCredentialStore;
   const clientFactory = vi.fn(() => client as unknown as SharedHttpClient);
   const coordinator = new SharedSyncCoordinator(
@@ -208,6 +220,16 @@ describe("shared sync coordinator", () => {
     expect(harness.store.beginSubmissionBatch).toHaveBeenCalledTimes(1);
     expect(harness.client.pull).toHaveBeenCalledTimes(1);
     expect(harness.store.applyPull).toHaveBeenCalledTimes(1);
+    expect(harness.store.applyPull).toHaveBeenCalledWith(
+      {
+        sessionId: "session-1",
+        runId: "run-session-1",
+        expectedReleaseId: releaseId,
+        serviceOrigin: "https://session-1.example.test",
+        credentialKey: "credential-key-session-1",
+      },
+      pull("session-1"),
+    );
   });
 
   it("keeps the same drain through one serialized trailing pass for every trigger after claim", async () => {
@@ -282,6 +304,20 @@ describe("shared sync coordinator", () => {
     await firstSessionDrain;
   });
 
+  it("finishes credential cleanup for an already committed revoked binding without network work", async () => {
+    const harness = createHarness();
+    harness.store.session.mockResolvedValue({
+      ...session("session-1"),
+      membershipStatus: "revoked",
+    });
+
+    await request(harness.coordinator, "session-1", "retry");
+
+    expect(harness.credentials.removeCredential).toHaveBeenCalledWith("credential-key-session-1");
+    expect(harness.store.beginSubmissionBatch).not.toHaveBeenCalled();
+    expect(harness.clientFactory).not.toHaveBeenCalled();
+  });
+
   it("keeps durable shared view reads pure", async () => {
     const sharedView = {
       sessionId: "session-1",
@@ -311,10 +347,14 @@ describe("shared sync coordinator", () => {
     const coordinator = new SharedSyncCoordinator(
       store,
       {
-        create: vi.fn(async () => "credential"),
-        get: vi.fn(async () => "credential"),
-        remove: vi.fn(async () => undefined),
-        getOrCreateJoinRequestId: vi.fn(async () => "join-request"),
+        generateJoinRequestId: vi.fn(() => "join-request"),
+        generateCredential: vi.fn(() => "credential"),
+        putCredential: vi.fn(async () => undefined),
+        getCredential: vi.fn(async () => "credential"),
+        removeCredential: vi.fn(async () => undefined),
+        putInvitation: vi.fn(async () => undefined),
+        getInvitation: vi.fn(async () => "invitation"),
+        removeInvitation: vi.fn(async () => undefined),
       },
       clientFactory,
     );

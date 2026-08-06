@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
-import { isSyncCommand, type SyncCommand } from "@plotpoint/protocol";
+import { isSharedJoinRequest, isSyncCommand, type SyncCommand } from "@plotpoint/protocol";
 
 import { SharedSessionService, SharedSessionServiceError } from "./shared-session-service.js";
 
@@ -157,23 +157,10 @@ export function createApiServer(service: SharedSessionApi, config: ApiServerConf
       const participants = url.pathname.match(/^\/v1\/shared-sessions\/([^/]+)\/participants$/);
       if (request.method === "POST" && participants !== null) {
         const value = await json(request);
-        if (
-          !exact(value, ["joinRequestId", "invitation", "participantCredential"]) ||
-          typeof value.joinRequestId !== "string" ||
-          typeof value.invitation !== "string" ||
-          typeof value.participantCredential !== "string"
-        ) {
+        if (!isSharedJoinRequest(value)) {
           throw new SharedSessionServiceError("join-request-invalid", 400);
         }
-        send(
-          response,
-          200,
-          await service.join(routeId(participants[1]), {
-            joinRequestId: value.joinRequestId,
-            invitation: value.invitation,
-            participantCredential: value.participantCredential,
-          }),
-        );
+        send(response, 200, await service.join(routeId(participants[1]), value));
         return;
       }
 

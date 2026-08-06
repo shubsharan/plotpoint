@@ -615,6 +615,7 @@ export default function App() {
         serviceUrl,
         sessionId: sessionCode,
         runId: runtime.recovery.runId,
+        expectedReleaseId: runtime.recovery.releaseId,
         invitation,
       });
       setInvitation("");

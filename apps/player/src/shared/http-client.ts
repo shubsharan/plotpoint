@@ -1,6 +1,8 @@
 import {
+  isSharedJoinResponse,
   isSyncCommandResult,
   isSyncPull,
+  type SharedJoinResponse,
   type SyncCommandResult,
   type SyncCommand,
   type SyncPull,
@@ -15,13 +17,7 @@ export class SharedHttpError extends Error {
   }
 }
 
-export interface JoinResult {
-  readonly participantId: string;
-  readonly teamId: string;
-  readonly releaseId: `sha256:${string}`;
-  readonly disposition: "joined" | "duplicate";
-  readonly sync: SyncPull;
-}
+export type JoinResult = SharedJoinResponse;
 
 function object(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -63,6 +59,7 @@ export class SharedHttpClient {
   async join(input: {
     readonly sessionId: string;
     readonly joinRequestId: string;
+    readonly expectedReleaseId: `sha256:${string}`;
     readonly invitation: string;
     readonly participantCredential: string;
   }): Promise<JoinResult> {
@@ -73,6 +70,7 @@ export class SharedHttpClient {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           joinRequestId: input.joinRequestId,
+          expectedReleaseId: input.expectedReleaseId,
           invitation: input.invitation,
           participantCredential: input.participantCredential,
         }),
@@ -80,19 +78,10 @@ export class SharedHttpClient {
       this.timeoutMs,
       this.fetcher,
     );
-    if (
-      !object(value) ||
-      Object.keys(value).some(
-        (key) => !["participantId", "teamId", "releaseId", "disposition", "sync"].includes(key),
-      ) ||
-      typeof value.participantId !== "string" ||
-      typeof value.teamId !== "string" ||
-      typeof value.releaseId !== "string" ||
-      !["joined", "duplicate"].includes(value.disposition as string) ||
-      !isSyncPull(value.sync)
-    )
+    if (!isSharedJoinResponse(value) || value.sync.snapshot.sessionId !== input.sessionId) {
       throw new Error("shared-join-response-invalid");
-    return value as unknown as JoinResult;
+    }
+    return value;
   }
 
   async submit(

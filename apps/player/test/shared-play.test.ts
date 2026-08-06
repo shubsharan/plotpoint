@@ -8,12 +8,24 @@ import {
   routeSharedBridgeMessage,
   type SharedProjectionContract,
 } from "../src/shared/host-bridge";
-import { SHARED_MIGRATION, SharedSyncStore, type SharedSqlDatabase } from "../src/shared/database";
+import {
+  SHARED_MIGRATION,
+  SharedSyncStore,
+  type SharedBindingContext,
+  type SharedSqlDatabase,
+} from "../src/shared/database";
 import { SharedHttpClient } from "../src/shared/http-client";
 import { SharedSyncCoordinator } from "../src/shared/sync-coordinator";
 import { buildSharedHuntReport } from "../src/reports/create-shared-hunt-report";
 
 const releaseId = `sha256:${"a".repeat(64)}` as const;
+const bindingContext: SharedBindingContext = {
+  sessionId: "session-1",
+  runId: "run-1",
+  expectedReleaseId: releaseId,
+  serviceOrigin: "https://example.test",
+  credentialKey: "plotpoint.shared.session-1.credential",
+};
 const command = {
   commandId: "command-1",
   target: {
@@ -461,6 +473,68 @@ describe("shared player architecture", () => {
     ).resolves.toMatchObject({ terminal: "no-op", outcomeCode: "already" });
   });
 
+  it("sends the exact release-pinned join request without repeated body versions", async () => {
+    const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe("https://example.test/v1/shared-sessions/session-1/participants");
+      expect(JSON.parse(String(init?.body))).toEqual({
+        joinRequestId: "join-request-1",
+        expectedReleaseId: releaseId,
+        invitation: "invitation-secret",
+        participantCredential: "participant-secret",
+      });
+      return new Response(
+        JSON.stringify({
+          participantId: "participant-1",
+          teamId: "team-1",
+          releaseId,
+          disposition: "joined",
+          sync: pullWithMembership("active"),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    await expect(
+      new SharedHttpClient("https://example.test", fetcher as typeof fetch).join({
+        sessionId: "session-1",
+        joinRequestId: "join-request-1",
+        expectedReleaseId: releaseId,
+        invitation: "invitation-secret",
+        participantCredential: "participant-secret",
+      }),
+    ).resolves.toMatchObject({ releaseId, disposition: "joined" });
+  });
+
+  it("rejects a join response whose snapshot belongs to another session", async () => {
+    const pull = pullWithMembership("active");
+    const fetcher = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            participantId: "participant-1",
+            teamId: "team-1",
+            releaseId,
+            disposition: "joined",
+            sync: {
+              ...pull,
+              snapshot: { ...pull.snapshot, sessionId: "session-other" },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    );
+
+    await expect(
+      new SharedHttpClient("https://example.test", fetcher as typeof fetch).join({
+        sessionId: "session-1",
+        joinRequestId: "join-request-1",
+        expectedReleaseId: releaseId,
+        invitation: "invitation-secret",
+        participantCredential: "participant-secret",
+      }),
+    ).rejects.toThrow("shared-join-response-invalid");
+  });
+
   it("resolves only exact persisted observations", async () => {
     const row = {
       observation_id: "observation-1",
@@ -498,12 +572,20 @@ describe("shared player architecture", () => {
         statements.push({ sql: sql.replace(/\s+/g, " ").trim(), parameters });
         return { changes: 1 };
       }),
-      getFirstAsync: vi.fn(async () => ({
-        release_id: releaseId,
-        participant_id: "participant-1",
-        team_id: "team-1",
-        membership_status: "active",
-      })),
+      getFirstAsync: vi.fn(async (sql: string) =>
+        sql.includes("FROM runs")
+          ? { release_id: releaseId, status: "active" }
+          : {
+              session_id: "session-1",
+              run_id: "run-1",
+              release_id: releaseId,
+              participant_id: "participant-1",
+              team_id: "team-1",
+              service_origin: bindingContext.serviceOrigin,
+              credential_key: bindingContext.credentialKey,
+              membership_status: "active",
+            },
+      ),
       getAllAsync: vi.fn(async () => []),
     } as unknown as SharedSqlDatabase;
     const database = {
@@ -511,7 +593,7 @@ describe("shared player architecture", () => {
         operation(transaction),
     } as unknown as SharedSqlDatabase;
 
-    await new SharedSyncStore(database).applyPull("session-1", pullWithMembership("revoked"));
+    await new SharedSyncStore(database).applyPull(bindingContext, pullWithMembership("revoked"));
 
     const blockedOutbox = statements.find(
       ({ sql }) => sql.includes("UPDATE shared_outbox") && sql.includes("blocked-revoked"),
@@ -532,12 +614,20 @@ describe("shared player architecture", () => {
     const runAsync = vi.fn(async () => ({ changes: 1 }));
     const transaction = {
       runAsync,
-      getFirstAsync: vi.fn(async () => ({
-        release_id: releaseId,
-        participant_id: "participant-1",
-        team_id: "team-1",
-        membership_status: "revoked",
-      })),
+      getFirstAsync: vi.fn(async (sql: string) =>
+        sql.includes("FROM runs")
+          ? { release_id: releaseId, status: "active" }
+          : {
+              session_id: "session-1",
+              run_id: "run-1",
+              release_id: releaseId,
+              participant_id: "participant-1",
+              team_id: "team-1",
+              service_origin: bindingContext.serviceOrigin,
+              credential_key: bindingContext.credentialKey,
+              membership_status: "revoked",
+            },
+      ),
       getAllAsync: vi.fn(async () => []),
     } as unknown as SharedSqlDatabase;
     const database = {
@@ -546,7 +636,7 @@ describe("shared player architecture", () => {
     } as unknown as SharedSqlDatabase;
 
     await expect(
-      new SharedSyncStore(database).applyPull("session-1", pullWithMembership("active")),
+      new SharedSyncStore(database).applyPull(bindingContext, pullWithMembership("active")),
     ).rejects.toThrow("membership-reactivation-conflict");
     expect(runAsync).not.toHaveBeenCalled();
   });
@@ -560,7 +650,8 @@ describe("shared player architecture", () => {
         releaseId,
         participantId: "participant-1",
         teamId: "team-1",
-        serviceUrl: "https://example.test",
+        serviceOrigin: "https://example.test",
+        credentialKey: bindingContext.credentialKey,
         cursor: "0",
         membershipStatus: "active" as const,
       })),
@@ -572,12 +663,16 @@ describe("shared player architecture", () => {
       }),
     } as unknown as SharedSyncStore;
     const credentials = {
-      create: vi.fn(async () => "unused"),
-      get: vi.fn(async () => "participant-secret"),
-      remove: vi.fn(async () => {
+      generateJoinRequestId: vi.fn(() => "unused"),
+      generateCredential: vi.fn(() => "unused"),
+      putCredential: vi.fn(async () => undefined),
+      getCredential: vi.fn(async () => "participant-secret"),
+      removeCredential: vi.fn(async () => {
         order.push("credential-delete");
       }),
-      getOrCreateJoinRequestId: vi.fn(async () => "unused"),
+      putInvitation: vi.fn(async () => undefined),
+      getInvitation: vi.fn(async () => "unused"),
+      removeInvitation: vi.fn(async () => undefined),
     };
     const fetcher = vi.fn(
       async () =>
@@ -605,7 +700,8 @@ describe("shared player architecture", () => {
         releaseId,
         participantId: "participant-1",
         teamId: "team-1",
-        serviceUrl: "https://example.test",
+        serviceOrigin: "https://example.test",
+        credentialKey: bindingContext.credentialKey,
         cursor: "0",
         membershipStatus: "active" as const,
       })),
@@ -616,12 +712,16 @@ describe("shared player architecture", () => {
         throw new Error("revocation-commit-interrupted");
       }),
     } as unknown as SharedSyncStore;
-    const remove = vi.fn(async () => undefined);
+    const removeCredential = vi.fn(async () => undefined);
     const credentials = {
-      create: vi.fn(async () => "unused"),
-      get: vi.fn(async () => "participant-secret"),
-      remove,
-      getOrCreateJoinRequestId: vi.fn(async () => "unused"),
+      generateJoinRequestId: vi.fn(() => "unused"),
+      generateCredential: vi.fn(() => "unused"),
+      putCredential: vi.fn(async () => undefined),
+      getCredential: vi.fn(async () => "participant-secret"),
+      removeCredential,
+      putInvitation: vi.fn(async () => undefined),
+      getInvitation: vi.fn(async () => "unused"),
+      removeInvitation: vi.fn(async () => undefined),
     };
     const fetcher = vi.fn(
       async () =>
@@ -639,7 +739,7 @@ describe("shared player architecture", () => {
     await expect(coordinator.request("session-1", "retry")).rejects.toThrow(
       "revocation-commit-interrupted",
     );
-    expect(remove).not.toHaveBeenCalled();
+    expect(removeCredential).not.toHaveBeenCalled();
   });
 
   it("deletes the credential only after a revoked snapshot commits", async () => {
@@ -651,7 +751,8 @@ describe("shared player architecture", () => {
         releaseId,
         participantId: "participant-1",
         teamId: "team-1",
-        serviceUrl: "https://example.test",
+        serviceOrigin: "https://example.test",
+        credentialKey: bindingContext.credentialKey,
         cursor: "0",
         membershipStatus: "active" as const,
       })),
@@ -666,12 +767,16 @@ describe("shared player architecture", () => {
       }),
     } as unknown as SharedSyncStore;
     const credentials = {
-      create: vi.fn(async () => "unused"),
-      get: vi.fn(async () => "participant-secret"),
-      remove: vi.fn(async () => {
+      generateJoinRequestId: vi.fn(() => "unused"),
+      generateCredential: vi.fn(() => "unused"),
+      putCredential: vi.fn(async () => undefined),
+      getCredential: vi.fn(async () => "participant-secret"),
+      removeCredential: vi.fn(async () => {
         order.push("credential-delete");
       }),
-      getOrCreateJoinRequestId: vi.fn(async () => "unused"),
+      putInvitation: vi.fn(async () => undefined),
+      getInvitation: vi.fn(async () => "unused"),
+      removeInvitation: vi.fn(async () => undefined),
     };
     const fetcher = vi.fn(
       async () =>
@@ -708,13 +813,18 @@ describe("shared player architecture", () => {
             return {};
           },
           getFirstAsync: async (sql: string) => {
+            if (sql.includes("FROM runs")) {
+              return { release_id: releaseId, status: "active" };
+            }
             if (sql.includes("FROM shared_sessions")) {
               return {
+                session_id: "session-1",
                 run_id: "run-1",
                 release_id: releaseId,
                 participant_id: "participant-1",
                 team_id: "team-1",
-                service_url: "https://example.test",
+                service_origin: bindingContext.serviceOrigin,
+                credential_key: bindingContext.credentialKey,
                 membership_status: "active",
                 sync_status: "syncing",
               };
@@ -763,10 +873,10 @@ describe("shared player architecture", () => {
         },
       ],
     };
-    await expect(store.applyPull("session-1", pull)).rejects.toThrow("interrupted");
+    await expect(store.applyPull(bindingContext, pull)).rejects.toThrow("interrupted");
     expect(committed).toEqual([]);
     failAt = Number.POSITIVE_INFINITY;
-    await expect(store.applyPull("session-1", pull)).resolves.toBeUndefined();
+    await expect(store.applyPull(bindingContext, pull)).resolves.toBeUndefined();
     expect(committed[0]!.at(-1)).toContain("UPDATE shared_sessions");
   });
 });

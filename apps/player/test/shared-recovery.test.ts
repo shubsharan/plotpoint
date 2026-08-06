@@ -6,7 +6,7 @@ import type {
 } from "@plotpoint/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { SharedSyncStore } from "../src/shared/database";
+import { SharedSyncStore, type SharedBindingContext } from "../src/shared/database";
 import {
   createSharedTestDatabase,
   TEST_SQLITE_INTERRUPTED_AFTER_WRITE,
@@ -16,6 +16,13 @@ import {
 
 const releaseId = `sha256:${"a".repeat(64)}` as const;
 const sessionId = "session-1";
+const bindingContext: SharedBindingContext = {
+  sessionId,
+  runId: "run-1",
+  expectedReleaseId: releaseId,
+  serviceOrigin: "https://example.test",
+  credentialKey: "plotpoint.shared.session-1.credential",
+};
 
 interface SubmissionBatchRecord {
   readonly sessionId: string;
@@ -117,15 +124,16 @@ async function setup(): Promise<{
   databases.push(database);
   await database.runAsync(
     `INSERT INTO shared_sessions
-     (session_id,run_id,release_id,participant_id,team_id,service_url,membership_status,
+     (session_id,run_id,release_id,participant_id,team_id,service_origin,credential_key,membership_status,
       transport_status,sync_status,cursor,confirmed_at)
-     VALUES (?,?,?,?,?,?,'active','offline','current','0',?)`,
+     VALUES (?,?,?,?,?,?,?,'active','offline','current','0',?)`,
     sessionId,
     "run-1",
     releaseId,
     "participant-1",
     "team-1",
     "https://example.test",
+    bindingContext.credentialKey,
     "2030-01-01T00:00:00.000Z",
   );
   const store = new SharedSyncStore(database) as SharedSyncStore & Phase6SubmissionStore;
@@ -279,7 +287,7 @@ describe("shared SQLite recovery", () => {
     }
     const authoritativePull = pull({ results: cases.map(({ result: value }) => value) });
 
-    await store.applyPull(sessionId, authoritativePull);
+    await store.applyPull(bindingContext, authoritativePull);
     const once = await database.sharedState(sessionId);
     expect(once.results.map(({ terminal }) => terminal)).toEqual([
       "accepted",
@@ -289,7 +297,7 @@ describe("shared SQLite recovery", () => {
     ]);
     expect(once.outbox).toEqual([]);
 
-    await expect(store.applyPull(sessionId, authoritativePull)).resolves.toBeUndefined();
+    await expect(store.applyPull(bindingContext, authoritativePull)).resolves.toBeUndefined();
     await expect(database.sharedState(sessionId)).resolves.toEqual(once);
   });
 
@@ -298,7 +306,7 @@ describe("shared SQLite recovery", () => {
     const originalCommand = command("command-1");
     const originalPull = pull({ results: [result("command-1", "accepted", 1, "1")] });
     await enqueue(store, originalCommand, "2030-01-01T00:00:01.000Z");
-    await store.applyPull(sessionId, originalPull);
+    await store.applyPull(bindingContext, originalPull);
     await database.runAsync(
       `INSERT INTO shared_outbox
        (session_id,command_id,target_json,expected_state_version,command_type,payload_json,
@@ -319,7 +327,7 @@ describe("shared SQLite recovery", () => {
       results: [result("command-1", "rejected", 0, "99")],
     });
 
-    await expect(store.applyPull(sessionId, conflictingPull)).rejects.toThrow();
+    await expect(store.applyPull(bindingContext, conflictingPull)).rejects.toThrow();
     await expect(database.sharedState(sessionId)).resolves.toEqual(before);
   });
 
@@ -328,7 +336,9 @@ describe("shared SQLite recovery", () => {
     const before = await database.sharedState(sessionId);
     const transactionStarts = database.transactionStarts;
 
-    await expect(store.applyPull(sessionId, pull({ duplicateProjection: true }))).rejects.toThrow();
+    await expect(
+      store.applyPull(bindingContext, pull({ duplicateProjection: true })),
+    ).rejects.toThrow();
     expect(database.transactionStarts).toBe(transactionStarts);
     await expect(database.sharedState(sessionId)).resolves.toEqual(before);
   });
@@ -341,7 +351,7 @@ describe("shared SQLite recovery", () => {
     const transactionStarts = database.transactionStarts;
 
     await expect(
-      store.applyPull(sessionId, pull({ results: [duplicate, duplicate] })),
+      store.applyPull(bindingContext, pull({ results: [duplicate, duplicate] })),
     ).rejects.toThrow();
     expect(database.transactionStarts).toBe(transactionStarts);
     await expect(database.sharedState(sessionId)).resolves.toEqual(before);
@@ -364,18 +374,18 @@ describe("shared SQLite recovery", () => {
     const before = await database.sharedState(sessionId);
 
     database.interruptNextTransactionAfterWrite(3);
-    await expect(store.applyPull(sessionId, replacement)).rejects.toThrow(
+    await expect(store.applyPull(bindingContext, replacement)).rejects.toThrow(
       TEST_SQLITE_INTERRUPTED_AFTER_WRITE,
     );
     await expect(database.sharedState(sessionId)).resolves.toEqual(before);
 
     database.interruptNextTransactionBeforeCommit();
-    await expect(store.applyPull(sessionId, replacement)).rejects.toThrow(
+    await expect(store.applyPull(bindingContext, replacement)).rejects.toThrow(
       TEST_SQLITE_INTERRUPTED_BEFORE_COMMIT,
     );
     await expect(database.sharedState(sessionId)).resolves.toEqual(before);
 
-    await expect(store.applyPull(sessionId, replacement)).resolves.toBeUndefined();
+    await expect(store.applyPull(bindingContext, replacement)).resolves.toBeUndefined();
     expect((await database.sharedState(sessionId)).sessions).toEqual([
       expect.objectContaining({ cursor: "cursor-2", sync_status: "current" }),
     ]);

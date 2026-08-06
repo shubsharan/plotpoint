@@ -1,7 +1,7 @@
 import type { SyncCommand } from "@plotpoint/protocol";
 
 import type { ParticipantCredentialStore } from "./credentials";
-import { SharedSyncStore } from "./database";
+import { SharedSyncStore, type SharedBindingContext } from "./database";
 import { SharedHttpClient, SharedHttpError } from "./http-client";
 
 export type SharedSyncTrigger = "enqueue" | "foreground" | "reconnect" | "retry";
@@ -71,10 +71,20 @@ export class SharedSyncCoordinator {
   ): Promise<"current" | "revoked"> {
     const session = await this.store.session(sessionId);
     if (session === null) throw new Error("shared-session-missing");
-    if (session.membershipStatus === "revoked") return "revoked";
-    const credential = await this.credentials.get(sessionId);
+    if (session.membershipStatus === "revoked") {
+      await this.credentials.removeCredential(session.credentialKey);
+      return "revoked";
+    }
+    const credential = await this.credentials.getCredential(session.credentialKey);
     if (credential === null) throw new Error("shared-credential-missing");
-    const client = this.clientFactory(session.serviceUrl);
+    const client = this.clientFactory(session.serviceOrigin);
+    const context: SharedBindingContext = {
+      sessionId: session.sessionId,
+      runId: session.runId,
+      expectedReleaseId: session.releaseId,
+      serviceOrigin: session.serviceOrigin,
+      credentialKey: session.credentialKey,
+    };
     let batchClaimed = false;
     try {
       const batch = await this.store.beginSubmissionBatch(sessionId);
@@ -98,9 +108,9 @@ export class SharedSyncCoordinator {
       }
       await this.store.recordSyncEvent(sessionId, 0, "pulling", "started");
       const pull = await client.pull(sessionId, credential, session.cursor);
-      await this.store.applyPull(sessionId, pull);
+      await this.store.applyPull(context, pull);
       if (pull.snapshot.membershipStatus === "revoked") {
-        await this.credentials.remove(sessionId);
+        await this.credentials.removeCredential(session.credentialKey);
         await this.store.recordSyncEvent(sessionId, 0, "revoked", "snapshot-replaced");
         return "revoked";
       }
@@ -109,7 +119,7 @@ export class SharedSyncCoordinator {
     } catch (error) {
       if (error instanceof SharedHttpError && error.code === "participant-revoked") {
         await this.store.markRevoked(sessionId);
-        await this.credentials.remove(sessionId);
+        await this.credentials.removeCredential(session.credentialKey);
         await this.store.recordSyncEvent(sessionId, 0, "revoked", "participant-revoked");
         return "revoked";
       }

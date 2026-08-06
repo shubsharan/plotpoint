@@ -1,10 +1,14 @@
 import * as SecureStore from "expo-secure-store";
 
 export interface ParticipantCredentialStore {
-  create(sessionId: string): Promise<string>;
-  get(sessionId: string): Promise<string | null>;
-  remove(sessionId: string): Promise<void>;
-  getOrCreateJoinRequestId(sessionId: string): Promise<string>;
+  generateJoinRequestId(): string;
+  generateCredential(): string;
+  putCredential(key: string, credential: string): Promise<void>;
+  getCredential(key: string): Promise<string | null>;
+  removeCredential(key: string): Promise<void>;
+  putInvitation(key: string, invitation: string): Promise<void>;
+  getInvitation(key: string): Promise<string | null>;
+  removeInvitation(key: string): Promise<void>;
 }
 
 function randomSecret(): string {
@@ -15,26 +19,18 @@ function randomSecret(): string {
 }
 
 export function createParticipantCredentialStore(): ParticipantCredentialStore {
-  const key = (sessionId: string) => `plotpoint.shared.${sessionId}.credential`;
-  const joinKey = (sessionId: string) => `plotpoint.shared.${sessionId}.join-request`;
+  const put = (key: string, value: string) =>
+    SecureStore.setItemAsync(key, value, {
+      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    });
   return {
-    async create(sessionId) {
-      const credential = randomSecret();
-      await SecureStore.setItemAsync(key(sessionId), credential, {
-        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-      });
-      return credential;
-    },
-    get: (sessionId) => SecureStore.getItemAsync(key(sessionId)),
-    remove: (sessionId) => SecureStore.deleteItemAsync(key(sessionId)),
-    async getOrCreateJoinRequestId(sessionId) {
-      const existing = await SecureStore.getItemAsync(joinKey(sessionId));
-      if (existing !== null) return existing;
-      const requestId = `join-${randomSecret()}`;
-      await SecureStore.setItemAsync(joinKey(sessionId), requestId, {
-        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-      });
-      return requestId;
-    },
+    generateJoinRequestId: () => `join-${randomSecret()}`,
+    generateCredential: randomSecret,
+    putCredential: put,
+    getCredential: (key) => SecureStore.getItemAsync(key),
+    removeCredential: (key) => SecureStore.deleteItemAsync(key),
+    putInvitation: put,
+    getInvitation: (key) => SecureStore.getItemAsync(key),
+    removeInvitation: (key) => SecureStore.deleteItemAsync(key),
   };
 }

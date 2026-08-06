@@ -77,6 +77,7 @@ describe("generic shared-session PostgreSQL integration", () => {
     const credentials = [createSecret(), createSecret(), createSecret()];
     const joinInput = {
       joinRequestId: "join-1",
+      expectedReleaseId: releaseId,
       invitation: invitations[0]!.invitation,
       participantCredential: credentials[0]!,
     };
@@ -87,11 +88,13 @@ describe("generic shared-session PostgreSQL integration", () => {
     });
     const teammateTwo = await service.join(session.sessionId, {
       joinRequestId: "join-2",
+      expectedReleaseId: releaseId,
       invitation: invitations[1]!.invitation,
       participantCredential: credentials[1]!,
     });
     const teammateThree = await service.join(session.sessionId, {
       joinRequestId: "join-3",
+      expectedReleaseId: releaseId,
       invitation: invitations[2]!.invitation,
       participantCredential: credentials[2]!,
     });
@@ -180,6 +183,89 @@ describe("generic shared-session PostgreSQL integration", () => {
     });
   }, 120_000);
 
+  it("checks release pinning before invitation consumption and preserves exact join retry identity", async () => {
+    const session = await service.createSession({
+      creationId: "creation-release-pin",
+      releaseId,
+      teamLabel: "Release pin",
+    });
+    const invitation = await service.createInvitation(
+      session.sessionId,
+      "invitation-release-pin",
+      "2031-01-01T00:00:00.000Z",
+    );
+    const input = {
+      joinRequestId: "join-release-pin",
+      expectedReleaseId: releaseId,
+      invitation: invitation.invitation,
+      participantCredential: createSecret(),
+    };
+
+    await expect(
+      service.join(session.sessionId, {
+        ...input,
+        expectedReleaseId: `sha256:${"f".repeat(64)}`,
+      }),
+    ).rejects.toMatchObject({ code: "session-release-mismatch", status: 409 });
+    const beforeJoin = await pool.query(
+      "SELECT consumed_at, consumed_join_request_id, consumed_credential_digest FROM hunt_invitations WHERE invitation_id = $1",
+      ["invitation-release-pin"],
+    );
+    expect(beforeJoin.rows).toEqual([
+      {
+        consumed_at: null,
+        consumed_join_request_id: null,
+        consumed_credential_digest: null,
+      },
+    ]);
+
+    const joined = await service.join(session.sessionId, input);
+    const duplicate = await service.join(session.sessionId, input);
+    expect(joined).toMatchObject({
+      releaseId,
+      teamId: session.teamId,
+      disposition: "joined",
+    });
+    expect(duplicate).toMatchObject({
+      participantId: joined.participantId,
+      teamId: joined.teamId,
+      releaseId,
+      disposition: "duplicate",
+    });
+    for (const response of [joined, duplicate]) {
+      expect(response.releaseId).toBe(response.sync.snapshot.releaseId);
+      expect(response.participantId).toBe(response.sync.snapshot.participantId);
+      expect(response.teamId).toBe(response.sync.snapshot.teamId);
+      expect(response.sync.snapshot.sessionId).toBe(session.sessionId);
+      expect(response).not.toHaveProperty("version");
+      expect(response.sync).not.toHaveProperty("version");
+    }
+
+    await expect(
+      service.join(session.sessionId, {
+        ...input,
+        expectedReleaseId: `sha256:${"e".repeat(64)}`,
+      }),
+    ).rejects.toMatchObject({ code: "session-release-mismatch", status: 409 });
+
+    const changedInvitation = await service.createInvitation(
+      session.sessionId,
+      "invitation-release-pin-changed",
+      "2031-01-01T00:00:00.000Z",
+    );
+    await expect(
+      service.join(session.sessionId, {
+        ...input,
+        invitation: changedInvitation.invitation,
+      }),
+    ).rejects.toMatchObject({ code: "join-not-authorized", status: 401 });
+    const changedInvitationRow = await pool.query(
+      "SELECT consumed_at FROM hunt_invitations WHERE invitation_id = $1",
+      ["invitation-release-pin-changed"],
+    );
+    expect(changedInvitationRow.rows).toEqual([{ consumed_at: null }]);
+  }, 120_000);
+
   it("rolls back all writes when the final operational-event write fails", async () => {
     const session = await service.createSession({
       creationId: "creation-fault",
@@ -194,6 +280,7 @@ describe("generic shared-session PostgreSQL integration", () => {
     const credential = createSecret();
     await service.join(session.sessionId, {
       joinRequestId: "join-fault",
+      expectedReleaseId: releaseId,
       invitation: invitation.invitation,
       participantCredential: credential,
     });

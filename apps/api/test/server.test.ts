@@ -159,6 +159,7 @@ describe("generic shared-session HTTP boundary", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         joinRequestId: "join-1",
+        expectedReleaseId: RELEASE_ID,
         invitation: "invitation-secret-with-enough-entropy",
         participantCredential: "participant-secret-with-enough-entropy",
       }),
@@ -166,6 +167,7 @@ describe("generic shared-session HTTP boundary", () => {
     expect(joined.status).toBe(200);
     expect(fake.join).toHaveBeenCalledWith("session-1", {
       joinRequestId: "join-1",
+      expectedReleaseId: RELEASE_ID,
       invitation: "invitation-secret-with-enough-entropy",
       participantCredential: "participant-secret-with-enough-entropy",
     });

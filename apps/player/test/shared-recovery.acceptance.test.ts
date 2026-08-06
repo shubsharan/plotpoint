@@ -2,10 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import type { SharedCommandIntent, SyncPull } from "@plotpoint/protocol";
 
-import { SharedSyncStore } from "../src/shared/database";
+import { SharedSyncStore, type SharedBindingContext } from "../src/shared/database";
 import { createSharedTestDatabase, type TestSharedSqliteDatabase } from "./helpers/shared-sqlite";
 
 const releaseId = `sha256:${"a".repeat(64)}` as const;
+const bindingContext: SharedBindingContext = {
+  sessionId: "session-1",
+  runId: "run-1",
+  expectedReleaseId: releaseId,
+  serviceOrigin: "https://service.example",
+  credentialKey: "plotpoint.shared.session-1.credential",
+};
 
 function projection(stateVersion: number) {
   return {
@@ -75,15 +82,16 @@ describe("shared recovery acceptance", () => {
       const store = new SharedSyncStore(database);
       await database.runAsync(
         `INSERT INTO shared_sessions
-         (session_id,run_id,release_id,participant_id,team_id,service_url,membership_status,
+         (session_id,run_id,release_id,participant_id,team_id,service_origin,credential_key,membership_status,
           transport_status,sync_status,cursor,confirmed_at)
-         VALUES (?,?,?,?,?,?,'active','online','current','0',?)`,
+         VALUES (?,?,?,?,?,?,?,'active','online','current','0',?)`,
         "session-1",
         "run-1",
         releaseId,
         "participant-1",
         "team-1",
         "https://service.example",
+        bindingContext.credentialKey,
         "2030-01-01T00:00:00.000Z",
       );
 
@@ -101,10 +109,10 @@ describe("shared recovery acceptance", () => {
       expect(recoveredBatch).toEqual(lostResponseBatch);
 
       const normal = pull({ cursor: "100", stateVersion: 100, commandIds });
-      await store.applyPull("session-1", normal);
+      await store.applyPull(bindingContext, normal);
       const normalBytes = await durableBytes(database);
       for (let iteration = 0; iteration < 100; iteration += 1) {
-        await store.applyPull("session-1", normal);
+        await store.applyPull(bindingContext, normal);
       }
       expect(await durableBytes(database)).toBe(normalBytes);
       await expect(
@@ -115,9 +123,9 @@ describe("shared recovery acceptance", () => {
       ).resolves.toEqual({ count: 100 });
 
       const corrective = pull({ cursor: "101", stateVersion: 101, commandIds });
-      await store.applyPull("session-1", corrective);
+      await store.applyPull(bindingContext, corrective);
       const correctiveBytes = await durableBytes(database);
-      await store.applyPull("session-1", corrective);
+      await store.applyPull(bindingContext, corrective);
       expect(await durableBytes(database)).toBe(correctiveBytes);
 
       await store.enqueue(
@@ -126,13 +134,13 @@ describe("shared recovery acceptance", () => {
         "2030-01-01T00:00:01.000Z",
       );
       const revoked = pull({ cursor: "102", membership: "revoked", stateVersion: 101 });
-      await store.applyPull("session-1", revoked);
+      await store.applyPull(bindingContext, revoked);
       const revokedBytes = await durableBytes(database);
       for (let iteration = 0; iteration < 100; iteration += 1) {
-        await store.applyPull("session-1", revoked);
+        await store.applyPull(bindingContext, revoked);
       }
       expect(await durableBytes(database)).toBe(revokedBytes);
-      await expect(store.applyPull("session-1", corrective)).rejects.toThrow(
+      await expect(store.applyPull(bindingContext, corrective)).rejects.toThrow(
         "membership-reactivation-conflict",
       );
       expect(await durableBytes(database)).toBe(revokedBytes);

@@ -88,6 +88,21 @@ export interface SyncPull {
   readonly commandResults: readonly SyncCommandResult[];
 }
 
+export interface SharedJoinRequest {
+  readonly joinRequestId: string;
+  readonly expectedReleaseId: `sha256:${string}`;
+  readonly invitation: string;
+  readonly participantCredential: string;
+}
+
+export interface SharedJoinResponse {
+  readonly participantId: string;
+  readonly teamId: string;
+  readonly releaseId: `sha256:${string}`;
+  readonly disposition: "joined" | "duplicate";
+  readonly sync: SyncPull;
+}
+
 export interface SharedPlayTransport {
   send(
     type: "shared.view.get" | "shared.command.enqueue",
