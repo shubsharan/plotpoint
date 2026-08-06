@@ -1,5 +1,7 @@
 import {
+  HOST_BRIDGE_VERSION,
   openRelease,
+  parseHostBridgeEnvelope,
   verifyRelease,
   type CanonicalJsonObject,
   type ReleaseId,
@@ -9,44 +11,48 @@ import { canonicalizeValue } from "@plotpoint/runtime";
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
 
 import type { PlayerDatabase } from "../persistence/database";
+import { validateCandidateTransition } from "../persistence/validation";
 import type { RunRecord } from "../model";
+import type { CandidateTransition, DurableCommandRecord, DurableTransitionResult } from "../model";
 
 export interface RecoveryBootstrap {
   readonly runId: string;
   readonly releaseId: ReleaseId;
   readonly startedAt: string;
   readonly aggregate: {
+    readonly modelId: string;
     readonly aggregateId: string;
     readonly aggregateKind: "player";
     readonly schemaId: string;
-    readonly schemaVersion: number;
     readonly state: CanonicalJsonObject;
     readonly stateVersion: number;
+    readonly progression?: import("@plotpoint/protocol").ProgressionInstance;
   } | null;
 }
 
 export interface RecoverySnapshotRow {
+  readonly model_id: string;
   readonly aggregate_id: string;
   readonly aggregate_kind: string;
   readonly schema_id: string;
-  readonly schema_version: number;
   readonly state_version: number;
   readonly state_json: string;
+  readonly progression_json: string | null;
   readonly journal_position: number;
 }
 
 export interface RecoveryJournalRow {
   readonly sequence: number;
   readonly command_id: string;
-  readonly outcome_json: string;
-  readonly progression_json: string;
+  readonly record_json: string;
 }
 
 export interface RecoveryReceiptRow {
   readonly command_id: string;
-  readonly expected_version: number;
+  readonly expected_state_version: number;
+  readonly candidate_json: string;
   readonly result_json: string;
-  readonly resulting_version: number;
+  readonly resulting_state_version: number;
 }
 
 export interface RecoveryObservationLinkRow {
@@ -68,24 +74,8 @@ export type RecoveryRecordsResult =
 
 export type RecoveryStateValidator = (input: {
   readonly schemaId: string;
-  readonly schemaVersion: number;
   readonly state: CanonicalJsonObject;
 }) => boolean;
-
-interface RecoveryReceiptResult {
-  readonly kind: "accepted";
-  readonly commandId: string;
-  readonly commandOutcome: "accepted" | "no-op" | "rejected" | "invalid";
-  readonly aggregateId: string;
-  readonly aggregateKind: "player";
-  readonly schemaId: string;
-  readonly schemaVersion: number;
-  readonly expectedVersion: number;
-  readonly resultingVersion: number;
-  readonly observationIds: readonly string[];
-  readonly outcome?: CanonicalJsonObject;
-  readonly diagnosticCodes?: readonly string[];
-}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
@@ -101,69 +91,52 @@ function hasExactFields(value: Record<string, unknown>, fields: readonly string[
   );
 }
 
-function parseRecoveryReceiptResult(value: string): RecoveryReceiptResult | null {
-  let parsed: unknown;
+function parseJson(value: string): unknown {
   try {
-    parsed = JSON.parse(value) as unknown;
+    return JSON.parse(value) as unknown;
   } catch {
     return null;
   }
-  if (!isPlainObject(parsed)) return null;
-  const commandOutcome = parsed.commandOutcome;
-  if (
-    commandOutcome !== "accepted" &&
-    commandOutcome !== "no-op" &&
-    commandOutcome !== "rejected" &&
-    commandOutcome !== "invalid"
-  ) {
-    return null;
-  }
-  const terminalField = commandOutcome === "invalid" ? "diagnosticCodes" : "outcome";
-  if (
-    !hasExactFields(parsed, [
-      "aggregateId",
-      "aggregateKind",
-      "commandId",
-      "commandOutcome",
-      "expectedVersion",
-      terminalField,
-      "kind",
-      "observationIds",
-      "resultingVersion",
-      "schemaId",
-      "schemaVersion",
-    ]) ||
-    parsed.kind !== "accepted" ||
-    typeof parsed.commandId !== "string" ||
-    parsed.commandId.length === 0 ||
-    typeof parsed.aggregateId !== "string" ||
-    parsed.aggregateId.length === 0 ||
-    parsed.aggregateKind !== "player" ||
-    typeof parsed.schemaId !== "string" ||
-    parsed.schemaId.length === 0 ||
-    !Number.isSafeInteger(parsed.schemaVersion) ||
-    (parsed.schemaVersion as number) < 1 ||
-    !Number.isSafeInteger(parsed.expectedVersion) ||
-    (parsed.expectedVersion as number) < 0 ||
-    !Number.isSafeInteger(parsed.resultingVersion) ||
-    (parsed.resultingVersion as number) < 0 ||
-    !Array.isArray(parsed.observationIds) ||
-    !parsed.observationIds.every((id) => typeof id === "string" && id.length > 0) ||
-    new Set(parsed.observationIds).size !== parsed.observationIds.length
-  ) {
-    return null;
-  }
-  if (commandOutcome === "invalid") {
-    if (
-      !Array.isArray(parsed.diagnosticCodes) ||
-      !parsed.diagnosticCodes.every((code) => typeof code === "string" && code.length > 0)
-    ) {
-      return null;
-    }
-  } else if (!isPlainObject(parsed.outcome) || canonicalizeValue(parsed.outcome).kind !== "valid") {
-    return null;
-  }
-  return parsed as unknown as RecoveryReceiptResult;
+}
+
+function parseRecoveryCandidate(value: string): CandidateTransition | null {
+  const validated = validateCandidateTransition(parseJson(value));
+  return validated.kind === "valid" ? validated.candidate : null;
+}
+
+function parseRecoveryResult(value: string): DurableTransitionResult | null {
+  const parsed = parseHostBridgeEnvelope(
+    {
+      version: HOST_BRIDGE_VERSION,
+      requestId: "recovery",
+      type: "transition.result",
+      payload: parseJson(value),
+    },
+    "host-to-web",
+  );
+  return parsed.kind === "valid" && parsed.envelope.type === "transition.result"
+    ? parsed.envelope.payload
+    : null;
+}
+
+function canonicalEqual(left: unknown, right: unknown): boolean {
+  const leftCanonical = canonicalizeValue(left);
+  const rightCanonical = canonicalizeValue(right);
+  return (
+    leftCanonical.kind === "valid" &&
+    rightCanonical.kind === "valid" &&
+    JSON.stringify(leftCanonical.canonical.value) === JSON.stringify(rightCanonical.canonical.value)
+  );
+}
+
+function parseRecoveryCommandRecord(value: string): DurableCommandRecord | null {
+  const parsed = parseJson(value);
+  if (!isPlainObject(parsed) || !hasExactFields(parsed, ["candidate", "result"])) return null;
+  const candidate = validateCandidateTransition(parsed.candidate);
+  const result = parseRecoveryResult(JSON.stringify(parsed.result));
+  return candidate.kind === "valid" && result !== null
+    ? { candidate: candidate.candidate, result }
+    : null;
 }
 
 function parsedObject(value: string): CanonicalJsonObject | null {
@@ -225,8 +198,11 @@ export async function verifyRecoveryArtifact(input: {
       if (entry === undefined) {
         return { kind: "invalid", code: "recovery-aggregate-schema-missing" };
       }
+      if (validators.has(requirement.id)) {
+        return { kind: "invalid", code: "recovery-aggregate-schema-duplicate" };
+      }
       validators.set(
-        `${requirement.id}\0${requirement.version}`,
+        requirement.id,
         new Ajv2020({ allErrors: true, strict: true }).compile(
           JSON.parse(decoder.decode(entry.bytes)) as object,
         ),
@@ -235,8 +211,7 @@ export async function verifyRecoveryArtifact(input: {
     return {
       kind: "valid",
       manifest: verified.manifest,
-      validateState: ({ schemaId, schemaVersion, state }) =>
-        validators.get(`${schemaId}\0${schemaVersion}`)?.(state) === true,
+      validateState: ({ schemaId, state }) => validators.get(schemaId)?.(state) === true,
     };
   } catch {
     return { kind: "invalid", code: "recovery-aggregate-schema-invalid" };
@@ -257,11 +232,55 @@ export function validateRecoveryRecords(
   }
 
   const snapshot = records.snapshot;
+  if (
+    !hasExactFields(snapshot as unknown as Record<string, unknown>, [
+      "aggregate_id",
+      "aggregate_kind",
+      "journal_position",
+      "model_id",
+      "progression_json",
+      "schema_id",
+      "state_json",
+      "state_version",
+    ]) ||
+    records.journals.some(
+      (journal) =>
+        !hasExactFields(journal as unknown as Record<string, unknown>, [
+          "command_id",
+          "record_json",
+          "sequence",
+        ]),
+    ) ||
+    records.receipts.some(
+      (receipt) =>
+        !hasExactFields(receipt as unknown as Record<string, unknown>, [
+          "candidate_json",
+          "command_id",
+          "expected_state_version",
+          "result_json",
+          "resulting_state_version",
+        ]),
+    ) ||
+    records.observationLinks.some(
+      (link) =>
+        !hasExactFields(link as unknown as Record<string, unknown>, [
+          "command_id",
+          "observation_exists",
+          "observation_id",
+        ]),
+    )
+  ) {
+    return { kind: "invalid", code: "recovery-record-shape-invalid" };
+  }
   const state = parsedObject(snapshot.state_json);
+  const progression =
+    snapshot.progression_json === null ? undefined : parseJson(snapshot.progression_json);
   if (
     state === null ||
+    snapshot.model_id.length === 0 ||
     snapshot.aggregate_id.length === 0 ||
     snapshot.aggregate_kind !== "player" ||
+    (snapshot.progression_json !== null && progression === null) ||
     !Number.isSafeInteger(snapshot.state_version) ||
     snapshot.state_version < 0 ||
     !Number.isSafeInteger(snapshot.journal_position) ||
@@ -274,17 +293,38 @@ export function validateRecoveryRecords(
     (requirement) =>
       requirement.kind === snapshot.aggregate_kind && requirement.id === snapshot.schema_id,
   );
-  if (schema === undefined || schema.version !== snapshot.schema_version) {
+  if (schema === undefined) {
     return { kind: "invalid", code: "recovery-snapshot-schema-mismatch" };
   }
-  if (
-    !validateState({
-      schemaId: snapshot.schema_id,
-      schemaVersion: snapshot.schema_version,
-      state,
-    })
-  ) {
+  if (!validateState({ schemaId: snapshot.schema_id, state })) {
     return { kind: "invalid", code: "recovery-snapshot-state-schema-invalid" };
+  }
+  const bootstrapEnvelope = parseHostBridgeEnvelope(
+    {
+      version: HOST_BRIDGE_VERSION,
+      requestId: "recovery",
+      type: "runtime.bootstrap",
+      payload: {
+        runId: "recovery",
+        releaseId: `sha256:${"0".repeat(64)}`,
+        aggregate: {
+          modelId: snapshot.model_id,
+          aggregateId: snapshot.aggregate_id,
+          aggregateKind: snapshot.aggregate_kind,
+          schemaId: snapshot.schema_id,
+          stateVersion: snapshot.state_version,
+          state,
+          ...(progression === undefined ? {} : { progression }),
+        },
+      },
+    },
+    "host-to-web",
+  );
+  if (
+    bootstrapEnvelope.kind === "invalid" ||
+    bootstrapEnvelope.envelope.type !== "runtime.bootstrap"
+  ) {
+    return { kind: "invalid", code: "recovery-snapshot-invalid" };
   }
   if (
     snapshot.journal_position !== records.journals.length ||
@@ -294,30 +334,47 @@ export function validateRecoveryRecords(
   }
 
   const receipts = new Map(records.receipts.map((receipt) => [receipt.command_id, receipt]));
+  if (receipts.size !== records.receipts.length) {
+    return { kind: "invalid", code: "recovery-receipt-duplicate" };
+  }
+  const parsedReceipts = new Map<
+    string,
+    { readonly candidate: CandidateTransition; readonly result: DurableTransitionResult }
+  >();
   const acceptedCommands = new Set<string>();
   for (const receipt of records.receipts) {
-    const result = parseRecoveryReceiptResult(receipt.result_json);
+    const candidate = parseRecoveryCandidate(receipt.candidate_json);
+    const result = parseRecoveryResult(receipt.result_json);
     if (
+      candidate === null ||
       result === null ||
+      candidate.commandId !== receipt.command_id ||
       result.commandId !== receipt.command_id ||
-      result.expectedVersion !== receipt.expected_version ||
-      result.resultingVersion !== receipt.resulting_version ||
-      result.aggregateKind !== "player" ||
-      result.aggregateId !== snapshot.aggregate_id ||
-      result.schemaId !== snapshot.schema_id ||
-      result.schemaVersion !== snapshot.schema_version ||
-      receipt.resulting_version !==
-        receipt.expected_version + (result.commandOutcome === "accepted" ? 1 : 0)
+      candidate.expectedStateVersion !== receipt.expected_state_version ||
+      result.resultingStateVersion !== receipt.resulting_state_version ||
+      result.disposition !== "committed" ||
+      candidate.terminal !== result.terminal ||
+      candidate.modelId !== snapshot.model_id ||
+      candidate.target.aggregateKind !== "player" ||
+      candidate.target.aggregateId !== snapshot.aggregate_id ||
+      candidate.target.schemaId !== snapshot.schema_id ||
+      receipt.resulting_state_version !==
+        receipt.expected_state_version + (candidate.terminal === "accepted" ? 1 : 0) ||
+      (candidate.terminal === "invalid"
+        ? result.terminal !== "invalid" ||
+          !canonicalEqual(candidate.diagnosticCodes, result.diagnosticCodes)
+        : result.terminal === "invalid" || !canonicalEqual(candidate.outcome, result.outcome))
     ) {
       return { kind: "invalid", code: "recovery-receipt-invalid" };
     }
-    if (result.commandOutcome === "accepted") acceptedCommands.add(receipt.command_id);
+    parsedReceipts.set(receipt.command_id, { candidate, result });
+    if (candidate.terminal === "accepted") acceptedCommands.add(receipt.command_id);
 
     const durableLinks = records.observationLinks
       .filter((link) => link.command_id === receipt.command_id)
       .map((link) => link.observation_id)
       .sort();
-    const claimedLinks = [...result.observationIds].sort();
+    const claimedLinks = [...candidate.observationIds].sort();
     if (
       durableLinks.length !== claimedLinks.length ||
       durableLinks.some((id, index) => id !== claimedLinks[index])
@@ -342,41 +399,35 @@ export function validateRecoveryRecords(
     if (
       journal.sequence !== sequence ||
       receipt === undefined ||
-      receipt.expected_version !== sequence - 1 ||
-      receipt.resulting_version !== sequence
+      receipt.expected_state_version !== sequence - 1 ||
+      receipt.resulting_state_version !== sequence
     ) {
       return { kind: "invalid", code: "recovery-journal-receipt-mismatch" };
     }
-    const result = parseRecoveryReceiptResult(receipt.result_json);
-    if (result === null) return { kind: "invalid", code: "recovery-receipt-invalid" };
-    if (result.commandOutcome !== "accepted") {
+    const receiptRecord = parsedReceipts.get(journal.command_id);
+    const journalRecord = parseRecoveryCommandRecord(journal.record_json);
+    if (
+      receiptRecord === undefined ||
+      journalRecord === null ||
+      receiptRecord.candidate.terminal !== "accepted" ||
+      !canonicalEqual(journalRecord, receiptRecord)
+    ) {
       return { kind: "invalid", code: "recovery-journal-receipt-mismatch" };
-    }
-    try {
-      const outcome = parsedObject(journal.outcome_json);
-      const progression = JSON.parse(journal.progression_json) as unknown;
-      if (
-        outcome === null ||
-        JSON.stringify(outcome) !== JSON.stringify(result.outcome) ||
-        !Array.isArray(progression) ||
-        !progression.every((change) => typeof change === "string")
-      ) {
-        return { kind: "invalid", code: "recovery-journal-payload-invalid" };
-      }
-    } catch {
-      return { kind: "invalid", code: "recovery-journal-payload-invalid" };
     }
   }
 
   return {
     kind: "valid",
     aggregate: {
+      modelId: snapshot.model_id,
       aggregateId: snapshot.aggregate_id,
       aggregateKind: "player",
       schemaId: snapshot.schema_id,
-      schemaVersion: snapshot.schema_version,
       state,
       stateVersion: snapshot.state_version,
+      ...(bootstrapEnvelope.envelope.payload.aggregate.progression === undefined
+        ? {}
+        : { progression: bootstrapEnvelope.envelope.payload.aggregate.progression }),
     },
   };
 }
@@ -420,17 +471,18 @@ export async function recoverRun(
   const transaction = database.raw();
   const records: RecoveryRecords = {
     snapshot: await transaction.getFirstAsync<RecoverySnapshotRow>(
-      `SELECT aggregate_id, aggregate_kind, schema_id, schema_version, state_version,
-              state_json, journal_position FROM snapshots WHERE run_id = ?`,
+      `SELECT model_id, aggregate_id, aggregate_kind, schema_id, state_version,
+              state_json, progression_json, journal_position FROM snapshots WHERE run_id = ?`,
       run.runId,
     ),
     journals: await transaction.getAllAsync<RecoveryJournalRow>(
-      `SELECT sequence, command_id, outcome_json, progression_json
+      `SELECT sequence, command_id, record_json
        FROM journal WHERE run_id = ? ORDER BY sequence`,
       run.runId,
     ),
     receipts: await transaction.getAllAsync<RecoveryReceiptRow>(
-      `SELECT command_id, expected_version, result_json, resulting_version
+      `SELECT command_id, expected_state_version, candidate_json, result_json,
+              resulting_state_version
        FROM command_receipts WHERE run_id = ?`,
       run.runId,
     ),

@@ -22,11 +22,13 @@ export function validateAssets(snapshot: CompilationSnapshot): ValidateAssetsRes
     [
       "bundles/logic.js",
       "bundles/presentation.js",
+      "composition/game.json",
       "manifest.json",
-      ...snapshot.registries.aggregateSchemas.map(({ id }) =>
-        generatedReleaseEntryPath("aggregate-schema", id),
+      ...snapshot.registries.schemas.map(({ id }) =>
+        snapshot.registries.aggregateModels.some(({ stateSchema }) => stateSchema === id)
+          ? generatedReleaseEntryPath("aggregate-schema", id)
+          : generatedReleaseEntryPath("schema", id),
       ),
-      ...snapshot.registries.schemas.map(({ id }) => generatedReleaseEntryPath("schema", id)),
       ...snapshot.registries.progressions.map(({ id }) =>
         generatedReleaseEntryPath("progression", id),
       ),

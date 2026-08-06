@@ -13,11 +13,11 @@ type Payload = JsonObject;
 type Outcome = JsonObject & { readonly result: string };
 
 const aggregate: Aggregate<State, "player"> = {
-  kind: "player",
-  id: "p1",
-  schemaVersion: 1,
+  aggregateId: "p1",
+  modelId: "player.model",
+  aggregateKind: "player",
+  schemaId: "player.state",
   stateVersion: 0,
-  authority: "local",
   state: { seen: "" },
 };
 const command: Command<Payload, "player"> = {
@@ -53,8 +53,8 @@ describe("ordered observation consumption", () => {
       observations: [{ kind: "clock", key: "now", value: "2030-01-01T00:00:00.000Z" }],
     });
 
-    expect(result.kind).toBe("accepted");
-    if (result.kind !== "accepted") throw new Error("expected accepted");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "accepted" } });
+    if (result.kind !== "recorded") throw new Error("expected recorded acceptance");
     expect(result.record.observationTrace).toEqual([
       {
         index: 0,
@@ -73,9 +73,9 @@ describe("ordered observation consumption", () => {
       observations: [],
     });
 
-    expect(result.kind).toBe("invalid");
-    if (result.kind === "invalid")
-      expect(result.diagnostics[0]?.code).toBe("observation-exhausted");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
+    if (result.kind === "recorded")
+      expect(result.record.diagnostics[0]?.code).toBe("observation-exhausted");
   });
 
   it("diagnoses an out-of-order identity", () => {
@@ -86,8 +86,8 @@ describe("ordered observation consumption", () => {
       observations: [{ kind: "identifier", key: "next", value: "id-1" }],
     });
 
-    expect(result.kind).toBe("invalid");
-    if (result.kind === "invalid")
-      expect(result.diagnostics[0]?.code).toBe("observation-order-mismatch");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
+    if (result.kind === "recorded")
+      expect(result.record.diagnostics[0]?.code).toBe("observation-order-mismatch");
   });
 });

@@ -67,7 +67,6 @@ export interface ValidatedSchema {
 export type ValidateSchemasResult =
   | {
       readonly kind: "valid";
-      readonly aggregateSchemas: ReadonlyMap<string, ValidatedSchema>;
       readonly schemas: ReadonlyMap<string, ValidatedSchema>;
     }
   | { readonly kind: "invalid"; readonly diagnostics: readonly CompilerDiagnostic[] };
@@ -190,21 +189,13 @@ function closedSubsetDiagnostics(
 
 export function validateSchemas(snapshot: CompilationSnapshot): ValidateSchemasResult {
   const ajv = new Ajv2020({ allErrors: true, strict: true, validateSchema: true });
-  const aggregateSchemas = new Map<string, ValidatedSchema>();
   const schemas = new Map<string, ValidatedSchema>();
   const diagnostics: CompilerDiagnostic[] = [];
-  const registrations = [
-    ...snapshot.registries.aggregateSchemas.map((registration) => ({
-      id: registration.id,
-      path: registration.path,
-      registration: "aggregateSchemas",
-    })),
-    ...snapshot.registries.schemas.map((registration) => ({
-      id: registration.id,
-      path: registration.path,
-      registration: "schemas",
-    })),
-  ];
+  const registrations = snapshot.registries.schemas.map((registration) => ({
+    id: registration.id,
+    path: registration.path,
+    registration: "schemas",
+  }));
 
   for (const registration of registrations) {
     const file = snapshot.files.get(registration.path);
@@ -277,9 +268,7 @@ export function validateSchemas(snapshot: CompilationSnapshot): ValidateSchemasR
         continue;
       }
       const validate = ajv.compile(document);
-      const destination =
-        registration.registration === "aggregateSchemas" ? aggregateSchemas : schemas;
-      destination.set(
+      schemas.set(
         registration.id,
         Object.freeze({
           id: registration.id,
@@ -303,5 +292,5 @@ export function validateSchemas(snapshot: CompilationSnapshot): ValidateSchemasR
   if (diagnostics.length > 0) {
     return { kind: "invalid", diagnostics: orderCompilerDiagnostics(diagnostics) };
   }
-  return { kind: "valid", aggregateSchemas, schemas };
+  return { kind: "valid", schemas };
 }

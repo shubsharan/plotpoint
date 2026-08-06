@@ -12,11 +12,11 @@ type State = JsonObject & { readonly done: boolean };
 type Outcome = JsonObject & { readonly result: string };
 
 const aggregate: Aggregate<State, "session"> = {
-  kind: "session",
-  id: "s1",
-  schemaVersion: 1,
+  aggregateId: "s1",
+  modelId: "session.model",
+  aggregateKind: "session",
+  schemaId: "session.state",
   stateVersion: 0,
-  authority: "server",
   state: { done: false },
 };
 const command: Command<JsonObject, "session"> = {
@@ -48,15 +48,15 @@ describe("event and effect boundary", () => {
 
     const result = executeCommand({ definition, aggregate, command, observations: [] });
 
-    expect(result.kind).toBe("accepted");
-    if (result.kind === "accepted") {
-      expect(result.domainEvents).toEqual([{ order: 1 }, { order: 2 }]);
-      expect(result.effectIntents).toEqual([{ marker: "effect-handler", type: "callback" }]);
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "accepted" } });
+    if (result.kind === "recorded") {
+      expect(result.record.domainEvents).toEqual([{ order: 1 }, { order: 2 }]);
+      expect(result.record.effectIntents).toEqual([{ marker: "effect-handler", type: "callback" }]);
     }
     expect(invoked).not.toHaveBeenCalled();
   });
 
-  it("rejects commit-dependent outputs on a no-op", () => {
+  it("accepts an effect-only durable fact and advances the aggregate once", () => {
     const definition = defineCommand<"session", State, JsonObject, Outcome>({
       definitionId: "noop-output",
       commandType: "finish",
@@ -75,7 +75,10 @@ describe("event and effect boundary", () => {
 
     const result = executeCommand({ definition, aggregate, command, observations: [] });
 
-    expect(result.kind).toBe("invalid");
-    if (result.kind === "invalid") expect(result.diagnostics[0]?.code).toBe("no-op-output-invalid");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "accepted" } });
+    if (result.kind === "recorded") {
+      expect(result.record.effectIntents).toEqual([{ type: "forbidden" }]);
+      expect(result.aggregate.stateVersion).toBe(1);
+    }
   });
 });

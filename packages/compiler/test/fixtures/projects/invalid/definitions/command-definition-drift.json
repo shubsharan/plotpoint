@@ -1,4 +1,6 @@
 {
+  "application": { "keys": ["mount"], "mountType": "function" },
+  "aggregateModels": [{ "registrationId": "player", "initializerType": "function" }],
   "commands": [
     {
       "registrationId": "solve",
@@ -7,5 +9,6 @@
       "aggregateKind": "player"
     }
   ],
-  "progressions": []
+  "progressions": [],
+  "components": []
 }

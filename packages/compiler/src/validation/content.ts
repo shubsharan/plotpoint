@@ -19,6 +19,40 @@ export type ValidateContentResult =
   | { readonly kind: "valid"; readonly content: readonly ValidatedContent[] }
   | { readonly kind: "invalid"; readonly diagnostics: readonly CompilerDiagnostic[] };
 
+export function validateDefaultInitializationInputs(
+  snapshot: CompilationSnapshot,
+  schemas: ReadonlyMap<string, ValidatedSchema>,
+): readonly CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  for (const model of snapshot.registries.aggregateModels) {
+    if (model.authority !== "local" || model.initializationContent !== undefined) continue;
+    const schema = schemas.get(model.initializationSchema);
+    if (schema === undefined || schema.validate({})) continue;
+    const firstError = [...(schema.validate.errors ?? [])].sort((left, right) => {
+      const leftKey = `${left.instancePath}\0${left.schemaPath}\0${left.keyword}`;
+      const rightKey = `${right.instancePath}\0${right.schemaPath}\0${right.keyword}`;
+      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+    })[0];
+    diagnostics.push(
+      createCompilerDiagnostic({
+        code: "content-schema-invalid",
+        location: {
+          kind: "registration",
+          registration: "aggregateModels",
+          id: model.id,
+          field: "initializationSchema",
+        },
+        details: {
+          schema: model.initializationSchema,
+          instancePath: firstError?.instancePath ?? "",
+          keyword: firstError?.keyword ?? "unknown",
+        },
+      }),
+    );
+  }
+  return orderCompilerDiagnostics(diagnostics);
+}
+
 export function validateContent(
   snapshot: CompilationSnapshot,
   schemas: ReadonlyMap<string, ValidatedSchema>,
@@ -52,7 +86,7 @@ export function validateContent(
         continue;
       }
       if (registration.schema !== undefined) {
-        const schema = schemas.get(registration.schema);
+        const schema = schemas.get(registration.schema.id);
         if (schema === undefined) {
           diagnostics.push(
             createCompilerDiagnostic({
@@ -63,7 +97,7 @@ export function validateContent(
                 id: registration.id,
                 field: "schema",
               },
-              details: { target: registration.schema },
+              details: { target: registration.schema.id },
             }),
           );
           continue;
@@ -79,7 +113,7 @@ export function validateContent(
               code: "content-schema-invalid",
               location: { kind: "artifact", path: registration.path },
               details: {
-                schema: registration.schema,
+                schema: registration.schema.id,
                 instancePath: firstError?.instancePath ?? "",
                 keyword: firstError?.keyword ?? "unknown",
               },

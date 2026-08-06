@@ -1,6 +1,4 @@
 import {
-  CONTRACT_VERSIONS,
-  isSharedHuntReport,
   projectLocationObservation,
   type LocationObservation,
   type SharedHuntReportEvent,
@@ -92,7 +90,6 @@ export function buildSharedHuntReport(evidence: SharedHuntReportEvidence): Share
     events.push({ kind: "synchronization", ...item, order: 2 });
   events.sort((left, right) => left.elapsedMs - right.elapsedMs || left.order - right.order);
   const report: SharedHuntReport = {
-    version: CONTRACT_VERSIONS.sharedReport,
     releaseId: evidence.releaseId,
     sessionAlias: "session",
     selfAlias: "self",
@@ -101,7 +98,6 @@ export function buildSharedHuntReport(evidence: SharedHuntReportEvidence): Share
     completion: evidence.completion,
     events: events.map(({ order: _order, ...event }) => event),
   };
-  if (!isSharedHuntReport(report)) throw new Error("shared-report-contract-invalid");
   const serialized = JSON.stringify(report);
   for (const forbidden of [
     "latitude",
@@ -192,7 +188,6 @@ export async function createSharedHuntReport(
       }>("SELECT * FROM observations WHERE observation_id=? ORDER BY recorded_at DESC LIMIT 1", id);
       if (row === null) throw new Error("shared-report-observation-missing");
       const base = {
-        version: CONTRACT_VERSIONS.capabilityObservation,
         observationId: row.observation_id,
         recordedAt: row.recorded_at,
       };

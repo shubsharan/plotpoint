@@ -1,5 +1,4 @@
 import {
-  CONTRACT_VERSIONS,
   isSyncCommandResult,
   isSyncPull,
   type SyncCommandResult,
@@ -17,7 +16,6 @@ export class SharedHttpError extends Error {
 }
 
 export interface JoinResult {
-  readonly version: typeof CONTRACT_VERSIONS.sharedApi;
   readonly participantId: string;
   readonly teamId: string;
   readonly releaseId: `sha256:${string}`;
@@ -74,7 +72,6 @@ export class SharedHttpClient {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          version: CONTRACT_VERSIONS.sharedApi,
           joinRequestId: input.joinRequestId,
           invitation: input.invitation,
           participantCredential: input.participantCredential,
@@ -86,10 +83,8 @@ export class SharedHttpClient {
     if (
       !object(value) ||
       Object.keys(value).some(
-        (key) =>
-          !["version", "participantId", "teamId", "releaseId", "disposition", "sync"].includes(key),
+        (key) => !["participantId", "teamId", "releaseId", "disposition", "sync"].includes(key),
       ) ||
-      value.version !== CONTRACT_VERSIONS.sharedApi ||
       typeof value.participantId !== "string" ||
       typeof value.teamId !== "string" ||
       typeof value.releaseId !== "string" ||

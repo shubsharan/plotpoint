@@ -1,5 +1,4 @@
 import {
-  CONTRACT_VERSIONS,
   isReleaseId,
   openRelease,
   verifyRelease,
@@ -73,7 +72,6 @@ function terminalResult(
   row: ReceiptRow,
 ): SyncCommandResult {
   return {
-    version: CONTRACT_VERSIONS.sharedSync,
     commandId,
     disposition,
     terminal: row.terminal,
@@ -472,12 +470,10 @@ export class HuntService {
         [participant.participant_id, after, highWater],
       );
       const pull: SyncPull = {
-        version: CONTRACT_VERSIONS.sharedSync,
         kind: "snapshot",
         reset,
         nextCursor: encodeCursor(highWater),
         snapshot: {
-          version: CONTRACT_VERSIONS.sharedSync,
           sessionId,
           releaseId: aggregate.release_id,
           participantId: participant.participant_id,

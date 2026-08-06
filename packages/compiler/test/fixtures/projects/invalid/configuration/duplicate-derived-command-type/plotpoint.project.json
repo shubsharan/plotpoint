@@ -1,0 +1,87 @@
+{
+  "projectFormatVersion": 1,
+  "environment": "web",
+  "hostApi": {
+    "major": 1,
+    "minimumMinor": 1
+  },
+  "application": {
+    "definition": {
+      "source": "src/presentation.ts",
+      "export": "presentation"
+    },
+    "components": []
+  },
+  "aggregateModels": [
+    {
+      "id": "minimal.player",
+      "authority": "local",
+      "kind": "player",
+      "stateSchema": "minimal.player-state",
+      "initializationSchema": "minimal.puzzle-content",
+      "initializer": {
+        "source": "src/logic.ts",
+        "export": "logic"
+      },
+      "initializationContent": "minimal.puzzle",
+      "events": [],
+      "effects": []
+    }
+  ],
+  "commands": [
+    {
+      "id": "minimal.solve-again",
+      "type": "solve",
+      "execution": "local",
+      "definition": {
+        "source": "src/commands/solve.ts",
+        "export": "solveCommand"
+      },
+      "aggregateModel": "minimal.player",
+      "payloadSchema": "minimal.solve-payload",
+      "outcomeSchema": "minimal.solve-outcome"
+    },
+    {
+      "id": "minimal.solve",
+      "type": "solve",
+      "execution": "local",
+      "definition": {
+        "source": "src/commands/solve.ts",
+        "export": "solveCommand"
+      },
+      "aggregateModel": "minimal.player",
+      "payloadSchema": "minimal.solve-payload",
+      "outcomeSchema": "minimal.solve-outcome"
+    }
+  ],
+  "schemas": [
+    {
+      "id": "minimal.player-state",
+      "path": "schemas/player-state.schema.json"
+    },
+    {
+      "id": "minimal.puzzle-content",
+      "path": "schemas/puzzle-content.schema.json"
+    },
+    {
+      "id": "minimal.solve-outcome",
+      "path": "schemas/solve-outcome.schema.json"
+    },
+    {
+      "id": "minimal.solve-payload",
+      "path": "schemas/solve-payload.schema.json"
+    }
+  ],
+  "progressions": [],
+  "components": [],
+  "content": [
+    {
+      "id": "minimal.puzzle",
+      "path": "content/puzzle.json",
+      "schema": {
+        "id": "minimal.puzzle-content"
+      }
+    }
+  ],
+  "assets": []
+}

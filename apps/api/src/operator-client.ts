@@ -63,27 +63,20 @@ export class HuntOperatorClient {
     readonly releaseId: string;
     readonly teamLabel: string;
   }): Promise<unknown> {
-    return this.request("/hunt-sessions", {
-      version: CONTRACT_VERSIONS.sharedApi,
-      ...input,
-    });
+    return this.request("/hunt-sessions", input);
   }
 
   createInvitation(
     sessionId: string,
     input: { readonly invitationId: string; readonly expiresAt: string },
   ): Promise<unknown> {
-    return this.request(`/hunt-sessions/${encodeURIComponent(sessionId)}/invitations`, {
-      version: CONTRACT_VERSIONS.sharedApi,
-      ...input,
-    });
+    return this.request(`/hunt-sessions/${encodeURIComponent(sessionId)}/invitations`, input);
   }
 
   revoke(sessionId: string, participantId: string, operationId: string): Promise<unknown> {
     return this.request(
       `/hunt-sessions/${encodeURIComponent(sessionId)}/participants/${encodeURIComponent(participantId)}/revoke`,
-      { version: CONTRACT_VERSIONS.sharedApi, operationId },
+      { operationId },
     );
   }
 }
-import { CONTRACT_VERSIONS } from "@plotpoint/protocol";

@@ -12,15 +12,14 @@ import {
 type State = JsonObject & { readonly count: number };
 
 const aggregate: Aggregate<State, "player"> = {
-  kind: "player",
-  id: "player-1",
-  schemaVersion: 1,
+  aggregateId: "player-1",
+  modelId: "benchmark.player",
+  aggregateKind: "player",
+  schemaId: "benchmark.state",
   stateVersion: 0,
-  authority: "local",
   state: { count: 0 },
   progression: {
     graphId: "benchmark",
-    graphVersion: 1,
     nodes: Array.from({ length: 20 }, (_value, index) => ({
       nodeId: `node-${index}`,
       status: "locked",
@@ -49,20 +48,20 @@ const definition = defineCommand<"player", State, JsonObject, JsonObject>({
     };
   },
 });
-const progression = defineProgression<"player", State, JsonObject, JsonObject>({
+const progression = defineProgression<"player", State>({
   aggregateKind: "player",
   graphId: "benchmark",
-  graphVersion: 1,
   nodes: Array.from({ length: 20 }, (_value, index) => ({
     nodeId: `node-${index}`,
     initialStatus: "locked",
   })),
-  automaticRules: Array.from({ length: 20 }, (_value, index) => ({
-    ruleId: `unlock-${index}`,
+  transitions: Array.from({ length: 20 }, (_value, index) => ({
+    transitionId: `unlock-${index}`,
     targetNodeId: `node-${index}`,
-    from: ["locked"],
-    to: "available",
+    from: ["locked" as const],
+    to: "available" as const,
     priority: 0,
+    trigger: "automatic" as const,
     when: () => true,
   })),
 });

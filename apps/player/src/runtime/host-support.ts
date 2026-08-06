@@ -1,6 +1,7 @@
 import {
-  CONTRACT_VERSIONS,
   FOREGROUND_LOCATION_CAPABILITY,
+  HOST_API_VERSION,
+  RELEASE_FORMAT_VERSION,
   type HostReleaseSupport,
   type ReleaseManifest,
 } from "@plotpoint/protocol";
@@ -59,8 +60,8 @@ function requiredCapabilitySupport(manifest: ReleaseManifest): HostReleaseSuppor
  */
 export function deriveHostSupportFromManifest(manifest: ReleaseManifest): HostReleaseSupport {
   return Object.freeze({
-    releaseFormatVersions: Object.freeze([CONTRACT_VERSIONS.releaseFormat]),
-    hostApi: CONTRACT_VERSIONS.hostApi,
+    releaseFormatVersions: Object.freeze([RELEASE_FORMAT_VERSION]),
+    hostApi: HOST_API_VERSION,
     aggregateSchemas: aggregateSchemaSupport(manifest),
     capabilities: requiredCapabilitySupport(manifest),
   });

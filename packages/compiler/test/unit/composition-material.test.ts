@@ -18,32 +18,45 @@ function configuration(): ProjectConfiguration {
     projectFormatVersion: 1,
     environment: "web",
     hostApi: { major: 1, minimumMinor: 0 },
-    entries: {
-      logic: { source: "src/logic.ts", export: "logic" },
-      presentation: { source: "src/presentation.ts", export: "presentation" },
+    application: {
+      definition: { source: "src/presentation.ts", export: "application" },
+      components: ["card"],
     },
+    aggregateModels: [
+      {
+        id: "player",
+        authority: "local",
+        kind: "player",
+        stateSchema: "player-state",
+        initializationSchema: "player-initialization",
+        initializer: { source: "src/logic.ts", export: "initialize" },
+        events: [],
+        effects: [],
+      },
+    ],
     commands: [
       {
         id: "z-command",
         type: "solve",
+        execution: "local",
         definition: { source: "src/solve.ts", export: "solve" },
-        aggregateSchema: "player-state",
+        aggregateModel: "player",
         payloadSchema: "solve-payload",
         outcomeSchema: "solve-outcome",
       },
       {
         id: "a-command",
         type: "hint",
+        execution: "local",
         definition: { source: "src/hint.ts", export: "hint" },
-        aggregateSchema: "player-state",
+        aggregateModel: "player",
         payloadSchema: "hint-payload",
         outcomeSchema: "hint-outcome",
       },
     ],
-    aggregateSchemas: [
-      { id: "player-state", kind: "player", version: 1, path: "schemas/player.json" },
-    ],
     schemas: [
+      { id: "player-state", path: "schemas/player.json" },
+      { id: "player-initialization", path: "schemas/player-initialization.json" },
       { id: "solve-outcome", path: "schemas/solve-outcome.json" },
       { id: "hint-payload", path: "schemas/hint-payload.json" },
       { id: "content", path: "schemas/content.json" },
@@ -53,13 +66,8 @@ function configuration(): ProjectConfiguration {
     progressions: [
       {
         id: "main",
-        version: 1,
-        kind: "player",
         definition: { source: "src/progression.ts", export: "main" },
-        aggregateSchema: "player-state",
-        commands: ["z-command", "a-command"],
-        content: ["puzzle"],
-        components: ["card"],
+        aggregateModel: "player",
       },
     ],
     components: [
@@ -72,7 +80,7 @@ function configuration(): ProjectConfiguration {
         capabilities: [],
       },
     ],
-    content: [{ id: "puzzle", path: "content/puzzle.json", schema: "content" }],
+    content: [{ id: "puzzle", path: "content/puzzle.json", schema: { id: "content" } }],
     assets: [{ id: "clue", path: "assets/clue.txt", releasePath: "assets/clue.txt" }],
   };
 }
@@ -95,6 +103,10 @@ function snapshot(config = configuration()): CompilationSnapshot {
         required: ["solved"],
         properties: { solved: { type: "boolean" } },
       }),
+    ],
+    [
+      "schemas/player-initialization.json",
+      jsonFile("schema", "schemas/player-initialization.json", objectSchema),
     ],
     ["schemas/solve-outcome.json", jsonFile("schema", "schemas/solve-outcome.json", objectSchema)],
     ["schemas/hint-payload.json", jsonFile("schema", "schemas/hint-payload.json", objectSchema)],
@@ -136,12 +148,18 @@ describe("composition registries", () => {
       "content",
       "hint-outcome",
       "hint-payload",
+      "player-initialization",
+      "player-state",
       "solve-outcome",
       "solve-payload",
     ]);
     expect(Object.isFrozen(result.registries.commands)).toBe(true);
-    expect(Object.isFrozen(result.registries.commands[0]?.definition)).toBe(true);
-    expect(Object.isFrozen(result.registries.progressions[0]?.commands)).toBe(true);
+    const firstCommand = result.registries.commands[0];
+    expect(firstCommand?.execution).toBe("local");
+    if (firstCommand?.execution === "local") {
+      expect(Object.isFrozen(firstCommand.definition)).toBe(true);
+    }
+    expect(Object.isFrozen(result.registries.application.components)).toBe(true);
     expect(validateReferences(result.registries)).toEqual([]);
   });
 
@@ -154,7 +172,7 @@ describe("composition registries", () => {
 
     expect(result.kind).toBe("invalid");
     if (result.kind === "invalid") {
-      expect(result.diagnostics[0]?.code).toBe("composition-reference-duplicate");
+      expect(result.diagnostics[0]?.code).toBe("configuration-identity-duplicate");
     }
   });
 });

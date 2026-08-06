@@ -152,10 +152,18 @@ export function resolveImportGraph(
   const registeredSources =
     environment === "logic"
       ? [
-          ...snapshot.registries.commands.map(({ definition }) => definition.source),
+          ...snapshot.registries.aggregateModels.flatMap((model) =>
+            model.authority === "local" ? [model.initializer.source] : [],
+          ),
+          ...snapshot.registries.commands.flatMap((command) =>
+            command.execution === "local" ? [command.definition.source] : [],
+          ),
           ...snapshot.registries.progressions.map(({ definition }) => definition.source),
         ]
-      : snapshot.registries.components.map(({ implementation }) => implementation.source);
+      : [
+          snapshot.registries.application.definition.source,
+          ...snapshot.registries.components.map(({ implementation }) => implementation.source),
+        ];
   const pending = [entry.source, ...registeredSources];
 
   while (pending.length > 0) {

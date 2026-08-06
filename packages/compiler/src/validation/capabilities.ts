@@ -22,12 +22,28 @@ export function validateCapabilities(snapshot: CompilationSnapshot): ValidateCap
   const capabilities = new Map<string, CapabilityRequirement>();
   const diagnostics: CompilerDiagnostic[] = [];
 
-  for (const component of snapshot.registries.components) {
-    for (const requirement of component.capabilities) {
+  const selections = [
+    ...snapshot.registries.components.map((component) => ({
+      registration: "components",
+      id: component.id,
+      capabilities: component.capabilities,
+    })),
+    ...(snapshot.registries.trustedMechanic === undefined
+      ? []
+      : [
+          {
+            registration: "trustedMechanic",
+            id: snapshot.registries.trustedMechanic.id,
+            capabilities: snapshot.registries.trustedMechanic.capabilities,
+          },
+        ]),
+  ];
+  for (const selection of selections) {
+    for (const requirement of selection.capabilities) {
       const location = {
         kind: "registration" as const,
-        registration: "components",
-        id: component.id,
+        registration: selection.registration,
+        id: selection.id,
         field: "capabilities",
       };
       if (
@@ -112,22 +128,6 @@ export function validateCompatibilityRequirements(
         details: { field: "minimumMinor", reason: "not-nonnegative-integer" },
       }),
     );
-  }
-  for (const schema of snapshot.registries.aggregateSchemas) {
-    if (!Number.isSafeInteger(schema.version) || schema.version < 1) {
-      diagnostics.push(
-        createCompilerDiagnostic({
-          code: "compatibility-invalid",
-          location: {
-            kind: "registration",
-            registration: "aggregateSchemas",
-            id: schema.id,
-            field: "version",
-          },
-          details: { reason: "not-positive-integer" },
-        }),
-      );
-    }
   }
   return orderCompilerDiagnostics(diagnostics);
 }

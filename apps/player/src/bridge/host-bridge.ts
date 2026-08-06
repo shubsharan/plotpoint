@@ -1,5 +1,5 @@
 import {
-  CONTRACT_VERSIONS,
+  HOST_BRIDGE_VERSION,
   parseHostBridgeEnvelope,
   type CanonicalJsonObject,
   type CapabilityRequest,
@@ -67,7 +67,7 @@ export async function routeHostBridgeMessage(
     if (request.type === "runtime.ready") {
       const payload = await handlers.runtimeReady();
       return {
-        version: CONTRACT_VERSIONS.hostBridge,
+        version: HOST_BRIDGE_VERSION,
         requestId: request.requestId,
         type: "runtime.bootstrap",
         payload,
@@ -76,7 +76,7 @@ export async function routeHostBridgeMessage(
     if (request.type === "transition.commit") {
       const payload = await handlers.commitTransition(request.payload);
       return {
-        version: CONTRACT_VERSIONS.hostBridge,
+        version: HOST_BRIDGE_VERSION,
         requestId: request.requestId,
         type: "transition.result",
         payload,
@@ -84,7 +84,7 @@ export async function routeHostBridgeMessage(
     }
     const payload = await handlers.requestCapability(request.payload);
     return {
-      version: CONTRACT_VERSIONS.hostBridge,
+      version: HOST_BRIDGE_VERSION,
       requestId: request.requestId,
       type: "capability.result",
       payload,
@@ -99,7 +99,7 @@ export async function routeHostBridgeMessage(
 
 function errorEnvelope(code: string, requestId: string): HostErrorEnvelope {
   return {
-    version: CONTRACT_VERSIONS.hostBridge,
+    version: HOST_BRIDGE_VERSION,
     requestId,
     type: "host.error",
     payload: { code },

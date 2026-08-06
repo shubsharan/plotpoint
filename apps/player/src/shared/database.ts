@@ -1,5 +1,4 @@
 import {
-  CONTRACT_VERSIONS,
   isLocationObservation,
   isSharedCommandIntent,
   isSyncPull,
@@ -10,6 +9,8 @@ import {
   type SharedProjection,
   type SyncPull,
 } from "@plotpoint/protocol";
+
+import { PLAYER_DATABASE_INCOMPATIBLE } from "../persistence/schema-policy";
 
 export const SHARED_MIGRATION = `
 CREATE TABLE IF NOT EXISTS shared_sessions (
@@ -48,6 +49,63 @@ CREATE INDEX IF NOT EXISTS shared_outbox_status ON shared_outbox(session_id, sta
 CREATE INDEX IF NOT EXISTS shared_sync_events_session ON shared_sync_events(session_id, sequence);
 `;
 
+const SHARED_SCHEMA_COLUMNS = Object.freeze({
+  shared_sessions: [
+    "session_id",
+    "run_id",
+    "release_id",
+    "participant_id",
+    "team_id",
+    "service_url",
+    "membership_status",
+    "transport_status",
+    "sync_status",
+    "cursor",
+    "confirmed_at",
+  ],
+  shared_outbox: [
+    "session_id",
+    "command_id",
+    "target_json",
+    "expected_state_version",
+    "command_type",
+    "payload_json",
+    "observation_ids_json",
+    "status",
+    "enqueued_at",
+  ],
+  shared_projections: [
+    "session_id",
+    "aggregate_kind",
+    "aggregate_id",
+    "schema_id",
+    "schema_version",
+    "state_version",
+    "value_json",
+  ],
+  shared_results: [
+    "session_id",
+    "command_id",
+    "terminal",
+    "outcome_code",
+    "resulting_state_version",
+    "expected_state_version",
+    "observation_ids_json",
+    "decision_position",
+    "decided_at",
+  ],
+  shared_sync_events: [
+    "sequence",
+    "session_id",
+    "elapsed_ms",
+    "phase",
+    "disposition",
+    "command_id",
+  ],
+} as const);
+
+export const SHARED_DATABASE_TABLES = Object.freeze(Object.keys(SHARED_SCHEMA_COLUMNS));
+
 export interface SharedSqlDatabase {
   execAsync(query: string): Promise<void>;
   runAsync(query: string, ...parameters: unknown[]): Promise<{ readonly changes?: number }>;
@@ -67,22 +125,39 @@ export interface SharedSessionRecord {
   readonly serviceUrl: string;
 }
 
-export async function migrateSharedDatabase(database: SharedSqlDatabase): Promise<void> {
-  await database.execAsync(SHARED_MIGRATION);
-  const resultColumns = new Set(
-    (await database.getAllAsync<{ name: string }>("PRAGMA table_info(shared_results)")).map(
-      ({ name }) => name,
-    ),
+function sameColumns(actual: readonly string[], expected: readonly string[]): boolean {
+  return (
+    actual.length === expected.length && actual.every((name, index) => name === expected[index])
   );
-  if (!resultColumns.has("expected_state_version")) {
-    await database.execAsync(
-      "ALTER TABLE shared_results ADD COLUMN expected_state_version INTEGER NOT NULL DEFAULT 0",
-    );
+}
+
+async function hasCorrectedSharedSchema(database: SharedSqlDatabase): Promise<boolean> {
+  for (const [table, expected] of Object.entries(SHARED_SCHEMA_COLUMNS)) {
+    const actual = (
+      await database.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)
+    ).map(({ name }) => name);
+    if (!sameColumns(actual, expected)) return false;
   }
-  if (!resultColumns.has("observation_ids_json")) {
-    await database.execAsync(
-      "ALTER TABLE shared_results ADD COLUMN observation_ids_json TEXT NOT NULL DEFAULT '[]'",
-    );
+  return true;
+}
+
+export async function assertSharedDatabaseSchema(database: SharedSqlDatabase): Promise<void> {
+  const tables = SHARED_DATABASE_TABLES;
+  const existingSharedTables = await database.getAllAsync<{ name: string }>(
+    `SELECT name FROM sqlite_master
+     WHERE type = 'table' AND name IN (${tables.map(() => "?").join(",")})`,
+    ...tables,
+  );
+  if (existingSharedTables.length > 0 && !(await hasCorrectedSharedSchema(database))) {
+    throw new Error(PLAYER_DATABASE_INCOMPATIBLE);
+  }
+}
+
+export async function migrateSharedDatabase(database: SharedSqlDatabase): Promise<void> {
+  await assertSharedDatabaseSchema(database);
+  await database.execAsync(SHARED_MIGRATION);
+  if (!(await hasCorrectedSharedSchema(database))) {
+    throw new Error(PLAYER_DATABASE_INCOMPATIBLE);
   }
 }
 
@@ -245,7 +320,6 @@ export class SharedSyncStore {
       );
       if (row === null) throw new Error("shared-observation-missing");
       const base = {
-        version: CONTRACT_VERSIONS.sharedSync,
         observationId: row.observation_id,
         recordedAt: row.recorded_at,
       };

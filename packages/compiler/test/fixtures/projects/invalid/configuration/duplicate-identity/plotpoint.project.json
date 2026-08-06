@@ -1,35 +1,30 @@
 {
   "projectFormatVersion": 1,
   "environment": "web",
-  "hostApi": {
-    "major": 1,
-    "minimumMinor": 0
+  "hostApi": { "major": 1, "minimumMinor": 0 },
+  "application": {
+    "definition": { "source": "src/presentation.ts", "export": "application" },
+    "components": []
   },
-  "entries": {
-    "logic": {
-      "source": "src/logic.ts",
-      "export": "logic"
-    },
-    "presentation": {
-      "source": "src/presentation.ts",
-      "export": "presentation"
+  "aggregateModels": [
+    {
+      "id": "player",
+      "authority": "local",
+      "kind": "player",
+      "stateSchema": "duplicate.schema",
+      "initializationSchema": "duplicate.schema",
+      "initializer": { "source": "src/logic.ts", "export": "initialize" },
+      "events": [],
+      "effects": []
     }
-  },
+  ],
   "commands": [],
-  "aggregateSchemas": [],
   "schemas": [
-    {
-      "id": "duplicate.schema",
-      "path": "schemas/a.json"
-    },
-    {
-      "id": "duplicate.schema",
-      "path": "schemas/b.json"
-    }
+    { "id": "duplicate.schema", "path": "schemas/a.json" },
+    { "id": "duplicate.schema", "path": "schemas/b.json" }
   ],
   "progressions": [],
   "components": [],
   "content": [],
   "assets": []
 }
-

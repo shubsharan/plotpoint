@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { inspectRelease } from "@plotpoint/protocol";
+import { GAME_COMPOSITION_PATH, inspectGameRelease, inspectRelease } from "@plotpoint/protocol";
 
 import { buildCanonicalRegistries } from "../../src/composition/registries.js";
 import type {
@@ -27,43 +27,45 @@ function createSnapshot(): CompilationSnapshot {
     projectFormatVersion: 1,
     environment: "web",
     hostApi: { major: 1, minimumMinor: 2 },
-    entries: {
-      logic: { source: "src/private-logic.ts", export: "logic" },
-      presentation: { source: "src/private-presentation.ts", export: "presentation" },
+    application: {
+      definition: { source: "src/private-presentation.ts", export: "application" },
+      components: ["puzzle-card"],
     },
+    aggregateModels: [
+      {
+        id: "player-model",
+        authority: "local",
+        kind: "player",
+        stateSchema: "player-state",
+        initializationSchema: "player-initialization",
+        initializer: { source: "src/private-logic.ts", export: "initialize" },
+        events: [],
+        effects: [],
+      },
+    ],
     commands: [
       {
         id: "solve",
         type: "solve",
+        execution: "local",
         definition: { source: "src/private-solve.ts", export: "solveCommand" },
-        aggregateSchema: "player-state",
+        aggregateModel: "player-model",
         payloadSchema: "solve-payload",
         outcomeSchema: "solve-outcome",
       },
     ],
-    aggregateSchemas: [
-      {
-        id: "player-state",
-        kind: "player",
-        version: 1,
-        path: "schemas/private-player-state.json",
-      },
-    ],
     schemas: [
+      { id: "player-state", path: "schemas/private-player-state.json" },
+      { id: "player-initialization", path: "schemas/private-initialization.json" },
       { id: "puzzle-content", path: "schemas/private-content.json" },
       { id: "solve-outcome", path: "schemas/private-outcome.json" },
       { id: "solve-payload", path: "schemas/private-payload.json" },
     ],
     progressions: [
       {
-        id: "puzzle",
-        version: 1,
-        kind: "player",
+        id: "main-progression",
         definition: { source: "src/private-progression.ts", export: "puzzleProgression" },
-        aggregateSchema: "player-state",
-        commands: ["solve"],
-        content: ["puzzle"],
-        components: ["puzzle-card"],
+        aggregateModel: "player-model",
       },
     ],
     components: [
@@ -79,7 +81,13 @@ function createSnapshot(): CompilationSnapshot {
         ],
       },
     ],
-    content: [{ id: "puzzle", path: "content/private-puzzle.json", schema: "puzzle-content" }],
+    content: [
+      {
+        id: "puzzle",
+        path: "content/private-puzzle.json",
+        schema: { id: "puzzle-content" },
+      },
+    ],
     assets: [{ id: "clue", path: "assets/private-clue.txt", releasePath: "assets/clue.txt" }],
   };
   const configuration = Object.freeze({
@@ -105,6 +113,10 @@ function createSnapshot(): CompilationSnapshot {
         required: ["solved"],
         properties: { solved: { type: "boolean" } },
       }),
+    ],
+    [
+      "schemas/private-initialization.json",
+      jsonFile("schema", "schemas/private-initialization.json", objectSchema),
     ],
     [
       "schemas/private-content.json",
@@ -136,11 +148,7 @@ function createSnapshot(): CompilationSnapshot {
     ],
   ]);
 
-  return {
-    config: configuration,
-    registries: registries.registries,
-    files,
-  };
+  return { config: configuration, registries: registries.registries, files };
 }
 
 async function assembleFixture(snapshot = createSnapshot()) {
@@ -154,10 +162,9 @@ async function assembleFixture(snapshot = createSnapshot()) {
   return assembleRelease({
     snapshot,
     bundles: {
-      logic: encoder.encode("export const logic = true;"),
-      presentation: encoder.encode("export const presentation = true;"),
+      logic: encoder.encode("export const aggregateModels = {};"),
+      presentation: encoder.encode("export const application = {}; export const components = {};"),
     },
-    aggregateSchemas: schemas.aggregateSchemas,
     schemas: schemas.schemas,
     content: content.content,
     assets: assets.assets,
@@ -166,7 +173,7 @@ async function assembleFixture(snapshot = createSnapshot()) {
 }
 
 describe("release assembly", () => {
-  it("assembles a complete ordinal inventory that independently self-inspects", async () => {
+  it("assembles a complete ordinal inventory with a self-inspecting game catalog", async () => {
     const result = await assembleFixture();
     expect(result.kind).toBe("assembled");
     if (result.kind !== "assembled") return;
@@ -176,9 +183,11 @@ describe("release assembly", () => {
       ["bundles/logic.js", "logic-bundle"],
       ["bundles/presentation.js", "presentation-bundle"],
       [generatedReleaseEntryPath("component", "puzzle-card"), "component-data"],
+      [GAME_COMPOSITION_PATH, "content"],
       [generatedReleaseEntryPath("content", "puzzle"), "content"],
-      [generatedReleaseEntryPath("progression", "puzzle"), "progression"],
+      [generatedReleaseEntryPath("progression", "main-progression"), "progression"],
       [generatedReleaseEntryPath("aggregate-schema", "player-state"), "aggregate-schema"],
+      [generatedReleaseEntryPath("schema", "player-initialization"), "command-schema"],
       [generatedReleaseEntryPath("schema", "puzzle-content"), "command-schema"],
       [generatedReleaseEntryPath("schema", "solve-outcome"), "command-schema"],
       [generatedReleaseEntryPath("schema", "solve-payload"), "command-schema"],
@@ -189,6 +198,14 @@ describe("release assembly", () => {
     expect(result.artifact.manifest).toMatchObject({
       releaseFormatVersion: 1,
       hostApi: { major: 1, minimumMinor: 2 },
+      aggregateSchemas: [
+        {
+          id: "player-state",
+          kind: "player",
+          version: 1,
+          path: generatedReleaseEntryPath("aggregate-schema", "player-state"),
+        },
+      ],
       entrypoints: { logic: "bundles/logic.js", presentation: "bundles/presentation.js" },
       capabilities: [{ id: "plotpoint.haptics", major: 1, minimumMinor: 2 }],
     });
@@ -205,9 +222,25 @@ describe("release assembly", () => {
       manifest: result.artifact.manifest,
       releaseId: result.artifact.releaseId,
     });
+    await expect(inspectGameRelease(result.artifact.bytes)).resolves.toMatchObject({
+      release: { kind: "inspected", releaseId: result.artifact.releaseId },
+      gameComposition: {
+        application: { components: ["puzzle-card"] },
+        aggregateModels: [
+          {
+            id: "player-model",
+            authority: "local",
+            kind: "player",
+            stateSchema: { id: "player-state" },
+            initializationSchema: { id: "player-initialization" },
+          },
+        ],
+        commands: [{ id: "solve", execution: "local", aggregateModel: "player-model" }],
+      },
+    });
   });
 
-  it("emits config-derived progression descriptors without inspected ambient values", async () => {
+  it("emits config-derived descriptors without reverse references or entry versions", async () => {
     const result = await assembleFixture();
     expect(result.kind).toBe("assembled");
     if (result.kind !== "assembled") return;
@@ -215,17 +248,12 @@ describe("release assembly", () => {
     expect(parsed.kind).toBe("parsed");
     if (parsed.kind !== "parsed") return;
     const progression = parsed.entries.find(
-      ({ path }) => path === generatedReleaseEntryPath("progression", "puzzle"),
+      ({ path }) => path === generatedReleaseEntryPath("progression", "main-progression"),
     );
 
     expect(JSON.parse(decoder.decode(progression?.bytes))).toEqual({
-      id: "puzzle",
-      version: 1,
-      kind: "player",
-      aggregateSchema: "player-state",
-      commands: ["solve"],
-      content: ["puzzle"],
-      components: ["puzzle-card"],
+      id: "main-progression",
+      aggregateModel: "player-model",
     });
   });
 
@@ -257,48 +285,5 @@ describe("release assembly", () => {
         forbidden,
       );
     }
-  });
-
-  it("keeps equal aggregate and general schema IDs in separate release entries", async () => {
-    const baseline = createSnapshot();
-    const sharedId = baseline.config.aggregateSchemas[0]?.id;
-    if (sharedId === undefined) throw new Error("fixture aggregate schema missing");
-    const configuration = {
-      ...baseline.config,
-      schemas: baseline.config.schemas.map((schema, index) =>
-        index === 0 ? { ...schema, id: sharedId } : schema,
-      ),
-      content: baseline.config.content.map((content) => ({ ...content, schema: sharedId })),
-    };
-    const registries = buildCanonicalRegistries(configuration);
-    if (registries.kind !== "valid") throw new Error("expected colliding schema registries");
-    const snapshot: CompilationSnapshot = {
-      ...baseline,
-      config: configuration,
-      registries: registries.registries,
-    };
-
-    const validated = validateSchemas(snapshot);
-    expect(validated.kind).toBe("valid");
-    if (validated.kind !== "valid") return;
-    expect(validated.aggregateSchemas.get(sharedId)?.path).toBe(
-      "schemas/private-player-state.json",
-    );
-    expect(validated.schemas.get(sharedId)?.path).toBe("schemas/private-content.json");
-
-    const result = await assembleFixture(snapshot);
-    expect(result.kind).toBe("assembled");
-    if (result.kind !== "assembled") return;
-    const parsed = parseStoredZip(result.artifact.bytes);
-    expect(parsed.kind).toBe("parsed");
-    if (parsed.kind !== "parsed") return;
-    const entries = new Map(
-      parsed.entries.map((entry) => [entry.path, decoder.decode(entry.bytes)]),
-    );
-
-    expect(entries.get(generatedReleaseEntryPath("aggregate-schema", sharedId))).toContain(
-      '"solved"',
-    );
-    expect(entries.get(generatedReleaseEntryPath("schema", sharedId))).toContain('"title"');
   });
 });

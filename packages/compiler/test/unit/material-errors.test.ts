@@ -30,22 +30,36 @@ function baseConfiguration(): ProjectConfiguration {
     projectFormatVersion: 1,
     environment: "web",
     hostApi: { major: 1, minimumMinor: 0 },
-    entries: {
-      logic: { source: "src/logic.ts", export: "logic" },
-      presentation: { source: "src/presentation.ts", export: "presentation" },
+    application: {
+      definition: { source: "src/presentation.ts", export: "presentation" },
+      components: ["card"],
     },
+    aggregateModels: [
+      {
+        id: "player",
+        authority: "local",
+        kind: "player",
+        stateSchema: "player-state",
+        initializationSchema: "player-initialization",
+        initializer: { source: "src/logic.ts", export: "initialize" },
+        events: [],
+        effects: [],
+      },
+    ],
     commands: [
       {
         id: "solve",
         type: "solve",
+        execution: "local",
         definition: { source: "src/solve.ts", export: "solve" },
-        aggregateSchema: "player",
+        aggregateModel: "player",
         payloadSchema: "payload",
         outcomeSchema: "outcome",
       },
     ],
-    aggregateSchemas: [{ id: "player", kind: "player", version: 1, path: "schemas/player.json" }],
     schemas: [
+      { id: "player-state", path: "schemas/player.json" },
+      { id: "player-initialization", path: "schemas/initialization.json" },
       { id: "content", path: "schemas/content.json" },
       { id: "outcome", path: "schemas/outcome.json" },
       { id: "payload", path: "schemas/payload.json" },
@@ -61,7 +75,7 @@ function baseConfiguration(): ProjectConfiguration {
         capabilities: [],
       },
     ],
-    content: [{ id: "puzzle", path: "content/puzzle.json", schema: "content" }],
+    content: [{ id: "puzzle", path: "content/puzzle.json", schema: { id: "content" } }],
     assets: [{ id: "clue", path: "assets/clue.txt", releasePath: "assets/clue.txt" }],
   };
 }
@@ -94,6 +108,10 @@ function snapshot(
         required: ["title"],
         properties: { title: { type: "string" } },
       }),
+    ],
+    [
+      "schemas/initialization.json",
+      jsonFile("schema", "schemas/initialization.json", objectSchema),
     ],
     ["schemas/outcome.json", jsonFile("schema", "schemas/outcome.json", objectSchema)],
     ["schemas/payload.json", jsonFile("schema", "schemas/payload.json", objectSchema)],
@@ -194,7 +212,7 @@ describe("material validation failures", () => {
       content: [
         {
           ...config.content[0]!,
-          schema: testCase.missingSchema,
+          schema: { id: testCase.missingSchema },
         },
       ],
     });
@@ -333,7 +351,7 @@ describe("material validation failures", () => {
     }
   });
 
-  it("rejects invalid host and aggregate compatibility declarations", async () => {
+  it("rejects invalid host compatibility declarations", async () => {
     const testCase = await fixture<{
       hostApi: { major: number; minimumMinor: number };
       aggregateVersion: number;
@@ -342,12 +360,10 @@ describe("material validation failures", () => {
     const project = snapshot({
       ...config,
       hostApi: testCase.hostApi,
-      aggregateSchemas: [{ ...config.aggregateSchemas[0]!, version: testCase.aggregateVersion }],
     });
 
     const result = validateCompatibilityRequirements(project);
     expect(result.map(({ code }) => code)).toEqual([
-      "compatibility-invalid",
       "compatibility-invalid",
       "compatibility-invalid",
     ]);

@@ -1,5 +1,7 @@
-import { CONTRACT_VERSIONS } from "../contract-versions.js";
 import type { CanonicalJsonObject } from "../release/types.js";
+
+export const HOST_API_VERSION = Object.freeze({ major: 1, minor: 1 } as const);
+export const HOST_BRIDGE_VERSION = 1 as const;
 
 export type HostBridgeDirection = "web-to-host" | "host-to-web";
 export type WebToHostMessageType = "runtime.ready" | "transition.commit" | "capability.request";
@@ -11,32 +13,52 @@ export type HostToWebMessageType =
 export type HostBridgeMessageType = WebToHostMessageType | HostToWebMessageType;
 
 export interface HostBridgeEnvelope<Type extends string, Payload> {
-  readonly version: typeof CONTRACT_VERSIONS.hostBridge;
+  readonly version: typeof HOST_BRIDGE_VERSION;
   readonly requestId: string;
   readonly type: Type;
-  readonly payload: Payload & CanonicalJsonObject;
+  readonly payload: Payload;
 }
 
-export type AggregateTarget = CanonicalJsonObject & {
+export interface AggregateTarget {
   readonly aggregateId: string;
   readonly aggregateKind: "player";
   readonly schemaId: string;
-  readonly schemaVersion: number;
-};
+}
 
-type TransitionCandidateBase = CanonicalJsonObject & {
+export type ProgressionStatus = "locked" | "available" | "active" | "completed" | "skipped";
+
+export interface ProgressionNodeState {
+  readonly nodeId: string;
+  readonly status: ProgressionStatus;
+}
+
+export interface ProgressionInstance {
+  readonly graphId: string;
+  readonly nodes: readonly ProgressionNodeState[];
+}
+
+export type TypedRecord = CanonicalJsonObject & { readonly type: string };
+export type ProgressionTransitionRecord = CanonicalJsonObject;
+
+interface TransitionCandidateBase {
   readonly commandId: string;
+  readonly modelId: string;
+  readonly commandType: string;
+  readonly payload: CanonicalJsonObject;
   readonly target: AggregateTarget;
-  readonly expectedVersion: number;
+  readonly expectedStateVersion: number;
   readonly observationIds: readonly string[];
-};
+}
 
 export type TransitionCandidate =
   | (TransitionCandidateBase & {
       readonly terminal: "accepted";
-      readonly nextState: CanonicalJsonObject;
+      readonly nextState?: CanonicalJsonObject;
+      readonly nextProgression?: ProgressionInstance;
       readonly outcome: CanonicalJsonObject;
-      readonly progressionChanges: readonly string[];
+      readonly domainEvents: readonly TypedRecord[];
+      readonly effectIntents: readonly TypedRecord[];
+      readonly progressionTrace: readonly ProgressionTransitionRecord[];
     })
   | (TransitionCandidateBase & {
       readonly terminal: "no-op" | "rejected";
@@ -44,37 +66,41 @@ export type TransitionCandidate =
     })
   | (TransitionCandidateBase & {
       readonly terminal: "invalid";
+      readonly phase: "execution";
       readonly diagnosticCodes: readonly string[];
+      readonly attemptedProgressionTrace: readonly ProgressionTransitionRecord[];
     });
 
-export type RuntimeBootstrap = CanonicalJsonObject & {
+export interface LocalAggregateView {
+  readonly modelId: string;
+  readonly aggregateId: string;
+  readonly aggregateKind: "player";
+  readonly schemaId: string;
+  readonly stateVersion: number;
+  readonly state: CanonicalJsonObject;
+  readonly progression?: ProgressionInstance;
+}
+
+export interface RuntimeBootstrap {
   readonly runId: string;
   readonly releaseId: `sha256:${string}`;
-  readonly aggregate:
-    | null
-    | (CanonicalJsonObject & {
-        readonly aggregateId: string;
-        readonly aggregateKind: "player";
-        readonly schemaId: string;
-        readonly schemaVersion: number;
-        readonly stateVersion: number;
-        readonly state: CanonicalJsonObject;
-      });
-};
+  readonly aggregate: LocalAggregateView;
+}
 
 export type TransitionResult =
   | {
       readonly commandId: string;
       readonly disposition: "committed" | "duplicate";
       readonly terminal: "accepted" | "no-op" | "rejected";
-      readonly resultingVersion: number;
+      readonly resultingStateVersion: number;
       readonly outcome: CanonicalJsonObject;
     }
   | {
       readonly commandId: string;
       readonly disposition: "committed" | "duplicate";
       readonly terminal: "invalid";
-      readonly resultingVersion: number;
+      readonly phase: "execution";
+      readonly resultingStateVersion: number;
       readonly diagnosticCodes: readonly string[];
     };
 
@@ -131,7 +157,7 @@ export type HostBridgeParseResult<Envelope extends AnyHostBridgeEnvelope = AnyHo
   | { readonly kind: "invalid"; readonly code: string };
 
 export interface HostBridgeTransport {
-  send(type: WebToHostMessageType, payload: CanonicalJsonObject): Promise<unknown>;
+  send(type: WebToHostMessageType, payload: object): Promise<unknown>;
 }
 
 export type HostCapabilityOutputValidator<Output extends object> = (
@@ -200,47 +226,111 @@ function isStringArray(value: unknown, unique = false): value is readonly string
 function isAggregateTarget(value: unknown): value is AggregateTarget {
   if (!isCanonicalObject(value)) return false;
   return (
-    hasExactKeys(value, ["aggregateId", "aggregateKind", "schemaId", "schemaVersion"]) &&
+    hasExactKeys(value, ["aggregateId", "aggregateKind", "schemaId"]) &&
     isNonEmptyString(value.aggregateId) &&
     value.aggregateKind === "player" &&
-    isNonEmptyString(value.schemaId) &&
-    isPositiveInteger(value.schemaVersion)
+    isNonEmptyString(value.schemaId)
   );
+}
+
+const PROGRESSION_STATUSES: ReadonlySet<string> = new Set([
+  "locked",
+  "available",
+  "active",
+  "completed",
+  "skipped",
+]);
+
+function isProgressionInstance(value: unknown): value is ProgressionInstance {
+  if (!isCanonicalObject(value) || !hasExactKeys(value, ["graphId", "nodes"])) return false;
+  if (!isNonEmptyString(value.graphId) || !Array.isArray(value.nodes)) return false;
+  let previousNodeId: string | undefined;
+  for (const node of value.nodes) {
+    if (
+      !isCanonicalObject(node) ||
+      !hasExactKeys(node, ["nodeId", "status"]) ||
+      !isNonEmptyString(node.nodeId) ||
+      typeof node.status !== "string" ||
+      !PROGRESSION_STATUSES.has(node.status) ||
+      (previousNodeId !== undefined && previousNodeId >= node.nodeId)
+    ) {
+      return false;
+    }
+    previousNodeId = node.nodeId;
+  }
+  return true;
+}
+
+function isTypedRecord(value: unknown): value is TypedRecord {
+  return isCanonicalObject(value) && isNonEmptyString(value.type);
+}
+
+function isCanonicalObjectArray(value: unknown): value is readonly CanonicalJsonObject[] {
+  return Array.isArray(value) && value.every(isCanonicalObject);
 }
 
 function isTransitionCandidate(value: unknown): value is TransitionCandidate {
   if (!isCanonicalObject(value)) return false;
   const baseIsValid =
     isNonEmptyString(value.commandId) &&
+    isNonEmptyString(value.modelId) &&
+    isNonEmptyString(value.commandType) &&
+    isCanonicalObject(value.payload) &&
     isAggregateTarget(value.target) &&
-    isNonNegativeInteger(value.expectedVersion) &&
+    isNonNegativeInteger(value.expectedStateVersion) &&
     isStringArray(value.observationIds, true);
   if (!baseIsValid) return false;
 
   if (value.terminal === "accepted") {
+    const required = [
+      "commandId",
+      "commandType",
+      "domainEvents",
+      "effectIntents",
+      "expectedStateVersion",
+      "modelId",
+      "observationIds",
+      "outcome",
+      "payload",
+      "progressionTrace",
+      "target",
+      "terminal",
+    ];
+    const keys = Object.keys(value);
+    if (
+      !required.every((key) => Object.hasOwn(value, key)) ||
+      keys.some(
+        (key) => !required.includes(key) && key !== "nextState" && key !== "nextProgression",
+      ) ||
+      (Object.hasOwn(value, "nextState") && !isCanonicalObject(value.nextState)) ||
+      (Object.hasOwn(value, "nextProgression") && !isProgressionInstance(value.nextProgression)) ||
+      !isCanonicalObject(value.outcome) ||
+      !Array.isArray(value.domainEvents) ||
+      !value.domainEvents.every(isTypedRecord) ||
+      !Array.isArray(value.effectIntents) ||
+      !value.effectIntents.every(isTypedRecord) ||
+      !isCanonicalObjectArray(value.progressionTrace)
+    ) {
+      return false;
+    }
     return (
-      hasExactKeys(value, [
-        "commandId",
-        "expectedVersion",
-        "nextState",
-        "observationIds",
-        "outcome",
-        "progressionChanges",
-        "target",
-        "terminal",
-      ]) &&
-      isCanonicalObject(value.nextState) &&
-      isCanonicalObject(value.outcome) &&
-      isStringArray(value.progressionChanges)
+      Object.hasOwn(value, "nextState") ||
+      Object.hasOwn(value, "nextProgression") ||
+      value.domainEvents.length > 0 ||
+      value.effectIntents.length > 0 ||
+      value.progressionTrace.length > 0
     );
   }
   if (value.terminal === "no-op" || value.terminal === "rejected") {
     return (
       hasExactKeys(value, [
         "commandId",
-        "expectedVersion",
+        "commandType",
+        "expectedStateVersion",
+        "modelId",
         "observationIds",
         "outcome",
+        "payload",
         "target",
         "terminal",
       ]) && isCanonicalObject(value.outcome)
@@ -250,12 +340,20 @@ function isTransitionCandidate(value: unknown): value is TransitionCandidate {
     return (
       hasExactKeys(value, [
         "commandId",
+        "commandType",
         "diagnosticCodes",
-        "expectedVersion",
+        "expectedStateVersion",
+        "attemptedProgressionTrace",
+        "modelId",
         "observationIds",
+        "payload",
+        "phase",
         "target",
         "terminal",
-      ]) && isStringArray(value.diagnosticCodes)
+      ]) &&
+      value.phase === "execution" &&
+      isStringArray(value.diagnosticCodes) &&
+      isCanonicalObjectArray(value.attemptedProgressionTrace)
     );
   }
   return false;
@@ -270,23 +368,20 @@ function isRuntimeBootstrap(value: CanonicalJsonObject): boolean {
   ) {
     return false;
   }
-  if (value.aggregate === null) return true;
   if (!isCanonicalObject(value.aggregate)) return false;
+  const required = ["aggregateId", "aggregateKind", "modelId", "schemaId", "state", "stateVersion"];
+  const keys = Object.keys(value.aggregate);
   return (
-    hasExactKeys(value.aggregate, [
-      "aggregateId",
-      "aggregateKind",
-      "schemaId",
-      "schemaVersion",
-      "state",
-      "stateVersion",
-    ]) &&
+    required.every((key) => Object.hasOwn(value.aggregate as CanonicalJsonObject, key)) &&
+    keys.every((key) => required.includes(key) || key === "progression") &&
+    isNonEmptyString(value.aggregate.modelId) &&
     isNonEmptyString(value.aggregate.aggregateId) &&
     value.aggregate.aggregateKind === "player" &&
     isNonEmptyString(value.aggregate.schemaId) &&
-    isPositiveInteger(value.aggregate.schemaVersion) &&
     isNonNegativeInteger(value.aggregate.stateVersion) &&
-    isCanonicalObject(value.aggregate.state)
+    isCanonicalObject(value.aggregate.state) &&
+    (!Object.hasOwn(value.aggregate, "progression") ||
+      isProgressionInstance(value.aggregate.progression))
   );
 }
 
@@ -294,7 +389,7 @@ function isTransitionResult(value: CanonicalJsonObject): value is TransitionResu
   const baseIsValid =
     isNonEmptyString(value.commandId) &&
     (value.disposition === "committed" || value.disposition === "duplicate") &&
-    isNonNegativeInteger(value.resultingVersion);
+    isNonNegativeInteger(value.resultingStateVersion);
   if (!baseIsValid) return false;
   if (
     value.terminal === "accepted" ||
@@ -306,7 +401,7 @@ function isTransitionResult(value: CanonicalJsonObject): value is TransitionResu
         "commandId",
         "disposition",
         "outcome",
-        "resultingVersion",
+        "resultingStateVersion",
         "terminal",
       ]) && isCanonicalObject(value.outcome)
     );
@@ -317,9 +412,12 @@ function isTransitionResult(value: CanonicalJsonObject): value is TransitionResu
         "commandId",
         "diagnosticCodes",
         "disposition",
-        "resultingVersion",
+        "phase",
+        "resultingStateVersion",
         "terminal",
-      ]) && isStringArray(value.diagnosticCodes)
+      ]) &&
+      value.phase === "execution" &&
+      isStringArray(value.diagnosticCodes)
     );
   }
   return false;
@@ -438,7 +536,7 @@ export function parseHostBridgeEnvelope(
   if (!hasExactKeys(envelope, ["payload", "requestId", "type", "version"])) {
     return { kind: "invalid", code: "bridge-envelope-fields-invalid" };
   }
-  if (envelope.version !== CONTRACT_VERSIONS.hostBridge) {
+  if (envelope.version !== HOST_BRIDGE_VERSION) {
     return { kind: "invalid", code: "bridge-version-unsupported" };
   }
   if (!isNonEmptyString(envelope.requestId)) {
@@ -462,7 +560,7 @@ export function parseHostBridgeEnvelope(
   return {
     kind: "valid",
     envelope: Object.freeze({
-      version: CONTRACT_VERSIONS.hostBridge,
+      version: HOST_BRIDGE_VERSION,
       requestId: envelope.requestId,
       type: envelope.type,
       payload: envelope.payload,

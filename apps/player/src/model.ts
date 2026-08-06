@@ -1,4 +1,10 @@
-import type { CanonicalJsonObject, ReleaseId } from "@plotpoint/protocol";
+import type {
+  CanonicalJsonObject,
+  ProgressionInstance,
+  ReleaseId,
+  TransitionCandidate,
+  TransitionResult,
+} from "@plotpoint/protocol";
 
 export interface InstalledReleaseRecord {
   readonly releaseId: ReleaseId;
@@ -16,62 +22,32 @@ export interface RunRecord {
 
 export interface SnapshotRecord {
   readonly runId: string;
+  readonly modelId: string;
   readonly aggregateId: string;
   readonly aggregateKind: "player";
   readonly schemaId: string;
-  readonly schemaVersion: number;
   readonly stateVersion: number;
   readonly state: CanonicalJsonObject;
+  readonly progression?: ProgressionInstance;
   readonly journalPosition: number;
 }
 
-interface CandidateTransitionBase {
-  readonly commandId: string;
-  readonly aggregateId: string;
-  readonly aggregateKind: "player";
-  readonly schemaId: string;
-  readonly schemaVersion: number;
-  readonly expectedVersion: number;
-  readonly observationIds: readonly string[];
+export type CandidateTransition = TransitionCandidate;
+export type DurableTransitionResult = TransitionResult;
+
+export interface DurableCommandRecord {
+  readonly candidate: CandidateTransition;
+  readonly result: DurableTransitionResult;
 }
 
-export type CandidateTransition =
-  | (CandidateTransitionBase & {
-      readonly commandOutcome: "accepted";
-      readonly outcome: CanonicalJsonObject;
-      readonly nextState: CanonicalJsonObject;
-      readonly progressionChanges: readonly string[];
-    })
-  | (CandidateTransitionBase & {
-      readonly commandOutcome: "no-op" | "rejected";
-      readonly outcome: CanonicalJsonObject;
-      readonly nextState?: never;
-      readonly progressionChanges?: never;
-      readonly diagnosticCodes?: never;
-    })
-  | (CandidateTransitionBase & {
-      readonly commandOutcome: "invalid";
-      readonly diagnosticCodes: readonly string[];
-      readonly outcome?: never;
-      readonly nextState?: never;
-      readonly progressionChanges?: never;
-    });
-
-export interface DurableTransitionResult {
-  readonly kind: "accepted" | "duplicate" | "invalid" | "stale";
+export type TransitionCommitFailure = {
+  readonly kind: "invalid" | "stale";
   readonly commandId: string;
-  readonly commandOutcome?: "accepted" | "no-op" | "rejected" | "invalid";
-  readonly aggregateId?: string;
-  readonly aggregateKind?: "player";
-  readonly schemaId?: string;
-  readonly schemaVersion?: number;
-  readonly expectedVersion?: number;
-  readonly resultingVersion?: number;
-  readonly outcome?: CanonicalJsonObject;
-  readonly diagnosticCodes?: readonly string[];
-  readonly observationIds?: readonly string[];
-  readonly code?: string;
-}
+  readonly resultingStateVersion?: number;
+  readonly code: string;
+};
+
+export type TransitionCommitResult = DurableTransitionResult | TransitionCommitFailure;
 
 export type RunEventRecord =
   | {

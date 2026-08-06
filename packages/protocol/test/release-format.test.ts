@@ -44,6 +44,14 @@ function fixture(): { readonly manifest: ReleaseManifest; readonly entries: Stor
 }
 
 describe("strict release-format  container", () => {
+  it("keeps Release Format 1 game-agnostic and free of catalog compatibility fields", () => {
+    const { manifest } = fixture();
+
+    expect(manifest.releaseFormatVersion).toBe(1);
+    expect(manifest).not.toHaveProperty("gameComposition");
+    expect(manifest).not.toHaveProperty("gameCompositionVersion");
+  });
+
   it("writes byte-identical stored archives in ordinal path order", () => {
     const { entries } = fixture();
     const forward = writeStoredZip(entries);

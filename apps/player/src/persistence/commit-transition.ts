@@ -1,4 +1,12 @@
-import type { CandidateTransition, DurableTransitionResult, SnapshotRecord } from "../model";
+import { canonicalizeValue } from "@plotpoint/runtime";
+
+import type {
+  CandidateTransition,
+  DurableCommandRecord,
+  DurableTransitionResult,
+  SnapshotRecord,
+  TransitionCommitResult,
+} from "../model";
 import { validateCandidateTransition } from "./validation";
 
 export interface TransitionStore {
@@ -6,7 +14,7 @@ export interface TransitionStore {
 }
 
 export interface TransitionTransaction {
-  getReceipt(runId: string, commandId: string): Promise<DurableTransitionResult | null>;
+  getReceipt(runId: string, commandId: string): Promise<DurableCommandRecord | null>;
   getSnapshot(runId: string): Promise<SnapshotRecord | null>;
   observationsExist(runId: string, observationIds: readonly string[]): Promise<boolean>;
   record(runId: string, candidate: CandidateTransition): Promise<DurableTransitionResult>;
@@ -16,7 +24,7 @@ export async function commitCandidateTransition(input: {
   readonly store: TransitionStore;
   readonly runId: string;
   readonly candidate: CandidateTransition;
-}): Promise<DurableTransitionResult> {
+}): Promise<TransitionCommitResult> {
   const validated = validateCandidateTransition(input.candidate);
   if (validated.kind === "invalid") {
     return { kind: "invalid", commandId: input.candidate.commandId, code: validated.code };
@@ -24,24 +32,39 @@ export async function commitCandidateTransition(input: {
   const candidate = validated.candidate;
   return input.store.transaction(async (transaction) => {
     const prior = await transaction.getReceipt(input.runId, candidate.commandId);
-    if (prior !== null) return { ...prior, kind: "duplicate" };
+    if (prior !== null) {
+      const original = canonicalizeValue(prior.candidate);
+      const repeated = canonicalizeValue(candidate);
+      if (
+        original.kind === "invalid" ||
+        repeated.kind === "invalid" ||
+        JSON.stringify(original.canonical.value) !== JSON.stringify(repeated.canonical.value)
+      ) {
+        return {
+          kind: "invalid",
+          commandId: candidate.commandId,
+          code: "transition-command-reuse-conflict",
+        };
+      }
+      return { ...prior.result, disposition: "duplicate" };
+    }
 
     const snapshot = await transaction.getSnapshot(input.runId);
     const currentVersion = snapshot?.stateVersion ?? 0;
-    if (currentVersion !== candidate.expectedVersion) {
+    if (currentVersion !== candidate.expectedStateVersion) {
       return {
         kind: "stale",
         commandId: candidate.commandId,
-        resultingVersion: currentVersion,
+        resultingStateVersion: currentVersion,
         code: "transition-expected-version-stale",
       };
     }
     if (
       snapshot !== null &&
-      (snapshot.aggregateId !== candidate.aggregateId ||
-        snapshot.aggregateKind !== candidate.aggregateKind ||
-        snapshot.schemaId !== candidate.schemaId ||
-        snapshot.schemaVersion !== candidate.schemaVersion)
+      (snapshot.modelId !== candidate.modelId ||
+        snapshot.aggregateId !== candidate.target.aggregateId ||
+        snapshot.aggregateKind !== candidate.target.aggregateKind ||
+        snapshot.schemaId !== candidate.target.schemaId)
     ) {
       return {
         kind: "invalid",

@@ -1,12 +1,10 @@
 import {
   canonicalizeValue,
-  executeCommand,
   type AggregateKind,
-  type CommandDefinition,
-  type DefinedProgression,
+  type ExecutableAggregateModel,
   type ExecutionRecord,
-  type RecordedExecutionResult,
   type JsonObject,
+  type RecordedExecution,
 } from "@plotpoint/runtime";
 
 import { firstDifference } from "./assertions.js";
@@ -18,24 +16,18 @@ export interface ReplayInput<
   Kind extends AggregateKind = AggregateKind,
 > {
   readonly record: ExecutionRecord<State, Outcome, Payload, Kind>;
-  readonly definition: CommandDefinition<State, Payload, Outcome, Kind>;
-  readonly progression?: DefinedProgression<State, Payload, Outcome, Kind>;
+  readonly model: ExecutableAggregateModel<Kind>;
 }
 
-export type ReplayResult<
-  State extends JsonObject,
-  Payload extends JsonObject,
-  Outcome extends JsonObject,
-  Kind extends AggregateKind = AggregateKind,
-> =
+export type ReplayResult<Kind extends AggregateKind = AggregateKind> =
   | {
       readonly kind: "match";
-      readonly result: RecordedExecutionResult<State, Outcome, Payload, Kind>;
+      readonly result: RecordedExecution<JsonObject, JsonObject, JsonObject, Kind>;
     }
   | {
       readonly kind: "mismatch";
       readonly path: string;
-      readonly result?: RecordedExecutionResult<State, Outcome, Payload, Kind>;
+      readonly result?: RecordedExecution<JsonObject, JsonObject, JsonObject, Kind>;
     };
 
 export function replayScenario<
@@ -43,19 +35,13 @@ export function replayScenario<
   Payload extends JsonObject,
   Outcome extends JsonObject,
   Kind extends AggregateKind,
->(input: ReplayInput<State, Payload, Outcome, Kind>): ReplayResult<State, Payload, Outcome, Kind> {
-  if (input.record.definitionId !== input.definition.definitionId) {
-    return { kind: "mismatch", path: "/definitionId" };
-  }
-  const result = executeCommand({
-    definition: input.definition,
+>(input: ReplayInput<State, Payload, Outcome, Kind>): ReplayResult<Kind> {
+  const result = input.model.execute({
     aggregate: input.record.aggregateBefore,
     command: input.record.command,
     observations: input.record.observations,
-    policy: input.record.policy,
-    ...(input.progression === undefined ? {} : { progression: input.progression }),
   });
-  if (!("record" in result)) return { kind: "mismatch", path: "/preflight" };
+  if (result.kind !== "recorded") return { kind: "mismatch", path: "/preflight" };
   const expected = canonicalizeValue(input.record);
   const actual = canonicalizeValue(result.record);
   if (expected.kind === "invalid" || actual.kind === "invalid") {

@@ -1,5 +1,5 @@
 import type {
-  AggregateSchemaRegistration,
+  AggregateModelRegistration,
   CompileProjectResult,
   CompiledProject,
   ProgressionRegistration,
@@ -12,25 +12,25 @@ import type { ProjectConfiguration as DeepProjectConfiguration } from "@plotpoin
 type DeepImportMustRemainUnavailable = DeepProjectConfiguration;
 void (undefined as unknown as DeepImportMustRemainUnavailable);
 
-const invalidAggregate: AggregateSchemaRegistration = {
+// @ts-expect-error local aggregate models are player-owned
+const invalidAggregate: AggregateModelRegistration = {
   id: "puzzle.organization",
-  // @ts-expect-error aggregate registration kinds are closed
-  kind: "organization",
-  version: 1,
-  path: "schemas/organization.json",
+  authority: "local",
+  kind: "team",
+  stateSchema: "puzzle.state",
+  initializationSchema: "puzzle.initialization",
+  initializer: { source: "src/initialize.ts", export: "initialize" },
+  events: [],
+  effects: [],
 };
 void invalidAggregate;
 
 const invalidProgression: ProgressionRegistration = {
   id: "puzzle.progression",
-  version: 1,
-  // @ts-expect-error progression registration kinds use aggregate kinds only
-  kind: "global",
   definition: { source: "src/progression.ts", export: "progression" },
-  aggregateSchema: "puzzle.player",
-  commands: [],
-  content: [],
-  components: [],
+  aggregateModel: "puzzle.player",
+  // @ts-expect-error entry-specific versions are not part of the author contract
+  version: 1,
 };
 void invalidProgression;
 

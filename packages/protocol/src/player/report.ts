@@ -1,4 +1,3 @@
-import { CONTRACT_VERSIONS } from "../contract-versions.js";
 import type { CanonicalJsonObject, ReleaseId } from "../release/types.js";
 
 export const FOREGROUND_LOCATION_CAPABILITY = Object.freeze({
@@ -11,7 +10,6 @@ export type LocationAvailability = "available" | "permission-denied" | "unavaila
 export type LocationRequestInput = Readonly<Record<string, never>>;
 
 interface LocationObservationBase extends CanonicalJsonObject {
-  readonly version: typeof CONTRACT_VERSIONS.capabilityObservation;
   readonly observationId: string;
   readonly recordedAt: string;
 }
@@ -58,7 +56,6 @@ function isRfc3339(value: unknown): value is string {
 
 function hasValidBase(value: Record<string, unknown>): boolean {
   return (
-    value.version === CONTRACT_VERSIONS.capabilityObservation &&
     typeof value.observationId === "string" &&
     value.observationId.length > 0 &&
     isRfc3339(value.recordedAt)
@@ -82,7 +79,6 @@ export function isLocationObservation(value: unknown): value is LocationObservat
         "longitude",
         "observationId",
         "recordedAt",
-        "version",
       ]) &&
       isRfc3339(value.capturedAt) &&
       Number.isSafeInteger(value.ageMs) &&
@@ -101,17 +97,11 @@ export function isLocationObservation(value: unknown): value is LocationObservat
     );
   }
   if (value.availability === "permission-denied" || value.availability === "unavailable") {
-    return hasExactKeys(value, ["availability", "observationId", "recordedAt", "version"]);
+    return hasExactKeys(value, ["availability", "observationId", "recordedAt"]);
   }
   if (value.availability === "failed") {
     return (
-      hasExactKeys(value, [
-        "availability",
-        "diagnosticCode",
-        "observationId",
-        "recordedAt",
-        "version",
-      ]) &&
+      hasExactKeys(value, ["availability", "diagnosticCode", "observationId", "recordedAt"]) &&
       typeof value.diagnosticCode === "string" &&
       /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(value.diagnosticCode)
     );
@@ -178,95 +168,12 @@ export function projectLocationObservation(
   });
 }
 
-export interface PlayReportCommandEvent {
-  readonly kind: "command";
-  readonly elapsedMs: number;
-  readonly commandId: string;
-  readonly terminal: "accepted" | "no-op" | "rejected" | "invalid";
-  readonly expectedVersion: number;
-  readonly resultingVersion: number;
-  readonly outcomeCode?: string;
-  readonly progressionChanges: readonly string[];
-}
-
-export interface PlayReportCapabilityEvent {
-  readonly kind: "capability";
-  readonly elapsedMs: number;
-  readonly capability: {
-    readonly id: string;
-    readonly major: number;
-  };
-  readonly recordId: string;
-  readonly outcomeCode: string;
-  readonly projection: CanonicalJsonObject;
-}
-
-export interface PlayReportLifecycleEvent {
-  readonly kind: "lifecycle";
-  readonly elapsedMs: number;
-  readonly phase: string;
-  readonly disposition: string;
-  readonly commandId?: string;
-  readonly diagnosticCode?: string;
-}
-
-export interface PlayReportDiagnosticEvent {
-  readonly kind: "diagnostic";
-  readonly elapsedMs: number;
-  readonly code: string;
-  readonly commandId?: string;
-}
-
-export type PlayReportEvent =
-  | PlayReportCommandEvent
-  | PlayReportCapabilityEvent
-  | PlayReportLifecycleEvent
-  | PlayReportDiagnosticEvent;
-
-export interface PlayReport {
-  readonly version: typeof CONTRACT_VERSIONS.playReport;
-  readonly releaseId: ReleaseId;
-  readonly runId: string;
-  readonly platform: "ios" | "android";
-  readonly durationMs: number;
-  readonly events: readonly PlayReportEvent[];
-}
-
-export interface CapabilityReportProjectionValidator {
-  readonly capability: { readonly id: string; readonly major: number };
-  validate(projection: unknown): boolean;
-}
-
-export const LOCATION_REPORT_PROJECTION_VALIDATOR: CapabilityReportProjectionValidator =
-  Object.freeze({
-    capability: Object.freeze({
-      id: FOREGROUND_LOCATION_CAPABILITY.id,
-      major: FOREGROUND_LOCATION_CAPABILITY.major,
-    }),
-    validate: isLocationReportProjection,
-  });
-
 function isNonNegativeSafeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0 && !Object.is(value, -0);
 }
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
-}
-
-function isStableCode(value: unknown): value is string {
-  return typeof value === "string" && /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(value);
-}
-
-function isStringArray(value: unknown): value is readonly string[] {
-  return Array.isArray(value) && value.every(isNonEmptyString);
-}
-
-function isCanonicalJsonValue(value: unknown): boolean {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
-  if (typeof value === "number") return Number.isFinite(value) && !Object.is(value, -0);
-  if (Array.isArray(value)) return value.every(isCanonicalJsonValue);
-  return isObject(value) && Object.values(value).every(isCanonicalJsonValue);
 }
 
 function hasOnlyOptionalKeys(
@@ -281,123 +188,186 @@ function hasOnlyOptionalKeys(
   );
 }
 
-function isCommandEvent(value: Record<string, unknown>): boolean {
-  return (
-    hasOnlyOptionalKeys(
-      value,
-      [
-        "commandId",
-        "elapsedMs",
-        "expectedVersion",
-        "kind",
-        "progressionChanges",
-        "resultingVersion",
-        "terminal",
-      ],
-      ["outcomeCode"],
-    ) &&
-    isNonNegativeSafeInteger(value.elapsedMs) &&
-    isNonEmptyString(value.commandId) &&
-    ["accepted", "no-op", "rejected", "invalid"].includes(value.terminal as string) &&
-    isNonNegativeSafeInteger(value.expectedVersion) &&
-    isNonNegativeSafeInteger(value.resultingVersion) &&
-    (!Object.hasOwn(value, "outcomeCode") || isStableCode(value.outcomeCode)) &&
-    isStringArray(value.progressionChanges)
-  );
+declare const reportSafeDiagnosticCode: unique symbol;
+export type ReportSafeDiagnosticCode = string & {
+  readonly [reportSafeDiagnosticCode]: true;
+};
+
+export type GamePlayReportEvent =
+  | {
+      readonly kind: "lifecycle";
+      readonly elapsedMs: number;
+      readonly disposition: "mounted" | "recovered" | "unmounted" | "mount-failed";
+    }
+  | {
+      readonly kind: "command";
+      readonly elapsedMs: number;
+      readonly scope: "local" | "shared";
+      readonly commandAlias: string;
+      readonly terminal:
+        | "pending"
+        | "accepted"
+        | "no-op"
+        | "rejected"
+        | "invalid"
+        | "blocked-revoked";
+      readonly expectedStateVersion: number;
+      readonly resultingStateVersion?: number;
+    }
+  | {
+      readonly kind: "capability";
+      readonly elapsedMs: number;
+      readonly capabilityId: string;
+      readonly disposition: "captured" | "consumed" | "denied" | "expired";
+    }
+  | {
+      readonly kind: "synchronization";
+      readonly elapsedMs: number;
+      readonly phase:
+        | "offline"
+        | "connecting"
+        | "submitting"
+        | "pulling"
+        | "current"
+        | "degraded"
+        | "revoked";
+      readonly disposition:
+        | "scheduled"
+        | "coalesced"
+        | "batch-claimed"
+        | "submit-succeeded"
+        | "submit-failed"
+        | "pull-applied"
+        | "pull-failed"
+        | "membership-revoked";
+    }
+  | {
+      readonly kind: "recovery";
+      readonly elapsedMs: number;
+      readonly disposition: "run-restored" | "join-resumed" | "snapshot-replaced" | "cursor-reset";
+    }
+  | {
+      readonly kind: "diagnostic";
+      readonly elapsedMs: number;
+      readonly code: ReportSafeDiagnosticCode;
+      readonly commandAlias?: string;
+    };
+
+export interface GamePlayReport {
+  readonly releaseId: ReleaseId;
+  readonly platform: "ios" | "android";
+  readonly durationMs: number;
+  readonly shared?: {
+    readonly membership: "active" | "revoked";
+  };
+  readonly events: readonly GamePlayReportEvent[];
 }
 
-function isCapabilityEvent(
-  value: Record<string, unknown>,
-  validators: readonly CapabilityReportProjectionValidator[],
-): boolean {
-  const requestedCapability = value.capability;
-  if (
-    !hasExactKeys(value, [
-      "capability",
-      "elapsedMs",
-      "kind",
-      "outcomeCode",
-      "projection",
-      "recordId",
-    ]) ||
-    !isNonNegativeSafeInteger(value.elapsedMs) ||
-    !isObject(requestedCapability) ||
-    !hasExactKeys(requestedCapability, ["id", "major"]) ||
-    !isNonEmptyString(requestedCapability.id) ||
-    !Number.isSafeInteger(requestedCapability.major) ||
-    (requestedCapability.major as number) <= 0 ||
-    !isNonEmptyString(value.recordId) ||
-    !isStableCode(value.outcomeCode) ||
-    !isObject(value.projection) ||
-    !isCanonicalJsonValue(value.projection)
-  ) {
-    return false;
+const REPORT_SAFE_DIAGNOSTIC_CODES: ReadonlySet<string> = new Set([
+  "capability-expired",
+  "delivery-interrupted",
+  "runtime-mount-failed",
+  "runtime-recovery-failed",
+  "shared-membership-revoked",
+  "shared-sync-failed",
+]);
+
+export function parseReportSafeDiagnosticCode(value: unknown): ReportSafeDiagnosticCode | null {
+  return typeof value === "string" && REPORT_SAFE_DIAGNOSTIC_CODES.has(value)
+    ? (value as ReportSafeDiagnosticCode)
+    : null;
+}
+
+function isGamePlayReportEvent(value: unknown): value is GamePlayReportEvent {
+  if (!isObject(value) || !isNonNegativeSafeInteger(value.elapsedMs)) return false;
+  if (value.kind === "lifecycle") {
+    return (
+      hasExactKeys(value, ["disposition", "elapsedMs", "kind"]) &&
+      ["mounted", "recovered", "unmounted", "mount-failed"].includes(value.disposition as string)
+    );
   }
-  const validator = validators.find(
-    ({ capability }) =>
-      capability.id === requestedCapability.id && capability.major === requestedCapability.major,
-  );
-  return validator !== undefined && validator.validate(value.projection);
-}
-
-function isLifecycleEvent(value: Record<string, unknown>): boolean {
+  if (value.kind === "command") {
+    return (
+      hasOnlyOptionalKeys(
+        value,
+        ["commandAlias", "elapsedMs", "expectedStateVersion", "kind", "scope", "terminal"],
+        ["resultingStateVersion"],
+      ) &&
+      (value.scope === "local" || value.scope === "shared") &&
+      isNonEmptyString(value.commandAlias) &&
+      ["pending", "accepted", "no-op", "rejected", "invalid", "blocked-revoked"].includes(
+        value.terminal as string,
+      ) &&
+      isNonNegativeSafeInteger(value.expectedStateVersion) &&
+      (!Object.hasOwn(value, "resultingStateVersion") ||
+        isNonNegativeSafeInteger(value.resultingStateVersion))
+    );
+  }
+  if (value.kind === "capability") {
+    return (
+      hasExactKeys(value, ["capabilityId", "disposition", "elapsedMs", "kind"]) &&
+      isNonEmptyString(value.capabilityId) &&
+      ["captured", "consumed", "denied", "expired"].includes(value.disposition as string)
+    );
+  }
+  if (value.kind === "synchronization") {
+    return (
+      hasExactKeys(value, ["disposition", "elapsedMs", "kind", "phase"]) &&
+      ["offline", "connecting", "submitting", "pulling", "current", "degraded", "revoked"].includes(
+        value.phase as string,
+      ) &&
+      [
+        "scheduled",
+        "coalesced",
+        "batch-claimed",
+        "submit-succeeded",
+        "submit-failed",
+        "pull-applied",
+        "pull-failed",
+        "membership-revoked",
+      ].includes(value.disposition as string)
+    );
+  }
+  if (value.kind === "recovery") {
+    return (
+      hasExactKeys(value, ["disposition", "elapsedMs", "kind"]) &&
+      ["run-restored", "join-resumed", "snapshot-replaced", "cursor-reset"].includes(
+        value.disposition as string,
+      )
+    );
+  }
   return (
-    hasOnlyOptionalKeys(
-      value,
-      ["disposition", "elapsedMs", "kind", "phase"],
-      ["commandId", "diagnosticCode"],
-    ) &&
-    isNonNegativeSafeInteger(value.elapsedMs) &&
-    isStableCode(value.phase) &&
-    isStableCode(value.disposition) &&
-    (!Object.hasOwn(value, "commandId") || isNonEmptyString(value.commandId)) &&
-    (!Object.hasOwn(value, "diagnosticCode") || isStableCode(value.diagnosticCode))
+    value.kind === "diagnostic" &&
+    hasOnlyOptionalKeys(value, ["code", "elapsedMs", "kind"], ["commandAlias"]) &&
+    parseReportSafeDiagnosticCode(value.code) !== null &&
+    (!Object.hasOwn(value, "commandAlias") || isNonEmptyString(value.commandAlias))
   );
 }
 
-function isDiagnosticEvent(value: Record<string, unknown>): boolean {
-  return (
-    hasOnlyOptionalKeys(value, ["code", "elapsedMs", "kind"], ["commandId"]) &&
-    isNonNegativeSafeInteger(value.elapsedMs) &&
-    isStableCode(value.code) &&
-    (!Object.hasOwn(value, "commandId") || isNonEmptyString(value.commandId))
-  );
-}
-
-function isPlayReportEvent(
-  value: unknown,
-  validators: readonly CapabilityReportProjectionValidator[],
-): value is PlayReportEvent {
-  if (!isObject(value)) return false;
-  if (value.kind === "command") return isCommandEvent(value);
-  if (value.kind === "capability") return isCapabilityEvent(value, validators);
-  if (value.kind === "lifecycle") return isLifecycleEvent(value);
-  if (value.kind === "diagnostic") return isDiagnosticEvent(value);
-  return false;
-}
-
-export function isPlayReport(
-  value: unknown,
-  projectionValidators: readonly CapabilityReportProjectionValidator[] = [],
-): value is PlayReport {
+export function isGamePlayReport(value: unknown): value is GamePlayReport {
   if (
     !isObject(value) ||
-    !hasExactKeys(value, ["durationMs", "events", "platform", "releaseId", "runId", "version"]) ||
-    value.version !== CONTRACT_VERSIONS.playReport ||
+    !hasOnlyOptionalKeys(value, ["durationMs", "events", "platform", "releaseId"], ["shared"]) ||
     typeof value.releaseId !== "string" ||
     !/^sha256:[0-9a-f]{64}$/.test(value.releaseId) ||
-    !isNonEmptyString(value.runId) ||
     (value.platform !== "ios" && value.platform !== "android") ||
     !isNonNegativeSafeInteger(value.durationMs) ||
-    !Array.isArray(value.events)
+    !Array.isArray(value.events) ||
+    (Object.hasOwn(value, "shared") &&
+      (!isObject(value.shared) ||
+        !hasExactKeys(value.shared, ["membership"]) ||
+        (value.shared.membership !== "active" && value.shared.membership !== "revoked")))
   ) {
     return false;
   }
   let priorElapsedMs = -1;
+  let priorKind = "";
   for (const event of value.events) {
-    if (!isPlayReportEvent(event, projectionValidators)) return false;
+    if (!isGamePlayReportEvent(event)) return false;
     if (event.elapsedMs < priorElapsedMs || event.elapsedMs > value.durationMs) return false;
+    if (event.elapsedMs === priorElapsedMs && event.kind < priorKind) return false;
     priorElapsedMs = event.elapsedMs;
+    priorKind = event.kind;
   }
   return true;
 }

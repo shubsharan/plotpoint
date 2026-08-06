@@ -17,11 +17,11 @@ function aggregateFor<Kind extends AggregateKind>(
   stateVersion = 2,
 ): Aggregate<State, Kind> {
   return {
-    kind,
-    id: `${kind}-1`,
-    schemaVersion: 1,
+    aggregateId: `${kind}-1`,
+    modelId: `${kind}.model`,
+    aggregateKind: kind,
+    schemaId: `${kind}.state`,
     stateVersion,
-    authority: "local",
     state: { nested: { value: 1 } },
   };
 }
@@ -67,8 +67,8 @@ describe("aggregate isolation", () => {
         observations: [],
       });
 
-      expect(result.kind).toBe("accepted");
-      if (result.kind !== "accepted") throw new Error("expected accepted");
+      expect(result).toMatchObject({ kind: "recorded", record: { terminal: "accepted" } });
+      if (result.kind !== "recorded") throw new Error("expected recorded acceptance");
       expect(result.aggregate.stateVersion).toBe(3);
       expect(source.stateVersion).toBe(2);
       expect(source.state.nested.value).toBe(1);
@@ -90,9 +90,9 @@ describe("aggregate isolation", () => {
       observations: [{ kind: "clock", key: "now", value: 1 }],
     });
 
-    expect(result.kind).toBe("invalid");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
     expect(handler).not.toHaveBeenCalled();
-    if (result.kind !== "invalid" || result.phase !== "execution") {
+    if (result.kind !== "recorded") {
       throw new Error("expected recorded invalid result");
     }
     expect(result.record.observationTrace).toEqual([]);
@@ -117,9 +117,9 @@ describe("aggregate isolation", () => {
       observations: [],
     });
 
-    expect(result.kind).toBe("invalid");
-    if (result.kind === "invalid")
-      expect(result.diagnostics[0]?.code).toBe("command-target-mismatch");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
+    if (result.kind === "recorded")
+      expect(result.record.diagnostics[0]?.code).toBe("command-target-mismatch");
   });
 
   it("rejects version overflow without changing the target", () => {
@@ -147,8 +147,8 @@ describe("aggregate isolation", () => {
       observations: [],
     });
 
-    expect(result.kind).toBe("invalid");
-    if (result.kind !== "invalid" || result.phase !== "execution") {
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
+    if (result.kind !== "recorded") {
       throw new Error("expected recorded invalid result");
     }
     expect(result.aggregate).toEqual(source);

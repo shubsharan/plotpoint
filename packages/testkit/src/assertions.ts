@@ -3,8 +3,11 @@ import {
   type DiagnosticCode,
   type ExecutionRecord,
   type ExecutionResult,
+  type AggregateKind,
   type JsonObject,
   type JsonValue,
+  type PreflightInvalidExecution,
+  type RecordedExecution,
 } from "@plotpoint/runtime";
 
 export class PlotpointAssertionError extends Error {
@@ -60,33 +63,84 @@ function canonicalValue(value: unknown): JsonValue {
   return canonical.canonical.value;
 }
 
-export function assertAccepted<State extends JsonObject, Outcome extends JsonObject>(
-  result: ExecutionResult<State, Outcome>,
-): asserts result is Extract<ExecutionResult<State, Outcome>, { readonly kind: "accepted" }> {
-  if (result.kind !== "accepted")
-    throw new PlotpointAssertionError(`expected-accepted:${result.kind}`);
+type RecordedWithTerminal<
+  State extends JsonObject,
+  Outcome extends JsonObject,
+  Payload extends JsonObject,
+  Kind extends AggregateKind,
+  Terminal extends ExecutionRecord["terminal"],
+> = RecordedExecution<State, Outcome, Payload, Kind> & {
+  readonly record: ExecutionRecord<State, Outcome, Payload, Kind> & {
+    readonly terminal: Terminal;
+  };
+};
+
+export function assertAccepted<
+  State extends JsonObject,
+  Outcome extends JsonObject,
+  Payload extends JsonObject,
+  Kind extends AggregateKind,
+>(
+  result: ExecutionResult<State, Outcome, Payload, Kind>,
+): asserts result is RecordedWithTerminal<State, Outcome, Payload, Kind, "accepted"> {
+  if (result.kind !== "recorded" || result.record.terminal !== "accepted") {
+    const actual = result.kind === "recorded" ? result.record.terminal : result.kind;
+    throw new PlotpointAssertionError(`expected-accepted:${actual}`);
+  }
 }
 
-export function assertRejected<State extends JsonObject, Outcome extends JsonObject>(
-  result: ExecutionResult<State, Outcome>,
-): asserts result is Extract<ExecutionResult<State, Outcome>, { readonly kind: "rejected" }> {
-  if (result.kind !== "rejected")
-    throw new PlotpointAssertionError(`expected-rejected:${result.kind}`);
+export function assertRejected<
+  State extends JsonObject,
+  Outcome extends JsonObject,
+  Payload extends JsonObject,
+  Kind extends AggregateKind,
+>(
+  result: ExecutionResult<State, Outcome, Payload, Kind>,
+): asserts result is RecordedWithTerminal<State, Outcome, Payload, Kind, "rejected"> {
+  if (result.kind !== "recorded" || result.record.terminal !== "rejected") {
+    const actual = result.kind === "recorded" ? result.record.terminal : result.kind;
+    throw new PlotpointAssertionError(`expected-rejected:${actual}`);
+  }
 }
 
-export function assertNoOp<State extends JsonObject, Outcome extends JsonObject>(
-  result: ExecutionResult<State, Outcome>,
-): asserts result is Extract<ExecutionResult<State, Outcome>, { readonly kind: "no-op" }> {
-  if (result.kind !== "no-op") throw new PlotpointAssertionError(`expected-no-op:${result.kind}`);
+export function assertNoOp<
+  State extends JsonObject,
+  Outcome extends JsonObject,
+  Payload extends JsonObject,
+  Kind extends AggregateKind,
+>(
+  result: ExecutionResult<State, Outcome, Payload, Kind>,
+): asserts result is RecordedWithTerminal<State, Outcome, Payload, Kind, "no-op"> {
+  if (result.kind !== "recorded" || result.record.terminal !== "no-op") {
+    const actual = result.kind === "recorded" ? result.record.terminal : result.kind;
+    throw new PlotpointAssertionError(`expected-no-op:${actual}`);
+  }
 }
 
-export function assertInvalid<State extends JsonObject, Outcome extends JsonObject>(
-  result: ExecutionResult<State, Outcome>,
+export function assertInvalid<
+  State extends JsonObject,
+  Outcome extends JsonObject,
+  Payload extends JsonObject,
+  Kind extends AggregateKind,
+>(
+  result: ExecutionResult<State, Outcome, Payload, Kind>,
   code?: DiagnosticCode,
-): asserts result is Extract<ExecutionResult<State, Outcome>, { readonly kind: "invalid" }> {
-  if (result.kind !== "invalid")
-    throw new PlotpointAssertionError(`expected-invalid:${result.kind}`);
-  if (code !== undefined && !result.diagnostics.some((diagnostic) => diagnostic.code === code)) {
+): asserts result is
+  | PreflightInvalidExecution
+  | RecordedWithTerminal<State, Outcome, Payload, Kind, "invalid"> {
+  if (result.kind === "preflight-invalid") {
+    if (code !== undefined && !result.diagnostics.some((diagnostic) => diagnostic.code === code)) {
+      throw new PlotpointAssertionError(`missing-diagnostic:${code}`);
+    }
+    return;
+  }
+  if (result.record.terminal !== "invalid") {
+    throw new PlotpointAssertionError(`expected-invalid:${result.record.terminal}`);
+  }
+  if (
+    code !== undefined &&
+    !result.record.diagnostics.some((diagnostic) => diagnostic.code === code)
+  ) {
     throw new PlotpointAssertionError(`missing-diagnostic:${code}`);
   }
 }
@@ -110,7 +164,7 @@ export function assertObservationConsumption(record: ExecutionRecord, expectedCo
 }
 
 export function assertDiagnostic(
-  result: ExecutionResult<JsonObject, JsonObject>,
+  result: ExecutionResult<JsonObject, JsonObject, JsonObject, AggregateKind>,
   code: DiagnosticCode,
 ): void {
   assertInvalid(result, code);

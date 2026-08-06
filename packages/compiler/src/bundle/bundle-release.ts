@@ -1,6 +1,10 @@
 import { rolldown, type OutputChunk, type RolldownBuild } from "rolldown";
 
-import { generateDefinitionInspectionEntry } from "../composition/generated-entries.js";
+import {
+  generateDefinitionInspectionEntry,
+  generateLogicEntry,
+  generatePresentationEntry,
+} from "../composition/generated-entries.js";
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
 import type { ImportGraph } from "../imports/resolve-graph.js";
 import type {
@@ -8,7 +12,6 @@ import type {
   CompilationSnapshot,
   CompilerDiagnostic,
   InvalidProject,
-  SourceExport,
 } from "../project/config.js";
 import {
   compilationSnapshotModules,
@@ -52,61 +55,6 @@ function invalid(
       }),
     ]),
   });
-}
-
-function importSpecifier(source: string): string {
-  return source.startsWith("./") ? source : `./${source}`;
-}
-
-function registryMap(
-  name: "commands" | "progressions" | "components",
-  registrations: readonly { readonly id: string; readonly selected: SourceExport }[],
-  imports: string[],
-): string {
-  const entries = registrations.map(({ id, selected }, index) => {
-    const moduleName = `${name}Module${index}`;
-    imports.push(
-      `import * as ${moduleName} from ${JSON.stringify(importSpecifier(selected.source))};`,
-    );
-    return `${JSON.stringify(id)}: ${moduleName}[${JSON.stringify(selected.export)}]`;
-  });
-  return `const ${name} = Object.freeze({${entries.join(",")}});`;
-}
-
-function selectedRoot(graph: ImportGraph, registries: CanonicalProjectRegistries): string {
-  const imports = [
-    `import * as selected from ${JSON.stringify(importSpecifier(graph.entry.source))};`,
-  ];
-  const declarations: string[] = [];
-  const namedExports: string[] = [];
-  if (graph.environment === "logic") {
-    declarations.push(
-      registryMap(
-        "commands",
-        registries.commands.map(({ id, definition }) => ({ id, selected: definition })),
-        imports,
-      ),
-      registryMap(
-        "progressions",
-        registries.progressions.map(({ id, definition }) => ({ id, selected: definition })),
-        imports,
-      ),
-    );
-    namedExports.push("commands", "progressions");
-  } else {
-    declarations.push(
-      registryMap(
-        "components",
-        registries.components.map(({ id, implementation }) => ({
-          id,
-          selected: implementation,
-        })),
-        imports,
-      ),
-    );
-    namedExports.push("components");
-  }
-  return `${imports.join("\n")}\n${declarations.join("\n")}\nexport { ${namedExports.join(", ")} };\nexport default selected[${JSON.stringify(graph.entry.export)}];\n`;
 }
 
 function isExactChunk(output: unknown, name: BundleName): output is OutputChunk {
@@ -202,14 +150,14 @@ async function generateBundle(
 
 async function bundleGraph(
   graph: ImportGraph,
-  registries: CanonicalProjectRegistries,
+  virtualSource: string,
 ): Promise<{ readonly kind: "bundled"; readonly bytes: Uint8Array } | InvalidProject> {
   const name = graph.environment;
   const virtualId = `\0plotpoint:${name}-entry.ts`;
   return generateBundle(
     name,
     "browser",
-    graphSnapshotPlugin(graph, virtualId, selectedRoot(graph, registries)),
+    graphSnapshotPlugin(graph, virtualId, virtualSource),
     virtualId,
   );
 }
@@ -232,8 +180,8 @@ export async function bundleRelease(input: {
   readonly registries: CanonicalProjectRegistries;
 }): Promise<BundleReleaseResult> {
   const results = await Promise.all([
-    bundleGraph(input.logic, input.registries),
-    bundleGraph(input.presentation, input.registries),
+    bundleGraph(input.logic, generateLogicEntry(input.registries)),
+    bundleGraph(input.presentation, generatePresentationEntry(input.registries)),
   ]);
   const failure = firstInvalid(results);
   if (failure !== undefined) return failure;

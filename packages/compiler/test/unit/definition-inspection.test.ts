@@ -10,35 +10,44 @@ function registries() {
     projectFormatVersion: 1,
     environment: "web",
     hostApi: { major: 1, minimumMinor: 0 },
-    entries: {
-      logic: { source: "src/logic.ts", export: "logic" },
-      presentation: { source: "src/presentation.ts", export: "presentation" },
+    application: {
+      definition: { source: "src/presentation.ts", export: "application" },
+      components: [],
     },
+    aggregateModels: [
+      {
+        id: "player",
+        authority: "local",
+        kind: "player",
+        stateSchema: "player-state",
+        initializationSchema: "initialization",
+        initializer: { source: "src/logic.ts", export: "initialize" },
+        events: [],
+        effects: [],
+      },
+    ],
     commands: [
       {
         id: "solve",
         type: "solve",
+        execution: "local",
         definition: { source: "src/solve.ts", export: "solveCommand" },
-        aggregateSchema: "player",
+        aggregateModel: "player",
         payloadSchema: "payload",
         outcomeSchema: "outcome",
       },
     ],
-    aggregateSchemas: [{ id: "player", kind: "player", version: 1, path: "schemas/player.json" }],
     schemas: [
+      { id: "player-state", path: "schemas/player.json" },
+      { id: "initialization", path: "schemas/initialization.json" },
       { id: "payload", path: "schemas/payload.json" },
       { id: "outcome", path: "schemas/outcome.json" },
     ],
     progressions: [
       {
         id: "puzzle",
-        version: 1,
-        kind: "player",
         definition: { source: "src/progression.ts", export: "puzzleProgression" },
-        aggregateSchema: "player",
-        commands: ["solve"],
-        content: [],
-        components: [],
+        aggregateModel: "player",
       },
     ],
     components: [],
@@ -56,12 +65,16 @@ describe("definition inspection", () => {
 
     expect(source).toContain('commandModule0["solveCommand"]');
     expect(source).toContain('progressionModule0["puzzleProgression"]');
+    expect(source).toContain('initializerModule0["initialize"]');
+    expect(source).toContain('applicationModule["application"]');
     expect(source).not.toMatch(/\.handle\s*\(/);
     expect(source).not.toMatch(/\.when\s*\(/);
   });
 
   it("returns canonical metadata from a bounded subprocess", async () => {
     const metadata = {
+      application: { keys: ["mount"], mountType: "function" },
+      aggregateModels: [{ registrationId: "player", initializerType: "function" }],
       commands: [
         {
           registrationId: "solve",
@@ -74,12 +87,12 @@ describe("definition inspection", () => {
         {
           registrationId: "puzzle",
           graphId: "puzzle",
-          graphVersion: 1,
           aggregateKind: "player",
           nodes: [{ nodeId: "solve", initialStatus: "active" }],
-          automaticRules: [],
+          transitions: [],
         },
       ],
+      components: [],
     };
     const result = await inspectDefinitionBundle(
       `console.log(${JSON.stringify(JSON.stringify(metadata))});`,

@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { defineCommand, type Aggregate, type Command, type JsonObject } from "@plotpoint/runtime";
+import {
+  defineCommand,
+  resolveCommandBinding,
+  type Aggregate,
+  type Command,
+  type JsonObject,
+} from "@plotpoint/runtime";
 import { createRuntimeHarness } from "@plotpoint/testkit";
+import { isJsonObject, modelFixture, runtimeSchema } from "./runtime-model.js";
 
 const aggregate: Aggregate<JsonObject, "player"> = {
-  kind: "player",
-  id: "p1",
-  schemaVersion: 1,
+  aggregateId: "p1",
+  modelId: "audit.player",
+  aggregateKind: "player",
+  schemaId: "audit.state",
   stateVersion: 0,
-  authority: "local",
   state: { value: 0 },
 };
 const command: Command<JsonObject, "player"> = {
@@ -44,11 +51,26 @@ describe.sequential("ambient authority audit", () => {
         };
       },
     });
+    const jsonSchema = runtimeSchema("audit.json", isJsonObject);
+    const binding = resolveCommandBinding({
+      registrationId: "audit",
+      definition,
+      payloadSchema: jsonSchema,
+      outcomeSchema: jsonSchema,
+    });
+    const model = modelFixture({
+      modelId: "audit.player",
+      aggregateKind: "player",
+      authority: "local",
+      stateSchema: runtimeSchema("audit.state", isJsonObject),
+      initializeState: () => ({ value: 0 }),
+      commandsByType: { audit: binding },
+    });
 
     expect(() =>
       createRuntimeHarness({ auditKnownAmbientApis: true }).run({
         name: "ambient access",
-        definition,
+        model,
         aggregate,
         command,
         observations: [],

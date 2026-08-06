@@ -1,36 +1,31 @@
 import type { AggregateKind } from "../aggregates.js";
 import { canonicalizeValue, type JsonObject } from "../canonical-json.js";
-import type { Command, DomainEvent } from "../commands.js";
+import type { DomainEvent } from "../commands.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics.js";
-import type { ObservationConsumption } from "../observations.js";
 import {
   compareOrdinal,
-  type AutomaticRule,
-  type DefinedProgression,
-  type ProgressionRuleInput,
+  type ProgressionDefinition,
+  type ProgressionFacts,
+  type ProgressionTransition,
 } from "./graph.js";
 import type {
   ProgressionInstance,
   ProgressionIntent,
   ProgressionStatus,
-  ProgressionTransition,
+  ProgressionTraceEntry,
 } from "./state.js";
 import { validateProgressionGraph } from "./validate-graph.js";
 
 export interface EvaluateProgressionInput<
   State extends JsonObject,
-  Payload extends JsonObject,
-  Outcome extends JsonObject,
   Kind extends AggregateKind = AggregateKind,
 > {
-  readonly definition: DefinedProgression<State, Payload, Outcome, Kind>;
+  readonly definition: ProgressionDefinition<State, Kind>;
   readonly progression: ProgressionInstance;
   readonly intents: readonly ProgressionIntent[];
   readonly aggregateState: State;
-  readonly command: Command<Payload, Kind>;
-  readonly outcome: Outcome;
   readonly domainEvents: readonly DomainEvent[];
-  readonly observationTrace: readonly ObservationConsumption[];
+  readonly commandId: string;
   readonly maxAutomaticTransitions: number;
 }
 
@@ -38,42 +33,39 @@ export type ProgressionEvaluationResult =
   | {
       readonly kind: "stable";
       readonly progression: ProgressionInstance;
-      readonly trace: readonly ProgressionTransition[];
+      readonly trace: readonly ProgressionTraceEntry[];
     }
   | {
       readonly kind: "invalid";
       readonly diagnostic: Diagnostic;
-      readonly attemptedTrace: readonly ProgressionTransition[];
+      readonly attemptedTrace: readonly ProgressionTraceEntry[];
     };
 
 function canonicalProgression(
   graphId: string,
-  graphVersion: number,
   statuses: ReadonlyMap<string, ProgressionStatus>,
 ): ProgressionInstance {
-  const candidate = {
+  return Object.freeze({
     graphId,
-    graphVersion,
-    nodes: [...statuses.entries()]
-      .sort(([left], [right]) => compareOrdinal(left, right))
-      .map(([nodeId, status]) => ({ nodeId, status })),
-  };
-  const result = canonicalizeValue(candidate);
-  if (result.kind === "invalid")
-    throw new TypeError("Runtime constructed invalid progression state");
-  return result.canonical.value as unknown as ProgressionInstance;
+    nodes: Object.freeze(
+      [...statuses.entries()]
+        .sort(([left], [right]) => compareOrdinal(left, right))
+        .map(([nodeId, status]) => Object.freeze({ nodeId, status })),
+    ),
+  });
 }
 
 function stateText(progression: ProgressionInstance): string {
   const result = canonicalizeValue(progression);
-  if (result.kind === "invalid")
+  if (result.kind === "invalid") {
     throw new TypeError("Runtime constructed invalid progression state");
+  }
   return result.canonical.text;
 }
 
 function invalid(
   diagnostic: Diagnostic,
-  trace: readonly ProgressionTransition[],
+  trace: readonly ProgressionTraceEntry[],
 ): ProgressionEvaluationResult {
   return Object.freeze({
     kind: "invalid",
@@ -82,17 +74,14 @@ function invalid(
   });
 }
 
-export function evaluateProgression<
-  State extends JsonObject,
-  Payload extends JsonObject,
-  Outcome extends JsonObject,
-  Kind extends AggregateKind,
->(input: EvaluateProgressionInput<State, Payload, Outcome, Kind>): ProgressionEvaluationResult {
+export function evaluateProgression<State extends JsonObject, Kind extends AggregateKind>(
+  input: EvaluateProgressionInput<State, Kind>,
+): ProgressionEvaluationResult {
   const validation = validateProgressionGraph({
     definition: input.definition,
     progression: input.progression,
     intents: input.intents,
-    commandId: input.command.id,
+    commandId: input.commandId,
   });
   if (validation.kind === "invalid") return invalid(validation.diagnostic, []);
   if (!Number.isSafeInteger(input.maxAutomaticTransitions) || input.maxAutomaticTransitions < 0) {
@@ -107,71 +96,69 @@ export function evaluateProgression<
   }
 
   const statuses = new Map(input.progression.nodes.map((node) => [node.nodeId, node.status]));
-  const trace: ProgressionTransition[] = [];
+  const trace: ProgressionTraceEntry[] = [];
   for (const intent of input.intents) {
-    statuses.set(intent.nodeId, intent.to);
+    const transition = input.definition.transitions.find(
+      (candidate) =>
+        candidate.transitionId === intent.transitionId && candidate.trigger === "intent",
+    );
+    if (transition === undefined) {
+      throw new TypeError("Validated progression intent has no transition");
+    }
+    const from = statuses.get(transition.targetNodeId) as ProgressionStatus;
+    statuses.set(transition.targetNodeId, transition.to);
     trace.push(
       Object.freeze({
         sequence: trace.length,
         round: 0,
         source: "command",
-        nodeId: intent.nodeId,
-        from: intent.from,
-        to: intent.to,
+        transitionId: transition.transitionId,
+        nodeId: transition.targetNodeId,
+        from,
+        to: transition.to,
       }),
     );
   }
 
-  let progression = canonicalProgression(
-    input.definition.graphId,
-    input.definition.graphVersion,
-    statuses,
-  );
+  let progression = canonicalProgression(input.definition.graphId, statuses);
   const seen = new Map<string, number>([[stateText(progression), 0]]);
   let appliedCount = 0;
   let round = 0;
 
   while (true) {
     round += 1;
-    const ruleInputCandidate: ProgressionRuleInput<State, Payload, Outcome, Kind> = {
+    const factsCandidate: ProgressionFacts<State> = {
       aggregateState: input.aggregateState,
       progression,
-      command: input.command,
-      outcome: input.outcome,
       domainEvents: input.domainEvents,
-      observationTrace: input.observationTrace,
     };
-    const canonicalInput = canonicalizeValue(ruleInputCandidate);
-    if (canonicalInput.kind === "invalid") {
+    const canonicalFacts = canonicalizeValue(factsCandidate);
+    if (canonicalFacts.kind === "invalid") {
       return invalid(
         createDiagnostic("progression-rule-failed", {
-          commandId: input.command.id,
+          commandId: input.commandId,
           graphId: input.definition.graphId,
-          reason: canonicalInput.diagnostic.code,
+          reason: canonicalFacts.diagnostic.code,
         }),
         trace,
       );
     }
-    const frozenInput = canonicalInput.canonical.value as unknown as ProgressionRuleInput<
-      State,
-      Payload,
-      Outcome,
-      Kind
-    >;
-    const enabled: AutomaticRule<State, Payload, Outcome, Kind>[] = [];
-    for (const rule of input.definition.automaticRules) {
-      const current = statuses.get(rule.targetNodeId);
-      if (current === undefined || !rule.from.includes(current)) continue;
+    const frozenFacts = canonicalFacts.canonical.value as unknown as ProgressionFacts<State>;
+    const enabled: ProgressionTransition<State>[] = [];
+    for (const transition of input.definition.transitions) {
+      if (transition.trigger !== "automatic") continue;
+      const current = statuses.get(transition.targetNodeId);
+      if (current === undefined || !transition.from.includes(current)) continue;
       let selected: unknown;
       try {
-        selected = rule.when(frozenInput);
+        selected = transition.when?.(frozenFacts);
       } catch {
         return invalid(
           createDiagnostic("progression-rule-failed", {
-            commandId: input.command.id,
+            commandId: input.commandId,
             graphId: input.definition.graphId,
             reason: "predicate-threw",
-            ruleId: rule.ruleId,
+            transitionId: transition.transitionId,
           }),
           trace,
         );
@@ -179,62 +166,62 @@ export function evaluateProgression<
       if (typeof selected !== "boolean") {
         return invalid(
           createDiagnostic("progression-rule-failed", {
-            commandId: input.command.id,
+            commandId: input.commandId,
             graphId: input.definition.graphId,
             reason: "predicate-not-boolean",
-            ruleId: rule.ruleId,
+            transitionId: transition.transitionId,
           }),
           trace,
         );
       }
-      if (selected) enabled.push(rule);
+      if (selected) enabled.push(transition);
     }
 
-    const byTarget = new Map<string, AutomaticRule<State, Payload, Outcome, Kind>[]>();
-    for (const rule of enabled) {
-      const group = byTarget.get(rule.targetNodeId) ?? [];
-      group.push(rule);
-      byTarget.set(rule.targetNodeId, group);
+    const byTarget = new Map<string, ProgressionTransition<State>[]>();
+    for (const transition of enabled) {
+      const group = byTarget.get(transition.targetNodeId) ?? [];
+      group.push(transition);
+      byTarget.set(transition.targetNodeId, group);
     }
-    const winners: AutomaticRule<State, Payload, Outcome, Kind>[] = [];
-    for (const [nodeId, rules] of byTarget) {
-      const lowestPriority = Math.min(...rules.map((rule) => rule.priority));
-      const lowest = rules.filter((rule) => rule.priority === lowestPriority);
+    const winners: ProgressionTransition<State>[] = [];
+    for (const [nodeId, transitions] of byTarget) {
+      const lowestPriority = Math.min(...transitions.map((transition) => transition.priority));
+      const lowest = transitions.filter((transition) => transition.priority === lowestPriority);
       if (lowest.length > 1) {
         return invalid(
           createDiagnostic("progression-conflict", {
-            commandId: input.command.id,
+            commandId: input.commandId,
             graphId: input.definition.graphId,
             nodeId,
             priority: lowestPriority,
-            ruleIds: lowest.map((rule) => rule.ruleId).sort(),
+            transitionIds: lowest.map((transition) => transition.transitionId).sort(compareOrdinal),
           }),
           trace,
         );
       }
-      winners.push(lowest[0] as AutomaticRule<State, Payload, Outcome, Kind>);
+      winners.push(lowest[0] as ProgressionTransition<State>);
     }
     winners.sort(
       (left, right) =>
         compareOrdinal(left.targetNodeId, right.targetNodeId) ||
-        compareOrdinal(left.ruleId, right.ruleId),
+        compareOrdinal(left.transitionId, right.transitionId),
     );
     if (winners.length === 0) {
       return Object.freeze({ kind: "stable", progression, trace: Object.freeze([...trace]) });
     }
 
-    const candidateTransitions = winners.map((rule) => ({
-      nodeId: rule.targetNodeId,
-      from: statuses.get(rule.targetNodeId) as ProgressionStatus,
-      to: rule.to,
-      ruleId: rule.ruleId,
+    const candidateTransitions = winners.map((transition) => ({
+      nodeId: transition.targetNodeId,
+      from: statuses.get(transition.targetNodeId) as ProgressionStatus,
+      to: transition.to,
+      transitionId: transition.transitionId,
     }));
     if (appliedCount + winners.length > input.maxAutomaticTransitions) {
       return invalid(
         createDiagnostic("progression-limit-overrun", {
           appliedCount,
           candidateTransitions,
-          commandId: input.command.id,
+          commandId: input.commandId,
           graphId: input.definition.graphId,
           limit: input.maxAutomaticTransitions,
           nextBatchSize: winners.length,
@@ -243,41 +230,36 @@ export function evaluateProgression<
       );
     }
 
-    for (const rule of winners) {
-      const from = statuses.get(rule.targetNodeId) as ProgressionStatus;
-      statuses.set(rule.targetNodeId, rule.to);
+    for (const transition of winners) {
+      const from = statuses.get(transition.targetNodeId) as ProgressionStatus;
+      statuses.set(transition.targetNodeId, transition.to);
       trace.push(
         Object.freeze({
           sequence: trace.length,
           round,
           source: "automatic",
-          ruleId: rule.ruleId,
-          nodeId: rule.targetNodeId,
+          transitionId: transition.transitionId,
+          nodeId: transition.targetNodeId,
           from,
-          to: rule.to,
+          to: transition.to,
         }),
       );
     }
     appliedCount += winners.length;
-    progression = canonicalProgression(
-      input.definition.graphId,
-      input.definition.graphVersion,
-      statuses,
-    );
+    progression = canonicalProgression(input.definition.graphId, statuses);
     const text = stateText(progression);
     const firstSeenAutomaticCount = seen.get(text);
     if (firstSeenAutomaticCount !== undefined) {
       const automaticTrace = trace.filter((transition) => transition.source === "automatic");
       return invalid(
         createDiagnostic("progression-cycle", {
-          commandId: input.command.id,
+          commandId: input.commandId,
           cycleLength: appliedCount - firstSeenAutomaticCount,
           cycleTrace: automaticTrace.slice(
             firstSeenAutomaticCount,
           ) as unknown as readonly JsonObject[],
           firstSeenTransition: firstSeenAutomaticCount,
           graphId: input.definition.graphId,
-          graphVersion: input.definition.graphVersion,
           repeatedSnapshot: progression as unknown as JsonObject,
           repeatedTransition: appliedCount,
         }),

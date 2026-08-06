@@ -1,6 +1,7 @@
 import { createReleaseArtifact, type ReleaseManifest } from "@plotpoint/protocol";
 import { describe, expect, it } from "vitest";
 
+import type { CandidateTransition, DurableCommandRecord } from "../src/model";
 import {
   isRecoverableSnapshotState,
   validateRecoveryRecords,
@@ -19,42 +20,79 @@ const manifest = {
   inventory: [],
 } satisfies ReleaseManifest;
 
+const progression = {
+  graphId: "field.progression",
+  nodes: [{ nodeId: "finish", status: "completed" as const }],
+};
+
+const acceptedCandidate = {
+  commandId: "command-1",
+  modelId: "field.player",
+  commandType: "field.advance",
+  payload: { answer: "north" },
+  target: {
+    aggregateId: "field-player",
+    aggregateKind: "player",
+    schemaId: "field.player-state",
+  },
+  expectedStateVersion: 0,
+  observationIds: ["location-1"],
+  terminal: "accepted",
+  nextState: { attempts: 0, phase: "complete" },
+  nextProgression: progression,
+  outcome: { result: "advanced" },
+  domainEvents: [{ type: "field.advanced", payload: { phase: "complete" } }],
+  effectIntents: [{ type: "field.notify", payload: { message: "Complete" } }],
+  progressionTrace: [
+    {
+      sequence: 1,
+      round: 1,
+      source: "command",
+      nodeId: "finish",
+      from: "active",
+      to: "completed",
+    },
+  ],
+} satisfies CandidateTransition;
+
+const acceptedResult = {
+  commandId: "command-1",
+  disposition: "committed",
+  terminal: "accepted",
+  resultingStateVersion: 1,
+  outcome: { result: "advanced" },
+} as const;
+
+const acceptedRecord = {
+  candidate: acceptedCandidate,
+  result: acceptedResult,
+} satisfies DurableCommandRecord;
+
 const validRecords = {
   snapshot: {
+    model_id: "field.player",
     aggregate_id: "field-player",
     aggregate_kind: "player",
     schema_id: "field.player-state",
-    schema_version: 1,
     state_version: 1,
-    state_json: JSON.stringify({ attempts: 0, phase: "puzzle" }),
+    state_json: JSON.stringify({ attempts: 0, phase: "complete" }),
+    progression_json: JSON.stringify(progression),
     journal_position: 1,
   },
   journals: [
     {
       sequence: 1,
       command_id: "command-1",
-      outcome_json: JSON.stringify({ result: "advanced" }),
-      progression_json: JSON.stringify(["puzzle"]),
+      record_json: JSON.stringify(acceptedRecord),
     },
   ],
   receipts: [
     {
       command_id: "command-1",
-      expected_version: 0,
-      resulting_version: 1,
-      result_json: JSON.stringify({
-        kind: "accepted",
-        commandId: "command-1",
-        commandOutcome: "accepted",
-        aggregateId: "field-player",
-        aggregateKind: "player",
-        schemaId: "field.player-state",
-        schemaVersion: 1,
-        expectedVersion: 0,
-        resultingVersion: 1,
-        outcome: { result: "advanced" },
-        observationIds: ["location-1"],
-      }),
+      expected_state_version: 0,
+      candidate_json: JSON.stringify(acceptedCandidate),
+      result_json: JSON.stringify(acceptedResult),
+      resulting_state_version: 1,
     },
   ],
   observationLinks: [
@@ -120,20 +158,67 @@ describe("recovery artifact boundary", () => {
 });
 
 describe("recovery record coherence", () => {
-  it("accepts a valid restart snapshot with its exact journal and receipt", () => {
-    expect(validateRecoveryRecords(manifest, validRecords, validateState)).toMatchObject({
+  it("recovers exact model, schema, state, progression, events, effects, and record identity", () => {
+    expect(validateRecoveryRecords(manifest, validRecords, validateState)).toEqual({
       kind: "valid",
       aggregate: {
+        modelId: "field.player",
         aggregateId: "field-player",
+        aggregateKind: "player",
         schemaId: "field.player-state",
-        schemaVersion: 1,
         stateVersion: 1,
-        state: { attempts: 0, phase: "puzzle" },
+        state: { attempts: 0, phase: "complete" },
+        progression,
       },
     });
   });
 
-  it("rejects malformed snapshots and schema or version mismatch", () => {
+  it("keeps no-op receipts without synthesizing a journal or state-version advance", () => {
+    const noOpCandidate = {
+      ...acceptedCandidate,
+      commandId: "command-2",
+      expectedStateVersion: 1,
+      observationIds: [],
+      terminal: "no-op",
+      outcome: { result: "unchanged" },
+    } as const;
+    const noOpResult = {
+      commandId: "command-2",
+      disposition: "committed",
+      terminal: "no-op",
+      resultingStateVersion: 1,
+      outcome: { result: "unchanged" },
+    } as const;
+    const { nextState, nextProgression, domainEvents, effectIntents, progressionTrace, ...base } =
+      noOpCandidate;
+    void nextState;
+    void nextProgression;
+    void domainEvents;
+    void effectIntents;
+    void progressionTrace;
+
+    expect(
+      validateRecoveryRecords(
+        manifest,
+        {
+          ...validRecords,
+          receipts: [
+            ...validRecords.receipts,
+            {
+              command_id: "command-2",
+              expected_state_version: 1,
+              candidate_json: JSON.stringify(base),
+              result_json: JSON.stringify(noOpResult),
+              resulting_state_version: 1,
+            },
+          ],
+        },
+        validateState,
+      ),
+    ).toMatchObject({ kind: "valid", aggregate: { stateVersion: 1 } });
+  });
+
+  it("rejects malformed, superseded, or identity-mismatched snapshots", () => {
     expect(isRecoverableSnapshotState({ phase: "puzzle", attempts: 1 })).toBe(true);
     expect(isRecoverableSnapshotState(null)).toBe(false);
     expect(isRecoverableSnapshotState(["partial"])).toBe(false);
@@ -141,22 +226,37 @@ describe("recovery record coherence", () => {
     for (const snapshot of [
       { ...validRecords.snapshot, state_json: "{" },
       { ...validRecords.snapshot, state_json: "[]" },
+      { ...validRecords.snapshot, model_id: "" },
       { ...validRecords.snapshot, aggregate_kind: "team" },
       { ...validRecords.snapshot, schema_id: "other.player-state" },
-      { ...validRecords.snapshot, schema_version: 2 },
       { ...validRecords.snapshot, state_version: -1 },
+      { ...validRecords.snapshot, progression_json: "{}" },
+      { ...validRecords.snapshot, schema_version: 1 },
     ]) {
       expect(
-        validateRecoveryRecords(manifest, { ...validRecords, snapshot }, validateState).kind,
+        validateRecoveryRecords(
+          manifest,
+          { ...validRecords, snapshot } as RecoveryRecords,
+          validateState,
+        ).kind,
       ).toBe("invalid");
     }
   });
 
-  it("rejects journal positions, sequences, versions, and missing receipt links", () => {
+  it("rejects incoherent journals, versions, receipts, and observation links", () => {
+    const changedRecord = {
+      ...acceptedRecord,
+      candidate: { ...acceptedCandidate, effectIntents: [] },
+    };
     const incoherent: RecoveryRecords[] = [
       { ...validRecords, snapshot: { ...validRecords.snapshot, journal_position: 0 } },
       { ...validRecords, snapshot: { ...validRecords.snapshot, state_version: 2 } },
       { ...validRecords, journals: [{ ...validRecords.journals[0]!, sequence: 2 }] },
+      { ...validRecords, journals: [{ ...validRecords.journals[0]!, record_json: "{" }] },
+      {
+        ...validRecords,
+        journals: [{ ...validRecords.journals[0]!, record_json: JSON.stringify(changedRecord) }],
+      },
       { ...validRecords, receipts: [] },
       { ...validRecords, observationLinks: [] },
       {
@@ -167,33 +267,15 @@ describe("recovery record coherence", () => {
       },
       {
         ...validRecords,
-        receipts: [{ ...validRecords.receipts[0]!, resulting_version: 2 }],
+        receipts: [{ ...validRecords.receipts[0]!, resulting_state_version: 2 }],
+      },
+      {
+        ...validRecords,
+        receipts: [{ ...validRecords.receipts[0]!, candidate_json: "{" }],
       },
       {
         ...validRecords,
         receipts: [{ ...validRecords.receipts[0]!, result_json: "{" }],
-      },
-      {
-        ...validRecords,
-        receipts: [
-          {
-            ...validRecords.receipts[0]!,
-            result_json: JSON.stringify({ kind: "accepted", commandId: "command-1" }),
-          },
-        ],
-      },
-      {
-        ...validRecords,
-        journals: [
-          {
-            ...validRecords.journals[0]!,
-            outcome_json: JSON.stringify({ result: "different" }),
-          },
-        ],
-      },
-      {
-        ...validRecords,
-        journals: [{ ...validRecords.journals[0]!, progression_json: "{}" }],
       },
     ];
     for (const records of incoherent) {
@@ -229,13 +311,13 @@ describe("recovery record coherence", () => {
     ).toEqual({ kind: "invalid", code: "recovery-records-without-snapshot" });
   });
 
-  it("rejects canonical state that fails the release schema", () => {
+  it("rejects canonical state that fails the installed release schema", () => {
     expect(
       validateRecoveryRecords(
         manifest,
         {
           ...validRecords,
-          snapshot: { ...validRecords.snapshot, state_json: JSON.stringify({ phase: "puzzle" }) },
+          snapshot: { ...validRecords.snapshot, state_json: JSON.stringify({ phase: "complete" }) },
         },
         validateState,
       ),

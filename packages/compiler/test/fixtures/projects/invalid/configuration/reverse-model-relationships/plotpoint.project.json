@@ -1,0 +1,39 @@
+{
+  "projectFormatVersion": 1,
+  "environment": "web",
+  "hostApi": {
+    "major": 1,
+    "minimumMinor": 1
+  },
+  "application": {
+    "definition": {
+      "source": "src/presentation.ts",
+      "export": "presentation"
+    },
+    "components": []
+  },
+  "aggregateModels": [
+    {
+      "id": "minimal.player",
+      "authority": "local",
+      "kind": "player",
+      "stateSchema": "minimal.player-state",
+      "initializationSchema": "minimal.puzzle-content",
+      "initializer": {
+        "source": "src/logic.ts",
+        "export": "logic"
+      },
+      "events": [],
+      "effects": [],
+      "commands": ["minimal.solve"],
+      "progression": "minimal.route",
+      "trustedMechanic": "target-discovery"
+    }
+  ],
+  "commands": [],
+  "schemas": [],
+  "progressions": [],
+  "components": [],
+  "content": [],
+  "assets": []
+}

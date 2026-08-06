@@ -1,9 +1,8 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { migratePlayerDatabase } from "../src/persistence/database";
-import { createPlayReport } from "../src/reports/create-play-report";
 
 vi.mock("expo-sqlite", () => ({}));
 
@@ -79,86 +78,32 @@ function seedLegacyDatabase(database: RealMigrationDatabase): void {
     .run(releaseId, "file:///release.plotpoint", "{}", "2030-01-01T00:00:00.000Z");
 }
 
-afterEach(() => vi.restoreAllMocks());
-
-describe("player database upgrades", () => {
-  it("reconciles duplicate active legacy runs before enforcing one active run per release", async () => {
-    const database = new RealMigrationDatabase();
-    seedLegacyDatabase(database);
-    database.database
-      .prepare("INSERT INTO runs (run_id, release_id, started_at, status) VALUES (?, ?, ?, ?)")
-      .run("run-older", releaseId, "2030-01-01T00:00:00.000Z", "active");
-    database.database
-      .prepare("INSERT INTO runs (run_id, release_id, started_at, status) VALUES (?, ?, ?, ?)")
-      .run("run-newer", releaseId, "2030-01-01T01:00:00.000Z", "active");
-
-    await migratePlayerDatabase(database);
-
-    expect(
-      await database.getAllAsync<{ run_id: string; status: string }>(
-        "SELECT run_id, status FROM runs ORDER BY run_id",
-      ),
-    ).toEqual([
-      { run_id: "run-newer", status: "active" },
-      { run_id: "run-older", status: "invalid" },
-    ]);
-    expect(
-      await database.getAllAsync<{ run_id: string; code: string }>(
-        "SELECT run_id, code FROM run_events ORDER BY sequence",
-      ),
-    ).toEqual([{ run_id: "run-older", code: "legacy-duplicate-active-run" }]);
-    expect(() =>
-      database.database
-        .prepare("INSERT INTO runs (run_id, release_id, started_at, status) VALUES (?, ?, ?, ?)")
-        .run("run-third", releaseId, "2030-01-01T02:00:00.000Z", "active"),
-    ).toThrow();
-    database.close();
-  });
-
-  it("imports legacy recovery events once in stable order and exposes them in reports", async () => {
+describe("player database clean break", () => {
+  it("rejects an incompatible installed schema with reset or reinstall guidance", async () => {
     const database = new RealMigrationDatabase();
     seedLegacyDatabase(database);
     database.database
       .prepare("INSERT INTO runs (run_id, release_id, started_at, status) VALUES (?, ?, ?, ?)")
       .run("run-report", releaseId, "2030-01-01T00:00:00.000Z", "active");
-    const insertRecovery = database.database.prepare(
-      "INSERT INTO recovery_events (run_id, code, elapsed_ms) VALUES (?, ?, ?)",
+    const tablesBefore = database.database
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+      )
+      .all();
+
+    await expect(migratePlayerDatabase(database)).rejects.toThrow(
+      "player-database-incompatible-reset-or-reinstall",
     );
-    insertRecovery.run("run-report", "application-restarted", 5_000);
-    insertRecovery.run("run-report", "application-restored", 5_000);
-
-    await migratePlayerDatabase(database);
-    await migratePlayerDatabase(database);
-
     expect(
-      await database.getAllAsync<{
-        elapsed_ms: number;
-        code: string;
-        legacy_recovery_rowid: number;
-      }>(
-        `SELECT elapsed_ms, code, legacy_recovery_rowid FROM run_events
-         WHERE legacy_recovery_rowid IS NOT NULL ORDER BY sequence`,
-      ),
-    ).toEqual([
-      {
-        elapsed_ms: 5_000,
-        code: "application-restarted",
-        legacy_recovery_rowid: 1,
-      },
-      {
-        elapsed_ms: 5_000,
-        code: "application-restored",
-        legacy_recovery_rowid: 2,
-      },
-    ]);
-
-    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2030-01-01T00:00:10.000Z"));
-    await expect(createPlayReport(database, "run-report", "ios")).resolves.toMatchObject({
-      events: [
-        { kind: "diagnostic", elapsedMs: 5_000, code: "application-restarted" },
-        { kind: "diagnostic", elapsedMs: 5_000, code: "application-restored" },
-      ],
-    });
+      database.database
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        )
+        .all(),
+    ).toEqual(tablesBefore);
+    expect(
+      database.database.prepare("SELECT run_id, status FROM runs ORDER BY run_id").all(),
+    ).toEqual([{ run_id: "run-report", status: "active" }]);
     database.close();
   });
 });

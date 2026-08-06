@@ -22,13 +22,27 @@ async function fixture(): Promise<string> {
     projectFormatVersion: 1,
     environment: "web",
     hostApi: { major: 1, minimumMinor: 0 },
-    entries: {
-      logic: { source: "src/logic.ts", export: "logic" },
-      presentation: { source: "src/presentation.ts", export: "presentation" },
+    application: {
+      definition: { source: "src/presentation.ts", export: "presentation" },
+      components: [],
     },
+    aggregateModels: [
+      {
+        id: "player",
+        authority: "local",
+        kind: "player",
+        stateSchema: "player-state",
+        initializationSchema: "player-initialization",
+        initializer: { source: "src/logic.ts", export: "logic" },
+        events: [],
+        effects: [],
+      },
+    ],
     commands: [],
-    aggregateSchemas: [{ id: "player", kind: "player", version: 1, path: "schemas/player.json" }],
-    schemas: [],
+    schemas: [
+      { id: "player-state", path: "schemas/player.json" },
+      { id: "player-initialization", path: "schemas/initialization.json" },
+    ],
     progressions: [],
     components: [],
     content: [{ id: "story", path: "content/story.json" }],
@@ -40,6 +54,7 @@ async function fixture(): Promise<string> {
     writeFile(join(root, "src/helper.ts"), "export const helper = {};\n"),
     writeFile(join(root, "src/presentation.ts"), "export const presentation = {};\n"),
     writeFile(join(root, "schemas/player.json"), "{}"),
+    writeFile(join(root, "schemas/initialization.json"), "{}"),
     writeFile(join(root, "content/story.json"), '{"title":"Frozen"}'),
     writeFile(join(root, "assets/image.bin"), new Uint8Array([0, 1, 2])),
   ]);
@@ -64,6 +79,7 @@ describe("project snapshot", () => {
       "assets/image.bin",
       "content/story.json",
       "plotpoint.project.json",
+      "schemas/initialization.json",
       "schemas/player.json",
       "src/helper.ts",
       "src/logic.ts",

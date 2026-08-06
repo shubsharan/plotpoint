@@ -13,13 +13,15 @@ import {
 function candidate(terminal: TransitionCandidate["terminal"]): TransitionCandidate {
   const base = {
     commandId: `command-${terminal}`,
+    modelId: "field-player",
+    commandType: "example.advance",
+    payload: {},
     target: {
       aggregateId: "player-1",
       aggregateKind: "player" as const,
       schemaId: "player-state",
-      schemaVersion: 1,
     },
-    expectedVersion: 2,
+    expectedStateVersion: 2,
     observationIds: [],
   };
   if (terminal === "accepted") {
@@ -28,11 +30,19 @@ function candidate(terminal: TransitionCandidate["terminal"]): TransitionCandida
       terminal,
       nextState: { phase: "complete" },
       outcome: { result: "advanced" },
-      progressionChanges: ["complete"],
+      domainEvents: [],
+      effectIntents: [],
+      progressionTrace: [],
     };
   }
   if (terminal === "invalid") {
-    return { ...base, terminal, diagnosticCodes: ["runtime-result-invalid"] };
+    return {
+      ...base,
+      terminal,
+      phase: "execution",
+      diagnosticCodes: ["runtime-result-invalid"],
+      attemptedProgressionTrace: [],
+    };
   }
   return { ...base, terminal, outcome: { result: terminal } };
 }
@@ -45,13 +55,18 @@ function result(
     commandId: transition.commandId,
     disposition,
     terminal: transition.terminal,
-    resultingVersion:
+    resultingStateVersion:
       transition.terminal === "accepted"
-        ? transition.expectedVersion + 1
-        : transition.expectedVersion,
+        ? transition.expectedStateVersion + 1
+        : transition.expectedStateVersion,
   };
   return transition.terminal === "invalid"
-    ? { ...base, terminal: "invalid", diagnosticCodes: transition.diagnosticCodes }
+    ? {
+        ...base,
+        terminal: "invalid",
+        phase: "execution",
+        diagnosticCodes: transition.diagnosticCodes,
+      }
     : { ...base, terminal: transition.terminal, outcome: transition.outcome };
 }
 
@@ -85,7 +100,6 @@ describe("Host Runtime Client ", () => {
 
   it("unwraps a capability output only after identity and output validation", async () => {
     const output = {
-      version: 1,
       observationId: "location-1",
       recordedAt: "2030-01-01T00:00:00.000Z",
       availability: "unavailable",
@@ -114,7 +128,7 @@ describe("Host Runtime Client ", () => {
         commandId: "another-command",
         disposition: "committed",
         terminal: "accepted",
-        resultingVersion: 3,
+        resultingStateVersion: 3,
         outcome: { result: "advanced" },
       },
       expected: "host-transition-command-mismatch",
@@ -125,7 +139,7 @@ describe("Host Runtime Client ", () => {
         commandId: "command-accepted",
         disposition: "duplicate",
         terminal: "rejected",
-        resultingVersion: 2,
+        resultingStateVersion: 2,
         outcome: { result: "outside" },
       },
       expected: "host-transition-terminal-mismatch",

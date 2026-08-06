@@ -1,4 +1,3 @@
-import { CONTRACT_VERSIONS } from "../contract-versions.js";
 import type { CanonicalJsonObject } from "../release/types.js";
 import type { LocationObservation } from "../player/report.js";
 
@@ -54,7 +53,6 @@ export interface SharedPlayView {
 }
 
 export interface SyncCommand {
-  readonly version: typeof CONTRACT_VERSIONS.sharedSync;
   readonly commandId: string;
   readonly target: SharedAggregateTarget;
   readonly expectedStateVersion: number;
@@ -64,7 +62,6 @@ export interface SyncCommand {
 }
 
 export interface SyncCommandResult {
-  readonly version: typeof CONTRACT_VERSIONS.sharedSync;
   readonly commandId: string;
   readonly disposition: "decided" | "duplicate";
   readonly terminal: SharedTerminal;
@@ -74,7 +71,6 @@ export interface SyncCommandResult {
 }
 
 export interface AuthorizedSnapshot {
-  readonly version: typeof CONTRACT_VERSIONS.sharedSync;
   readonly sessionId: string;
   readonly releaseId: `sha256:${string}`;
   readonly participantId: string;
@@ -85,7 +81,6 @@ export interface AuthorizedSnapshot {
 }
 
 export interface SyncPull {
-  readonly version: typeof CONTRACT_VERSIONS.sharedSync;
   readonly kind: "snapshot";
   readonly reset: boolean;
   readonly nextCursor: string;

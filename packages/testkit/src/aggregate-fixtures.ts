@@ -1,31 +1,33 @@
 import {
   canonicalizeValue,
   type Aggregate,
-  type AggregateAuthority,
   type AggregateKind,
+  type ExecutableAggregateModel,
   type JsonObject,
   type ProgressionInstance,
 } from "@plotpoint/runtime";
 
-export interface FixtureOverrides<State extends JsonObject> {
+export interface FixtureOverrides<State extends JsonObject, Kind extends AggregateKind> {
+  readonly model: ExecutableAggregateModel<Kind>;
   readonly state: State;
-  readonly id?: string;
-  readonly schemaVersion?: number;
+  readonly aggregateId?: string;
   readonly stateVersion?: number;
-  readonly authority?: AggregateAuthority;
   readonly progression?: ProgressionInstance;
 }
 
 function aggregateFixture<State extends JsonObject, Kind extends AggregateKind>(
   kind: Kind,
-  overrides: FixtureOverrides<State>,
+  overrides: FixtureOverrides<State, Kind>,
 ): Aggregate<State, Kind> {
+  if (overrides.model.aggregateKind !== kind) {
+    throw new TypeError(`Invalid ${kind} fixture: aggregate-model-kind-mismatch`);
+  }
   const candidate = {
-    kind,
-    id: overrides.id ?? `${kind}-fixture`,
-    schemaVersion: overrides.schemaVersion ?? 1,
+    aggregateId: overrides.aggregateId ?? `${kind}-fixture`,
+    modelId: overrides.model.modelId,
+    aggregateKind: kind,
+    schemaId: overrides.model.stateSchema.id,
     stateVersion: overrides.stateVersion ?? 0,
-    authority: overrides.authority ?? "local",
     state: overrides.state,
     ...(overrides.progression === undefined ? {} : { progression: overrides.progression }),
   };
@@ -37,19 +39,19 @@ function aggregateFixture<State extends JsonObject, Kind extends AggregateKind>(
 }
 
 export function playerFixture<State extends JsonObject>(
-  overrides: FixtureOverrides<State>,
+  overrides: FixtureOverrides<State, "player">,
 ): Aggregate<State, "player"> {
   return aggregateFixture("player", overrides);
 }
 
 export function teamFixture<State extends JsonObject>(
-  overrides: FixtureOverrides<State>,
+  overrides: FixtureOverrides<State, "team">,
 ): Aggregate<State, "team"> {
   return aggregateFixture("team", overrides);
 }
 
 export function sessionFixture<State extends JsonObject>(
-  overrides: FixtureOverrides<State>,
+  overrides: FixtureOverrides<State, "session">,
 ): Aggregate<State, "session"> {
   return aggregateFixture("session", overrides);
 }

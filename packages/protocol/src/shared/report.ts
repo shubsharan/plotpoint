@@ -1,4 +1,3 @@
-import { CONTRACT_VERSIONS } from "../contract-versions.js";
 import type { LocationReportProjection } from "../player/report.js";
 import { isLocationReportProjection } from "../player/report.js";
 import { isReleaseId } from "../release/identity.js";
@@ -53,7 +52,6 @@ export type SharedHuntReportEvent =
     });
 
 export interface SharedHuntReport {
-  readonly version: typeof CONTRACT_VERSIONS.sharedReport;
   readonly releaseId: `sha256:${string}`;
   readonly sessionAlias: string;
   readonly selfAlias: "self";
@@ -141,7 +139,6 @@ export function isSharedHuntReport(value: unknown): value is SharedHuntReport {
   if (
     !object(value) ||
     !exact(value, [
-      "version",
       "releaseId",
       "sessionAlias",
       "selfAlias",
@@ -153,7 +150,6 @@ export function isSharedHuntReport(value: unknown): value is SharedHuntReport {
   )
     return false;
   if (
-    value.version !== CONTRACT_VERSIONS.sharedReport ||
     typeof value.releaseId !== "string" ||
     !isReleaseId(value.releaseId) ||
     typeof value.sessionAlias !== "string" ||

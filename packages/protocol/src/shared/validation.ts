@@ -1,4 +1,3 @@
-import { CONTRACT_VERSIONS } from "../contract-versions.js";
 import type { CanonicalJsonObject } from "../release/types.js";
 import { isLocationObservation } from "../player/report.js";
 import type {
@@ -180,7 +179,6 @@ export function isSyncCommand(value: unknown): value is SyncCommand {
   return (
     object(value) &&
     keys(value, [
-      "version",
       "commandId",
       "target",
       "expectedStateVersion",
@@ -188,7 +186,6 @@ export function isSyncCommand(value: unknown): value is SyncCommand {
       "payload",
       "observations",
     ]) &&
-    value.version === CONTRACT_VERSIONS.sharedSync &&
     isSharedCommandIntent({
       commandId: value.commandId,
       target: value.target,
@@ -210,7 +207,6 @@ export function isSyncCommandResult(value: unknown): value is SyncCommandResult 
   return (
     object(value) &&
     keys(value, [
-      "version",
       "commandId",
       "disposition",
       "terminal",
@@ -218,7 +214,6 @@ export function isSyncCommandResult(value: unknown): value is SyncCommandResult 
       "resultingStateVersion",
       "decisionPosition",
     ]) &&
-    value.version === CONTRACT_VERSIONS.sharedSync &&
     nonempty(value.commandId) &&
     ["decided", "duplicate"].includes(value.disposition as string) &&
     typeof value.terminal === "string" &&
@@ -233,7 +228,6 @@ export function isAuthorizedSnapshot(value: unknown): value is AuthorizedSnapsho
   return (
     object(value) &&
     keys(value, [
-      "version",
       "sessionId",
       "releaseId",
       "participantId",
@@ -242,7 +236,6 @@ export function isAuthorizedSnapshot(value: unknown): value is AuthorizedSnapsho
       "confirmedAt",
       "projections",
     ]) &&
-    value.version === CONTRACT_VERSIONS.sharedSync &&
     nonempty(value.sessionId) &&
     typeof value.releaseId === "string" &&
     isReleaseId(value.releaseId) &&
@@ -258,8 +251,7 @@ export function isAuthorizedSnapshot(value: unknown): value is AuthorizedSnapsho
 export function isSyncPull(value: unknown): value is SyncPull {
   return (
     object(value) &&
-    keys(value, ["version", "kind", "reset", "nextCursor", "snapshot", "commandResults"]) &&
-    value.version === CONTRACT_VERSIONS.sharedSync &&
+    keys(value, ["kind", "reset", "nextCursor", "snapshot", "commandResults"]) &&
     value.kind === "snapshot" &&
     typeof value.reset === "boolean" &&
     nonempty(value.nextCursor) &&

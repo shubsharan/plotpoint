@@ -59,7 +59,6 @@ describe("generic shared play contracts", () => {
 
   it("preserves every terminal through snapshot recovery", () => {
     const results = ["accepted", "no-op", "rejected", "invalid"].map((terminal, index) => ({
-      version: 1,
       commandId: `command-${index}`,
       disposition: "decided",
       terminal,
@@ -69,12 +68,10 @@ describe("generic shared play contracts", () => {
     }));
     expect(
       isSyncPull({
-        version: 1,
         kind: "snapshot",
         reset: false,
         nextCursor: "4",
         snapshot: {
-          version: 1,
           sessionId: view.sessionId,
           releaseId: view.releaseId,
           participantId: "participant-1",
@@ -91,7 +88,6 @@ describe("generic shared play contracts", () => {
   it("requires host-resolved Location  observations on the service wire", () => {
     expect(
       isSyncCommand({
-        version: 1,
         commandId: intent.commandId,
         target: intent.target,
         expectedStateVersion: intent.expectedStateVersion,
@@ -99,7 +95,6 @@ describe("generic shared play contracts", () => {
         payload: intent.payload,
         observations: [
           {
-            version: 1,
             observationId: "observation-1",
             recordedAt: "2026-08-04T00:00:00.000Z",
             availability: "available",

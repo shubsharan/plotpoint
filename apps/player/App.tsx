@@ -29,11 +29,14 @@ import { createParticipantCredentialStore } from "./src/shared/credentials";
 import { SharedSyncCoordinator } from "./src/shared/sync-coordinator";
 import { SharedSessionController } from "./src/shared/session-controller";
 
+type ActiveRecovery = RecoveryBootstrap & {
+  readonly aggregate: NonNullable<RecoveryBootstrap["aggregate"]>;
+};
+
 interface ActiveRuntime {
-  readonly recovery: RecoveryBootstrap;
+  readonly recovery: ActiveRecovery;
   readonly html: string;
   readonly aggregateSchemaId: string;
-  readonly aggregateSchemaVersion: number;
   readonly validateAggregate: ValidateFunction;
 }
 
@@ -164,6 +167,8 @@ export default function App() {
     recovery: RecoveryBootstrap,
     publication = "Opened from a verified local publication.",
   ) => {
+    if (recovery.aggregate === null) throw new Error("runtime-aggregate-missing");
+    const activeRecovery: ActiveRecovery = { ...recovery, aggregate: recovery.aggregate };
     const installation = await db.installedRelease(recovery.releaseId);
     if (installation === null) throw new Error("recovery-installation-missing");
     const opened = await openRelease(await readArtifactBytes(installation.artifactUri));
@@ -189,9 +194,8 @@ export default function App() {
       strict: true,
     }).compile(JSON.parse(decoder.decode(aggregateSchema.bytes)) as object);
     setRuntime({
-      recovery,
+      recovery: activeRecovery,
       aggregateSchemaId: aggregateRequirement.id,
-      aggregateSchemaVersion: aggregateRequirement.version,
       validateAggregate,
       html: buildRuntimeBootstrap({
         logicSource: decoder.decode(logic.bytes),
@@ -319,7 +323,6 @@ export default function App() {
             aggregate: runtime.recovery.aggregate,
           },
           aggregateSchemaId: runtime.aggregateSchemaId,
-          aggregateSchemaVersion: runtime.aggregateSchemaVersion,
           validateAggregate: runtime.validateAggregate,
         },
         location: {

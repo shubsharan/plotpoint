@@ -1,4 +1,3 @@
-import { CONTRACT_VERSIONS } from "../contract-versions.js";
 import { isReleaseId } from "../release/identity.js";
 import type { ReleaseId } from "../release/types.js";
 
@@ -6,7 +5,6 @@ export const MAX_RELEASE_BYTES = 64 * 1024 * 1024;
 export const RELEASE_DOWNLOAD_TIMEOUT_MS = 30_000;
 
 export interface InstallDescriptor {
-  readonly version: typeof CONTRACT_VERSIONS.installDescriptor;
   readonly releaseUrl: string;
   readonly expectedReleaseId: ReleaseId;
 }
@@ -58,14 +56,8 @@ export function isEligibleInstallUrl(value: string): boolean {
 }
 
 export function parseInstallDescriptor(value: unknown): InstallDescriptorResult {
-  if (
-    !isPlainObject(value) ||
-    !hasExactKeys(value, ["expectedReleaseId", "releaseUrl", "version"])
-  ) {
+  if (!isPlainObject(value) || !hasExactKeys(value, ["expectedReleaseId", "releaseUrl"])) {
     return { kind: "invalid", code: "install-descriptor-shape-invalid", field: "" };
-  }
-  if (value.version !== CONTRACT_VERSIONS.installDescriptor) {
-    return { kind: "invalid", code: "install-descriptor-version-unsupported", field: "version" };
   }
   if (typeof value.releaseUrl !== "string" || !isEligibleInstallUrl(value.releaseUrl)) {
     return { kind: "invalid", code: "install-release-url-ineligible", field: "releaseUrl" };
@@ -80,7 +72,6 @@ export function parseInstallDescriptor(value: unknown): InstallDescriptorResult 
   return {
     kind: "valid",
     descriptor: Object.freeze({
-      version: CONTRACT_VERSIONS.installDescriptor,
       releaseUrl: value.releaseUrl,
       expectedReleaseId: value.expectedReleaseId,
     }),

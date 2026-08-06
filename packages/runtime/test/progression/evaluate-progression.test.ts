@@ -2,82 +2,62 @@ import { describe, expect, it } from "vitest";
 
 import {
   defineProgression,
-  type Command,
-  type DefinedProgression,
+  initialProgression,
   type JsonObject,
+  type ProgressionDefinition,
   type ProgressionInstance,
 } from "@plotpoint/runtime";
 import { evaluateProgression } from "../../src/progression/evaluate-progression.js";
 
 type State = JsonObject & { readonly unlocked: boolean };
-type Outcome = JsonObject & { readonly result: string };
-
-const command: Command<JsonObject, "player"> = {
-  id: "c1",
-  type: "advance",
-  target: { kind: "player", id: "p1" },
-  expectedStateVersion: 0,
-  payload: {},
-};
 
 function run(
-  definition: DefinedProgression<State, JsonObject, Outcome, "player">,
-  progression: ProgressionInstance,
+  definition: ProgressionDefinition<State, "player">,
+  progression: ProgressionInstance = initialProgression(definition),
 ) {
   return evaluateProgression({
     definition,
     progression,
     intents: [],
     aggregateState: { unlocked: true },
-    command,
-    outcome: { result: "ok" },
+    commandId: "c1",
     domainEvents: [],
-    observationTrace: [],
     maxAutomaticTransitions: 10,
   });
 }
 
 describe("evaluateProgression", () => {
   it("applies independent winners as one canonical parallel batch", () => {
-    const definition = defineProgression<"player", State, JsonObject, Outcome>({
+    const definition = defineProgression<"player", State>({
       aggregateKind: "player",
       graphId: "parallel",
-      graphVersion: 1,
       nodes: [
         { nodeId: "root", initialStatus: "active" },
         { nodeId: "west", initialStatus: "locked" },
         { nodeId: "east", initialStatus: "locked" },
       ],
-      automaticRules: [
+      transitions: [
         {
-          ruleId: "unlock-west",
+          transitionId: "unlock-west",
           targetNodeId: "west",
           from: ["locked"],
           to: "available",
           priority: 0,
+          trigger: "automatic",
           when: ({ aggregateState }) => aggregateState.unlocked,
         },
         {
-          ruleId: "unlock-east",
+          transitionId: "unlock-east",
           targetNodeId: "east",
           from: ["locked"],
           to: "available",
           priority: 0,
+          trigger: "automatic",
           when: ({ progression }) => progression.nodes.every((node) => node.status !== "available"),
         },
       ],
     });
-    const progression: ProgressionInstance = {
-      graphId: "parallel",
-      graphVersion: 1,
-      nodes: [
-        { nodeId: "east", status: "locked" },
-        { nodeId: "root", status: "active" },
-        { nodeId: "west", status: "locked" },
-      ],
-    };
-
-    const result = run(definition, progression);
+    const result = run(definition);
 
     expect(result.kind).toBe("stable");
     if (result.kind === "stable") {
@@ -86,113 +66,111 @@ describe("evaluateProgression", () => {
         { nodeId: "root", status: "active" },
         { nodeId: "west", status: "available" },
       ]);
-      expect(result.trace.map((step) => [step.round, step.nodeId])).toEqual([
-        [1, "east"],
-        [1, "west"],
+      expect(result.trace.map((step) => [step.round, step.transitionId])).toEqual([
+        [1, "unlock-east"],
+        [1, "unlock-west"],
       ]);
     }
   });
 
   it("selects the lowest priority per node", () => {
-    const definition = defineProgression<"player", State, JsonObject, Outcome>({
+    const definition = defineProgression<"player", State>({
       aggregateKind: "player",
       graphId: "priority",
-      graphVersion: 1,
       nodes: [{ nodeId: "node", initialStatus: "available" }],
-      automaticRules: [
+      transitions: [
         {
-          ruleId: "complete",
+          transitionId: "complete",
           targetNodeId: "node",
           from: ["available"],
           to: "completed",
           priority: 5,
+          trigger: "automatic",
           when: () => true,
         },
         {
-          ruleId: "activate",
+          transitionId: "activate",
           targetNodeId: "node",
           from: ["available"],
           to: "active",
           priority: 1,
+          trigger: "automatic",
           when: () => true,
         },
       ],
     });
-    const result = run(definition, {
-      graphId: "priority",
-      graphVersion: 1,
-      nodes: [{ nodeId: "node", status: "available" }],
-    });
+    const result = run(definition);
 
     expect(result.kind).toBe("stable");
     if (result.kind === "stable") expect(result.progression.nodes[0]?.status).toBe("active");
   });
 
   it("reports equal-priority conflicts", () => {
-    const definition = defineProgression<"player", State, JsonObject, Outcome>({
+    const definition = defineProgression<"player", State>({
       aggregateKind: "player",
       graphId: "conflict",
-      graphVersion: 1,
       nodes: [{ nodeId: "node", initialStatus: "available" }],
-      automaticRules: [
+      transitions: [
         {
-          ruleId: "a",
+          transitionId: "a",
           targetNodeId: "node",
           from: ["available"],
           to: "active",
           priority: 0,
+          trigger: "automatic",
           when: () => true,
         },
         {
-          ruleId: "b",
+          transitionId: "b",
           targetNodeId: "node",
           from: ["available"],
           to: "skipped",
           priority: 0,
+          trigger: "automatic",
           when: () => true,
         },
       ],
     });
-    const result = run(definition, {
-      graphId: "conflict",
-      graphVersion: 1,
-      nodes: [{ nodeId: "node", status: "available" }],
-    });
+    const result = run(definition);
 
     expect(result.kind).toBe("invalid");
     if (result.kind === "invalid") expect(result.diagnostic.code).toBe("progression-conflict");
   });
 
-  it("applies command completion and skipping intents before stable evaluation", () => {
-    const definition = defineProgression<"player", State, JsonObject, Outcome>({
+  it("applies named command intents before automatic evaluation", () => {
+    const definition = defineProgression<"player", State>({
       aggregateKind: "player",
       graphId: "direct",
-      graphVersion: 1,
       nodes: [
         { nodeId: "a", initialStatus: "active" },
         { nodeId: "b", initialStatus: "available" },
       ],
-      automaticRules: [],
+      transitions: [
+        {
+          transitionId: "complete-a",
+          targetNodeId: "a",
+          from: ["active"],
+          to: "completed",
+          priority: 0,
+          trigger: "intent",
+        },
+        {
+          transitionId: "skip-b",
+          targetNodeId: "b",
+          from: ["available"],
+          to: "skipped",
+          priority: 0,
+          trigger: "intent",
+        },
+      ],
     });
     const result = evaluateProgression({
       definition,
-      progression: {
-        graphId: "direct",
-        graphVersion: 1,
-        nodes: [
-          { nodeId: "a", status: "active" },
-          { nodeId: "b", status: "available" },
-        ],
-      },
-      intents: [
-        { nodeId: "a", from: "active", to: "completed" },
-        { nodeId: "b", from: "available", to: "skipped" },
-      ],
+      progression: initialProgression(definition),
+      intents: [{ transitionId: "complete-a" }, { transitionId: "skip-b" }],
       aggregateState: { unlocked: true },
-      command,
-      outcome: { result: "ok" },
+      commandId: "c1",
       domainEvents: [],
-      observationTrace: [],
       maxAutomaticTransitions: 0,
     });
 

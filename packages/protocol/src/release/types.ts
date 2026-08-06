@@ -1,4 +1,4 @@
-import { CONTRACT_VERSIONS } from "../contract-versions.js";
+export const RELEASE_FORMAT_VERSION = 1 as const;
 
 export type Sha256Digest = `sha256:${string}`;
 export type ReleaseId = Sha256Digest;
@@ -41,7 +41,7 @@ export interface ReleaseInventoryEntry {
 }
 
 export interface ReleaseManifest {
-  readonly releaseFormatVersion: typeof CONTRACT_VERSIONS.releaseFormat;
+  readonly releaseFormatVersion: typeof RELEASE_FORMAT_VERSION;
   readonly hostApi: HostApiRequirement;
   readonly aggregateSchemas: readonly AggregateSchemaRequirement[];
   readonly capabilities: readonly CapabilityRequirement[];
@@ -97,6 +97,7 @@ export type ReleaseDiagnosticCategory =
   | "format"
   | "manifest"
   | "inventory"
+  | "composition"
   | "integrity"
   | "identity"
   | "compatibility";

@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   canonicalizeValue,
-  defineProgression,
   defineCommand,
+  defineProgression,
   executeCommand,
+  initialProgression,
   type Aggregate,
   type Command,
   type JsonObject,
-  type DefinedProgression,
+  type ProgressionDefinition,
   type ProgressionInstance,
 } from "@plotpoint/runtime";
 import { evaluateProgression } from "../../src/progression/evaluate-progression.js";
@@ -22,7 +23,7 @@ const command: Command<JsonObject, "player"> = {
 };
 
 function evaluate(
-  definition: DefinedProgression<JsonObject, JsonObject, JsonObject, "player">,
+  definition: ProgressionDefinition<JsonObject, "player">,
   progression: ProgressionInstance,
   maxAutomaticTransitions: number,
 ) {
@@ -31,50 +32,54 @@ function evaluate(
     progression,
     intents: [],
     aggregateState: {},
-    command,
-    outcome: {},
+    commandId: command.id,
     domainEvents: [],
-    observationTrace: [],
     maxAutomaticTransitions,
   });
+}
+
+function playerAggregate(progression: ProgressionInstance): Aggregate<JsonObject, "player"> {
+  return {
+    aggregateId: "p1",
+    modelId: "player.model",
+    aggregateKind: "player",
+    schemaId: "player.state",
+    stateVersion: 0,
+    state: {},
+    progression,
+  };
 }
 
 describe("progression failures", () => {
   const parallel = defineProgression({
     aggregateKind: "player",
     graphId: "parallel",
-    graphVersion: 1,
     nodes: [
       { nodeId: "a", initialStatus: "locked" },
       { nodeId: "b", initialStatus: "locked" },
     ],
-    automaticRules: [
+    transitions: [
       {
-        ruleId: "unlock-a",
+        transitionId: "unlock-a",
         targetNodeId: "a",
         from: ["locked"],
         to: "available",
         priority: 0,
+        trigger: "automatic",
         when: () => true,
       },
       {
-        ruleId: "unlock-b",
+        transitionId: "unlock-b",
         targetNodeId: "b",
         from: ["locked"],
         to: "available",
         priority: 0,
+        trigger: "automatic",
         when: () => true,
       },
     ],
   });
-  const start: ProgressionInstance = {
-    graphId: "parallel",
-    graphVersion: 1,
-    nodes: [
-      { nodeId: "a", status: "locked" },
-      { nodeId: "b", status: "locked" },
-    ],
-  };
+  const start = initialProgression(parallel);
 
   it.each([0, 1])("rejects a parallel batch atomically at limit %i", (limit) => {
     const result = evaluate(parallel, start, limit);
@@ -96,64 +101,49 @@ describe("progression failures", () => {
     const cyclic = defineProgression({
       aggregateKind: "player",
       graphId: "cycle",
-      graphVersion: 1,
       nodes: [{ nodeId: "a", initialStatus: "active" }],
-      automaticRules: [
+      transitions: [
         {
-          ruleId: "deactivate",
+          transitionId: "deactivate",
           targetNodeId: "a",
           from: ["active"],
           to: "available",
           priority: 0,
+          trigger: "automatic",
           when: () => true,
         },
         {
-          ruleId: "activate",
+          transitionId: "activate",
           targetNodeId: "a",
           from: ["available"],
           to: "active",
           priority: 0,
+          trigger: "automatic",
           when: () => true,
         },
       ],
     });
-    const result = evaluate(
-      cyclic,
-      { graphId: "cycle", graphVersion: 1, nodes: [{ nodeId: "a", status: "active" }] },
-      10,
-    );
+    const result = evaluate(cyclic, initialProgression(cyclic), 10);
 
     expect(result.kind).toBe("invalid");
     if (result.kind === "invalid") expect(result.diagnostic.code).toBe("progression-cycle");
   });
 
-  it("rolls back the aggregate and suppresses candidate effects when progression fails", () => {
-    type AtomicState = JsonObject & { readonly changed: boolean };
-    const aggregate: Aggregate<AtomicState, "player"> = {
-      kind: "player",
-      id: "p1",
-      schemaVersion: 1,
-      stateVersion: 0,
-      authority: "local",
-      state: { changed: false },
-      progression: start,
-    };
-    const definition = defineCommand<"player", AtomicState, JsonObject, JsonObject>({
+  it("rolls back aggregate and candidate facts when progression fails", () => {
+    const aggregate = playerAggregate(start);
+    const definition = defineCommand<"player", JsonObject, JsonObject, JsonObject>({
       definitionId: "atomic",
       commandType: "advance",
       aggregateKind: "player",
-      handle() {
-        return {
-          kind: "accepted" as const,
-          nextState: { changed: true },
-          outcome: { result: "candidate" },
-          domainEvents: [{ type: "candidate" }],
-          effectIntents: [{ type: "candidate-effect" }],
-          progressionIntents: [],
-        };
-      },
+      handle: () => ({
+        kind: "accepted",
+        nextState: { changed: true },
+        outcome: { result: "candidate" },
+        domainEvents: [{ type: "candidate" }],
+        effectIntents: [{ type: "candidate-effect" }],
+        progressionIntents: [],
+      }),
     });
-
     const result = executeCommand({
       definition,
       aggregate,
@@ -163,28 +153,24 @@ describe("progression failures", () => {
       policy: { maxAutomaticTransitions: 1 },
     });
 
-    expect(result.kind).toBe("invalid");
-    if (result.kind !== "invalid" || result.phase !== "execution") {
-      throw new Error("expected recorded invalid result");
-    }
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
+    if (result.kind !== "recorded") throw new Error("expected recorded invalid result");
     expect(result.aggregate).toEqual(aggregate);
-    expect(result.diagnostics[0]?.code).toBe("progression-limit-overrun");
+    expect(result.record.diagnostics[0]?.code).toBe("progression-limit-overrun");
     expect(result.record.effectIntents).toBeUndefined();
     expect(result.record.domainEvents).toBeUndefined();
   });
 
-  it("returns recorded invalidity for malformed progression identity", () => {
-    const aggregate: Aggregate<JsonObject, "player"> = {
-      kind: "player",
-      id: "p1",
-      schemaVersion: 1,
-      stateVersion: 0,
-      authority: "local",
-      state: {},
-      progression: { nodes: [] } as never,
-    };
+  it("records malformed progression state as deterministic invalidity", () => {
+    const progression = defineProgression({
+      aggregateKind: "player",
+      graphId: "malformed",
+      nodes: [],
+      transitions: [],
+    });
+    const aggregate = playerAggregate({ nodes: [] } as never);
     const definition = defineCommand<"player", JsonObject, JsonObject, JsonObject>({
-      definitionId: "malformed-progression",
+      definitionId: "malformed",
       commandType: "advance",
       aggregateKind: "player",
       handle: () => ({
@@ -196,17 +182,6 @@ describe("progression failures", () => {
         progressionIntents: [],
       }),
     });
-    const progression = defineProgression({
-      aggregateKind: "player",
-      graphId: "malformed-progression",
-      graphVersion: 1,
-      nodes: [],
-      automaticRules: [],
-    });
-
-    expect(() =>
-      executeCommand({ definition, aggregate, command, observations: [], progression }),
-    ).not.toThrow();
     const result = executeCommand({
       definition,
       aggregate,
@@ -214,29 +189,19 @@ describe("progression failures", () => {
       observations: [],
       progression,
     });
-    expect(result.kind).toBe("invalid");
-    if (result.kind !== "invalid" || result.phase !== "execution") {
-      throw new Error("expected recorded invalid result");
-    }
-    expect(result.diagnostics[0]?.code).toBe("progression-state-invalid");
+
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
+    if (result.kind !== "recorded") throw new Error("expected recorded invalid result");
+    expect(result.record.diagnostics[0]?.code).toBe("progression-state-invalid");
     expect(canonicalizeValue(result.record).kind).toBe("valid");
   });
 
   it("rejects a progression definition for another aggregate kind before evaluation", () => {
     let evaluated = false;
-    const aggregate: Aggregate<JsonObject, "player"> = {
-      kind: "player",
-      id: "p1",
-      schemaVersion: 1,
-      stateVersion: 0,
-      authority: "local",
-      state: {},
-      progression: {
-        graphId: "kind-mismatch",
-        graphVersion: 1,
-        nodes: [{ nodeId: "node", status: "locked" }],
-      },
-    };
+    const aggregate = playerAggregate({
+      graphId: "kind-mismatch",
+      nodes: [{ nodeId: "node", status: "locked" }],
+    });
     const definition = defineCommand<"player", JsonObject, JsonObject, JsonObject>({
       definitionId: "kind-mismatch",
       commandType: "advance",
@@ -253,15 +218,15 @@ describe("progression failures", () => {
     const progression = defineProgression({
       aggregateKind: "team",
       graphId: "kind-mismatch",
-      graphVersion: 1,
       nodes: [{ nodeId: "node", initialStatus: "locked" }],
-      automaticRules: [
+      transitions: [
         {
-          ruleId: "evaluate",
+          transitionId: "evaluate",
           targetNodeId: "node",
           from: ["locked"],
           to: "available",
           priority: 0,
+          trigger: "automatic",
           when: () => {
             evaluated = true;
             return true;
@@ -269,7 +234,6 @@ describe("progression failures", () => {
         },
       ],
     });
-
     const result = executeCommand({
       definition,
       aggregate,
@@ -278,47 +242,41 @@ describe("progression failures", () => {
       progression: progression as never,
     });
 
-    expect(result.kind).toBe("invalid");
-    if (result.kind !== "invalid" || result.phase !== "execution") {
-      throw new Error("expected recorded invalid result");
-    }
-    expect(result.diagnostics[0]).toMatchObject({
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
+    if (result.kind !== "recorded") throw new Error("expected recorded invalid result");
+    expect(result.record.diagnostics[0]).toMatchObject({
       code: "progression-graph-invalid",
       details: { reason: "aggregate-kind-mismatch" },
     });
     expect(evaluated).toBe(false);
   });
 
-  it("rejects reverted progression instead of returning a traced no-op", () => {
+  it("rejects progression that returns to its starting state without another durable fact", () => {
     const reverted = defineProgression({
       aggregateKind: "player",
       graphId: "reverted",
-      graphVersion: 1,
       nodes: [{ nodeId: "node", initialStatus: "active" }],
-      automaticRules: [
+      transitions: [
         {
-          ruleId: "restore",
+          transitionId: "deactivate",
+          targetNodeId: "node",
+          from: ["active"],
+          to: "available",
+          priority: 0,
+          trigger: "intent",
+        },
+        {
+          transitionId: "restore",
           targetNodeId: "node",
           from: ["available"],
           to: "active",
           priority: 0,
+          trigger: "automatic",
           when: () => true,
         },
       ],
     });
-    const aggregate: Aggregate<JsonObject, "player"> = {
-      kind: "player",
-      id: "p1",
-      schemaVersion: 1,
-      stateVersion: 0,
-      authority: "local",
-      state: {},
-      progression: {
-        graphId: "reverted",
-        graphVersion: 1,
-        nodes: [{ nodeId: "node", status: "active" }],
-      },
-    };
+    const aggregate = playerAggregate(initialProgression(reverted));
     const definition = defineCommand<"player", JsonObject, JsonObject, JsonObject>({
       definitionId: "reverted",
       commandType: "advance",
@@ -329,10 +287,9 @@ describe("progression failures", () => {
         outcome: {},
         domainEvents: [],
         effectIntents: [],
-        progressionIntents: [{ nodeId: "node", from: "active", to: "available" }],
+        progressionIntents: [{ transitionId: "deactivate" }],
       }),
     });
-
     const result = executeCommand({
       definition,
       aggregate,
@@ -341,8 +298,8 @@ describe("progression failures", () => {
       progression: reverted,
     });
 
-    expect(result.kind).toBe("invalid");
-    if (result.kind !== "invalid") throw new Error("expected invalid");
-    expect(result.diagnostics[0]?.code).toBe("no-op-output-invalid");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
+    if (result.kind !== "recorded") throw new Error("expected recorded invalid result");
+    expect(result.record.diagnostics[0]?.code).toBe("no-op-output-invalid");
   });
 });

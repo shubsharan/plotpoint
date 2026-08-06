@@ -12,27 +12,45 @@ export interface InspectedCommandMetadata {
   readonly aggregateKind: "player" | "team" | "session";
 }
 
+export interface InspectedApplicationMetadata {
+  readonly keys: readonly string[];
+  readonly mountType: string;
+}
+
+export interface InspectedAggregateModelMetadata {
+  readonly registrationId: string;
+  readonly initializerType: string;
+}
+
 export interface InspectedProgressionMetadata {
   readonly registrationId: string;
   readonly graphId: string;
-  readonly graphVersion: number;
   readonly aggregateKind: "player" | "team" | "session";
   readonly nodes: readonly {
     readonly nodeId: string;
     readonly initialStatus: string;
   }[];
-  readonly automaticRules: readonly {
-    readonly ruleId: string;
+  readonly transitions: readonly {
+    readonly transitionId: string;
     readonly targetNodeId: string;
-    readonly from: readonly string[];
+    readonly from: string;
     readonly to: string;
     readonly priority: number;
+    readonly trigger: "automatic" | "intent";
   }[];
 }
 
+export interface InspectedComponentMetadata {
+  readonly registrationId: string;
+  readonly implementationType: string;
+}
+
 export interface DefinitionInspectionMetadata {
+  readonly application: InspectedApplicationMetadata;
+  readonly aggregateModels: readonly InspectedAggregateModelMetadata[];
   readonly commands: readonly InspectedCommandMetadata[];
   readonly progressions: readonly InspectedProgressionMetadata[];
+  readonly components: readonly InspectedComponentMetadata[];
 }
 
 export interface InspectDefinitionBundleOptions {
@@ -70,9 +88,27 @@ function isAggregateKind(value: unknown): value is "player" | "team" | "session"
 }
 
 function validMetadata(value: unknown): value is DefinitionInspectionMetadata {
-  if (!isRecord(value) || !Array.isArray(value.commands) || !Array.isArray(value.progressions)) {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.application) ||
+    !Array.isArray(value.application.keys) ||
+    !value.application.keys.every((key) => typeof key === "string") ||
+    value.application.keys.length !== 1 ||
+    value.application.keys[0] !== "mount" ||
+    value.application.mountType !== "function" ||
+    !Array.isArray(value.aggregateModels) ||
+    !Array.isArray(value.commands) ||
+    !Array.isArray(value.progressions) ||
+    !Array.isArray(value.components)
+  ) {
     return false;
   }
+  const aggregateModelsValid = value.aggregateModels.every(
+    (model) =>
+      isRecord(model) &&
+      typeof model.registrationId === "string" &&
+      model.initializerType === "function",
+  );
   const commandsValid = value.commands.every(
     (command) =>
       isRecord(command) &&
@@ -86,10 +122,9 @@ function validMetadata(value: unknown): value is DefinitionInspectionMetadata {
       !isRecord(progression) ||
       typeof progression.registrationId !== "string" ||
       typeof progression.graphId !== "string" ||
-      !Number.isSafeInteger(progression.graphVersion) ||
       !isAggregateKind(progression.aggregateKind) ||
       !Array.isArray(progression.nodes) ||
-      !Array.isArray(progression.automaticRules)
+      !Array.isArray(progression.transitions)
     ) {
       return false;
     }
@@ -100,19 +135,25 @@ function validMetadata(value: unknown): value is DefinitionInspectionMetadata {
           typeof node.nodeId === "string" &&
           typeof node.initialStatus === "string",
       ) &&
-      progression.automaticRules.every(
-        (rule) =>
-          isRecord(rule) &&
-          typeof rule.ruleId === "string" &&
-          typeof rule.targetNodeId === "string" &&
-          Array.isArray(rule.from) &&
-          rule.from.every((status) => typeof status === "string") &&
-          typeof rule.to === "string" &&
-          Number.isSafeInteger(rule.priority),
+      progression.transitions.every(
+        (transition) =>
+          isRecord(transition) &&
+          typeof transition.transitionId === "string" &&
+          typeof transition.targetNodeId === "string" &&
+          typeof transition.from === "string" &&
+          typeof transition.to === "string" &&
+          Number.isSafeInteger(transition.priority) &&
+          (transition.trigger === "automatic" || transition.trigger === "intent"),
       )
     );
   });
-  return commandsValid && progressionsValid;
+  const componentsValid = value.components.every(
+    (component) =>
+      isRecord(component) &&
+      typeof component.registrationId === "string" &&
+      component.implementationType === "function",
+  );
+  return aggregateModelsValid && commandsValid && progressionsValid && componentsValid;
 }
 
 export async function inspectDefinitionBundle(

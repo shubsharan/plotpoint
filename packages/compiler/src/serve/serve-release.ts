@@ -4,7 +4,6 @@ import { isIPv4 } from "node:net";
 import { networkInterfaces } from "node:os";
 
 import {
-  CONTRACT_VERSIONS,
   MAX_RELEASE_BYTES,
   isEligibleInstallUrl,
   verifyRelease,
@@ -127,7 +126,6 @@ export async function serveRelease(input: ServeReleaseInput): Promise<RunningRel
   const port = await listen(server, host, input.port ?? 0);
   const releaseUrl = `http://${host}:${port}/release.pprelease`;
   const descriptor: InstallDescriptor = Object.freeze({
-    version: CONTRACT_VERSIONS.installDescriptor,
     releaseUrl,
     expectedReleaseId: verified.releaseId,
   });

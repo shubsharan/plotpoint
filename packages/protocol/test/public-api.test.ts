@@ -2,8 +2,8 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import packageJson from "../package.json" with { type: "json" };
 import * as protocol from "@plotpoint/protocol";
+import * as playerProtocol from "../src/player.js";
 import {
-  CONTRACT_VERSIONS,
   assessCompatibility,
   createReleaseArtifact,
   inspectRelease,
@@ -20,21 +20,21 @@ import {
 } from "@plotpoint/protocol";
 
 describe("protocol public API", () => {
-  it("publishes serialized compatibility generations from one registry", () => {
-    expect(Object.isFrozen(CONTRACT_VERSIONS)).toBe(true);
-    expect(CONTRACT_VERSIONS).toEqual({
-      projectConfiguration: 1,
-      releaseFormat: 1,
-      hostApi: { major: 1, minor: 1 },
-      installDescriptor: 1,
-      hostBridge: 1,
-      capabilityObservation: 1,
-      playReport: 1,
-      sharedSync: 1,
-      sharedReport: 1,
-      sharedApi: 1,
-      gameComposition: 1,
+  it("publishes compatibility constants only from their owning boundaries", () => {
+    expect(protocol).toMatchObject({
+      RELEASE_FORMAT_VERSION: 1,
+      HOST_API_VERSION: { major: 1, minor: 1 },
+      HOST_BRIDGE_VERSION: 1,
     });
+    expect(protocol).not.toHaveProperty("CONTRACT_VERSIONS");
+    expect(protocol).not.toHaveProperty("PROJECT_FORMAT_VERSION");
+    expect(Object.isFrozen(protocol.HOST_API_VERSION)).toBe(true);
+    expect(playerProtocol).toMatchObject({
+      HOST_API_VERSION: { major: 1, minor: 1 },
+      HOST_BRIDGE_VERSION: 1,
+    });
+    expect(playerProtocol).not.toHaveProperty("CONTRACT_VERSIONS");
+    expect(playerProtocol).not.toHaveProperty("RELEASE_FORMAT_VERSION");
   });
 
   it("exports portable inspection and compatibility operations from the package root", () => {
@@ -66,6 +66,21 @@ describe("protocol public API", () => {
         "sha256Digest",
         "validateReleaseManifest",
         "writeStoredZip",
+      ]),
+    );
+  });
+
+  it("exports only the plain composition, inspection, and report operations", () => {
+    expect(protocol).toMatchObject({
+      inspectGameRelease: expect.any(Function),
+      isGamePlayReport: expect.any(Function),
+    });
+    expect(Object.keys(protocol)).not.toEqual(
+      expect.arrayContaining([
+        "inspectGameReleaseV1",
+        "isGamePlayReportV1",
+        "isPlayReport",
+        "isSharedHuntReport",
       ]),
     );
   });

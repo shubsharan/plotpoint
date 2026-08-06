@@ -1,9 +1,44 @@
 import { describe, expect, it } from "vitest";
 
-import { defineCommand, type Aggregate, type Command, type JsonObject } from "@plotpoint/runtime";
+import {
+  defineCommand,
+  resolveCommandBinding,
+  type Aggregate,
+  type Command,
+  type CommandDefinition,
+  type JsonObject,
+} from "@plotpoint/runtime";
 import { clock, createRuntimeHarness } from "@plotpoint/testkit";
+import { isJsonObject, modelFixture, runtimeSchema } from "./runtime-model.js";
 
 type State = JsonObject & { readonly count: number };
+const stateSchema = runtimeSchema(
+  "counter.state",
+  (value): value is State =>
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "count" in value &&
+    typeof value.count === "number",
+);
+const jsonSchema = runtimeSchema("counter.json", isJsonObject);
+
+function executable(definition: CommandDefinition<State, JsonObject, JsonObject, "player">) {
+  const binding = resolveCommandBinding({
+    registrationId: definition.definitionId,
+    definition,
+    payloadSchema: jsonSchema,
+    outcomeSchema: jsonSchema,
+  });
+  return modelFixture({
+    modelId: "counter.player",
+    aggregateKind: "player",
+    authority: "local",
+    stateSchema,
+    initializeState: () => ({ count: 0 }),
+    commandsByType: { change: binding },
+  });
+}
 
 function fixture(): {
   aggregate: Aggregate<State, "player">;
@@ -11,11 +46,11 @@ function fixture(): {
 } {
   return {
     aggregate: {
-      kind: "player",
-      id: "p1",
-      schemaVersion: 1,
+      aggregateId: "p1",
+      modelId: "counter.player",
+      aggregateKind: "player",
+      schemaId: "counter.state",
       stateVersion: 0,
-      authority: "local",
       state: { count: 0 },
     },
     command: {
@@ -49,14 +84,14 @@ describe("runtime harness", () => {
 
     const result = createRuntimeHarness({ repeat: 100 }).run({
       name: "repeatable",
-      definition,
+      model: executable(definition),
       aggregate,
       command,
       observations: [],
     });
 
-    expect(result.kind).toBe("accepted");
-    if (result.kind !== "accepted") throw new Error("expected accepted");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "accepted" } });
+    if (result.kind !== "recorded") throw new Error("expected recorded result");
     expect(result.record.terminal).toBe("accepted");
   });
 
@@ -83,7 +118,7 @@ describe("runtime harness", () => {
     expect(() =>
       createRuntimeHarness({ repeat: 2 }).run({
         name: "varies",
-        definition,
+        model: executable(definition),
         aggregate,
         command,
         observations: [],
@@ -95,8 +130,9 @@ describe("runtime harness", () => {
     const source = fixture();
     const nonTarget: Aggregate<State> = {
       ...source.aggregate,
-      kind: "team",
-      id: "team-1",
+      aggregateKind: "team",
+      aggregateId: "team-1",
+      modelId: "counter.team",
       state: { count: 0 },
     };
     const definition = defineCommand<"player", State, JsonObject, JsonObject>({
@@ -120,7 +156,7 @@ describe("runtime harness", () => {
     expect(() =>
       createRuntimeHarness().run({
         name: "mutation",
-        definition,
+        model: executable(definition),
         aggregate: source.aggregate,
         command: source.command,
         observations: [],
@@ -151,11 +187,11 @@ describe("runtime harness", () => {
     expect(
       createRuntimeHarness().run({
         name: "exact",
-        definition,
+        model: executable(definition),
         aggregate,
         command,
         observations: [clock(1)],
       }).kind,
-    ).toBe("accepted");
+    ).toBe("recorded");
   });
 });

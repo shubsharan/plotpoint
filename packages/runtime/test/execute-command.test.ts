@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bindExecutableAggregateModel,
   canonicalizeValue,
   defineCommand,
   executeCommand,
+  resolveCommandBinding,
   type Aggregate,
   type Command,
   type JsonObject,
+  type ResolvedAggregateModel,
+  type RuntimeSchema,
 } from "@plotpoint/runtime";
 
 type State = JsonObject & { readonly count: number };
@@ -14,11 +18,11 @@ type Payload = JsonObject & { readonly amount: number };
 type Outcome = JsonObject & { readonly result: string };
 
 const aggregate: Aggregate<State, "player"> = {
-  kind: "player",
-  id: "player-1",
-  schemaVersion: 1,
+  aggregateId: "player-1",
+  modelId: "counter.player",
+  aggregateKind: "player",
+  schemaId: "counter.state",
   stateVersion: 4,
-  authority: "local",
   state: { count: 1 },
 };
 
@@ -55,8 +59,8 @@ describe("executeCommand", () => {
       observations: [],
     });
 
-    expect(result.kind).toBe("accepted");
-    if (result.kind !== "accepted") throw new Error("expected accepted");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "accepted" } });
+    if (result.kind !== "recorded") throw new Error("expected recorded acceptance");
     expect(result.aggregate.stateVersion).toBe(5);
     expect(result.aggregate.state).toEqual({ count: 3 });
     expect(aggregate.stateVersion).toBe(4);
@@ -79,8 +83,8 @@ describe("executeCommand", () => {
       observations: [],
     });
 
-    expect(result.kind).toBe("rejected");
-    if (result.kind !== "rejected") throw new Error("expected rejected");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "rejected" } });
+    if (result.kind !== "recorded") throw new Error("expected recorded rejection");
     expect(result.aggregate).toEqual(aggregate);
   });
 
@@ -89,15 +93,8 @@ describe("executeCommand", () => {
       definitionId: "noop",
       commandType: "increment",
       aggregateKind: "player",
-      handle(target) {
-        return {
-          kind: "accepted",
-          nextState: target.state,
-          outcome: { result: "unchanged" },
-          domainEvents: [],
-          effectIntents: [],
-          progressionIntents: [],
-        };
+      handle() {
+        return { kind: "no-op", outcome: { result: "unchanged" } };
       },
     });
 
@@ -108,8 +105,8 @@ describe("executeCommand", () => {
       observations: [],
     });
 
-    expect(result.kind).toBe("no-op");
-    if (result.kind !== "no-op") throw new Error("expected no-op");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "no-op" } });
+    if (result.kind !== "recorded") throw new Error("expected recorded no-op");
     expect(result.aggregate.stateVersion).toBe(4);
   });
 
@@ -141,8 +138,8 @@ describe("executeCommand", () => {
       observations: [],
     });
 
-    expect(result.kind).toBe("invalid");
-    if (result.kind === "invalid") expect(result.diagnostics[0]?.code).toBe(code);
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
+    if (result.kind === "recorded") expect(result.record.diagnostics[0]?.code).toBe(code);
     expect(JSON.stringify(result)).not.toContain("host prose");
   });
 
@@ -202,14 +199,16 @@ describe("executeCommand", () => {
     });
     const malformedOutput = executeCommand({ definition, aggregate, command, observations: [] });
 
-    expect(malformedCommand.kind).toBe("invalid");
-    if (malformedCommand.kind === "invalid") {
-      expect(malformedCommand.phase).toBe("preflight");
+    expect(malformedCommand.kind).toBe("preflight-invalid");
+    if (malformedCommand.kind === "preflight-invalid") {
       expect(malformedCommand.diagnostics[0]?.code).toBe("command-invalid");
     }
-    expect(malformedOutput.kind).toBe("invalid");
-    if (malformedOutput.kind === "invalid") {
-      expect(malformedOutput.diagnostics[0]?.code).toBe("handler-result-invalid");
+    expect(malformedOutput).toMatchObject({
+      kind: "recorded",
+      record: { terminal: "invalid" },
+    });
+    if (malformedOutput.kind === "recorded") {
+      expect(malformedOutput.record.diagnostics[0]?.code).toBe("handler-result-invalid");
     }
   });
 
@@ -256,7 +255,7 @@ describe("executeCommand", () => {
     for (const input of inputs) {
       expect(() => executeCommand(input)).not.toThrow();
       const result = executeCommand(input);
-      expect(result).toMatchObject({ kind: "invalid", phase: "preflight" });
+      expect(result).toMatchObject({ kind: "preflight-invalid" });
       expect("record" in result).toBe(false);
       expect("aggregate" in result).toBe(false);
     }
@@ -282,8 +281,7 @@ describe("executeCommand", () => {
       expect(() => executeCommand(input)).not.toThrow();
       const result = executeCommand(input);
       expect(result).toMatchObject({
-        kind: "invalid",
-        phase: "preflight",
+        kind: "preflight-invalid",
         diagnostics: [
           {
             code: "runtime-policy-invalid",
@@ -331,13 +329,208 @@ describe("executeCommand", () => {
       policy: { maxCanonicalNodes: 20 },
     });
 
-    expect(result.kind).toBe("rejected");
-    if (result.kind === "rejected") {
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "rejected" } });
+    if (result.kind === "recorded") {
       expect(Object.isFrozen(result.record)).toBe(true);
       expect(Object.isFrozen(result.record.observations)).toBe(true);
       expect(Object.isFrozen(result.record.observationTrace)).toBe(true);
       expect(Object.isFrozen(result.record.progressionTrace)).toBe(true);
       expect(Object.isFrozen(result.record.diagnostics)).toBe(true);
     }
+  });
+});
+
+describe("executable aggregate model initialization", () => {
+  it("contains initializer exceptions as a stable invalid result without a partial aggregate", () => {
+    const stateSchema: RuntimeSchema<State> = {
+      id: "counter.state",
+      schemaDigest: "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      validate(value) {
+        if (
+          value !== null &&
+          typeof value === "object" &&
+          !Array.isArray(value) &&
+          "count" in value &&
+          typeof value.count === "number"
+        ) {
+          return { valid: true, value: { count: value.count } };
+        }
+        return { valid: false, diagnostics: [] };
+      },
+    };
+    const initializationSchema: RuntimeSchema<JsonObject> = {
+      id: "counter.initialization",
+      schemaDigest: "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+      validate(value) {
+        if (
+          value !== null &&
+          typeof value === "object" &&
+          !Array.isArray(value) &&
+          "seed" in value &&
+          typeof value.seed === "number"
+        ) {
+          return { valid: true, value: { seed: value.seed } };
+        }
+        return { valid: false, diagnostics: [] };
+      },
+    };
+    const model: ResolvedAggregateModel<"player", State> = {
+      modelId: "counter.player",
+      aggregateKind: "player",
+      authority: "local",
+      stateSchema,
+      initializationSchema,
+      initializeState(input) {
+        throw new Error(`sensitive initializer detail: ${String(input.seed)}`);
+      },
+      commandsByType: {},
+      eventSchemas: {},
+      effectSchemas: {},
+    };
+    const executableModel = bindExecutableAggregateModel(model);
+
+    const initialize = (seed: number) => executableModel.initialize({ seed });
+    expect(() => initialize(1)).not.toThrow();
+
+    const first = initialize(1);
+    const second = initialize(2);
+    expect(first).toEqual(second);
+    expect(first).toEqual({
+      kind: "invalid",
+      diagnostics: [
+        {
+          code: "initializer-threw",
+          details: { modelId: "counter.player" },
+        },
+      ],
+    });
+    expect("aggregate" in first).toBe(false);
+  });
+
+  it("narrows erased model state and command payload before invoking typed logic", () => {
+    const stateSchema: RuntimeSchema<State> = {
+      id: "counter.state",
+      schemaDigest: "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      validate(value) {
+        if (
+          value !== null &&
+          typeof value === "object" &&
+          !Array.isArray(value) &&
+          "count" in value &&
+          typeof value.count === "number"
+        ) {
+          return { valid: true, value: { count: value.count } };
+        }
+        return { valid: false, diagnostics: [] };
+      },
+    };
+    const initializationSchema: RuntimeSchema<JsonObject> = {
+      id: "counter.initialization",
+      schemaDigest: "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      validate: () => ({ valid: true, value: {} }),
+    };
+    const payloadSchema: RuntimeSchema<Payload> = {
+      id: "counter.increment.payload",
+      schemaDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      validate(value) {
+        if (
+          value !== null &&
+          typeof value === "object" &&
+          !Array.isArray(value) &&
+          "amount" in value &&
+          typeof value.amount === "number"
+        ) {
+          return { valid: true, value: { amount: value.amount } };
+        }
+        return { valid: false, diagnostics: [] };
+      },
+    };
+    const outcomeSchema: RuntimeSchema<Outcome> = {
+      id: "counter.increment.outcome",
+      schemaDigest: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      validate(value) {
+        if (
+          value !== null &&
+          typeof value === "object" &&
+          !Array.isArray(value) &&
+          "result" in value &&
+          typeof value.result === "string"
+        ) {
+          return { valid: true, value: { result: value.result } };
+        }
+        return { valid: false, diagnostics: [] };
+      },
+    };
+    let handlerCalls = 0;
+    const binding = resolveCommandBinding({
+      registrationId: "counter.increment",
+      definition: defineCommand<"player", State, Payload, Outcome>({
+        definitionId: "counter.increment",
+        commandType: "increment",
+        aggregateKind: "player",
+        handle(target, input) {
+          handlerCalls += 1;
+          return {
+            kind: "accepted",
+            nextState: { count: target.state.count + input.payload.amount },
+            outcome: { result: "incremented" },
+            domainEvents: [],
+            effectIntents: [],
+            progressionIntents: [],
+          };
+        },
+      }),
+      payloadSchema,
+      outcomeSchema,
+    });
+    const executableModel = bindExecutableAggregateModel({
+      modelId: "counter.player",
+      aggregateKind: "player",
+      authority: "local",
+      stateSchema,
+      initializationSchema,
+      initializeState: () => ({ count: 0 }),
+      commandsByType: { increment: binding },
+      eventSchemas: {},
+      effectSchemas: {},
+    });
+    const erasedAggregate: Aggregate<JsonObject, "player"> = aggregate;
+
+    const invalidPayloadResult = executableModel.execute({
+      aggregate: erasedAggregate,
+      command: { ...command, payload: { amount: "invalid" } },
+      observations: [],
+    });
+    expect(invalidPayloadResult).toMatchObject({
+      kind: "recorded",
+      record: {
+        terminal: "invalid",
+        diagnostics: [{ code: "command-payload-invalid" }],
+      },
+    });
+    expect(handlerCalls).toBe(0);
+
+    const acceptedResult = executableModel.execute({
+      aggregate: erasedAggregate,
+      command,
+      observations: [],
+    });
+    expect(acceptedResult).toMatchObject({
+      kind: "recorded",
+      aggregate: { state: { count: 3 }, stateVersion: 5 },
+      record: { terminal: "accepted" },
+    });
+    expect(handlerCalls).toBe(1);
+
+    const invalidStateResult = executableModel.execute({
+      aggregate: { ...erasedAggregate, state: { count: "invalid" } },
+      command,
+      observations: [],
+    });
+    expect(invalidStateResult).toMatchObject({
+      kind: "preflight-invalid",
+      diagnostics: [{ code: "aggregate-state-invalid" }],
+    });
+    expect(handlerCalls).toBe(1);
   });
 });

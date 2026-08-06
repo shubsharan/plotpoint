@@ -1,7 +1,6 @@
 import * as Location from "expo-location";
 
 import {
-  CONTRACT_VERSIONS,
   FOREGROUND_LOCATION_CAPABILITY,
   isLocationObservation,
   isLocationRequestInput,
@@ -113,7 +112,6 @@ export async function captureForegroundLocation(
   try {
     if ((await adapter.requestPermission()) === "denied") {
       observation = {
-        version: CONTRACT_VERSIONS.capabilityObservation,
         observationId,
         recordedAt: recordedAt(),
         availability: "permission-denied",
@@ -123,14 +121,12 @@ export async function captureForegroundLocation(
       const hostRecordedAt = recordedAt();
       if (location === null) {
         observation = {
-          version: CONTRACT_VERSIONS.capabilityObservation,
           observationId,
           recordedAt: hostRecordedAt,
           availability: "unavailable",
         };
       } else if (!availableValuesAreValid(location)) {
         observation = {
-          version: CONTRACT_VERSIONS.capabilityObservation,
           observationId,
           recordedAt: hostRecordedAt,
           availability: "failed",
@@ -138,7 +134,6 @@ export async function captureForegroundLocation(
         };
       } else {
         observation = {
-          version: CONTRACT_VERSIONS.capabilityObservation,
           observationId,
           recordedAt: hostRecordedAt,
           availability: "available",
@@ -152,7 +147,6 @@ export async function captureForegroundLocation(
     }
   } catch {
     observation = {
-      version: CONTRACT_VERSIONS.capabilityObservation,
       observationId,
       recordedAt: recordedAt(),
       availability: "failed",
@@ -168,7 +162,6 @@ export async function captureForegroundLocation(
 
 function canonicalObservation(observation: LocationObservation): CanonicalJsonObject {
   const base = {
-    version: observation.version,
     observationId: observation.observationId,
     recordedAt: observation.recordedAt,
     availability: observation.availability,

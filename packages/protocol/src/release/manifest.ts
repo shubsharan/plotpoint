@@ -1,5 +1,3 @@
-import { CONTRACT_VERSIONS } from "../contract-versions.js";
-
 import { encodeCanonicalJson } from "./canonical-json.js";
 import { isSha256Digest } from "./identity.js";
 import { compareOrdinal, isCanonicalArchivePath } from "./paths.js";
@@ -10,6 +8,7 @@ import type {
   ReleaseEntryKind,
   ReleaseManifest,
 } from "./types.js";
+import { RELEASE_FORMAT_VERSION } from "./types.js";
 
 export type ManifestValidationResult =
   | { readonly kind: "valid"; readonly manifest: ReleaseManifest }
@@ -90,7 +89,7 @@ export function validateReleaseManifest(value: unknown): ManifestValidationResul
   if (!isObject(value) || !hasExactFields(value, ROOT_FIELDS)) {
     return invalid("invalid-root-shape", "");
   }
-  if (value.releaseFormatVersion !== CONTRACT_VERSIONS.releaseFormat)
+  if (value.releaseFormatVersion !== RELEASE_FORMAT_VERSION)
     return invalid("unsupported-release-format", "/releaseFormatVersion");
   if (!validateHostApi(value.hostApi)) return invalid("invalid-host-api", "/hostApi");
   if (!Array.isArray(value.aggregateSchemas)) return invalid("invalid-array", "/aggregateSchemas");

@@ -1,24 +1,17 @@
 import {
-  CONTRACT_VERSIONS,
   FOREGROUND_LOCATION_CAPABILITY,
-  LOCATION_REPORT_PROJECTION_VALIDATOR,
-  accuracyBand,
-  isPlayReport,
-  recencyBand,
-  type CanonicalJsonObject,
-  type PlayReportEvent,
-  type PlayReport,
+  isGamePlayReport,
+  parseReportSafeDiagnosticCode,
+  type GamePlayReport,
+  type GamePlayReportEvent,
 } from "@plotpoint/protocol";
 
 import type { DurableTransitionResult, RunEventRecord } from "../model";
 
-const STABLE_CODE = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
-const LOCATION_REPORT_MAXIMUM_FRESH_AGE_MS = 15_000;
-
 export interface PlayReportEvidence {
-  readonly releaseId: PlayReport["releaseId"];
+  readonly releaseId: GamePlayReport["releaseId"];
   readonly runId: string;
-  readonly platform: PlayReport["platform"];
+  readonly platform: GamePlayReport["platform"];
   readonly startedAtMs: number;
   readonly endedAtMs: number;
   readonly commands: readonly {
@@ -45,18 +38,16 @@ export interface PlayReportEvidence {
   readonly runEvents: readonly RunEventRecord[];
 }
 
-function stableCode(value: unknown): string | undefined {
-  return typeof value === "string" && STABLE_CODE.test(value) ? value : undefined;
-}
-
-function outcomeCode(outcome: CanonicalJsonObject | undefined): string | undefined {
-  return stableCode(outcome?.code) ?? stableCode(outcome?.result);
-}
-
 function reportElapsed(value: number, startedAtMs: number): number {
   const elapsed = value >= startedAtMs ? value - startedAtMs : value;
   if (!Number.isSafeInteger(elapsed) || elapsed < 0) throw new Error("report-elapsed-invalid");
   return elapsed;
+}
+
+function safeDiagnosticCode(value: string) {
+  const code = parseReportSafeDiagnosticCode(value);
+  if (code === null) throw new Error("report-diagnostic-code-unsafe");
+  return code;
 }
 
 function validateCoherence(evidence: PlayReportEvidence): void {
@@ -84,26 +75,14 @@ function validateCoherence(evidence: PlayReportEvidence): void {
     linksByCommand.set(link.commandId, links);
   }
   for (const { result } of evidence.commands) {
-    if (
-      result.commandOutcome === undefined ||
-      result.expectedVersion === undefined ||
-      result.resultingVersion === undefined
-    ) {
-      throw new Error("report-receipt-incoherent");
-    }
     const hasJournal = journalByCommand.has(result.commandId);
-    if ((result.commandOutcome === "accepted") !== hasJournal) {
+    if ((result.terminal === "accepted") !== hasJournal) {
       throw new Error("report-journal-incoherent");
-    }
-    const expectedLinks = [...(result.observationIds ?? [])].sort();
-    const actualLinks = [...(linksByCommand.get(result.commandId) ?? [])].sort();
-    if (JSON.stringify(expectedLinks) !== JSON.stringify(actualLinks)) {
-      throw new Error("report-observation-link-incoherent");
     }
   }
 }
 
-export function buildPlayReport(evidence: PlayReportEvidence): PlayReport {
+export function buildPlayReport(evidence: PlayReportEvidence): GamePlayReport {
   if (
     !Number.isSafeInteger(evidence.startedAtMs) ||
     !Number.isSafeInteger(evidence.endedAtMs) ||
@@ -113,57 +92,85 @@ export function buildPlayReport(evidence: PlayReportEvidence): PlayReport {
   }
   validateCoherence(evidence);
 
-  const events: Array<PlayReportEvent & { readonly order: number }> = [];
+  const commandAliases = new Map(
+    evidence.commands.map(({ result }, index) => [
+      result.commandId,
+      `command-${String(index + 1).padStart(3, "0")}`,
+    ]),
+  );
+  const events: GamePlayReportEvent[] = [];
   for (const { result, elapsedMs } of evidence.commands) {
-    const journal = evidence.journals.find(({ commandId }) => commandId === result.commandId);
+    const commandAlias = commandAliases.get(result.commandId);
+    if (commandAlias === undefined) throw new Error("report-command-alias-missing");
     events.push({
       kind: "command",
       elapsedMs: reportElapsed(elapsedMs, evidence.startedAtMs),
-      commandId: result.commandId,
-      terminal: result.commandOutcome as "accepted" | "no-op" | "rejected" | "invalid",
-      expectedVersion: result.expectedVersion as number,
-      resultingVersion: result.resultingVersion as number,
-      ...(outcomeCode(result.outcome) === undefined
-        ? {}
-        : { outcomeCode: outcomeCode(result.outcome) }),
-      progressionChanges: journal?.progressionChanges ?? [],
-      order: 0,
+      scope: "local",
+      commandAlias,
+      terminal: result.terminal,
+      expectedStateVersion:
+        result.terminal === "accepted"
+          ? result.resultingStateVersion - 1
+          : result.resultingStateVersion,
+      resultingStateVersion: result.resultingStateVersion,
     });
   }
   for (const capability of evidence.capabilities) {
     events.push({
       kind: "capability",
-      elapsedMs: capability.elapsedMs,
-      capability: {
-        id: FOREGROUND_LOCATION_CAPABILITY.id,
-        major: FOREGROUND_LOCATION_CAPABILITY.major,
-      },
-      recordId: capability.recordId,
-      outcomeCode: capability.availability,
-      projection: {
-        availability: capability.availability,
-        recencyBand: recencyBand(
-          capability.ageMs ?? undefined,
-          LOCATION_REPORT_MAXIMUM_FRESH_AGE_MS,
-        ),
-        accuracyBand: accuracyBand(capability.horizontalAccuracy ?? undefined),
-      },
-      order: 1,
+      elapsedMs: reportElapsed(capability.elapsedMs, evidence.startedAtMs),
+      capabilityId: FOREGROUND_LOCATION_CAPABILITY.id,
+      disposition: capability.availability === "available" ? "captured" : "denied",
     });
   }
   for (const event of evidence.runEvents) {
-    events.push({ ...event, order: event.kind === "lifecycle" ? 2 : 3 });
+    const elapsedMs = reportElapsed(event.elapsedMs, evidence.startedAtMs);
+    if (
+      (event.kind === "lifecycle" &&
+        event.phase === "recovery" &&
+        event.disposition === "application-restored") ||
+      (event.kind === "diagnostic" && event.code === "application-restored")
+    ) {
+      events.push({ kind: "recovery", elapsedMs, disposition: "run-restored" });
+    } else if (
+      event.kind === "lifecycle" &&
+      event.phase === "transition" &&
+      event.disposition === "interrupted"
+    ) {
+      const commandAlias =
+        event.commandId === undefined ? undefined : commandAliases.get(event.commandId);
+      events.push({
+        kind: "diagnostic",
+        elapsedMs,
+        code: safeDiagnosticCode("delivery-interrupted"),
+        ...(commandAlias === undefined ? {} : { commandAlias }),
+      });
+    } else if (
+      event.kind === "lifecycle" &&
+      event.phase === "recovery" &&
+      event.disposition === "failed"
+    ) {
+      events.push({
+        kind: "diagnostic",
+        elapsedMs,
+        code: safeDiagnosticCode("runtime-recovery-failed"),
+      });
+    } else {
+      throw new Error("report-run-event-unsupported");
+    }
   }
-  events.sort((left, right) => left.elapsedMs - right.elapsedMs || left.order - right.order);
+  events.sort(
+    (left, right) =>
+      left.elapsedMs - right.elapsedMs ||
+      (left.kind < right.kind ? -1 : left.kind > right.kind ? 1 : 0),
+  );
   const report = {
-    version: CONTRACT_VERSIONS.playReport,
     releaseId: evidence.releaseId,
-    runId: evidence.runId,
     platform: evidence.platform,
     durationMs: evidence.endedAtMs - evidence.startedAtMs,
-    events: events.map(({ order: _order, ...event }) => event),
-  } satisfies PlayReport;
-  if (!isPlayReport(report, [LOCATION_REPORT_PROJECTION_VALIDATOR])) {
+    events,
+  } satisfies GamePlayReport;
+  if (!isGamePlayReport(report)) {
     throw new Error("report-contract-invalid");
   }
   const serialized = JSON.stringify(report);
@@ -194,11 +201,11 @@ export interface PlayReportDatabase {
 export async function createPlayReport(
   database: PlayReportDatabase,
   runId: string,
-  platform: PlayReport["platform"],
-): Promise<PlayReport> {
+  platform: GamePlayReport["platform"],
+): Promise<GamePlayReport> {
   const raw = database.raw();
   const run = await raw.getFirstAsync<{
-    release_id: PlayReport["releaseId"];
+    release_id: GamePlayReport["releaseId"];
     started_at: string;
   }>("SELECT release_id, started_at FROM runs WHERE run_id = ?", runId);
   if (run === null) throw new Error("report-run-missing");

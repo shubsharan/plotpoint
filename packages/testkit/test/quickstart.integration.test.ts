@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { defineCommand, defineProgression, type JsonObject } from "@plotpoint/runtime";
+import {
+  defineCommand,
+  defineProgression,
+  initialProgression,
+  resolveCommandBinding,
+  type JsonObject,
+} from "@plotpoint/runtime";
 import {
   assertAccepted,
   clock,
@@ -8,6 +14,7 @@ import {
   playerFixture,
   replayScenario,
 } from "@plotpoint/testkit";
+import { isJsonObject, modelFixture, runtimeSchema } from "./runtime-model.js";
 
 type ClueState = JsonObject & { readonly discovered: readonly string[] };
 type Payload = JsonObject & { readonly clueId: string };
@@ -31,52 +38,93 @@ describe("quickstart acceptance", () => {
         };
       },
     });
-    const progression = defineProgression<"player", ClueState, Payload, Outcome>({
+    const progression = defineProgression<"player", ClueState>({
       aggregateKind: "player",
       graphId: "tour",
-      graphVersion: 1,
       nodes: [
         { nodeId: "find-clue", initialStatus: "active" },
         { nodeId: "solve-east", initialStatus: "locked" },
         { nodeId: "solve-west", initialStatus: "locked" },
       ],
-      automaticRules: [
+      transitions: [
         {
-          ruleId: "unlock-east",
+          transitionId: "unlock-east",
           targetNodeId: "solve-east",
           from: ["locked"],
           to: "available",
           priority: 0,
+          trigger: "automatic",
           when: ({ aggregateState }) => aggregateState.discovered.includes("alpha"),
         },
         {
-          ruleId: "unlock-west",
+          transitionId: "unlock-west",
           targetNodeId: "solve-west",
           from: ["locked"],
           to: "available",
           priority: 0,
+          trigger: "automatic",
           when: ({ aggregateState }) => aggregateState.discovered.includes("alpha"),
         },
       ],
     });
+    const stateSchema = runtimeSchema(
+      "tour.player-state",
+      (value): value is ClueState =>
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        "discovered" in value &&
+        Array.isArray(value.discovered) &&
+        value.discovered.every((clueId) => typeof clueId === "string"),
+    );
+    const payloadSchema = runtimeSchema(
+      "tour.record-clue-payload",
+      (value): value is Payload =>
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        "clueId" in value &&
+        typeof value.clueId === "string",
+    );
+    const outcomeSchema = runtimeSchema(
+      "tour.record-clue-outcome",
+      (value): value is Outcome =>
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        "result" in value &&
+        typeof value.result === "string",
+    );
+    const binding = resolveCommandBinding({
+      registrationId: "example.record-clue",
+      definition,
+      payloadSchema,
+      outcomeSchema,
+    });
+    const model = modelFixture({
+      modelId: "tour.player",
+      aggregateKind: "player",
+      authority: "local",
+      stateSchema,
+      initializeState: () => ({ discovered: [] }),
+      commandsByType: { "record-clue": binding },
+      eventSchemas: { "clue-recorded": runtimeSchema("tour.clue-recorded", isJsonObject) },
+      effectSchemas: {
+        "show-notification": runtimeSchema("tour.show-notification", isJsonObject),
+      },
+      progression,
+    });
     const aggregate = playerFixture<ClueState>({
-      id: "player-1",
+      model,
+      aggregateId: "player-1",
       stateVersion: 4,
       state: { discovered: [] },
-      progression: {
-        graphId: "tour",
-        graphVersion: 1,
-        nodes: [
-          { nodeId: "find-clue", status: "active" },
-          { nodeId: "solve-east", status: "locked" },
-          { nodeId: "solve-west", status: "locked" },
-        ],
-      },
+      progression: initialProgression(progression),
     });
 
     const result = createRuntimeHarness({ repeat: 100 }).run({
       name: "recording alpha unlocks both branches",
-      definition,
+      model,
       aggregate,
       command: {
         id: "command-1",
@@ -86,8 +134,6 @@ describe("quickstart acceptance", () => {
         payload: { clueId: "alpha" },
       },
       observations: [clock("2030-01-01T00:00:00.000Z")],
-      progression,
-      policy: { maxAutomaticTransitions: 2 },
     });
 
     assertAccepted(result);
@@ -97,6 +143,6 @@ describe("quickstart acceptance", () => {
       "available",
       "available",
     ]);
-    expect(replayScenario({ record: result.record, definition, progression }).kind).toBe("match");
+    expect(replayScenario({ record: result.record, model }).kind).toBe("match");
   });
 });

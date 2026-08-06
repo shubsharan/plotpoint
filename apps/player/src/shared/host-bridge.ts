@@ -1,5 +1,5 @@
 import {
-  CONTRACT_VERSIONS,
+  HOST_BRIDGE_VERSION,
   isSharedCommandIntent,
   type CanonicalJsonObject,
   type SharedCommandIntent,
@@ -8,7 +8,7 @@ import {
 } from "@plotpoint/protocol";
 
 interface SharedRequest {
-  readonly version: typeof CONTRACT_VERSIONS.hostBridge;
+  readonly version: typeof HOST_BRIDGE_VERSION;
   readonly requestId: string;
   readonly type: "shared.view.get" | "shared.command.enqueue";
   readonly payload: CanonicalJsonObject;
@@ -33,7 +33,7 @@ function parse(raw: string): SharedRequest | null {
   if (
     !object(value) ||
     Object.keys(value).some((key) => !["version", "requestId", "type", "payload"].includes(key)) ||
-    value.version !== CONTRACT_VERSIONS.hostBridge ||
+    value.version !== HOST_BRIDGE_VERSION ||
     typeof value.requestId !== "string" ||
     !["shared.view.get", "shared.command.enqueue"].includes(value.type as string) ||
     !object(value.payload)
@@ -57,7 +57,7 @@ export async function routeSharedBridgeMessage(
   const request = parse(raw);
   if (request === null)
     return {
-      version: CONTRACT_VERSIONS.hostBridge,
+      version: HOST_BRIDGE_VERSION,
       requestId: "unknown",
       type: "host.error",
       payload: { code: "shared-message-invalid" },
@@ -71,14 +71,14 @@ export async function routeSharedBridgeMessage(
       payload = await handlers.enqueue(command);
     }
     return {
-      version: CONTRACT_VERSIONS.hostBridge,
+      version: HOST_BRIDGE_VERSION,
       requestId: request.requestId,
       type: request.type === "shared.view.get" ? "shared.view.result" : "shared.command.result",
       payload: payload as unknown as CanonicalJsonObject,
     };
   } catch (error) {
     return {
-      version: CONTRACT_VERSIONS.hostBridge,
+      version: HOST_BRIDGE_VERSION,
       requestId: request.requestId,
       type: "host.error",
       payload: { code: error instanceof Error ? error.message : "shared-operation-failed" },

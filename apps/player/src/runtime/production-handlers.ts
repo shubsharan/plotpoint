@@ -1,43 +1,16 @@
-import type { RuntimeBootstrap, TransitionCandidate, TransitionResult } from "@plotpoint/protocol";
+import type { RuntimeBootstrap, TransitionResult } from "@plotpoint/protocol";
 
 import { createCapabilityDispatcher, type HostBridgeHandlers } from "../bridge/host-bridge";
 import {
   foregroundLocationCapabilityRegistration,
   type CaptureForegroundLocationInput,
 } from "../location/foreground-location";
-import type { CandidateTransition } from "../model";
 import { commitCandidateTransition, type TransitionStore } from "../persistence/commit-transition";
 import { transitionResultFromDurable } from "./transition-result";
-
-function durableCandidate(candidate: TransitionCandidate): CandidateTransition {
-  const base = {
-    commandId: candidate.commandId,
-    aggregateId: candidate.target.aggregateId,
-    aggregateKind: candidate.target.aggregateKind,
-    schemaId: candidate.target.schemaId,
-    schemaVersion: candidate.target.schemaVersion,
-    expectedVersion: candidate.expectedVersion,
-    observationIds: candidate.observationIds,
-  };
-  if (candidate.terminal === "accepted") {
-    return {
-      ...base,
-      commandOutcome: "accepted",
-      nextState: candidate.nextState,
-      outcome: candidate.outcome,
-      progressionChanges: candidate.progressionChanges,
-    };
-  }
-  if (candidate.terminal === "invalid") {
-    return { ...base, commandOutcome: "invalid", diagnosticCodes: candidate.diagnosticCodes };
-  }
-  return { ...base, commandOutcome: candidate.terminal, outcome: candidate.outcome };
-}
 
 export interface ProductionRuntimeContext {
   readonly bootstrap: RuntimeBootstrap;
   readonly aggregateSchemaId: string;
-  readonly aggregateSchemaVersion: number;
   validateAggregate(value: object): boolean;
 }
 
@@ -54,13 +27,17 @@ export function createProductionHostBridgeHandlers(input: {
     runtimeReady: async () => input.runtime.bootstrap,
     commitTransition: async ({ candidate }): Promise<TransitionResult> => {
       if (
+        candidate.modelId !== input.runtime.bootstrap.aggregate.modelId ||
+        candidate.target.aggregateId !== input.runtime.bootstrap.aggregate.aggregateId ||
+        candidate.target.aggregateKind !== input.runtime.bootstrap.aggregate.aggregateKind ||
         candidate.target.schemaId !== input.runtime.aggregateSchemaId ||
-        candidate.target.schemaVersion !== input.runtime.aggregateSchemaVersion
+        candidate.target.schemaId !== input.runtime.bootstrap.aggregate.schemaId
       ) {
         throw new Error("transition-aggregate-mismatch");
       }
       if (
         candidate.terminal === "accepted" &&
+        candidate.nextState !== undefined &&
         !input.runtime.validateAggregate(candidate.nextState)
       ) {
         throw new Error("transition-state-schema-invalid");
@@ -68,10 +45,9 @@ export function createProductionHostBridgeHandlers(input: {
       const result = await commitCandidateTransition({
         store: input.store,
         runId: input.runtime.bootstrap.runId,
-        candidate: durableCandidate(candidate),
+        candidate,
       });
-      if (result.kind === "stale") throw new Error(result.code ?? "transition-stale");
-      if (result.kind === "invalid") throw new Error(result.code ?? "transition-invalid");
+      if ("kind" in result) throw new Error(result.code);
       await input.onDurableResult?.();
       return transitionResultFromDurable(result);
     },

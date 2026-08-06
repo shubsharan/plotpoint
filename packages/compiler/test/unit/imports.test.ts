@@ -64,18 +64,32 @@ describe("environment graph resolution", () => {
   ) {
     const root = await mkdtemp(join(tmpdir(), "plotpoint-imports-"));
     roots.push(root);
-    await mkdir(join(root, "src"));
+    await Promise.all([mkdir(join(root, "src")), mkdir(join(root, "schemas"))]);
     const config = {
       projectFormatVersion: 1,
       environment: "web",
       hostApi: { major: 1, minimumMinor: 0 },
-      entries: {
-        logic: { source: "src/logic.ts", export: "logic" },
-        presentation: { source: "src/presentation.ts", export: "presentation" },
+      application: {
+        definition: { source: "src/presentation.ts", export: "presentation" },
+        components: [],
       },
+      aggregateModels: [
+        {
+          id: "player",
+          authority: "local",
+          kind: "player",
+          stateSchema: "player-state",
+          initializationSchema: "player-initialization",
+          initializer: { source: "src/logic.ts", export: "logic" },
+          events: [],
+          effects: [],
+        },
+      ],
       commands: [],
-      aggregateSchemas: [],
-      schemas: [],
+      schemas: [
+        { id: "player-state", path: "schemas/player-state.json" },
+        { id: "player-initialization", path: "schemas/player-initialization.json" },
+      ],
       progressions: [],
       components: [],
       content: [],
@@ -85,6 +99,8 @@ describe("environment graph resolution", () => {
       writeFile(join(root, "plotpoint.project.json"), JSON.stringify(config)),
       writeFile(join(root, "src/logic.ts"), logic),
       writeFile(join(root, "src/presentation.ts"), presentation),
+      writeFile(join(root, "schemas/player-state.json"), "{}"),
+      writeFile(join(root, "schemas/player-initialization.json"), "{}"),
       ...Object.entries(extraSources).map(([path, source]) =>
         writeFile(join(root, "src", path), source),
       ),
@@ -102,7 +118,9 @@ describe("environment graph resolution", () => {
       'import { createHostRuntimeClient } from "@plotpoint/protocol/player"; export const presentation = { createHostRuntimeClient, element: document.createElement("main") };',
     );
 
-    const logic = resolveImportGraph(captured, captured.config.entries.logic, "logic");
+    const localModel = captured.config.aggregateModels[0];
+    if (localModel?.authority !== "local") throw new Error("expected local model");
+    const logic = resolveImportGraph(captured, localModel.initializer, "logic");
     expect(logic).toMatchObject({
       kind: "resolved",
       graph: { environment: "logic" },
@@ -115,7 +133,7 @@ describe("environment graph resolution", () => {
     }
     const presentation = resolveImportGraph(
       captured,
-      captured.config.entries.presentation,
+      captured.config.application.definition,
       "presentation",
     );
     expect(presentation).toMatchObject({
@@ -142,7 +160,9 @@ describe("environment graph resolution", () => {
       "export const presentation = {};",
     );
 
-    expect(resolveImportGraph(captured, captured.config.entries.logic, "logic")).toMatchObject({
+    const localModel = captured.config.aggregateModels[0];
+    if (localModel?.authority !== "local") throw new Error("expected local model");
+    expect(resolveImportGraph(captured, localModel.initializer, "logic")).toMatchObject({
       kind: "resolved",
     });
   });
@@ -154,7 +174,7 @@ describe("environment graph resolution", () => {
     );
 
     expect(
-      resolveImportGraph(captured, captured.config.entries.presentation, "presentation"),
+      resolveImportGraph(captured, captured.config.application.definition, "presentation"),
     ).toMatchObject({ kind: "resolved" });
   });
 
@@ -212,7 +232,9 @@ describe("environment graph resolution", () => {
       Object.fromEntries(Object.entries(sources).filter((entry) => entry[1] !== undefined)),
     );
 
-    const result = resolveImportGraph(captured, captured.config.entries.logic, "logic");
+    const localModel = captured.config.aggregateModels[0];
+    if (localModel?.authority !== "local") throw new Error("expected local model");
+    const result = resolveImportGraph(captured, localModel.initializer, "logic");
     expect(result.kind).toBe(expected);
     if (reason !== undefined) {
       expect(result).toMatchObject({

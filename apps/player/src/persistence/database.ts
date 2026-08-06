@@ -1,6 +1,7 @@
 import * as SQLite from "expo-sqlite";
 
 import type {
+  DurableCommandRecord,
   DurableTransitionResult,
   InstalledReleaseRecord,
   RunEventRecord,
@@ -8,7 +9,12 @@ import type {
   SnapshotRecord,
 } from "../model";
 import type { TransitionStore, TransitionTransaction } from "./commit-transition";
-import { migrateSharedDatabase } from "../shared/database";
+import { PLAYER_DATABASE_INCOMPATIBLE } from "./schema-policy";
+import {
+  assertSharedDatabaseSchema,
+  migrateSharedDatabase,
+  SHARED_DATABASE_TABLES,
+} from "../shared/database";
 
 const BASE_MIGRATION = `
 PRAGMA journal_mode = WAL;
@@ -22,18 +28,20 @@ CREATE TABLE IF NOT EXISTS runs (
   started_at TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('active','completed','invalid'))
 );
 CREATE TABLE IF NOT EXISTS snapshots (
-  run_id TEXT PRIMARY KEY REFERENCES runs(run_id), aggregate_id TEXT NOT NULL,
-  aggregate_kind TEXT NOT NULL, schema_id TEXT NOT NULL, schema_version INTEGER NOT NULL,
-  state_version INTEGER NOT NULL, state_json TEXT NOT NULL, journal_position INTEGER NOT NULL
+  run_id TEXT PRIMARY KEY REFERENCES runs(run_id), model_id TEXT NOT NULL,
+  aggregate_id TEXT NOT NULL, aggregate_kind TEXT NOT NULL, schema_id TEXT NOT NULL,
+  state_version INTEGER NOT NULL, state_json TEXT NOT NULL, progression_json TEXT,
+  journal_position INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS command_receipts (
   run_id TEXT NOT NULL REFERENCES runs(run_id), command_id TEXT NOT NULL,
-  expected_version INTEGER NOT NULL, result_json TEXT NOT NULL, resulting_version INTEGER NOT NULL,
-  elapsed_ms INTEGER NOT NULL, PRIMARY KEY(run_id, command_id)
+  expected_state_version INTEGER NOT NULL, candidate_json TEXT NOT NULL, result_json TEXT NOT NULL,
+  resulting_state_version INTEGER NOT NULL, elapsed_ms INTEGER NOT NULL,
+  PRIMARY KEY(run_id, command_id)
 );
 CREATE TABLE IF NOT EXISTS journal (
   run_id TEXT NOT NULL REFERENCES runs(run_id), sequence INTEGER NOT NULL,
-  command_id TEXT NOT NULL, outcome_json TEXT NOT NULL, progression_json TEXT NOT NULL,
+  command_id TEXT NOT NULL, record_json TEXT NOT NULL,
   PRIMARY KEY(run_id, sequence)
 );
 CREATE TABLE IF NOT EXISTS observations (
@@ -53,51 +61,60 @@ CREATE TABLE IF NOT EXISTS run_events (
   kind TEXT NOT NULL CHECK(kind IN ('lifecycle','diagnostic')),
   phase TEXT, disposition TEXT, code TEXT, command_id TEXT
 );
-`;
-
-const ACTIVE_RUN_RECONCILIATION = `
-BEGIN IMMEDIATE;
-CREATE TEMP TABLE IF NOT EXISTS duplicate_active_runs (
-  run_id TEXT PRIMARY KEY
-);
-DELETE FROM duplicate_active_runs;
-INSERT INTO duplicate_active_runs (run_id)
-SELECT run_id
-FROM (
-  SELECT run_id,
-         ROW_NUMBER() OVER (
-           PARTITION BY release_id ORDER BY started_at DESC, run_id DESC
-         ) AS active_rank
-  FROM runs
-  WHERE status = 'active'
-)
-WHERE active_rank > 1
-ORDER BY run_id;
-INSERT INTO run_events (run_id, elapsed_ms, kind, code)
-SELECT run_id, 0, 'diagnostic', 'legacy-duplicate-active-run'
-FROM duplicate_active_runs
-WHERE NOT EXISTS (
-  SELECT 1 FROM run_events
-  WHERE run_events.run_id = duplicate_active_runs.run_id
-    AND run_events.kind = 'diagnostic'
-    AND run_events.code = 'legacy-duplicate-active-run'
-)
-ORDER BY run_id;
-UPDATE runs
-SET status = 'invalid'
-WHERE run_id IN (SELECT run_id FROM duplicate_active_runs);
-DROP TABLE duplicate_active_runs;
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_release
   ON runs(release_id) WHERE status = 'active';
-COMMIT;
 `;
 
-const OBSERVATION_MIGRATION_COLUMNS = Object.freeze([
-  { name: "recorded_at", definition: "TEXT" },
-  { name: "sensor_captured_at", definition: "TEXT" },
-  { name: "age_ms", definition: "INTEGER" },
-  { name: "diagnostic_code", definition: "TEXT" },
-]);
+const LOCAL_SCHEMA_COLUMNS = Object.freeze({
+  installed_releases: ["release_id", "artifact_uri", "manifest_json", "installed_at"],
+  runs: ["run_id", "release_id", "started_at", "status"],
+  snapshots: [
+    "run_id",
+    "model_id",
+    "aggregate_id",
+    "aggregate_kind",
+    "schema_id",
+    "state_version",
+    "state_json",
+    "progression_json",
+    "journal_position",
+  ],
+  command_receipts: [
+    "run_id",
+    "command_id",
+    "expected_state_version",
+    "candidate_json",
+    "result_json",
+    "resulting_state_version",
+    "elapsed_ms",
+  ],
+  journal: ["run_id", "sequence", "command_id", "record_json"],
+  observations: [
+    "run_id",
+    "observation_id",
+    "recorded_at",
+    "captured_at",
+    "sensor_captured_at",
+    "age_ms",
+    "availability",
+    "latitude",
+    "longitude",
+    "horizontal_accuracy",
+    "diagnostic_code",
+    "elapsed_ms",
+  ],
+  command_observations: ["run_id", "command_id", "observation_id"],
+  run_events: [
+    "sequence",
+    "run_id",
+    "elapsed_ms",
+    "kind",
+    "phase",
+    "disposition",
+    "code",
+    "command_id",
+  ],
+} as const);
 
 export interface ObservationMigrationDatabase {
   getAllAsync<T>(query: string, ...parameters: unknown[]): Promise<T[]>;
@@ -105,78 +122,78 @@ export interface ObservationMigrationDatabase {
   runAsync(query: string, ...parameters: unknown[]): Promise<unknown>;
 }
 
-export async function migrateObservationColumns(
-  database: ObservationMigrationDatabase,
-): Promise<void> {
-  const existing = new Set(
-    (await database.getAllAsync<{ name: string }>("PRAGMA table_info(observations)")).map(
-      ({ name }) => name,
-    ),
-  );
-  for (const column of OBSERVATION_MIGRATION_COLUMNS) {
-    if (!existing.has(column.name)) {
-      await database.execAsync(
-        `ALTER TABLE observations ADD COLUMN ${column.name} ${column.definition}`,
-      );
-    }
-  }
-  await database.runAsync(
-    "UPDATE observations SET recorded_at = captured_at WHERE recorded_at IS NULL",
+function sameColumns(actual: readonly string[], expected: readonly string[]): boolean {
+  return (
+    actual.length === expected.length && actual.every((name, index) => name === expected[index])
   );
 }
 
-async function migrateLegacyRecoveryEvents(database: ObservationMigrationDatabase): Promise<void> {
-  const runEventColumns = new Set(
-    (await database.getAllAsync<{ name: string }>("PRAGMA table_info(run_events)")).map(
-      ({ name }) => name,
-    ),
-  );
-  if (!runEventColumns.has("legacy_recovery_rowid")) {
-    await database.execAsync("ALTER TABLE run_events ADD COLUMN legacy_recovery_rowid INTEGER");
+async function hasCorrectedLocalSchema(database: ObservationMigrationDatabase): Promise<boolean> {
+  for (const [table, expected] of Object.entries(LOCAL_SCHEMA_COLUMNS)) {
+    const actual = (
+      await database.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)
+    ).map(({ name }) => name);
+    if (!sameColumns(actual, expected)) return false;
   }
-  await database.execAsync(
-    `CREATE UNIQUE INDEX IF NOT EXISTS one_import_per_legacy_recovery_event
-     ON run_events(legacy_recovery_rowid) WHERE legacy_recovery_rowid IS NOT NULL`,
-  );
+  return true;
+}
 
-  const legacyTable = await database.getAllAsync<{ name: string }>(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'recovery_events'",
+export async function assertPlayerDatabaseSchema(
+  database: ObservationMigrationDatabase,
+): Promise<void> {
+  const userTables = await database.getAllAsync<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
   );
-  if (legacyTable.length === 0) return;
-  await database.runAsync(
-    `INSERT OR IGNORE INTO run_events
-     (run_id, elapsed_ms, kind, code, legacy_recovery_rowid)
-     SELECT run_id, elapsed_ms, 'diagnostic', code, rowid
-     FROM recovery_events
-     ORDER BY rowid`,
+  const knownTables = new Set([...Object.keys(LOCAL_SCHEMA_COLUMNS), ...SHARED_DATABASE_TABLES]);
+  if (userTables.some(({ name }) => !knownTables.has(name))) {
+    throw new Error(PLAYER_DATABASE_INCOMPATIBLE);
+  }
+  const existingLocalTables = await database.getAllAsync<{ name: string }>(
+    `SELECT name FROM sqlite_master
+     WHERE type = 'table' AND name IN (${Object.keys(LOCAL_SCHEMA_COLUMNS)
+       .map(() => "?")
+       .join(",")})`,
+    ...Object.keys(LOCAL_SCHEMA_COLUMNS),
   );
+  if (existingLocalTables.length > 0 && !(await hasCorrectedLocalSchema(database))) {
+    throw new Error(PLAYER_DATABASE_INCOMPATIBLE);
+  }
 }
 
 export async function migratePlayerDatabase(database: ObservationMigrationDatabase): Promise<void> {
+  await assertPlayerDatabaseSchema(database);
   await database.execAsync(BASE_MIGRATION);
-  await migrateObservationColumns(database);
-  await migrateLegacyRecoveryEvents(database);
-  await database.execAsync(ACTIVE_RUN_RECONCILIATION);
+  if (!(await hasCorrectedLocalSchema(database))) {
+    throw new Error(PLAYER_DATABASE_INCOMPATIBLE);
+  }
 }
 
 function rowToSnapshot(row: {
   run_id: string;
+  model_id: string;
   aggregate_id: string;
   aggregate_kind: "player";
   schema_id: string;
-  schema_version: number;
   state_version: number;
   state_json: string;
+  progression_json: string | null;
   journal_position: number;
 }): SnapshotRecord {
   return {
     runId: row.run_id,
+    modelId: row.model_id,
     aggregateId: row.aggregate_id,
     aggregateKind: row.aggregate_kind,
     schemaId: row.schema_id,
-    schemaVersion: row.schema_version,
     stateVersion: row.state_version,
     state: JSON.parse(row.state_json) as SnapshotRecord["state"],
+    ...(row.progression_json === null
+      ? {}
+      : {
+          progression: JSON.parse(row.progression_json) as NonNullable<
+            SnapshotRecord["progression"]
+          >,
+        }),
     journalPosition: row.journal_position,
   };
 }
@@ -186,6 +203,8 @@ export class PlayerDatabase implements TransitionStore {
 
   static async open(): Promise<PlayerDatabase> {
     const database = await SQLite.openDatabaseAsync("plotpoint.db");
+    await assertPlayerDatabaseSchema(database);
+    await assertSharedDatabaseSchema(database);
     await migratePlayerDatabase(database);
     await migrateSharedDatabase(database);
     return new PlayerDatabase(database);
@@ -406,12 +425,21 @@ export class PlayerDatabase implements TransitionStore {
   private transactionAdapter(database: SQLite.SQLiteDatabase): TransitionTransaction {
     return {
       getReceipt: async (runId, commandId) => {
-        const row = await database.getFirstAsync<{ result_json: string }>(
-          "SELECT result_json FROM command_receipts WHERE run_id = ? AND command_id = ?",
+        const row = await database.getFirstAsync<{
+          candidate_json: string;
+          result_json: string;
+        }>(
+          `SELECT candidate_json, result_json FROM command_receipts
+           WHERE run_id = ? AND command_id = ?`,
           runId,
           commandId,
         );
-        return row === null ? null : (JSON.parse(row.result_json) as DurableTransitionResult);
+        return row === null
+          ? null
+          : ({
+              candidate: JSON.parse(row.candidate_json),
+              result: JSON.parse(row.result_json),
+            } as DurableCommandRecord);
       },
       getSnapshot: async (runId) => {
         const row = await database.getFirstAsync<Parameters<typeof rowToSnapshot>[0]>(
@@ -431,34 +459,38 @@ export class PlayerDatabase implements TransitionStore {
         return row?.count === observationIds.length;
       },
       record: async (runId, candidate) => {
-        const resultingVersion =
-          candidate.commandOutcome === "accepted"
-            ? candidate.expectedVersion + 1
-            : candidate.expectedVersion;
-        const result: DurableTransitionResult = {
-          kind: "accepted",
-          commandId: candidate.commandId,
-          commandOutcome: candidate.commandOutcome,
-          aggregateId: candidate.aggregateId,
-          aggregateKind: candidate.aggregateKind,
-          schemaId: candidate.schemaId,
-          schemaVersion: candidate.schemaVersion,
-          expectedVersion: candidate.expectedVersion,
-          resultingVersion,
-          ...(candidate.commandOutcome === "invalid"
-            ? { diagnosticCodes: candidate.diagnosticCodes }
-            : { outcome: candidate.outcome }),
-          observationIds: candidate.observationIds,
-        };
+        const resultingStateVersion =
+          candidate.terminal === "accepted"
+            ? candidate.expectedStateVersion + 1
+            : candidate.expectedStateVersion;
+        const result: DurableTransitionResult =
+          candidate.terminal === "invalid"
+            ? {
+                commandId: candidate.commandId,
+                disposition: "committed",
+                terminal: "invalid",
+                phase: candidate.phase,
+                resultingStateVersion,
+                diagnosticCodes: candidate.diagnosticCodes,
+              }
+            : {
+                commandId: candidate.commandId,
+                disposition: "committed",
+                terminal: candidate.terminal,
+                resultingStateVersion,
+                outcome: candidate.outcome,
+              };
         await database.runAsync(
           `INSERT INTO command_receipts
-           (run_id, command_id, expected_version, result_json, resulting_version, elapsed_ms)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+           (run_id, command_id, expected_state_version, candidate_json, result_json,
+            resulting_state_version, elapsed_ms)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
           runId,
           candidate.commandId,
-          candidate.expectedVersion,
+          candidate.expectedStateVersion,
+          JSON.stringify(candidate),
           JSON.stringify(result),
-          resultingVersion,
+          resultingStateVersion,
           Date.now(),
         );
         for (const observationId of candidate.observationIds) {
@@ -469,35 +501,53 @@ export class PlayerDatabase implements TransitionStore {
             observationId,
           );
         }
-        if (candidate.commandOutcome !== "accepted") return result;
+        if (candidate.terminal !== "accepted") return result;
 
-        const prior = await database.getFirstAsync<{ journal_position: number }>(
-          "SELECT journal_position FROM snapshots WHERE run_id = ?",
+        const prior = await database.getFirstAsync<{
+          journal_position: number;
+          state_json: string;
+          progression_json: string | null;
+        }>(
+          `SELECT journal_position, state_json, progression_json FROM snapshots
+           WHERE run_id = ?`,
           runId,
         );
         const sequence = (prior?.journal_position ?? 0) + 1;
+        const stateJson =
+          candidate.nextState === undefined
+            ? prior?.state_json
+            : JSON.stringify(candidate.nextState);
+        if (stateJson === undefined) throw new Error("transition-snapshot-state-missing");
+        const progressionJson =
+          candidate.nextProgression === undefined
+            ? (prior?.progression_json ?? null)
+            : JSON.stringify(candidate.nextProgression);
         await database.runAsync(
           `INSERT INTO snapshots
-           (run_id, aggregate_id, aggregate_kind, schema_id, schema_version, state_version,
-            state_json, journal_position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(run_id) DO UPDATE SET state_version=excluded.state_version,
-            state_json=excluded.state_json, journal_position=excluded.journal_position`,
+           (run_id, model_id, aggregate_id, aggregate_kind, schema_id, state_version,
+            state_json, progression_json, journal_position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(run_id) DO UPDATE SET model_id=excluded.model_id,
+            aggregate_id=excluded.aggregate_id, aggregate_kind=excluded.aggregate_kind,
+            schema_id=excluded.schema_id, state_version=excluded.state_version,
+            state_json=excluded.state_json, progression_json=excluded.progression_json,
+            journal_position=excluded.journal_position`,
           runId,
-          candidate.aggregateId,
-          candidate.aggregateKind,
-          candidate.schemaId,
-          candidate.schemaVersion,
-          resultingVersion,
-          JSON.stringify(candidate.nextState),
+          candidate.modelId,
+          candidate.target.aggregateId,
+          candidate.target.aggregateKind,
+          candidate.target.schemaId,
+          resultingStateVersion,
+          stateJson,
+          progressionJson,
           sequence,
         );
         await database.runAsync(
-          "INSERT INTO journal (run_id, sequence, command_id, outcome_json, progression_json) VALUES (?, ?, ?, ?, ?)",
+          `INSERT INTO journal (run_id, sequence, command_id, record_json)
+           VALUES (?, ?, ?, ?)`,
           runId,
           sequence,
           candidate.commandId,
-          JSON.stringify(candidate.outcome),
-          JSON.stringify(candidate.progressionChanges),
+          JSON.stringify({ candidate, result } satisfies DurableCommandRecord),
         );
         return result;
       },

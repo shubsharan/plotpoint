@@ -19,13 +19,12 @@ function progressionLocation(id: string, field?: string) {
 
 function hasCycle(progression: InspectedProgressionMetadata): string | null {
   const edges = new Map<string, Set<string>>();
-  for (const rule of progression.automaticRules) {
-    for (const from of rule.from) {
-      const key = `${rule.targetNodeId}\0${from}`;
-      const targets = edges.get(key) ?? new Set<string>();
-      targets.add(`${rule.targetNodeId}\0${rule.to}`);
-      edges.set(key, targets);
-    }
+  for (const transition of progression.transitions) {
+    if (transition.trigger !== "automatic") continue;
+    const key = `${transition.targetNodeId}\0${transition.from}`;
+    const targets = edges.get(key) ?? new Set<string>();
+    targets.add(`${transition.targetNodeId}\0${transition.to}`);
+    edges.set(key, targets);
   }
   const visiting = new Set<string>();
   const visited = new Set<string>();
@@ -68,37 +67,40 @@ function validateInspectedShape(
     }
     nodeIds.add(node.nodeId);
   }
-  const ruleIds = new Set<string>();
-  for (const rule of progression.automaticRules) {
-    if (ruleIds.has(rule.ruleId)) {
+  const transitionIds = new Set<string>();
+  for (const transition of progression.transitions) {
+    if (transitionIds.has(transition.transitionId)) {
       diagnostics.push(
         createCompilerDiagnostic({
           code: "progression-invalid",
-          location: progressionLocation(progression.registrationId, "automaticRules"),
-          details: { ruleId: rule.ruleId, reason: "duplicate-rule" },
+          location: progressionLocation(progression.registrationId, "transitions"),
+          details: { transitionId: transition.transitionId, reason: "duplicate-transition" },
         }),
       );
     }
-    ruleIds.add(rule.ruleId);
-    if (!nodeIds.has(rule.targetNodeId)) {
+    transitionIds.add(transition.transitionId);
+    if (!nodeIds.has(transition.targetNodeId)) {
       diagnostics.push(
         createCompilerDiagnostic({
           code: "progression-reference-missing",
-          location: progressionLocation(progression.registrationId, "automaticRules"),
-          details: { ruleId: rule.ruleId, target: rule.targetNodeId, targetKind: "node" },
+          location: progressionLocation(progression.registrationId, "transitions"),
+          details: {
+            transitionId: transition.transitionId,
+            target: transition.targetNodeId,
+            targetKind: "node",
+          },
         }),
       );
     }
-    if (
-      rule.from.length === 0 ||
-      rule.from.some((status) => !STATUSES.has(status)) ||
-      !STATUSES.has(rule.to)
-    ) {
+    if (!STATUSES.has(transition.from) || !STATUSES.has(transition.to)) {
       diagnostics.push(
         createCompilerDiagnostic({
           code: "progression-invalid",
-          location: progressionLocation(progression.registrationId, "automaticRules"),
-          details: { ruleId: rule.ruleId, reason: "invalid-status-transition" },
+          location: progressionLocation(progression.registrationId, "transitions"),
+          details: {
+            transitionId: transition.transitionId,
+            reason: "invalid-status-transition",
+          },
         }),
       );
     }
@@ -109,7 +111,7 @@ function validateInspectedShape(
     diagnostics.push(
       createCompilerDiagnostic({
         code: "progression-cycle",
-        location: progressionLocation(progression.registrationId, "automaticRules"),
+        location: progressionLocation(progression.registrationId, "transitions"),
         details: { nodeId: nodeId ?? "", status: status ?? "" },
       }),
     );
@@ -121,8 +123,8 @@ export function validateProgressions(
   inspection: DefinitionInspectionMetadata,
 ): readonly CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const aggregates = new Map(
-    registries.aggregateSchemas.map((registration) => [registration.id, registration] as const),
+  const models = new Map(
+    registries.aggregateModels.map((registration) => [registration.id, registration] as const),
   );
   const registrations = new Map(
     registries.progressions.map((registration) => [registration.id, registration] as const),
@@ -157,7 +159,7 @@ export function validateProgressions(
   );
   for (const registration of registries.progressions) {
     const progression = metadata.get(registration.id);
-    const aggregate = aggregates.get(registration.aggregateSchema);
+    const model = models.get(registration.aggregateModel);
     if (progression === undefined) {
       diagnostics.push(
         createCompilerDiagnostic({
@@ -170,8 +172,7 @@ export function validateProgressions(
     }
     for (const [field, expected, actual] of [
       ["graphId", registration.id, progression.graphId],
-      ["graphVersion", registration.version, progression.graphVersion],
-      ["aggregateKind", registration.kind, progression.aggregateKind],
+      ["aggregateKind", model?.kind ?? "player", progression.aggregateKind],
     ] as const) {
       if (expected !== actual) {
         diagnostics.push(
@@ -183,14 +184,14 @@ export function validateProgressions(
         );
       }
     }
-    if (aggregate !== undefined && aggregate.kind !== progression.aggregateKind) {
+    if (model !== undefined && model.kind !== progression.aggregateKind) {
       diagnostics.push(
         createCompilerDiagnostic({
           code: "progression-definition-mismatch",
-          location: progressionLocation(registration.id, "aggregateSchema"),
+          location: progressionLocation(registration.id, "aggregateModel"),
           details: {
             field: "aggregateKind",
-            expected: aggregate.kind,
+            expected: model.kind,
             actual: progression.aggregateKind,
           },
         }),
