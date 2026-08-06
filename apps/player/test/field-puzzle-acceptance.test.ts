@@ -22,7 +22,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { compileProject, validateProject } from "../../../packages/compiler/dist/index.js";
 import { installReleaseFromDescriptor } from "../src/install/install-release";
 import { PlayerDatabase } from "../src/persistence/database";
-import { createPlayReport } from "../src/reports/create-play-report";
+import { createGamePlayReport } from "../src/reports/create-game-play-report";
 import { mountGameComposition, type ComponentImplementation } from "../src/runtime/composition";
 import {
   createLocalModelAdapter,
@@ -579,7 +579,7 @@ describe("installed field puzzle vertical journey", () => {
       ).map(({ name }) => name);
       expect(journalColumns).toContain("record_json");
       expect(journalColumns).not.toContain("progression_json");
-      const report = await createPlayReport(database, selected.run.runId, "ios");
+      const report = await createGamePlayReport(database, selected.run.runId, "ios");
       expect(report).toMatchObject({
         releaseId: compilation.releaseId,
         platform: "ios",
@@ -593,8 +593,10 @@ describe("installed field puzzle vertical journey", () => {
           expect.objectContaining({ kind: "recovery", disposition: "run-restored" }),
         ]),
       });
+      expect(report).not.toHaveProperty("version");
+      expect(report).not.toHaveProperty("runId");
       expect(JSON.stringify(report)).not.toMatch(
-        /"(?:latitude|longitude|horizontalAccuracy|capturedAt|recordedAt|payload|state)"/,
+        /"(?:latitude|longitude|horizontalAccuracy|capturedAt|recordedAt|payload|state|progression|outcome|visitedCheckpoints|puzzleSolved|sessionId|participantId|teamId|serviceOrigin)"/,
       );
     } finally {
       sql.close();

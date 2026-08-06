@@ -12,7 +12,7 @@ import {
 export interface RuntimeBootstrapInput {
   readonly logicSource: string;
   readonly presentationSource: string;
-  readonly gameComposition?: GameComposition;
+  readonly gameComposition: GameComposition;
   readonly content?: Readonly<Record<string, CanonicalJsonValue>>;
   readonly assets?: Readonly<Record<string, CanonicalJsonValue>>;
   readonly aggregateSchemaVersions?: Readonly<Record<string, number>>;

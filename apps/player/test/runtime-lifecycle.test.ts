@@ -1,3 +1,4 @@
+import { access, readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 import { routeHostBridgeMessage } from "../src/bridge/host-bridge";
@@ -93,7 +94,73 @@ const originalCandidate = {
   observationIds: [],
 } satisfies CandidateTransition;
 
+async function exists(path: URL): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 describe("runtime view lifecycle", () => {
+  it("requires composition at the playable bootstrap and recovery boundaries", async () => {
+    const bootstrap = await readFile(
+      new URL("../src/runtime/bootstrap.ts", import.meta.url),
+      "utf8",
+    );
+    const recovery = await readFile(new URL("../src/runtime/recovery.ts", import.meta.url), "utf8");
+
+    expect(bootstrap).toContain("readonly gameComposition: GameComposition;");
+    expect(bootstrap).toContain("runtime-game-composition-missing");
+    expect(recovery).toContain("inspectGameRelease(input.bytes)");
+    expect(recovery).not.toMatch(/\binspectRelease\s*\(/);
+  });
+
+  it("keeps player routing independent of example games and mechanics", async () => {
+    const files = [
+      "../App.tsx",
+      "../src/runtime/composition.ts",
+      "../src/runtime/production-handlers.ts",
+      "../src/shared/host-bridge.ts",
+      "../src/shared/session-controller.ts",
+    ];
+    const sources = await Promise.all(
+      files.map((file) => readFile(new URL(file, import.meta.url), "utf8")),
+    );
+
+    expect(sources.join("\n")).not.toMatch(
+      /field-puzzle|co-op-game|target-discovery|SharedHunt|HuntReport|hunt-sessions/,
+    );
+  });
+
+  it("has no superseded local or game-specific report reader", async () => {
+    await expect(
+      Promise.all(
+        ["../src/reports/create-play-report.ts", "../src/reports/create-shared-hunt-report.ts"].map(
+          (file) => exists(new URL(file, import.meta.url)),
+        ),
+      ),
+    ).resolves.toEqual([false, false]);
+  });
+
+  it("never resets or rewrites an incompatible player database automatically", async () => {
+    const files = [
+      "../src/persistence/database.ts",
+      "../src/persistence/schema-policy.ts",
+      "../src/shared/database.ts",
+    ];
+    const sources = await Promise.all(
+      files.map((file) => readFile(new URL(file, import.meta.url), "utf8")),
+    );
+    const combined = sources.join("\n");
+
+    expect(combined).toContain("player-database-incompatible-reset-or-reinstall");
+    expect(combined).not.toMatch(
+      /deleteDatabase(?:Async)?\s*\(|\bDROP\s+(?:TABLE|TRIGGER|INDEX)\b|\bALTER\s+TABLE\b/i,
+    );
+  });
+
   it("redelivers the original durable result after view recreation", () => {
     const original = {
       commandId: "command-1",

@@ -17,6 +17,13 @@ const expectations = JSON.parse(
   await readFile(new URL("../fixtures/expected/invalid-diagnostics.json", import.meta.url), "utf8"),
 ) as Readonly<Record<string, readonly string[]>>;
 const temporaryRoots: string[] = [];
+const repositoryRoot = fileURLToPath(new URL("../../../../", import.meta.url));
+const validExampleNames = [
+  "branching-media-tour",
+  "co-op-game",
+  "field-puzzle",
+  "minimal-local-puzzle",
+] as const;
 
 afterEach(async () => {
   await Promise.all(
@@ -180,6 +187,86 @@ describe("invalid project publication boundary", () => {
 });
 
 describe("corrected project configuration boundary", () => {
+  it("keeps one author registry and selects every server contract in valid examples", async () => {
+    for (const exampleName of validExampleNames) {
+      const config = JSON.parse(
+        await readFile(
+          join(repositoryRoot, "examples/releases", exampleName, "plotpoint.project.json"),
+          "utf8",
+        ),
+      ) as {
+        readonly entries?: unknown;
+        readonly aggregateSchemas?: unknown;
+        readonly aggregateModels: readonly {
+          readonly id: string;
+          readonly authority: "local" | "server";
+        }[];
+        readonly commands: readonly {
+          readonly id: string;
+          readonly execution: "local" | "trusted-mechanic";
+          readonly aggregateModel: string;
+        }[];
+        readonly progressions: readonly { readonly aggregateModel: string }[];
+        readonly trustedMechanic?: {
+          readonly aggregateModel: string;
+          readonly commands: readonly string[];
+        };
+      };
+      expect(config).not.toHaveProperty("entries");
+      expect(config).not.toHaveProperty("aggregateSchemas");
+      expect(config.aggregateModels.filter(({ authority }) => authority === "local")).toHaveLength(
+        1,
+      );
+
+      const serverModels = config.aggregateModels
+        .filter(({ authority }) => authority === "server")
+        .map(({ id }) => id)
+        .sort();
+      expect(serverModels).toEqual(
+        config.trustedMechanic === undefined ? [] : [config.trustedMechanic.aggregateModel],
+      );
+      const trustedCommands = config.commands
+        .filter(({ execution }) => execution === "trusted-mechanic")
+        .map(({ id }) => id)
+        .sort();
+      expect(trustedCommands).toEqual([...(config.trustedMechanic?.commands ?? [])].sort());
+      expect(
+        config.commands
+          .filter(({ execution }) => execution === "trusted-mechanic")
+          .every(({ aggregateModel }) => aggregateModel === config.trustedMechanic?.aggregateModel),
+      ).toBe(true);
+      expect(
+        config.progressions.every(({ aggregateModel }) => !serverModels.includes(aggregateModel)),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects duplicate author registries alongside corrected configuration", async () => {
+    const root = await project();
+    const configPath = join(root, "plotpoint.project.json");
+    const config = JSON.parse(await readFile(configPath, "utf8")) as Record<string, unknown>;
+    config.aggregateSchemas = [];
+    config.entries = {
+      logic: { source: "src/logic.ts", export: "logic" },
+      presentation: { source: "src/presentation.ts", export: "presentation" },
+    };
+    await writeFile(configPath, JSON.stringify(config));
+
+    const result = await compileProject({
+      projectRoot: root,
+      outputFile: join(root, "output.pprelease"),
+    });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid")
+      throw new Error("duplicate author registries unexpectedly compiled");
+    expect(
+      result.diagnostics
+        .filter(({ code }) => code === "configuration-unknown-field")
+        .map(({ location }) => (location.kind === "configuration" ? location.pointer : undefined)),
+    ).toEqual(["/aggregateSchemas", "/entries"]);
+  });
+
   it.each([
     [
       "per-entry-generations",

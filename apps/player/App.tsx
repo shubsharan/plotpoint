@@ -34,8 +34,7 @@ import {
   createNativeInstallTransport,
 } from "./src/install/native-adapters";
 import { PlayerDatabase } from "./src/persistence/database";
-import { createPlayReport } from "./src/reports/create-play-report";
-import { createSharedHuntReport } from "./src/reports/create-shared-hunt-report";
+import { createGamePlayReport } from "./src/reports/create-game-play-report";
 import { allowRuntimeNavigation, buildRuntimeBootstrap } from "./src/runtime/bootstrap";
 import { deriveHostSupportFromManifest } from "./src/runtime/host-support";
 import { createProductionHostBridgeHandlers } from "./src/runtime/production-handlers";
@@ -590,10 +589,7 @@ export default function App() {
     if (database === null || runtime === null || FileSystem.cacheDirectory === null) return;
     try {
       const platform = Platform.OS === "android" ? "android" : "ios";
-      const report =
-        sharedSessionId === null
-          ? await createPlayReport(database, runtime.recovery.runId, platform)
-          : await createSharedHuntReport(database, sharedSessionId, platform);
+      const report = await createGamePlayReport(database, runtime.recovery.runId, platform);
       const uri = `${FileSystem.cacheDirectory}plotpoint-${runtime.recovery.runId}.report.json`;
       await FileSystem.writeAsStringAsync(uri, `${JSON.stringify(report, null, 2)}\n`);
       await Sharing.shareAsync(uri, {

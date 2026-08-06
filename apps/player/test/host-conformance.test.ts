@@ -8,7 +8,7 @@ import {
 
 import { routeHostBridgeMessage, type HostBridgeHandlers } from "../src/bridge/host-bridge";
 import { installReleaseFromDescriptor } from "../src/install/install-release";
-import { buildPlayReport } from "../src/reports/create-play-report";
+import { buildGamePlayReport } from "../src/reports/create-game-play-report";
 import { deriveHostSupportFromManifest } from "../src/runtime/host-support";
 import { validateRecoveryRecords } from "../src/runtime/recovery";
 import {
@@ -155,27 +155,35 @@ describe("Host API  release conformance", () => {
       ).toMatchObject({ kind: "valid", aggregate: { stateVersion: 1 } });
 
       expect(
-        buildPlayReport({
+        buildGamePlayReport({
           releaseId: fixture.release.releaseId,
-          runId: `${fixture.name}-run`,
           platform: "ios",
-          startedAtMs: 1_000,
-          endedAtMs: 2_000,
-          commands: [{ result: durableResult, elapsedMs: 1_500 }],
-          journals: [
+          lifecycle: [{ elapsedMs: 0, sourceSequence: 0, disposition: "mounted" }],
+          commands: [
             {
-              sequence: 1,
+              elapsedMs: 500,
+              sourceSequence: 1,
+              scope: "local",
               commandId: candidate.commandId,
-              progressionChanges: [],
+              terminal: durableResult.terminal,
+              expectedStateVersion: candidate.expectedStateVersion,
+              resultingStateVersion: durableResult.resultingStateVersion,
             },
           ],
           capabilities: [],
-          observationLinks: [],
-          runEvents: [],
+          synchronization: [],
+          recovery: [],
+          diagnostics: [],
         }),
       ).toMatchObject({
         releaseId: fixture.release.releaseId,
-        events: [{ kind: "command", terminal: "accepted", resultingStateVersion: 1 }],
+        events: expect.arrayContaining([
+          expect.objectContaining({
+            kind: "command",
+            terminal: "accepted",
+            resultingStateVersion: 1,
+          }),
+        ]),
       });
     }
   });

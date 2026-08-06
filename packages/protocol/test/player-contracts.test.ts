@@ -7,6 +7,7 @@ import {
   isLocationRequestInput,
   parseHostBridgeEnvelope,
   parseInstallDescriptor,
+  parseReportSafeDiagnosticCode,
   projectLocationObservation,
   recencyBand,
   type CapabilityRequestEnvelope,
@@ -458,6 +459,42 @@ describe("GamePlayReport", () => {
     ];
     for (const invalid of forbiddenReports) {
       expect(validate(invalid)).toBe(false);
+    }
+  });
+
+  it("allows only closed host-owned diagnostic codes", () => {
+    expect(parseReportSafeDiagnosticCode("runtime-mount-failed")).toBe("runtime-mount-failed");
+    expect(parseReportSafeDiagnosticCode("shared-sync-failed")).toBe("shared-sync-failed");
+    expect(parseReportSafeDiagnosticCode("provider said credential=secret")).toBeNull();
+    expect(parseReportSafeDiagnosticCode("/private/run.db")).toBeNull();
+  });
+
+  it("rejects adversarial aliases, outcomes, configuration, and durable evidence", () => {
+    const command = report.events[1];
+    if (command?.kind !== "command") throw new Error("command-fixture-missing");
+    for (const extra of [
+      { commandId: "sensitive-command" },
+      { outcomeCode: "target-discovered" },
+      { payload: { targetId: "target-secret" } },
+      { configuration: { maximumAgeMs: 15_000 } },
+      { projection: { complete: true } },
+      { credentialKey: "secure-store-key" },
+    ]) {
+      expect(
+        validate({
+          ...report,
+          events: [{ ...command, ...extra }],
+        }),
+      ).toBe(false);
+    }
+    for (const extra of [
+      { version: 1 },
+      { runAlias: "run" },
+      { sessionAlias: "session" },
+      { participantAlias: "self" },
+      { teamAlias: "team" },
+    ]) {
+      expect(validate({ ...report, ...extra })).toBe(false);
     }
   });
 });

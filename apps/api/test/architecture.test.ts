@@ -1,6 +1,18 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+
+async function sourceFiles(root: string): Promise<readonly string[]> {
+  const entries = await readdir(root, { withFileTypes: true });
+  const nested = await Promise.all(
+    entries.map(async (entry) => {
+      const path = resolve(root, entry.name);
+      if (entry.isDirectory()) return sourceFiles(path);
+      return entry.isFile() && entry.name.endsWith(".ts") ? [path] : [];
+    }),
+  );
+  return nested.flat();
+}
 
 describe("shared-play architecture boundaries", () => {
   it("does not execute release entrypoints on the server", async () => {
@@ -10,6 +22,25 @@ describe("shared-play architecture boundaries", () => {
     );
     expect(service).not.toMatch(
       /\beval\s*\(|new\s+Function|node:vm|entrypoints\.(logic|presentation)/,
+    );
+  });
+
+  it("never imports release-authored executable code into the server", async () => {
+    const root = resolve(import.meta.dirname, "../src");
+    const files = await sourceFiles(root);
+    const sources = await Promise.all(files.map((file) => readFile(file, "utf8")));
+    const combined = sources.join("\n");
+    const importSpecifiers = [...combined.matchAll(/(?:from\s*|import\s*\()\s*["']([^"']+)/g)].map(
+      ([, specifier]) => specifier,
+    );
+
+    expect(importSpecifiers).not.toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/(?:^|\/)(?:examples\/releases|bundles)(?:\/|$)/),
+      ]),
+    );
+    expect(combined).not.toMatch(
+      /\b(?:eval\s*\(|new\s+Function|node:vm|entrypoints\.(?:logic|presentation)|import\s*\()/,
     );
   });
 

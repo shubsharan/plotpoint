@@ -16,7 +16,6 @@ import {
 } from "../src/shared/database";
 import { SharedHttpClient } from "../src/shared/http-client";
 import { SharedSyncCoordinator } from "../src/shared/sync-coordinator";
-import { buildSharedHuntReport } from "../src/reports/create-shared-hunt-report";
 
 const releaseId = `sha256:${"a".repeat(64)}` as const;
 const bindingContext: SharedBindingContext = {
@@ -878,48 +877,5 @@ describe("shared player architecture", () => {
     failAt = Number.POSITIVE_INFINITY;
     await expect(store.applyPull(bindingContext, pull)).resolves.toBeUndefined();
     expect(committed[0]!.at(-1)).toContain("UPDATE shared_sessions");
-  });
-});
-
-describe("shared hunt report", () => {
-  it("keeps exact terminals and only location quality bands", () => {
-    const report = buildSharedHuntReport({
-      releaseId,
-      platform: "ios",
-      startedAtMs: 1000,
-      endedAtMs: 2000,
-      completion: { completedTargets: 1, totalTargets: 3, complete: false },
-      commands: [
-        {
-          commandId: "sensitive-command",
-          elapsedMs: 20,
-          expectedVersion: 0,
-          terminal: "accepted",
-          resultingVersion: 1,
-          outcomeCode: "target-discovered",
-          observations: [
-            {
-              observationId: "sensitive-observation",
-              recordedAt: "2030-01-01T00:00:01.000Z",
-              capturedAt: "2030-01-01T00:00:00.000Z",
-              ageMs: 1000,
-              availability: "available",
-              latitude: 37,
-              longitude: -122,
-              horizontalAccuracy: 8,
-            },
-          ],
-        },
-      ],
-      synchronization: [{ elapsedMs: 30, phase: "current", disposition: "snapshot-replaced" }],
-    });
-    expect(report.events).toContainEqual(
-      expect.objectContaining({
-        kind: "command",
-        terminal: "accepted",
-        commandAlias: "command-001",
-      }),
-    );
-    expect(JSON.stringify(report)).not.toMatch(/sensitive|latitude|longitude|observationId/);
   });
 });

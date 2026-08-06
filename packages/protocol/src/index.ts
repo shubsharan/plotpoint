@@ -155,7 +155,6 @@ export type {
   SyncCommand,
   SyncPull,
 } from "./shared/types.js";
-export type { SharedHuntReportEvent, SharedHuntReport } from "./shared/report.js";
 export type {
   AccuracyBand,
   GamePlayReport,

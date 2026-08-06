@@ -1,4 +1,10 @@
+import { cp, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { compileProject, validateProject } from "../../../../packages/compiler/dist/index.js";
 
 import targetConfiguration from "../content/targets.json" with { type: "json" };
 import { ClueBoard } from "../src/components/clue-board.js";
@@ -55,6 +61,20 @@ function reviseObservationFreshness(
 
 function withoutObservationFreshness({ maximumAgeMs: _maximumAgeMs, ...target }: Target) {
   return target;
+}
+
+async function copyProject(projectRoot: string, destination: string): Promise<void> {
+  await Promise.all(
+    ["assets", "content", "schemas", "src"].map((directory) =>
+      cp(join(projectRoot, directory), join(destination, directory), { recursive: true }),
+    ),
+  );
+  await Promise.all(
+    ["package.json", "plotpoint.project.json", "tsconfig.json"].map((file) =>
+      cp(join(projectRoot, file), join(destination, file)),
+    ),
+  );
+  await symlink(join(projectRoot, "node_modules"), join(destination, "node_modules"), "dir");
 }
 
 describe("co-op game two-release journey", () => {
@@ -121,7 +141,7 @@ describe("co-op game two-release journey", () => {
     expect(firstButton?.listenerCount("click")).toBe(0);
   });
 
-  it("assigns every real target to three participants and changes only observation freshness", () => {
+  it("assigns every real target to three participants and compiles a freshness-only revision", async () => {
     expect(targetConfiguration.targets).toHaveLength(PARTICIPANTS.length);
 
     const firstReleaseAssignments = targetConfiguration.targets.map((target, index) => ({
@@ -156,5 +176,37 @@ describe("co-op game two-release journey", () => {
       REVISED_MAXIMUM_AGE_MS,
       REVISED_MAXIMUM_AGE_MS,
     ]);
+
+    const projectRoot = new URL("../", import.meta.url).pathname;
+    const temporaryRoot = await mkdtemp(join(tmpdir(), "plotpoint-co-op-revision-"));
+    const revisedProjectRoot = join(temporaryRoot, "co-op-game");
+    const firstOutput = join(temporaryRoot, "first.pprelease");
+    const revisedOutput = join(temporaryRoot, "revised.pprelease");
+    try {
+      await copyProject(projectRoot, revisedProjectRoot);
+      await writeFile(
+        join(revisedProjectRoot, "content", "targets.json"),
+        `${JSON.stringify(revisedConfiguration, null, 2)}\n`,
+      );
+
+      await expect(validateProject({ projectRoot })).resolves.toMatchObject({ kind: "valid" });
+      await expect(validateProject({ projectRoot: revisedProjectRoot })).resolves.toMatchObject({
+        kind: "valid",
+      });
+      const first = await compileProject({ projectRoot, outputFile: firstOutput });
+      const revised = await compileProject({
+        projectRoot: revisedProjectRoot,
+        outputFile: revisedOutput,
+      });
+      expect(first.kind).toBe("compiled");
+      expect(revised.kind).toBe("compiled");
+      if (first.kind !== "compiled" || revised.kind !== "compiled") {
+        throw new Error(`co-op-revision-compilation-failed:${JSON.stringify({ first, revised })}`);
+      }
+      expect(revised.releaseId).not.toBe(first.releaseId);
+      expect(await readFile(revisedOutput)).not.toEqual(await readFile(firstOutput));
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createSharedPlayClient,
+  isGamePlayReport,
   isSharedJoinRequest,
   isSharedJoinResponse,
   isSharedCommandIntent,
@@ -13,6 +14,7 @@ import {
   type SharedJoinResponse,
   type SharedPlayView,
 } from "../src/index.js";
+import * as protocol from "../src/index.js";
 
 const releaseId = `sha256:${"a".repeat(64)}` as const;
 const confirmedAt = "2026-08-04T00:00:00.000Z";
@@ -61,6 +63,21 @@ const initialPull = {
 } as const;
 
 describe("generic shared play contracts", () => {
+  it("rejects the removed SharedHuntReport surface and shape", () => {
+    expect(protocol).not.toHaveProperty("isSharedHuntReport");
+    expect(
+      isGamePlayReport({
+        releaseId,
+        sessionAlias: "session",
+        selfAlias: "self",
+        platform: "ios",
+        durationMs: 1,
+        completion: { completedTargets: 1, totalTargets: 1, complete: true },
+        events: [],
+      }),
+    ).toBe(false);
+  });
+
   it("accepts unrelated command and projection schemas without mechanic branches", () => {
     expect(isSharedCommandIntent(intent)).toBe(true);
     expect(
