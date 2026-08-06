@@ -70,7 +70,6 @@ interface OrderedEvent {
   readonly stableKey: string;
 }
 
-const MAXIMUM_FRESH_AGE_MS = 15_000;
 const REPORT_SAFE_CAPABILITY_IDS: ReadonlySet<string> = new Set([
   FOREGROUND_LOCATION_CAPABILITY.id,
 ]);
@@ -289,34 +288,6 @@ function elapsedFromNumber(value: number, startedAtMs: number): number {
   return elapsed;
 }
 
-function elapsedFromTimestamp(value: string, startedAtMs: number): number {
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) throw new Error("report-timestamp-invalid");
-  return elapsedFromNumber(timestamp, startedAtMs);
-}
-
-function stringArrayJson(value: string, code: string): readonly string[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value) as unknown;
-  } catch {
-    throw new Error(code);
-  }
-  if (
-    !Array.isArray(parsed) ||
-    !parsed.every((item) => typeof item === "string" && item.length > 0)
-  ) {
-    throw new Error(code);
-  }
-  return parsed;
-}
-
-type StoredTerminal = "accepted" | "no-op" | "rejected" | "invalid";
-
-function isStoredTerminal(value: unknown): value is StoredTerminal {
-  return value === "accepted" || value === "no-op" || value === "rejected" || value === "invalid";
-}
-
 function syncEvent(
   phase: string,
   disposition: string,
@@ -373,24 +344,6 @@ function syncEvent(
   throw new Error("report-sync-event-unsupported");
 }
 
-interface ObservationRow {
-  readonly observation_id: string;
-  readonly availability: "available" | "permission-denied" | "unavailable" | "failed";
-  readonly age_ms: number | null;
-  readonly elapsed_ms: number;
-}
-
-function observationUseDisposition(observation: ObservationRow): CapabilityEvent["disposition"] {
-  return observation.availability === "available" &&
-    observation.age_ms !== null &&
-    Number.isSafeInteger(observation.age_ms) &&
-    observation.age_ms > MAXIMUM_FRESH_AGE_MS
-    ? "expired"
-    : observation.availability === "available"
-      ? "consumed"
-      : "denied";
-}
-
 async function readGamePlayReportEvidence(
   reader: ReportReader,
   runId: string,
@@ -404,153 +357,81 @@ async function readGamePlayReportEvidence(
   const startedAtMs = Date.parse(run.started_at);
   if (!Number.isFinite(startedAtMs)) throw new Error("report-run-incoherent");
 
-  const localRows = await reader.getAllAsync<{
-    readonly command_id: string;
-    readonly expected_state_version: number;
-    readonly result_json: string;
-    readonly resulting_state_version: number;
-    readonly elapsed_ms: number;
-  }>(
-    `SELECT command_id, expected_state_version, result_json, resulting_state_version, elapsed_ms
-     FROM command_receipts WHERE run_id = ? ORDER BY elapsed_ms, command_id`,
-    runId,
-  );
-  const commands: Array<GamePlayReportEvidence["commands"][number]> = localRows.map(
-    (row, index) => {
-      const result = parseJsonObject(row.result_json, "report-local-result-invalid");
-      if (
-        result.commandId !== row.command_id ||
-        result.disposition !== "committed" ||
-        !isStoredTerminal(result.terminal) ||
-        result.resultingStateVersion !== row.resulting_state_version ||
-        !nonNegativeInteger(row.expected_state_version) ||
-        !nonNegativeInteger(row.resulting_state_version) ||
-        (result.terminal === "accepted"
-          ? row.resulting_state_version !== row.expected_state_version + 1
-          : row.resulting_state_version !== row.expected_state_version)
-      ) {
-        throw new Error("report-local-result-invalid");
-      }
-      return {
-        elapsedMs: elapsedFromNumber(row.elapsed_ms, startedAtMs),
-        sourceSequence: index + 1,
-        scope: "local",
-        commandId: row.command_id,
-        terminal: result.terminal,
-        expectedStateVersion: row.expected_state_version,
-        resultingStateVersion: row.resulting_state_version,
-      };
-    },
-  );
-
-  const observationRows = await reader.getAllAsync<ObservationRow>(
-    `SELECT observation_id, availability, age_ms, elapsed_ms
-     FROM observations WHERE run_id = ? ORDER BY elapsed_ms, observation_id`,
-    runId,
-  );
-  const observations = new Map<string, ObservationRow>();
-  const capabilities: Array<GamePlayReportEvidence["capabilities"][number]> = [];
-  for (const [index, row] of observationRows.entries()) {
-    if (observations.has(row.observation_id)) throw new Error("report-observation-duplicate");
-    observations.set(row.observation_id, row);
-    capabilities.push({
-      elapsedMs: elapsedFromNumber(row.elapsed_ms, startedAtMs),
-      sourceSequence: index + 1,
-      capabilityId: FOREGROUND_LOCATION_CAPABILITY.id,
-      disposition: row.availability === "available" ? "captured" : "denied",
-    });
-  }
-
-  const localLinks = await reader.getAllAsync<{
-    readonly command_id: string;
-    readonly observation_id: string;
-  }>(
-    `SELECT command_id, observation_id FROM command_observations
-     WHERE run_id = ? ORDER BY command_id, observation_id`,
-    runId,
-  );
-  const localById = new Map(
-    commands
-      .filter((command) => command.scope === "local")
-      .map((command) => [command.commandId, command]),
-  );
-  for (const [index, link] of localLinks.entries()) {
-    const command = localById.get(link.command_id);
-    const observation = observations.get(link.observation_id);
-    if (command === undefined || observation === undefined) {
-      throw new Error("report-observation-link-incoherent");
-    }
-    capabilities.push({
-      elapsedMs: command.elapsedMs,
-      sourceSequence: observationRows.length + index + 1,
-      capabilityId: FOREGROUND_LOCATION_CAPABILITY.id,
-      disposition: observationUseDisposition(observation),
-    });
-  }
-
   const lifecycle: Array<GamePlayReportEvidence["lifecycle"][number]> = [];
+  const commands: Array<GamePlayReportEvidence["commands"][number]> = [];
+  const capabilities: Array<GamePlayReportEvidence["capabilities"][number]> = [];
+  const synchronization: Array<GamePlayReportEvidence["synchronization"][number]> = [];
   const recovery: Array<GamePlayReportEvidence["recovery"][number]> = [];
   const diagnostics: Array<GamePlayReportEvidence["diagnostics"][number]> = [];
-  const runEvents = await reader.getAllAsync<{
+  const rows = await reader.getAllAsync<{
     readonly sequence: number;
     readonly elapsed_ms: number;
-    readonly kind: "lifecycle" | "diagnostic";
-    readonly phase: string | null;
-    readonly disposition: string | null;
-    readonly code: string | null;
+    readonly kind: string;
     readonly command_id: string | null;
+    readonly evidence_json: string;
   }>(
-    `SELECT sequence, elapsed_ms, kind, phase, disposition, code, command_id
-     FROM run_events WHERE run_id = ? ORDER BY elapsed_ms, sequence`,
+    `SELECT sequence,elapsed_ms,kind,command_id,evidence_json
+     FROM game_play_events WHERE run_id=? ORDER BY sequence`,
     runId,
   );
-  for (const row of runEvents) {
+  for (const row of rows) {
     const elapsedMs = elapsedFromNumber(row.elapsed_ms, startedAtMs);
-    if (
-      row.kind === "lifecycle" &&
-      (row.disposition === "mounted" ||
-        row.disposition === "recovered" ||
-        row.disposition === "unmounted" ||
-        row.disposition === "mount-failed")
-    ) {
+    const value = parseJsonObject(row.evidence_json, "report-ledger-evidence-invalid");
+    const ordered = { elapsedMs, sourceSequence: row.sequence };
+    if (row.kind === "lifecycle" && typeof value.disposition === "string") {
       lifecycle.push({
-        elapsedMs,
-        sourceSequence: row.sequence,
-        disposition: row.disposition,
+        ...ordered,
+        disposition: value.disposition as LifecycleEvent["disposition"],
       });
     } else if (
-      (row.kind === "lifecycle" &&
-        row.phase === "recovery" &&
-        row.disposition === "application-restored") ||
-      (row.kind === "diagnostic" && row.code === "application-restored")
+      row.kind === "command" &&
+      row.command_id !== null &&
+      (value.scope === "local" || value.scope === "shared") &&
+      typeof value.terminal === "string" &&
+      nonNegativeInteger(value.expectedStateVersion) &&
+      (value.resultingStateVersion === undefined || nonNegativeInteger(value.resultingStateVersion))
     ) {
-      recovery.push({ elapsedMs, sourceSequence: row.sequence, disposition: "run-restored" });
+      commands.push({
+        ...ordered,
+        scope: value.scope,
+        commandId: row.command_id,
+        terminal: value.terminal as CommandEvent["terminal"],
+        expectedStateVersion: value.expectedStateVersion,
+        ...(value.resultingStateVersion === undefined
+          ? {}
+          : { resultingStateVersion: value.resultingStateVersion }),
+      });
     } else if (
-      row.kind === "lifecycle" &&
-      row.phase === "transition" &&
-      row.disposition === "interrupted"
+      row.kind === "capability" &&
+      typeof value.capabilityId === "string" &&
+      typeof value.disposition === "string"
     ) {
+      capabilities.push({
+        ...ordered,
+        capabilityId: value.capabilityId,
+        disposition: value.disposition as CapabilityEvent["disposition"],
+      });
+    } else if (
+      row.kind === "synchronization" &&
+      typeof value.phase === "string" &&
+      typeof value.disposition === "string"
+    ) {
+      const mapped = syncEvent(value.phase, value.disposition);
+      synchronization.push({ ...ordered, ...mapped });
+    } else if (row.kind === "recovery" && typeof value.disposition === "string") {
+      recovery.push({ ...ordered, disposition: value.disposition as RecoveryEvent["disposition"] });
+    } else if (row.kind === "diagnostic" && typeof value.code === "string") {
       diagnostics.push({
-        elapsedMs,
-        sourceSequence: row.sequence,
-        code: "delivery-interrupted",
+        ...ordered,
+        code: value.code,
         ...(row.command_id === null
           ? {}
-          : { commandScope: "local" as const, commandId: row.command_id }),
+          : {
+              commandScope: value.scope === "shared" ? ("shared" as const) : ("local" as const),
+              commandId: row.command_id,
+            }),
       });
-    } else if (
-      row.kind === "lifecycle" &&
-      row.phase === "recovery" &&
-      row.disposition === "failed"
-    ) {
-      diagnostics.push({
-        elapsedMs,
-        sourceSequence: row.sequence,
-        code: "runtime-recovery-failed",
-      });
-    } else {
-      throw new Error("report-run-event-unsupported");
-    }
+    } else throw new Error("report-ledger-evidence-invalid");
   }
 
   const session = await reader.getFirstAsync<{
@@ -562,111 +443,8 @@ async function readGamePlayReportEvidence(
      FROM shared_sessions WHERE run_id = ?`,
     runId,
   );
-  const synchronization: Array<GamePlayReportEvidence["synchronization"][number]> = [];
   if (session !== null) {
     if (session.release_id !== run.release_id) throw new Error("report-shared-release-conflict");
-    const outbox = await reader.getAllAsync<{
-      readonly command_id: string;
-      readonly expected_state_version: number;
-      readonly observation_ids_json: string;
-      readonly status: "queued" | "submitting" | "blocked-revoked";
-      readonly enqueued_at: string;
-    }>(
-      `SELECT command_id, expected_state_version, observation_ids_json, status, enqueued_at
-       FROM shared_outbox WHERE session_id = ? ORDER BY enqueued_at, command_id`,
-      session.session_id,
-    );
-    for (const [index, row] of outbox.entries()) {
-      stringArrayJson(row.observation_ids_json, "report-shared-observation-links-invalid");
-      commands.push({
-        elapsedMs: elapsedFromTimestamp(row.enqueued_at, startedAtMs),
-        sourceSequence: index + 1,
-        scope: "shared",
-        commandId: row.command_id,
-        terminal: row.status === "blocked-revoked" ? "blocked-revoked" : "pending",
-        expectedStateVersion: row.expected_state_version,
-      });
-    }
-
-    const sharedResults = await reader.getAllAsync<{
-      readonly command_id: string;
-      readonly terminal: StoredTerminal;
-      readonly resulting_state_version: number;
-      readonly expected_state_version: number;
-      readonly observation_ids_json: string;
-      readonly decision_position: string;
-      readonly decided_at: string;
-    }>(
-      `SELECT command_id, terminal, resulting_state_version, expected_state_version,
-              observation_ids_json, decision_position, decided_at
-       FROM shared_results WHERE session_id = ?
-       ORDER BY CAST(decision_position AS INTEGER), command_id`,
-      session.session_id,
-    );
-    for (const [index, row] of sharedResults.entries()) {
-      if (
-        !isStoredTerminal(row.terminal) ||
-        !nonNegativeInteger(row.expected_state_version) ||
-        !nonNegativeInteger(row.resulting_state_version) ||
-        (row.terminal === "accepted"
-          ? row.resulting_state_version !== row.expected_state_version + 1
-          : row.resulting_state_version !== row.expected_state_version)
-      ) {
-        throw new Error("report-shared-result-invalid");
-      }
-      const elapsedMs = elapsedFromTimestamp(row.decided_at, startedAtMs);
-      commands.push({
-        elapsedMs,
-        sourceSequence: outbox.length + index + 1,
-        scope: "shared",
-        commandId: row.command_id,
-        terminal: row.terminal,
-        expectedStateVersion: row.expected_state_version,
-        resultingStateVersion: row.resulting_state_version,
-      });
-      const observationIds = stringArrayJson(
-        row.observation_ids_json,
-        "report-shared-observation-links-invalid",
-      );
-      for (const [observationIndex, observationId] of observationIds.entries()) {
-        const observation = observations.get(observationId);
-        if (observation === undefined) throw new Error("report-shared-observation-missing");
-        capabilities.push({
-          elapsedMs,
-          sourceSequence:
-            observationRows.length + localLinks.length + index * 1_000 + observationIndex + 1,
-          capabilityId: FOREGROUND_LOCATION_CAPABILITY.id,
-          disposition: observationUseDisposition(observation),
-        });
-      }
-    }
-
-    const syncRows = await reader.getAllAsync<{
-      readonly sequence: number;
-      readonly elapsed_ms: number;
-      readonly phase: string;
-      readonly disposition: string;
-      readonly command_id: string | null;
-    }>(
-      `SELECT sequence, elapsed_ms, phase, disposition, command_id
-       FROM shared_sync_events WHERE session_id = ? ORDER BY sequence`,
-      session.session_id,
-    );
-    for (const row of syncRows) {
-      const mapped = syncEvent(row.phase, row.disposition);
-      synchronization.push({
-        elapsedMs: elapsedFromNumber(row.elapsed_ms, startedAtMs),
-        sourceSequence: row.sequence,
-        ...mapped,
-      });
-      if (row.disposition === "snapshot-replaced") {
-        recovery.push({
-          elapsedMs: elapsedFromNumber(row.elapsed_ms, startedAtMs),
-          sourceSequence: row.sequence,
-          disposition: "snapshot-replaced",
-        });
-      }
-    }
   }
 
   return {

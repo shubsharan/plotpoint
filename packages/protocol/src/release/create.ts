@@ -19,7 +19,7 @@ interface PreparedMaterialEntry {
 }
 
 function aggregateKey(schema: ReleaseConstructionInput["aggregateSchemas"][number]): string {
-  return `${schema.id}\0${schema.kind}\0${String(schema.version).padStart(16, "0")}\0${schema.path}`;
+  return `${schema.id}\0${schema.kind}\0${schema.path}`;
 }
 
 function invalid(code: string, reason: string, path?: string): InvalidRelease {

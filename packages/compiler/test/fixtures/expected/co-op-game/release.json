@@ -1,18 +1,16 @@
 {
-  "releaseId": "sha256:3878ab58a4e3b90eb95f60b63e95d13e0aca821e7353c2feeb8cf7b53d063822",
+  "releaseId": "sha256:6b3a9adb1e9a9549a6a791f049fd6d9bdd3660b8e9a84d90d2023d9e265d58f2",
   "manifest": {
     "aggregateSchemas": [
       {
         "id": "co-op.player-state",
         "kind": "player",
-        "path": "schemas/aggregate/636f2d6f702e706c617965722d7374617465.json",
-        "version": 1
+        "path": "schemas/aggregate/636f2d6f702e706c617965722d7374617465.json"
       },
       {
         "id": "plotpoint.location.team-state",
         "kind": "team",
-        "path": "schemas/aggregate/706c6f74706f696e742e6c6f636174696f6e2e7465616d2d7374617465.json",
-        "version": 1
+        "path": "schemas/aggregate/706c6f74706f696e742e6c6f636174696f6e2e7465616d2d7374617465.json"
       }
     ],
     "capabilities": [

@@ -188,7 +188,6 @@ describe("generic shared-session HTTP boundary", () => {
         aggregateKind: "team",
         aggregateId: "team-1",
         schemaId: "team-state",
-        schemaVersion: 1,
       },
       expectedStateVersion: 0,
       type: "trusted.command",

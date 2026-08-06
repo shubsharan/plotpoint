@@ -5,7 +5,6 @@ import {
   inspectGameRelease,
   openRelease,
   type CanonicalJsonObject,
-  type GameComposition,
   type LocalAggregateView,
   type TransitionCandidate,
   type TypedRecord,
@@ -20,10 +19,11 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { compileProject, validateProject } from "../../../packages/compiler/dist/index.js";
+import { routeHostBridgeMessage } from "../src/bridge/host-bridge";
 import { installReleaseFromDescriptor } from "../src/install/install-release";
 import { PlayerDatabase } from "../src/persistence/database";
 import { createGamePlayReport } from "../src/reports/create-game-play-report";
-import { mountGameComposition, type ComponentImplementation } from "../src/runtime/composition";
+import { buildRuntimeBootstrap } from "../src/runtime/bootstrap";
 import {
   createLocalModelAdapter,
   type HostObservationReference,
@@ -33,6 +33,10 @@ import { deriveHostSupportFromManifest } from "../src/runtime/host-support";
 import { createProductionHostBridgeHandlers } from "../src/runtime/production-handlers";
 import { recoverRun, verifyRecoveryArtifact } from "../src/runtime/recovery";
 import { playerRunLifecycleStore, selectReleaseRun } from "../src/runtime/run-lifecycle";
+import {
+  GeneratedRuntimeElement as TestElement,
+  mountGeneratedWebRuntime,
+} from "./helpers/generated-web-runtime";
 
 const descriptorUrl = "http://127.0.0.1:4000/install.json";
 const releaseUrl = "http://127.0.0.1:4000/field-puzzle.pprelease";
@@ -141,11 +145,6 @@ async function importBundle(bytes: Uint8Array): Promise<Readonly<Record<string, 
   return imported;
 }
 
-interface GeneratedPresentation {
-  readonly application: unknown;
-  readonly components: Readonly<Record<string, ComponentImplementation>>;
-}
-
 function isExecutableFieldModel(value: unknown): value is ExecutableAggregateModel<"player"> {
   return (
     isRecord(value) &&
@@ -172,14 +171,6 @@ function requireFieldModel(
   const model = aggregateModels["field.player"];
   if (!isExecutableFieldModel(model)) throw new Error("generated-field-model-invalid");
   return model;
-}
-
-function requirePresentation(module: Readonly<Record<string, unknown>>): GeneratedPresentation {
-  if (!isRecord(module.components)) throw new Error("generated-component-registry-missing");
-  return {
-    application: module.application,
-    components: module.components as Readonly<Record<string, ComponentImplementation>>,
-  };
 }
 
 function canonicalContent(bytes: Uint8Array): CanonicalJsonObject {
@@ -302,59 +293,6 @@ function fieldBinding(model: ExecutableAggregateModel<"player">): LocalCommandBi
   };
 }
 
-class TestElement {
-  readonly dataset: Record<string, string> = {};
-  readonly children: TestElement[] = [];
-  textContent: string | null = null;
-  parent: TestElement | null = null;
-
-  append(...children: TestElement[]): void {
-    for (const child of children) {
-      child.parent = this;
-      this.children.push(child);
-    }
-  }
-
-  replaceChildren(...children: TestElement[]): void {
-    for (const child of this.children) child.parent = null;
-    this.children.splice(0, this.children.length, ...children);
-    for (const child of children) child.parent = this;
-  }
-
-  remove(): void {
-    if (this.parent === null) return;
-    const index = this.parent.children.indexOf(this);
-    if (index >= 0) this.parent.children.splice(index, 1);
-    this.parent = null;
-  }
-}
-
-async function mountGeneratedApplication(input: {
-  readonly composition: GameComposition;
-  readonly presentation: GeneratedPresentation;
-  readonly local: ReturnType<typeof createLocalModelAdapter>;
-  readonly content: CanonicalJsonObject;
-  readonly requestCapability: (input: object) => Promise<object>;
-}) {
-  const root = new TestElement();
-  const handle = await mountGameComposition({
-    root: root as unknown as HTMLElement,
-    composition: input.composition,
-    application: input.presentation.application,
-    components: input.presentation.components,
-    providers: {
-      local: input.local,
-      content: { "field.game": input.content },
-      assets: {},
-      capabilities: {
-        [FOREGROUND_LOCATION_CAPABILITY.id]: { request: input.requestCapability },
-      },
-    },
-    isElement: (value): value is HTMLElement => value instanceof TestElement,
-  });
-  return { handle, root };
-}
-
 describe("installed field puzzle vertical journey", () => {
   it("compiles, installs, mounts, commits, recreates, recovers, and exports a generic report", async () => {
     const fileSystem = nodeFileSystem();
@@ -436,8 +374,14 @@ describe("installed field puzzle vertical journey", () => {
       }
       const model = requireFieldModel(await importBundle(logicEntry.bytes));
       expect(Object.keys(model.commandContracts)).toEqual(["advance"]);
-      const presentation = requirePresentation(await importBundle(presentationEntry.bytes));
       const content = canonicalContent(contentEntry.bytes);
+      const runtimeHtml = buildRuntimeBootstrap({
+        logicSource: new TextDecoder().decode(logicEntry.bytes),
+        presentationSource: new TextDecoder().decode(presentationEntry.bytes),
+        gameComposition: inspection.gameComposition,
+        content: { "field.game": content },
+        assets: {},
+      });
       const initialized = model.initialize(content);
       expect(initialized.kind).toBe("initialized");
       if (initialized.kind !== "initialized") throw new Error("field-initialization-invalid");
@@ -503,13 +447,9 @@ describe("installed field puzzle vertical journey", () => {
           })
         ).output;
 
-      const firstMount = await mountGeneratedApplication({
-        composition: inspection.gameComposition,
-        presentation,
-        local,
-        content,
-        requestCapability,
-      });
+      const firstMount = await mountGeneratedWebRuntime(runtimeHtml, (message) =>
+        routeHostBridgeMessage(message, handlers),
+      );
       expect(firstMount.root.children).toHaveLength(1);
       const observation = await requestCapability({});
       if (!isRecord(observation) || typeof observation.observationId !== "string") {
@@ -533,7 +473,7 @@ describe("installed field puzzle vertical journey", () => {
         terminal: "accepted",
         resultingStateVersion: 1,
       });
-      await firstMount.handle.unmount();
+      await firstMount.unmount();
       expect(firstMount.root.children).toHaveLength(0);
 
       const recovered = await recoverRun(database, selected.run, {
@@ -563,16 +503,42 @@ describe("installed field puzzle vertical journey", () => {
         bindings: { "field.advance": fieldBinding(model) },
         commit: (candidate) => handlers.commitTransition({ candidate }),
       });
-      const recreatedMount = await mountGeneratedApplication({
-        composition: inspection.gameComposition,
-        presentation,
-        local: recreatedLocal,
-        content,
-        requestCapability,
+      const recreatedHandlers = createProductionHostBridgeHandlers({
+        store: database,
+        runtime: {
+          bootstrap: {
+            runId: recovered.runId,
+            releaseId: recovered.releaseId,
+            aggregate: recovered.aggregate,
+          },
+          composition: inspection.gameComposition,
+          aggregateSchemaId: model.stateSchema.id,
+          validateSchema: verifiedArtifact.validateSchema,
+          validateProgression: verifiedArtifact.validateProgression,
+        },
+        location: {
+          database,
+          runId: recovered.runId,
+          startedAt,
+          adapter: {
+            requestPermission: async () => "granted",
+            capture: async () => ({
+              timestamp: Date.parse("2020-01-01T00:00:04.000Z"),
+              latitude: 37.76942,
+              longitude: -122.48621,
+              horizontalAccuracy: 8,
+            }),
+          },
+          now: () => new Date("2020-01-01T00:00:05.000Z"),
+          createObservationId: () => "field-location-2",
+        },
       });
+      const recreatedMount = await mountGeneratedWebRuntime(runtimeHtml, (message) =>
+        routeHostBridgeMessage(message, recreatedHandlers),
+      );
       expect(recreatedMount.root.children).toHaveLength(1);
       expect(await recreatedLocal.getView()).toEqual(recovered.aggregate);
-      await recreatedMount.handle.unmount();
+      await recreatedMount.unmount();
 
       const journalColumns = (
         await database.raw().getAllAsync<{ name: string }>("PRAGMA table_info(journal)")

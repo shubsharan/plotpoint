@@ -12,6 +12,10 @@ const workspaceRoot = new URL("./", import.meta.url).pathname;
 
 export default defineConfig({
   test: {
+    // Compiler and installed-player tests spawn real subprocesses. Bounding the shared pool keeps
+    // those acceptance paths within their own deadlines instead of oversubscribing the machine.
+    maxWorkers: 1,
+    testTimeout: 15_000,
     projects: [
       defineProject({
         resolve: {

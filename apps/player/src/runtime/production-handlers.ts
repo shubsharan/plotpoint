@@ -131,7 +131,11 @@ export function createProductionHostBridgeHandlers(input: {
         candidate,
       });
       if ("kind" in result) throw new Error(result.code);
-      await input.onDurableResult?.();
+      try {
+        await input.onDurableResult?.();
+      } catch {
+        // The terminal is already durable. View recovery is retried independently.
+      }
       return transitionResultFromDurable(result);
     },
     requestCapability: dispatchCapability,

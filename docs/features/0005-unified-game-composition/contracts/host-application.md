@@ -1,5 +1,17 @@
 # Contract: Host Application
 
+## Single Executable Runtime Amendment
+
+The environment-neutral Web runtime kernel is the only implementation of composition mounting, local
+command adaptation, component scoping, bridge clients, notifications, and cleanup. The compiler bundles
+that source into a generated TypeScript module. Production bootstrap is limited to transport, verified
+release loading, kernel start, and disposal; vertical tests execute the generated production bundle.
+
+Every component factory starts in a child mount scope. A valid returned element merges the child into
+the application scope. A throw or invalid return disposes only the child. Once native persistence
+commits a transition, the runtime must return its terminal result even if refresh or a listener fails;
+such failures enter recovery state and listeners are isolated from one another.
+
 Host Application connects one verified Game Composition to the existing Host Bridge Envelope.
 It corrects the private pre-release payloads in place. Host API 1.0 remains the local core and Host
 API 1.1 remains the shared-play extension; this feature introduces no new Host API minor, message-name

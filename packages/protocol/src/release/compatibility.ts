@@ -49,16 +49,17 @@ export function assessCompatibility(
   }
 
   for (const required of manifest.aggregateSchemas) {
+    const inventory = manifest.inventory.find(({ path }) => path === required.path);
     const available = support.aggregateSchemas.filter(
       ({ id, kind }) => id === required.id && kind === required.kind,
     );
-    if (!available.some(({ versions }) => versions.includes(required.version))) {
+    if (inventory === undefined || !available.some(({ digest }) => digest === inventory.digest)) {
       diagnostics.push(
         diagnostic("aggregate-schema-unsupported", `aggregate-schema:${required.id}`, {
           id: required.id,
           kind: required.kind,
-          requiredVersion: required.version,
-          supportedVersions: Object.freeze(available.flatMap(({ versions }) => [...versions])),
+          ...(inventory === undefined ? {} : { requiredDigest: inventory.digest }),
+          supportedDigests: Object.freeze(available.map(({ digest }) => digest)),
         }),
       );
     }

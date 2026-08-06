@@ -633,8 +633,7 @@ export function createTargetDiscoveryAdapter(
         command.type !== TARGET_DISCOVERY_COMMAND ||
         command.target.aggregateKind !== "team" ||
         command.target.aggregateId !== participant.teamId ||
-        command.target.schemaId !== TARGET_DISCOVERY_STATE_SCHEMA ||
-        command.target.schemaVersion !== 1
+        command.target.schemaId !== TARGET_DISCOVERY_STATE_SCHEMA
       ) {
         return invalidAuthorization("command-target-mismatch", {
           commandId: command.commandId,
@@ -709,6 +708,85 @@ export function createTargetDiscoveryAdapter(
         ]),
       });
     },
+    execute({ participant, aggregate, command, observations }) {
+      const authorization = adapter.authorize({ participant, command, observations });
+      const capabilityEvidence = (disposition: "consumed" | "denied" | "expired") =>
+        Object.freeze(
+          command.observations.map(({ observationId }) =>
+            Object.freeze({
+              observationId,
+              capabilityId: FOREGROUND_LOCATION_CAPABILITY.id,
+              disposition,
+            }),
+          ),
+        );
+      if (authorization.kind === "rejected") {
+        const disposition =
+          authorization.outcome.code === "location-stale"
+            ? "expired"
+            : authorization.outcome.code === "location-denied" ||
+                authorization.outcome.code === "location-unavailable"
+              ? "denied"
+              : authorization.outcome.code === "location-future" ||
+                  authorization.outcome.code === "location-inaccurate" ||
+                  authorization.outcome.code === "location-outside-zone"
+                ? "consumed"
+                : null;
+        return Object.freeze({
+          terminal: "rejected",
+          outcomeCode: authorization.outcome.code,
+          aggregateBefore: aggregate,
+          aggregateAfter: aggregate,
+          domainEvents: Object.freeze([]),
+          capabilityEvidence:
+            disposition === null ? Object.freeze([]) : capabilityEvidence(disposition),
+        });
+      }
+      if (authorization.kind === "invalid") {
+        return Object.freeze({
+          terminal: "invalid",
+          outcomeCode: authorization.diagnostics[0]?.code ?? "execution-invalid",
+          aggregateBefore: aggregate,
+          aggregateAfter: aggregate,
+          domainEvents: Object.freeze([]),
+          capabilityEvidence: Object.freeze([]),
+        });
+      }
+      const execution = model.execute({
+        aggregate,
+        command: Object.freeze({
+          ...authorization.command,
+          expectedStateVersion: aggregate.stateVersion,
+        }),
+        observations: authorization.observations,
+      });
+      if (execution.kind === "preflight-invalid") {
+        return Object.freeze({
+          terminal: "invalid",
+          outcomeCode: execution.diagnostics[0]?.code ?? "execution-invalid",
+          aggregateBefore: aggregate,
+          aggregateAfter: aggregate,
+          domainEvents: Object.freeze([]),
+          capabilityEvidence: Object.freeze([]),
+        });
+      }
+      const outcome = execution.record.outcome;
+      const outcomeCode =
+        execution.record.terminal === "invalid"
+          ? (execution.record.diagnostics[0]?.code ?? "execution-invalid")
+          : outcome !== undefined && typeof outcome.code === "string"
+            ? outcome.code
+            : null;
+      if (outcomeCode === null) throw new Error("trusted-outcome-invalid");
+      return Object.freeze({
+        terminal: execution.record.terminal,
+        outcomeCode,
+        aggregateBefore: aggregate,
+        aggregateAfter: execution.aggregate,
+        domainEvents: Object.freeze([...(execution.record.domainEvents ?? [])]),
+        capabilityEvidence: capabilityEvidence("consumed"),
+      });
+    },
     project({ participant, aggregate }): MechanicProjection {
       const projected = projectionSchema.validate(aggregate.state);
       if (
@@ -736,7 +814,6 @@ export function createTargetDiscoveryAdapter(
           aggregateKind: "team",
           aggregateId: aggregate.aggregateId,
           schemaId: TARGET_DISCOVERY_PROJECTION_SCHEMA,
-          schemaVersion: 1,
           stateVersion: aggregate.stateVersion,
           value: projected.value,
         }),

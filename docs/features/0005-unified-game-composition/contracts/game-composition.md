@@ -1,5 +1,13 @@
 # Contract: Project Configuration and Game Composition
 
+## Aggregate Schema Identity Amendment
+
+Aggregate schema inventory entries contain logical schema ID, artifact path, and exact digest only.
+`schemaVersion`, `schema_version`, aggregate manifest versions, and equivalent generation counters are
+invalid. Schema agreement is derived from the verified pinned release, logical ID, and exact inventoried
+bytes. Server aggregate models declaring any effects are invalid because Feature 0005 does not provide
+an authoritative effect outbox or delivery boundary.
+
 Project Configuration is the sole authored composition input. This feature corrects its private
 pre-release shape in place. The compiler accepts only the shape below and provides no legacy parser,
 upgrade mode, aliases, or compatibility diagnostics for the discarded shape.

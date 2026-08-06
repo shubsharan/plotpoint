@@ -10,6 +10,8 @@
     "check-types": "tsc -p tsconfig.json --noEmit",
     "dev": "expo start --dev-client",
     "ios": "expo run:ios --device",
+    "runtime:check": "node scripts/generate-web-runtime.mjs --check",
+    "runtime:generate": "node scripts/generate-web-runtime.mjs",
     "test": "vitest run --passWithNoTests --config ../../vitest.config.ts --project player",
     "test:watch": "vitest --config ../../vitest.config.ts --project player"
   },
@@ -22,6 +24,7 @@
     "expo-camera": "~57.0.3",
     "expo-file-system": "~57.0.1",
     "expo-location": "~57.0.7",
+    "expo-network": "~57.0.1",
     "expo-secure-store": "^57.0.1",
     "expo-sharing": "~57.0.8",
     "expo-sqlite": "~57.0.1",
@@ -32,6 +35,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "rolldown": "1.2.2",
     "typescript": "~6.0.3"
   }
 }

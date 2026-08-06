@@ -2,7 +2,12 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { migratePlayerDatabase } from "../src/persistence/database";
+import {
+  assertHostStorageSchemaDigest,
+  HOST_STORAGE_SCHEMA_DIGEST,
+  hostStorageSchemaDigest,
+  migratePlayerDatabase,
+} from "../src/persistence/database";
 import { migrateSharedDatabase } from "../src/shared/database";
 
 vi.mock("expo-sqlite", () => ({}));
@@ -114,7 +119,6 @@ describe("corrected player database schema", () => {
       "aggregate_kind",
       "aggregate_id",
       "schema_id",
-      "schema_version",
       "state_version",
       "value_json",
     ]);
@@ -144,17 +148,67 @@ describe("corrected player database schema", () => {
       "cursor",
       "confirmed_at",
     ]);
+    await expect(columns("game_play_events")).resolves.toEqual([
+      "sequence",
+      "run_id",
+      "committed_at",
+      "elapsed_ms",
+      "kind",
+      "command_id",
+      "evidence_json",
+    ]);
+    await expect(hostStorageSchemaDigest(database)).resolves.toBe(HOST_STORAGE_SCHEMA_DIGEST);
+    await expect(assertHostStorageSchemaDigest(database)).resolves.toBeUndefined();
+    await database.runAsync(
+      "INSERT INTO installed_releases VALUES (?,?,?,?)",
+      `sha256:${"a".repeat(64)}`,
+      "file:///release",
+      "{}",
+      "2030-01-01T00:00:00.000Z",
+    );
+    await database.runAsync(
+      "INSERT INTO runs VALUES (?,?,?,'active')",
+      "run-1",
+      `sha256:${"a".repeat(64)}`,
+      "2030-01-01T00:00:00.000Z",
+    );
+    await database.runAsync(
+      "INSERT INTO game_play_events(run_id,committed_at,elapsed_ms,kind,evidence_json) VALUES (?,?,?,?,?)",
+      "run-1",
+      "2030-01-01T00:00:00.000Z",
+      0,
+      "lifecycle",
+      '{"disposition":"mounted"}',
+    );
+    await expect(
+      database.runAsync("DELETE FROM game_play_events WHERE run_id=?", "run-1"),
+    ).rejects.toThrow("game-play-evidence-immutable");
     await expect(
       database.getAllAsync<{ name: string }>(
         "SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name",
       ),
     ).resolves.toEqual([
+      { name: "game_play_events_no_delete" },
+      { name: "game_play_events_no_update" },
       { name: "pending_shared_join_immutable" },
       { name: "pending_shared_join_no_bound_insert" },
       { name: "shared_session_binding_immutable" },
       { name: "shared_session_membership_monotonic" },
       { name: "shared_session_no_pending_insert" },
     ]);
+    database.close();
+  });
+
+  it("rejects an index-definition mismatch even when every table and column name matches", async () => {
+    const database = new RealMigrationDatabase();
+    await migratePlayerDatabase(database);
+    await migrateSharedDatabase(database);
+    database.database.exec(
+      "DROP INDEX shared_outbox_status; CREATE INDEX shared_outbox_status ON shared_outbox(status,session_id,enqueued_at);",
+    );
+    await expect(assertHostStorageSchemaDigest(database)).rejects.toThrow(
+      "player-database-incompatible-reset-or-reinstall",
+    );
     database.close();
   });
 

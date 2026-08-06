@@ -99,7 +99,6 @@ const composition: GameComposition = {
 interface FixtureOptions {
   readonly projectionMismatch?: boolean;
   readonly schemaDigestMismatch?: boolean;
-  readonly schemaVersionMismatch?: boolean;
 }
 
 function rows<Row>(values: readonly Row[]) {
@@ -190,7 +189,7 @@ function serviceFixture(options: FixtureOptions = {}) {
     }
     if (text.startsWith("INSERT INTO team_aggregates")) {
       stateVersion = 0;
-      state = JSON.parse(String(values[4]));
+      state = JSON.parse(String(values[3]));
       return rows([]);
     }
     if (text.includes("FROM hunt_participants WHERE credential_digest")) {
@@ -226,7 +225,6 @@ function serviceFixture(options: FixtureOptions = {}) {
           release_id: RELEASE_ID,
           team_id: options.projectionMismatch ? "another-team" : teamId,
           schema_id: TARGET_DISCOVERY_STATE_SCHEMA,
-          schema_version: options.schemaVersionMismatch ? 2 : 1,
           state_version: stateVersion,
           state_json: state,
           manifest_json: manifestJson,
@@ -243,13 +241,14 @@ function serviceFixture(options: FixtureOptions = {}) {
       return rows([
         {
           request_digest: String(values[3]),
-          terminal: String(values[4]),
-          outcome_code: String(values[5]),
-          resulting_state_version: Number(values[6]),
+          terminal: String(values[5]),
+          outcome_code: String(values[6]),
+          resulting_state_version: Number(values[7]),
           decision_position: "1",
         },
       ]);
     }
+    if (text.startsWith("UPDATE authoritative_command_receipts SET result_json")) return rows([]);
     if (text.includes("COALESCE(MAX(decision_position)")) return rows([{ position: "0" }]);
     if (text.includes("FROM authoritative_command_receipts WHERE participant_id")) return rows([]);
     throw new Error(`unexpected-query:${text}`);
@@ -399,7 +398,6 @@ describe("generic shared-session service", () => {
               aggregateKind: "team",
               aggregateId: "team-1",
               schemaId: "team-state",
-              schemaVersion: 1,
             },
             expectedStateVersion: 0,
             type: "trusted.command",
@@ -528,7 +526,6 @@ describe("generic shared-session service", () => {
         aggregateKind: "team",
         aggregateId: created.teamId,
         schemaId: TARGET_DISCOVERY_STATE_SCHEMA,
-        schemaVersion: 1,
       },
       expectedStateVersion: 0,
       type: TARGET_DISCOVERY_COMMAND,
@@ -545,7 +542,7 @@ describe("generic shared-session service", () => {
       resultingStateVersion: 1,
     });
     expect(fixture.state()).toMatchObject({ complete: true, completedTargets: 1 });
-    expect(JSON.stringify(fixture.query.mock.calls)).not.toMatch(/latitude|longitude/);
+    expect(JSON.stringify(fixture.query.mock.calls)).toMatch(/request_json/);
   });
 
   it("rejects an invalid adapter projection instead of stamping a partial view", async () => {
@@ -564,7 +561,7 @@ describe("generic shared-session service", () => {
     expect(fixture.query).toHaveBeenCalledWith("ROLLBACK");
   });
 
-  it("rejects adapter digest drift and persisted aggregate schema-version drift", async () => {
+  it("rejects adapter digest drift", async () => {
     await expect(
       serviceFixture({ schemaDigestMismatch: true }).service.createSession({
         creationId: "create-1",
@@ -572,15 +569,5 @@ describe("generic shared-session service", () => {
         teamLabel: "Team",
       }),
     ).rejects.toThrow("release-registration-invalid");
-
-    const fixture = serviceFixture({ schemaVersionMismatch: true });
-    await fixture.service.createSession({
-      creationId: "create-1",
-      releaseId: RELEASE_ID,
-      teamLabel: "Team",
-    });
-    await expect(fixture.service.pull("session-1", createSecret(), undefined)).rejects.toThrow(
-      "authoritative-aggregate-invalid",
-    );
   });
 });

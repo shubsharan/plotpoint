@@ -96,7 +96,6 @@ function pull(
           aggregateKind: "team",
           aggregateId: overrides.teamId ?? "team-a",
           schemaId: "example.shared-state",
-          schemaVersion: 1,
           stateVersion: overrides.stateVersion ?? 1,
           value: { completed: overrides.stateVersion ?? 1 },
         },

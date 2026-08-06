@@ -24,7 +24,6 @@ export interface SharedBridgeHandlers {
 
 export interface SharedProjectionContract {
   readonly schemaId: string;
-  readonly schemaVersion: number;
   validate(value: SharedProjection["value"]): boolean;
 }
 
@@ -62,12 +61,7 @@ export function deriveSharedRuntimeSurface(
       ? { kind: "local-only", sharedBindingAvailable: false }
       : recovery("shared-composition-invalid");
   }
-  if (
-    projectionContract === null ||
-    projectionContract.schemaId !== mechanic.projectionSchema.id ||
-    !Number.isSafeInteger(projectionContract.schemaVersion) ||
-    projectionContract.schemaVersion <= 0
-  ) {
+  if (projectionContract === null || projectionContract.schemaId !== mechanic.projectionSchema.id) {
     return recovery("shared-projection-contract-invalid");
   }
   if (view === null) return { kind: "join", sharedBindingAvailable: false };
@@ -83,7 +77,6 @@ export function deriveSharedRuntimeSurface(
   const projections = view.projections.filter(
     (projection) =>
       projection.schemaId === mechanic.projectionSchema.id &&
-      projection.schemaVersion === projectionContract.schemaVersion &&
       projection.aggregateKind === model.kind,
   );
   if (projections.length !== 1) return recovery("shared-projection-binding-invalid");
@@ -105,7 +98,6 @@ export function deriveSharedRuntimeSurface(
 export function createCompositionSharedBridgeHandlers(input: {
   readonly composition: GameComposition;
   readonly expectedReleaseId: ReleaseId;
-  readonly aggregateSchemaVersions: Readonly<Record<string, number>>;
   readonly projectionContract: SharedProjectionContract;
   getView(): Promise<SharedPlayView>;
   enqueue(command: SharedCommandIntent): Promise<SharedCommandStatus>;
@@ -140,21 +132,13 @@ export function createCompositionSharedBridgeHandlers(input: {
       );
       if (descriptor === undefined) throw new Error("shared-command-undeclared");
       const projection = view.projections[0];
-      const schemaVersion = input.aggregateSchemaVersions[model.stateSchema.id];
       if (
         projection === undefined ||
-        !Number.isSafeInteger(schemaVersion) ||
-        schemaVersion === undefined ||
-        schemaVersion <= 0 ||
         command.target.aggregateKind !== model.kind ||
         command.target.aggregateId !== projection.aggregateId ||
-        command.target.schemaId !== model.stateSchema.id ||
-        command.target.schemaVersion !== schemaVersion
+        command.target.schemaId !== model.stateSchema.id
       ) {
         throw new Error("shared-command-target-mismatch");
-      }
-      if (command.expectedStateVersion !== projection.stateVersion) {
-        throw new Error("shared-command-version-mismatch");
       }
       return input.enqueue(command);
     },

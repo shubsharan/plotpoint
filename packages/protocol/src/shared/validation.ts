@@ -49,10 +49,6 @@ function nonnegative(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
-function positive(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) > 0;
-}
-
 function canonical(value: unknown): value is CanonicalJsonObject {
   if (!object(value)) return false;
   return Object.values(value).every((entry) => {
@@ -71,12 +67,11 @@ function canonical(value: unknown): value is CanonicalJsonObject {
 export function isSharedAggregateTarget(value: unknown): value is SharedAggregateTarget {
   return (
     object(value) &&
-    keys(value, ["aggregateKind", "aggregateId", "schemaId", "schemaVersion"]) &&
+    keys(value, ["aggregateKind", "aggregateId", "schemaId"]) &&
     typeof value.aggregateKind === "string" &&
     KINDS.has(value.aggregateKind) &&
     nonempty(value.aggregateId) &&
-    nonempty(value.schemaId) &&
-    positive(value.schemaVersion)
+    nonempty(value.schemaId)
   );
 }
 
@@ -105,19 +100,11 @@ export function isSharedCommandIntent(value: unknown): value is SharedCommandInt
 export function isSharedProjection(value: unknown): value is SharedProjection {
   return (
     object(value) &&
-    keys(value, [
-      "aggregateKind",
-      "aggregateId",
-      "schemaId",
-      "schemaVersion",
-      "stateVersion",
-      "value",
-    ]) &&
+    keys(value, ["aggregateKind", "aggregateId", "schemaId", "stateVersion", "value"]) &&
     isSharedAggregateTarget({
       aggregateKind: value.aggregateKind,
       aggregateId: value.aggregateId,
       schemaId: value.schemaId,
-      schemaVersion: value.schemaVersion,
     }) &&
     nonnegative(value.stateVersion) &&
     canonical(value.value)
@@ -208,21 +195,35 @@ export function isSyncCommand(value: unknown): value is SyncCommand {
 export function isSyncCommandResult(value: unknown): value is SyncCommandResult {
   return (
     object(value) &&
-    keys(value, [
-      "commandId",
-      "disposition",
-      "terminal",
-      "outcomeCode",
-      "resultingStateVersion",
-      "decisionPosition",
-    ]) &&
+    keys(
+      value,
+      [
+        "commandId",
+        "disposition",
+        "terminal",
+        "outcomeCode",
+        "resultingStateVersion",
+        "decisionPosition",
+      ],
+      ["capabilityEvidence"],
+    ) &&
     nonempty(value.commandId) &&
     ["decided", "duplicate"].includes(value.disposition as string) &&
     typeof value.terminal === "string" &&
     TERMINALS.has(value.terminal as SharedTerminal) &&
     nonempty(value.outcomeCode) &&
     nonnegative(value.resultingStateVersion) &&
-    nonempty(value.decisionPosition)
+    nonempty(value.decisionPosition) &&
+    (value.capabilityEvidence === undefined ||
+      (Array.isArray(value.capabilityEvidence) &&
+        value.capabilityEvidence.every(
+          (item) =>
+            object(item) &&
+            keys(item, ["observationId", "capabilityId", "disposition"]) &&
+            nonempty(item.observationId) &&
+            nonempty(item.capabilityId) &&
+            ["captured", "consumed", "denied", "expired"].includes(item.disposition as string),
+        )))
   );
 }
 

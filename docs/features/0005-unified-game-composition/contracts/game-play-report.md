@@ -1,5 +1,18 @@
 # Contract: Game Play Report
 
+## Committed Evidence Amendment
+
+The report is projected only from append-only host-owned gameplay events committed by the responsible
+boundary. Each event has run, durable sequence, committed timestamp, kind, optional internal command ID,
+and validated generic evidence. Local commit records the actual observation-consumption trace; shared
+pull records exact participant results and mechanic capability evidence; synchronization records its
+real phase/disposition and time; lifecycle/recovery record completed transitions.
+
+Export uses one read transaction, durable event order, deterministic command aliases, existing privacy
+allowlists, and the unchanged public `GamePlayReport` validator. It never reads mechanic configuration,
+guesses freshness, assumes submitted/resulting version relationships, or reconstructs semantics by
+joining command, observation, synchronization, and lifecycle tables.
+
 Game Play Report is the only report produced by the corrected pre-release player. It replaces the
 local and game-specific report builders in place; there are no historical readers, compatibility
 aliases, or report migrations. Report selection uses only the installed run and its optional immutable

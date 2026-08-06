@@ -119,7 +119,6 @@ function pull(
           aggregateKind: "team",
           aggregateId: "team-1",
           schemaId: "example.counter",
-          schemaVersion: 1,
           stateVersion: overrides.count ?? 1,
           value: { count: overrides.count ?? 1 },
         },
@@ -200,7 +199,7 @@ async function durableState(database: TestSharedSqliteDatabase): Promise<unknown
     ),
     projections: await database.getAllAsync<Record<string, unknown>>(
       `SELECT * FROM shared_projections
-       ORDER BY session_id,aggregate_kind,aggregate_id,schema_id,schema_version`,
+       ORDER BY session_id,aggregate_kind,aggregate_id,schema_id`,
     ),
     results: await database.getAllAsync<Record<string, unknown>>(
       "SELECT * FROM shared_results ORDER BY session_id,decision_position,command_id",

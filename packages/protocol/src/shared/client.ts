@@ -18,7 +18,6 @@ export function createSharedPlayClient(transport: SharedPlayTransport): SharedPl
             aggregateKind: command.target.aggregateKind,
             aggregateId: command.target.aggregateId,
             schemaId: command.target.schemaId,
-            schemaVersion: command.target.schemaVersion,
           },
           expectedStateVersion: command.expectedStateVersion,
           type: command.type,

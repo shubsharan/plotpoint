@@ -120,7 +120,7 @@ export class TestSharedSqliteDatabase implements SharedSqlDatabase {
       ),
       projections: await this.getAllAsync<Readonly<Record<string, unknown>>>(
         `SELECT * FROM shared_projections WHERE session_id=?
-         ORDER BY aggregate_kind,aggregate_id,schema_id,schema_version`,
+         ORDER BY aggregate_kind,aggregate_id,schema_id`,
         sessionId,
       ),
       results: await this.getAllAsync<Readonly<Record<string, unknown>>>(

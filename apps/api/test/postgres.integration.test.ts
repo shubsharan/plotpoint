@@ -105,7 +105,6 @@ describe("generic shared-session PostgreSQL integration", () => {
         aggregateKind: "team" as const,
         aggregateId: session.teamId,
         schemaId: TARGET_DISCOVERY_STATE_SCHEMA,
-        schemaVersion: 1,
       },
       expectedStateVersion,
       type: TARGET_DISCOVERY_COMMAND,
@@ -125,7 +124,7 @@ describe("generic shared-session PostgreSQL integration", () => {
       ),
     ]);
     expect(new Set(exactRetries.map(({ disposition }) => disposition))).toEqual(
-      new Set(["decided", "duplicate"]),
+      new Set(["decided"]),
     );
     expect(exactRetries).toEqual([
       expect.objectContaining({
@@ -143,6 +142,18 @@ describe("generic shared-session PostgreSQL integration", () => {
       service.submit(
         session.sessionId,
         credentials[1]!,
+        command("ferry-command", "ferry-building", 0),
+      ),
+    ).resolves.toMatchObject({
+      disposition: "decided",
+      terminal: "no-op",
+      outcomeCode: "target-already-discovered",
+      resultingStateVersion: 1,
+    });
+    await expect(
+      service.submit(
+        session.sessionId,
+        credentials[1]!,
         command("ferry-repeat", "ferry-building", 1),
       ),
     ).resolves.toMatchObject({
@@ -156,7 +167,7 @@ describe("generic shared-session PostgreSQL integration", () => {
         credentials[0]!,
         command("ferry-command", "ferry-building", 0),
       ),
-    ).resolves.toMatchObject({ disposition: "duplicate", terminal: "accepted" });
+    ).resolves.toMatchObject({ disposition: "decided", terminal: "accepted" });
     await expect(
       service.submit(
         session.sessionId,
@@ -296,7 +307,6 @@ describe("generic shared-session PostgreSQL integration", () => {
         aggregateKind: "team" as const,
         aggregateId: session.teamId,
         schemaId: TARGET_DISCOVERY_STATE_SCHEMA,
-        schemaVersion: 1,
       },
       expectedStateVersion: 0,
       type: TARGET_DISCOVERY_COMMAND,

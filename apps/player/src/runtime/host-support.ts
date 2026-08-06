@@ -9,33 +9,16 @@ import {
 const IMPLEMENTED_CAPABILITIES = Object.freeze([FOREGROUND_LOCATION_CAPABILITY]);
 
 function aggregateSchemaSupport(manifest: ReleaseManifest): HostReleaseSupport["aggregateSchemas"] {
-  const versionsBySchema = new Map<
-    string,
-    {
-      readonly id: string;
-      readonly kind: ReleaseManifest["aggregateSchemas"][number]["kind"];
-      readonly versions: number[];
-    }
-  >();
-
-  for (const requirement of manifest.aggregateSchemas) {
-    const key = `${requirement.kind}\0${requirement.id}`;
-    const support = versionsBySchema.get(key);
-    if (support === undefined) {
-      versionsBySchema.set(key, {
+  return Object.freeze(
+    manifest.aggregateSchemas.map((requirement) => {
+      const inventory = manifest.inventory.find(({ path }) => path === requirement.path);
+      if (inventory === undefined) throw new Error("aggregate-schema-inventory-missing");
+      return Object.freeze({
         id: requirement.id,
         kind: requirement.kind,
-        versions: [requirement.version],
+        digest: inventory.digest,
       });
-    } else {
-      support.versions.push(requirement.version);
-    }
-  }
-
-  return Object.freeze(
-    [...versionsBySchema.values()].map(({ id, kind, versions }) =>
-      Object.freeze({ id, kind, versions: Object.freeze(versions) }),
-    ),
+    }),
   );
 }
 

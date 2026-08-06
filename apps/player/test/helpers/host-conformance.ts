@@ -160,7 +160,7 @@ async function createFixture(input: ReleaseFixtureInput): Promise<HostConformanc
   } satisfies GameComposition;
   const artifact = await createReleaseArtifact({
     hostApi: { major: 1, minimumMinor: 0 },
-    aggregateSchemas: [{ id: input.schemaId, kind: "player", version: 1, path: schemaPath }],
+    aggregateSchemas: [{ id: input.schemaId, kind: "player", path: schemaPath }],
     capabilities: input.capabilities,
     entrypoints: { logic: "bundles/logic.js", presentation: "bundles/presentation.js" },
     entries: [

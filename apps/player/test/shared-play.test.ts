@@ -31,7 +31,6 @@ const command = {
     aggregateKind: "team",
     aggregateId: "team-1",
     schemaId: "example.counter",
-    schemaVersion: 1,
   },
   expectedStateVersion: 0,
   type: "example.increment",
@@ -112,7 +111,6 @@ const sharedView = {
       aggregateKind: "team",
       aggregateId: "team-1",
       schemaId: "shared-projection",
-      schemaVersion: 1,
       stateVersion: 2,
       value: { count: 2 },
     },
@@ -122,7 +120,6 @@ const sharedView = {
 
 const projectionContract: SharedProjectionContract = {
   schemaId: "shared-projection",
-  schemaVersion: 1,
   validate: (value) =>
     typeof value.count === "number" &&
     Number.isSafeInteger(value.count) &&
@@ -344,7 +341,10 @@ describe("shared player architecture", () => {
       code: "shared-release-mismatch",
     });
     for (const [projection, code] of [
-      [{ ...sharedView.projections[0]!, schemaVersion: 2 }, "shared-projection-binding-invalid"],
+      [
+        { ...sharedView.projections[0]!, schemaId: "wrong-projection" },
+        "shared-projection-binding-invalid",
+      ],
       [
         { ...sharedView.projections[0]!, value: { count: "invalid" } },
         "shared-projection-payload-invalid",
@@ -370,7 +370,6 @@ describe("shared player architecture", () => {
     const handlers = createCompositionSharedBridgeHandlers({
       composition: sharedComposition,
       expectedReleaseId: releaseId,
-      aggregateSchemaVersions: { "shared-state": 1 },
       projectionContract,
       getView: async () => ({
         ...sharedView,
@@ -380,7 +379,6 @@ describe("shared player architecture", () => {
             aggregateKind: "player",
             aggregateId: "participant-1",
             schemaId: "private-projection",
-            schemaVersion: 1,
             stateVersion: 1,
             value: { private: true },
           },
@@ -409,7 +407,6 @@ describe("shared player architecture", () => {
         aggregateKind: "team" as const,
         aggregateId: "team-1",
         schemaId: "shared-state",
-        schemaVersion: 1,
       },
       expectedStateVersion: 2,
       type: "shared.action",
@@ -440,10 +437,10 @@ describe("shared player architecture", () => {
     );
     expect(mismatch).toMatchObject({
       requestId: "mismatch-request",
-      type: "host.error",
-      payload: { code: "shared-command-version-mismatch" },
+      type: "shared.command.result",
+      payload: { terminal: "pending" },
     });
-    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledTimes(2);
   });
 
   it("keeps credentials in the Authorization header and preserves exact terminals", async () => {
@@ -855,7 +852,6 @@ describe("shared player architecture", () => {
             aggregateKind: "team" as const,
             aggregateId: "team-1",
             schemaId: "example.counter",
-            schemaVersion: 1,
             stateVersion: 1,
             value: { count: 1 },
           },

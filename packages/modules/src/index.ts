@@ -17,6 +17,7 @@ export type {
   MechanicBindingValidation,
   MechanicDiagnostic,
   MechanicDiagnosticCode,
+  MechanicExecution,
   MechanicProjection,
   PersistedObservation,
   TrustedMechanicAdapter,

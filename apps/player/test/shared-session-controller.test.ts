@@ -307,15 +307,15 @@ function seedRecoverableAttempt(harness: Harness, status: "ready" | "submitting"
 }
 
 describe("shared session controller recovery", () => {
-  it("reserves before writing secrets, persists both secrets before send, and cleans up only after commit", async () => {
+  it("persists recoverable secrets before reservation, sends only after readiness, and cleans up after commit", async () => {
     const harness = createHarness();
 
     await expect(harness.controller.join(joinInput)).resolves.toEqual(pull());
 
     const position = (event: string) => harness.order.indexOf(event);
     expect(position("reserve")).toBeGreaterThanOrEqual(0);
-    expect(position("reserve")).toBeLessThan(position("invitation-secret"));
-    expect(position("reserve")).toBeLessThan(position("credential-secret"));
+    expect(position("invitation-secret")).toBeLessThan(position("reserve"));
+    expect(position("credential-secret")).toBeLessThan(position("reserve"));
     expect(position("invitation-secret")).toBeLessThan(position("ready"));
     expect(position("credential-secret")).toBeLessThan(position("ready"));
     expect(position("ready")).toBeLessThan(position("submitting"));

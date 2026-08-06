@@ -12,6 +12,7 @@ import type {
   LocationObservation,
   SharedProjection,
   SyncCommand,
+  SyncCommandResult,
   TrustedMechanicBinding,
 } from "@plotpoint/protocol";
 
@@ -65,6 +66,15 @@ export type MechanicProjection =
   | { readonly kind: "projected"; readonly projection: SharedProjection }
   | { readonly kind: "invalid"; readonly diagnostic: MechanicDiagnostic };
 
+export interface MechanicExecution<Kind extends "team" | "session"> {
+  readonly terminal: "accepted" | "no-op" | "rejected" | "invalid";
+  readonly outcomeCode: string;
+  readonly aggregateBefore: Aggregate<JsonObject, Kind>;
+  readonly aggregateAfter: Aggregate<JsonObject, Kind>;
+  readonly domainEvents: readonly JsonObject[];
+  readonly capabilityEvidence: NonNullable<SyncCommandResult["capabilityEvidence"]>;
+}
+
 export interface TrustedMechanicAdapter<Kind extends "team" | "session"> {
   readonly id: string;
   readonly model: ExecutableAggregateModel<Kind>;
@@ -80,6 +90,12 @@ export interface TrustedMechanicAdapter<Kind extends "team" | "session"> {
     readonly command: SyncCommand;
     readonly observations: readonly PersistedObservation[];
   }): MechanicAuthorization<Kind>;
+  execute(input: {
+    readonly participant: AuthorizedParticipant;
+    readonly aggregate: Aggregate<JsonObject, Kind>;
+    readonly command: SyncCommand;
+    readonly observations: readonly PersistedObservation[];
+  }): MechanicExecution<Kind>;
   project(input: {
     readonly participant: AuthorizedParticipant;
     readonly aggregate: Aggregate<JsonObject, Kind>;
@@ -162,7 +178,11 @@ export function resolveTrustedMechanic(input: {
   const selectedModel = input.composition.aggregateModels.find(
     ({ id }) => id === input.binding.aggregateModel,
   );
-  if (selectedModel === undefined || selectedModel.authority !== "server") {
+  if (
+    selectedModel === undefined ||
+    selectedModel.authority !== "server" ||
+    selectedModel.effects.length !== 0
+  ) {
     return diagnostic("model-contract-mismatch", [input.binding.aggregateModel]);
   }
   const resolved = factory.resolve({

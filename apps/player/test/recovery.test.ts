@@ -17,9 +17,7 @@ import {
 const manifest = {
   releaseFormatVersion: 1,
   hostApi: { major: 1, minimumMinor: 0 },
-  aggregateSchemas: [
-    { id: "field.player-state", kind: "player", version: 1, path: "schemas/player.json" },
-  ],
+  aggregateSchemas: [{ id: "field.player-state", kind: "player", path: "schemas/player.json" }],
   capabilities: [],
   entrypoints: { logic: "logic.js", presentation: "presentation.js" },
   inventory: [],
@@ -193,7 +191,6 @@ describe("recovery artifact boundary", () => {
         {
           id: "field.player-state",
           kind: "player",
-          version: 1,
           path: "schemas/player.json",
         },
       ],

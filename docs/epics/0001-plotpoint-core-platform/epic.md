@@ -74,7 +74,7 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 - [Immutable Release Pipeline](../../features/0002-immutable-release-pipeline/spec.md) — Done
 - [Durable Offline Field Puzzle](../../features/0003-durable-offline-player/spec.md) — Pending
 - [Co-op Game Loop](../../features/0004-cooperative-hunt-loop/spec.md) — Pending
-- [Unified Game Composition](../../features/0005-unified-game-composition/spec.md) — Pending
+- [Unified Game Composition](../../features/0005-unified-game-composition/spec.md) — Active
 - [Platform Architecture Guide](../../features/0006-platform-architecture-guide/spec.md) — Pending
 
 <!-- speckit:generated:epic-features END -->

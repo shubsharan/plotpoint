@@ -106,12 +106,16 @@ async function exists(path: URL): Promise<boolean> {
 describe("runtime view lifecycle", () => {
   it("requires composition at the playable bootstrap and recovery boundaries", async () => {
     const bootstrap = await readFile(
-      new URL("../src/runtime/bootstrap.ts", import.meta.url),
+      new URL("../src/runtime/web-runtime.generated.ts", import.meta.url),
+      "utf8",
+    );
+    const kernel = await readFile(
+      new URL("../src/runtime/web-runtime-kernel.ts", import.meta.url),
       "utf8",
     );
     const recovery = await readFile(new URL("../src/runtime/recovery.ts", import.meta.url), "utf8");
 
-    expect(bootstrap).toContain("readonly gameComposition: GameComposition;");
+    expect(kernel).toContain("readonly gameComposition: GameComposition;");
     expect(bootstrap).toContain("runtime-game-composition-missing");
     expect(recovery).toContain("inspectGameRelease(input.bytes)");
     expect(recovery).not.toMatch(/\binspectRelease\s*\(/);

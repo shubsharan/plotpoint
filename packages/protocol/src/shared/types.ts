@@ -9,7 +9,6 @@ export interface SharedAggregateTarget {
   readonly aggregateKind: SharedAggregateKind;
   readonly aggregateId: string;
   readonly schemaId: string;
-  readonly schemaVersion: number;
 }
 
 export interface SharedCommandIntent {
@@ -25,7 +24,6 @@ export interface SharedProjection {
   readonly aggregateKind: SharedAggregateKind;
   readonly aggregateId: string;
   readonly schemaId: string;
-  readonly schemaVersion: number;
   readonly stateVersion: number;
   readonly value: CanonicalJsonObject;
 }
@@ -68,6 +66,11 @@ export interface SyncCommandResult {
   readonly outcomeCode: string;
   readonly resultingStateVersion: number;
   readonly decisionPosition: string;
+  readonly capabilityEvidence?: readonly {
+    readonly observationId: string;
+    readonly capabilityId: string;
+    readonly disposition: "captured" | "consumed" | "denied" | "expired";
+  }[];
 }
 
 export interface AuthorizedSnapshot {

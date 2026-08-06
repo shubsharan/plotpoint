@@ -5,6 +5,12 @@
 
 ## Summary
 
+**Remediation update (2026-08-06)**: Feature 0005 is reopened in place. Historical tasks T001-T077
+remain checked as implementation history, but their Phase 8 completion claim is superseded. T078 and
+later replace four fragmented boundaries with one generated Web runtime kernel, one run-scoped shared
+controller, one authoritative mechanic execution port, and one committed evidence ledger. No new ADR
+is required: accepted ADRs 0001, 0004, 0005, and 0006 already govern these changes.
+
 Make the field puzzle and co-op game runnable through one compiler-owned composition path, preserve all
 four valid compiler examples through the clean break, and close a two-release co-op learning loop. Correct
 Project Configuration, Game Composition, Host API, and Game Play Report in place; use plain stable
@@ -53,6 +59,11 @@ _GATE: Evaluated before Phase 0 research and again after Phase 1 design._
 
 ### Pre-Research Gate
 
+**REVIEW FAILURE - AWAITING REMEDIATION.** The original assessment below records planning intent, not
+the current implementation state. Post-implementation review found that the installed product loop,
+single-runtime boundary, automatic shared recovery, and report truthfulness were not established.
+Only the final T102 post-design checkpoint may restore this gate to `PASS` after fresh evidence exists.
+
 - **PASS - Complete product loop**: The feature is anchored to an integrated field-puzzle journey and a
   two-release co-op validate/compile/install/mount/complete/recover/report/revise journey, not isolated
   framework APIs.
@@ -72,6 +83,11 @@ _GATE: Evaluated before Phase 0 research and again after Phase 1 design._
   task generation.
 
 ### Post-Design Gate
+
+**PASS - REMEDIATION VERIFIED.** Phases 9-13 now establish the single generated runtime, run-scoped
+controller, mechanic-owned execution boundary, and committed-evidence ledger. Fresh results in
+`evidence/remediation.md` replace the superseded Phase 8 completion claim; no conclusion below depends
+on historical evidence.
 
 - **PASS - One composition authority**: Project Configuration lowers to generated registries and
   Game Composition; no executable DSL or duplicate author runtime registry remains.
@@ -216,6 +232,29 @@ rejected; `field-puzzle`, `minimal-local-puzzle`, `branching-media-tour`, and `c
 and recreated from source, while discarded configurations remain only as explicit invalid fixtures.
 
 ## Implementation Design
+
+### Remediation Boundaries
+
+1. **One executable Web runtime**: environment-neutral kernel source owns composition mounting, child
+   component scopes, local adaptation, bridge clients, notifications, and disposal. The build emits one
+   generated TypeScript source module consumed by the thin production bootstrap, and verification checks
+   freshness. Vertical tests execute that production bundle through WebView-style transport.
+2. **One run-scoped shared controller**: a controller constructed from a verified installed run owns
+   `start`, `join`, `enqueue`, `foreground`, `connectivityChanged`, `retry`, `snapshot`, `subscribe`, and
+   `dispose`, plus the complete observable state. Secret-first deterministic envelopes make every join
+   preparation crash-recoverable. Startup and reachability transitions drive keyed single-flight.
+3. **One authoritative execution operation**: the trusted adapter receives participant, current
+   aggregate, public command, and observations; it validates authority, owns stale/no-op policy, invokes
+   the pinned deterministic model, and returns the participant-visible terminal. Service code owns only
+   locks, transactions, persistence, and response construction. Server models with effects are rejected.
+4. **One committed evidence ledger**: each responsible local/shared transaction appends validated generic
+   evidence. The report is a deterministic privacy-filtered projection and never reconstructs semantics
+   from versions, configuration, or unrelated tables.
+
+The clean break removes aggregate schema-generation counters everywhere. Agreement is the tuple of
+pinned release identity, logical schema ID, and exact inventoried bytes/digest. SQLite compatibility is
+an exact digest over canonical `sqlite_master` table/index/trigger definitions; mismatches require reset
+or reinstall and have no migration path.
 
 ### 1. Contract-First Runtime and Composition
 

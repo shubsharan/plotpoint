@@ -48,6 +48,7 @@ interface TransitionCandidateBase {
   readonly target: AggregateTarget;
   readonly expectedStateVersion: number;
   readonly observationIds: readonly string[];
+  readonly consumedObservationIds?: readonly string[];
 }
 
 export type TransitionCandidate =
@@ -206,6 +207,18 @@ function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): 
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
 
+function hasOnlyOptionalKeys(
+  value: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[],
+): boolean {
+  const keys = Object.keys(value);
+  return (
+    required.every((key) => Object.hasOwn(value, key)) &&
+    keys.every((key) => required.includes(key) || optional.includes(key))
+  );
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
@@ -271,6 +284,8 @@ function isCanonicalObjectArray(value: unknown): value is readonly CanonicalJson
 
 function isTransitionCandidate(value: unknown): value is TransitionCandidate {
   if (!isCanonicalObject(value)) return false;
+  const observationIds = value.observationIds;
+  const consumedObservationIds = value.consumedObservationIds ?? [];
   const baseIsValid =
     isNonEmptyString(value.commandId) &&
     isNonEmptyString(value.modelId) &&
@@ -278,7 +293,9 @@ function isTransitionCandidate(value: unknown): value is TransitionCandidate {
     isCanonicalObject(value.payload) &&
     isAggregateTarget(value.target) &&
     isNonNegativeInteger(value.expectedStateVersion) &&
-    isStringArray(value.observationIds, true);
+    isStringArray(observationIds, true) &&
+    isStringArray(consumedObservationIds, true) &&
+    consumedObservationIds.every((id) => observationIds.includes(id));
   if (!baseIsValid) return false;
 
   if (value.terminal === "accepted") {
@@ -300,7 +317,11 @@ function isTransitionCandidate(value: unknown): value is TransitionCandidate {
     if (
       !required.every((key) => Object.hasOwn(value, key)) ||
       keys.some(
-        (key) => !required.includes(key) && key !== "nextState" && key !== "nextProgression",
+        (key) =>
+          !required.includes(key) &&
+          key !== "nextState" &&
+          key !== "nextProgression" &&
+          key !== "consumedObservationIds",
       ) ||
       (Object.hasOwn(value, "nextState") && !isCanonicalObject(value.nextState)) ||
       (Object.hasOwn(value, "nextProgression") && !isProgressionInstance(value.nextProgression)) ||
@@ -323,34 +344,42 @@ function isTransitionCandidate(value: unknown): value is TransitionCandidate {
   }
   if (value.terminal === "no-op" || value.terminal === "rejected") {
     return (
-      hasExactKeys(value, [
-        "commandId",
-        "commandType",
-        "expectedStateVersion",
-        "modelId",
-        "observationIds",
-        "outcome",
-        "payload",
-        "target",
-        "terminal",
-      ]) && isCanonicalObject(value.outcome)
+      hasOnlyOptionalKeys(
+        value,
+        [
+          "commandId",
+          "commandType",
+          "expectedStateVersion",
+          "modelId",
+          "observationIds",
+          "outcome",
+          "payload",
+          "target",
+          "terminal",
+        ],
+        ["consumedObservationIds"],
+      ) && isCanonicalObject(value.outcome)
     );
   }
   if (value.terminal === "invalid") {
     return (
-      hasExactKeys(value, [
-        "commandId",
-        "commandType",
-        "diagnosticCodes",
-        "expectedStateVersion",
-        "attemptedProgressionTrace",
-        "modelId",
-        "observationIds",
-        "payload",
-        "phase",
-        "target",
-        "terminal",
-      ]) &&
+      hasOnlyOptionalKeys(
+        value,
+        [
+          "commandId",
+          "commandType",
+          "diagnosticCodes",
+          "expectedStateVersion",
+          "attemptedProgressionTrace",
+          "modelId",
+          "observationIds",
+          "payload",
+          "phase",
+          "target",
+          "terminal",
+        ],
+        ["consumedObservationIds"],
+      ) &&
       value.phase === "execution" &&
       isStringArray(value.diagnosticCodes) &&
       isCanonicalObjectArray(value.attemptedProgressionTrace)

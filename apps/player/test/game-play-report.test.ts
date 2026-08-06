@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { FOREGROUND_LOCATION_CAPABILITY } from "@plotpoint/protocol";
 
 import {
   buildGamePlayReport,
@@ -273,57 +274,52 @@ describe("Game Play Report", () => {
           return null;
         },
         getAllAsync: async <T>(query: string) => {
-          if (query.includes("FROM command_receipts")) {
+          if (query.includes("FROM game_play_events")) {
             return [
               {
+                sequence: 1,
                 command_id: "local-secret",
-                expected_state_version: 0,
-                result_json: JSON.stringify({
-                  commandId: "local-secret",
-                  disposition: "committed",
+                kind: "command",
+                evidence_json: JSON.stringify({
+                  scope: "local",
                   terminal: "accepted",
+                  expectedStateVersion: 0,
                   resultingStateVersion: 1,
-                  outcome: { value: "private-outcome" },
                 }),
-                resulting_state_version: 1,
                 elapsed_ms: 3,
               },
-            ] as T[];
-          }
-          if (query.includes("FROM observations")) {
-            return [
               {
-                observation_id: "observation-secret",
-                availability: "available",
-                age_ms: 15_001,
+                sequence: 2,
+                command_id: "local-secret",
+                kind: "capability",
+                evidence_json: JSON.stringify({
+                  observationId: "observation-secret",
+                  capabilityId: FOREGROUND_LOCATION_CAPABILITY.id,
+                  disposition: "expired",
+                }),
                 elapsed_ms: 4,
               },
-            ] as T[];
-          }
-          if (query.includes("FROM command_observations")) return [] as T[];
-          if (query.includes("FROM run_events")) return [] as T[];
-          if (query.includes("FROM shared_outbox")) return [] as T[];
-          if (query.includes("FROM shared_results")) {
-            return [
               {
+                sequence: 3,
                 command_id: "shared-secret",
-                terminal: "rejected",
-                resulting_state_version: 2,
-                expected_state_version: 2,
-                observation_ids_json: JSON.stringify(["observation-secret"]),
-                decision_position: "7",
-                decided_at: "2030-01-01T00:00:00.006Z",
+                kind: "command",
+                evidence_json: JSON.stringify({
+                  scope: "shared",
+                  terminal: "rejected",
+                  expectedStateVersion: 2,
+                  resultingStateVersion: 2,
+                }),
+                elapsed_ms: 6,
               },
-            ] as T[];
-          }
-          if (query.includes("FROM shared_sync_events")) {
-            return [
               {
-                sequence: 8,
+                sequence: 4,
                 elapsed_ms: 7,
-                phase: "revoked",
-                disposition: "membership-revoked",
+                kind: "synchronization",
                 command_id: null,
+                evidence_json: JSON.stringify({
+                  phase: "revoked",
+                  disposition: "membership-revoked",
+                }),
               },
             ] as T[];
           }

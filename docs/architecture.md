@@ -419,6 +419,13 @@ The native player is the imperative shell around the WebView. It owns:
 - WebView lifecycle, recovery, and diagnostics; and
 - report generation and redaction.
 
+The Web side has one executable runtime kernel. The compiler bundles that environment-neutral source
+into the production module; unit tests may import the same kernel and vertical tests execute the
+generated bundle over WebView-style messages. The handwritten bootstrap owns only transport, verified
+release loading, startup, and disposal. Component factories mount in child cleanup scopes that merge
+only after success. A committed transition remains successful even when later refresh or notification
+work fails; those failures become recoverable diagnostics.
+
 ### Local Command Flow
 
 ```mermaid
@@ -501,8 +508,10 @@ run + release + service origin + session + participant + team + credential
 ```
 
 Before exposing a shared view, the player requires equality among the installed run, expected release,
-join response, authorized snapshot, and any existing binding. Raw invitations and credentials remain
-in SecureStore; SQLite stores only key references and request provenance needed for exact retry.
+join response, authorized snapshot, and any existing binding. Raw invitations and credentials use one
+deterministic per-run SecureStore envelope. Pending form contains immutable join identity, invitation,
+and participant credential; bound form retains only the credential. Secret write precedes SQLite
+reservation so startup can recover every crash window; SQLite stores request provenance for exact retry.
 
 Shared commands and projections are generic schema-identified envelopes:
 
@@ -515,6 +524,14 @@ Exact HTTP routes and envelopes are defined by the
 [Shared Session API](features/0005-unified-game-composition/contracts/shared-session-api.md).
 
 ### Durable Synchronization and Recovery
+
+One `SharedPlayController` exists per installed run and is the only owner of join, synchronization,
+revocation, recovery, and shared UI state. It exposes `local-only`, `join-required`, `joining`,
+`synchronizing`, `bound`, `revoked`, or `recovery-required`. `start()` completes recoverable secret
+preparation, resumes pending joins, and schedules immediate synchronization for an active binding.
+Foreground, explicit retry, and unreachable-to-reachable connectivity enter the same keyed single-flight.
+The App renders only controller state. Revocation commits blocked work and state, removes credentials,
+and unmounts the WebView before another game message can be accepted.
 
 ```mermaid
 stateDiagram-v2
@@ -535,7 +552,8 @@ One foreground synchronization pass:
 3. marks that set `submitting` atomically;
 4. submits every captured command at most once;
 5. performs at most one pull; and
-6. atomically reconciles results, projections, outbox rows, cursor, membership, and status.
+6. validates the complete pull before opening a mutation transaction; and
+7. atomically reconciles results, projections, outbox rows, cursor, membership, status, and evidence.
 
 Commands enqueued after the claim belong to another pass. A process-local keyed single-flight
 coordinator permits one active pass and at most one coalesced trailing pass per session. A caller awaits
@@ -555,8 +573,11 @@ recovery and a smaller protocol. See
 
 ## Game Play Reports
 
-A Game Play Report is a privacy-safe learning artifact derived by the native host from committed
-records. It is not a gameplay state export.
+A Game Play Report is a privacy-safe learning artifact projected by the native host from one append-only
+`game_play_events` ledger. It is not a gameplay state export. The boundary that knows a fact appends its
+validated generic evidence in the same transaction: local commit records actual observation use,
+trusted mechanics record capability dispositions, shared pull records exact participant results,
+synchronization records its real phase and time, and lifecycle/recovery record completed transitions.
 
 One report can contain local and optional shared evidence:
 
@@ -569,6 +590,8 @@ One report can contain local and optional shared evidence:
 It excludes raw aggregate state, projections, content, configuration, credentials, service identity,
 precise location, observation payloads, command outcomes, and game-specific completion fields. Stable
 aliases correlate commands inside one report without retaining player, team, session, or run identity.
+The exporter reads this ledger in one transaction and never infers semantics from version arithmetic,
+mechanic configuration, or joins across operational tables.
 
 The exact contract is [Game Play Report ](features/0005-unified-game-composition/contracts/game-play-report.md).
 
@@ -586,7 +609,8 @@ The exact contract is [Game Play Report ](features/0005-unified-game-composition
 | Session membership and shared command semantics   | API plus trusted mechanic adapter       | PostgreSQL                                      |
 | Authoritative team/session aggregate and receipts | API transaction                         | PostgreSQL                                      |
 | Confirmed authorized projection and cursor        | Server result, validated by native host | SQLite cache                                    |
-| Play report                                       | Native host redaction policy            | Derived export file                             |
+| Gameplay evidence                                 | Committing local/shared boundary        | SQLite append-only event ledger                 |
+| Play report                                       | Native host redaction policy            | Ledger-derived export file                      |
 
 The rule is simple: compute where the relevant game policy lives, but commit only in the system that
 owns the durable authority.

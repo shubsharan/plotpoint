@@ -4,7 +4,7 @@ import type { ParticipantCredentialStore } from "./credentials";
 import { SharedSyncStore, type SharedBindingContext } from "./database";
 import { SharedHttpClient, SharedHttpError } from "./http-client";
 
-export type SharedSyncTrigger = "enqueue" | "foreground" | "reconnect" | "retry";
+export type SharedSyncTrigger = "startup" | "enqueue" | "foreground" | "reconnect" | "retry";
 
 interface SessionDrain {
   claimComplete: boolean;
@@ -24,7 +24,10 @@ export class SharedSyncCoordinator {
   ) {}
 
   request(sessionId: string, trigger: SharedSyncTrigger): Promise<void> {
-    if (!sessionId || !["enqueue", "foreground", "reconnect", "retry"].includes(trigger)) {
+    if (
+      !sessionId ||
+      !["startup", "enqueue", "foreground", "reconnect", "retry"].includes(trigger)
+    ) {
       return Promise.reject(new Error("shared-sync-request-invalid"));
     }
     const existing = this.sessionDrains.get(sessionId);
@@ -111,7 +114,6 @@ export class SharedSyncCoordinator {
       await this.store.applyPull(context, pull);
       if (pull.snapshot.membershipStatus === "revoked") {
         await this.credentials.removeCredential(session.credentialKey);
-        await this.store.recordSyncEvent(sessionId, 0, "revoked", "snapshot-replaced");
         return "revoked";
       }
       await this.store.recordSyncEvent(sessionId, 0, "current", "snapshot-replaced");
@@ -120,7 +122,6 @@ export class SharedSyncCoordinator {
       if (error instanceof SharedHttpError && error.code === "participant-revoked") {
         await this.store.markRevoked(sessionId);
         await this.credentials.removeCredential(session.credentialKey);
-        await this.store.recordSyncEvent(sessionId, 0, "revoked", "participant-revoked");
         return "revoked";
       }
       if (batchClaimed) await this.store.failSubmissionBatch(sessionId);

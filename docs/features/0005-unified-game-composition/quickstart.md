@@ -1,7 +1,8 @@
 # Quickstart: One Game from Definition to Durable Action
 
-This walkthrough defines the implementation acceptance shape for both reference games. The commands
-and files below describe planned behavior; this documentation update does not implement them.
+This walkthrough defines the implementation acceptance shape for both reference games. The remediation
+uses the same generated production Web runtime and run-scoped shared controller in the installed player
+and vertical tests; direct helper calls are not acceptance evidence.
 
 ## 1. Declare One Composition
 
@@ -306,6 +307,13 @@ Invalid trusted outcome shapes are rejected rather than truncated. Every well-fo
 echoes its request ID.
 
 ## 9. Run the Provider-Free Gate
+
+Before the full gate, prove generated runtime freshness, participant-scoped idempotency, restart-only
+controller recovery, pre-transaction pull validation, and ledger-backed report determinism. The co-op
+journey must use disposable PostgreSQL, real SQLite stores, HTTP, controller recreation, and production
+WebView message transport. Its 5-second and 30-second release configurations must produce mechanic-
+committed dispositions without changing report code. Historical Phase 8 evidence cannot satisfy these
+commands.
 
 ```bash
 pnpm verify

@@ -1,5 +1,11 @@
 # Unified Game Composition Implementation Evidence
 
+> **SUPERSEDED — 2026-08-06**: The command results below remain factual for commit `6a2210d5`, but
+> they do not establish Feature 0005 product completion. Review found duplicated production/test Web
+> runtimes, incomplete startup recovery and revocation ownership, mechanic policy outside the trusted
+> execution boundary, inferred report semantics, and an API-only co-op acceptance. The reopened feature
+> uses `remediation.md` as its sole completion evidence record.
+
 Recorded on 2026-08-06. This record keeps provider-free behavior, disposable PostgreSQL and recovery,
 public four-example artifact reproduction, native simulator/emulator compatibility, and physical-device
 behavior as separate claims. A result remains `NOT RUN` until the named command completes against the

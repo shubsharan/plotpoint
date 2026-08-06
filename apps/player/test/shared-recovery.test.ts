@@ -57,7 +57,6 @@ function command(commandId: string, expectedStateVersion = 0, amount = 1): Share
       aggregateKind: "team",
       aggregateId: "team-1",
       schemaId: "example.counter",
-      schemaVersion: 1,
     },
     expectedStateVersion,
     type: "example.increment",
@@ -79,7 +78,6 @@ function pull(
     aggregateKind: "team" as const,
     aggregateId: "team-1",
     schemaId: "example.counter",
-    schemaVersion: 1,
     stateVersion: input.count ?? 1,
     value: { count: input.count ?? 1 },
   };
@@ -309,10 +307,11 @@ describe("shared SQLite recovery", () => {
     await store.applyPull(bindingContext, originalPull);
     await database.runAsync(
       `INSERT INTO shared_outbox
-       (session_id,command_id,target_json,expected_state_version,command_type,payload_json,
-        observation_ids_json,status,enqueued_at) VALUES (?,?,?,?,?,?,?,'submitting',?)`,
+       (session_id,command_id,intent_json,target_json,expected_state_version,command_type,payload_json,
+        observation_ids_json,status,enqueued_at) VALUES (?,?,?,?,?,?,?,?,'submitting',?)`,
       sessionId,
       originalCommand.commandId,
+      JSON.stringify(originalCommand),
       JSON.stringify(originalCommand.target),
       originalCommand.expectedStateVersion,
       originalCommand.type,
@@ -361,8 +360,8 @@ describe("shared SQLite recovery", () => {
     const { database, store } = await setup();
     await database.runAsync(
       `INSERT INTO shared_projections
-       (session_id,aggregate_kind,aggregate_id,schema_id,schema_version,state_version,value_json)
-       VALUES (?,'team','team-1','example.counter',1,0,'{"count":0}')`,
+       (session_id,aggregate_kind,aggregate_id,schema_id,state_version,value_json)
+       VALUES (?,'team','team-1','example.counter',0,'{"count":0}')`,
       sessionId,
     );
     await enqueue(store, command("command-1"), "2030-01-01T00:00:01.000Z");

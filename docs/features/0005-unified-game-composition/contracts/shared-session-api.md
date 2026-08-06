@@ -1,5 +1,15 @@
 # Contract: Shared Session HTTP API
 
+## Idempotency Amendment
+
+Command identity is participant-scoped: `(sessionId, participantId, commandId)`. The service stores the
+canonical request digest and exact participant-visible result JSON. An exact retry by that participant
+returns the original result bytes, changed canonical intent conflicts, and another participant may use
+the same command ID independently. Stale behavior is decided only by the selected trusted mechanic.
+
+Shared aggregate and projection contracts contain `stateVersion`, logical schema ID, and inventoried
+schema digest as applicable, but no aggregate schema-generation counter.
+
 Shared Session API replaces game-specific participant routing with a game-neutral transport. The
 existing Node modular monolith, PostgreSQL authority, credential handling, command receipts, and Sync
 envelopes remain. The `/v1` route prefix is the one centralized HTTP compatibility boundary; individual

@@ -1,5 +1,12 @@
 # Contract: Aggregate Runtime
 
+## Schema Authority Amendment
+
+Runtime aggregates carry `stateVersion` for optimistic concurrency and exact state transitions. They do
+not carry an aggregate schema generation. The executable model is resolved from one verified release
+schema contract `{ releaseId, schemaId, schemaDigest }` and validation uses those exact inventoried
+bytes. Old aggregate shapes containing `schemaVersion` or `schema_version` fail cleanly.
+
 Aggregate Runtime documents the corrected pre-release runtime contract. Repository-owned TypeScript
 APIs, schema IDs, and persisted record interfaces use plain names and are edited in place. Exact schema
 bytes are bound by immutable release inventory and digest rather than by generation suffixes.

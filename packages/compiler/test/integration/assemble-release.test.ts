@@ -202,7 +202,6 @@ describe("release assembly", () => {
         {
           id: "player-state",
           kind: "player",
-          version: 1,
           path: generatedReleaseEntryPath("aggregate-schema", "player-state"),
         },
       ],

@@ -14,9 +14,7 @@ function manifest(): ReleaseManifest {
   return {
     releaseFormatVersion: 1,
     hostApi: { major: 1, minimumMinor: 0 },
-    aggregateSchemas: [
-      { id: "puzzle.player", kind: "player", version: 1, path: "schemas/player.json" },
-    ],
+    aggregateSchemas: [{ id: "puzzle.player", kind: "player", path: "schemas/player.json" }],
     capabilities: [{ id: "plotpoint.media.playback", major: 1, minimumMinor: 0 }],
     entrypoints: { logic: "bundles/logic.js", presentation: "bundles/presentation.js" },
     inventory: [
@@ -86,6 +84,16 @@ describe("release manifest ", () => {
       validateReleaseManifest({
         ...value,
         capabilities: [value.capabilities[0], value.capabilities[0]],
+      }).kind,
+    ).toBe("invalid");
+  });
+
+  it("rejects aggregate schema generation counters", () => {
+    const value = manifest();
+    expect(
+      validateReleaseManifest({
+        ...value,
+        aggregateSchemas: [{ ...value.aggregateSchemas[0], version: 1 }],
       }).kind,
     ).toBe("invalid");
   });

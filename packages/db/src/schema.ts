@@ -43,7 +43,6 @@ CREATE TABLE IF NOT EXISTS team_aggregates (
   session_id TEXT NOT NULL REFERENCES hunt_sessions(session_id),
   team_id TEXT NOT NULL,
   schema_id TEXT NOT NULL,
-  schema_version INTEGER NOT NULL CHECK (schema_version > 0),
   state_version INTEGER NOT NULL CHECK (state_version >= 0),
   state_json JSONB NOT NULL,
   PRIMARY KEY (session_id, team_id)
@@ -54,30 +53,34 @@ CREATE TABLE IF NOT EXISTS authoritative_command_receipts (
   command_id TEXT NOT NULL,
   participant_id TEXT NOT NULL REFERENCES hunt_participants(participant_id),
   request_digest TEXT NOT NULL,
+  request_json TEXT NOT NULL,
   terminal TEXT NOT NULL CHECK (terminal IN ('accepted', 'no-op', 'rejected', 'invalid')),
   outcome_code TEXT NOT NULL,
   resulting_state_version INTEGER NOT NULL CHECK (resulting_state_version >= 0),
+  result_json TEXT NOT NULL,
   decision_position BIGINT NOT NULL DEFAULT nextval('command_decision_position'),
   decided_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
-  PRIMARY KEY (session_id, command_id),
+  PRIMARY KEY (session_id, participant_id, command_id),
   UNIQUE (decision_position)
 );
 CREATE TABLE IF NOT EXISTS authoritative_command_journal (
   session_id TEXT NOT NULL,
+  participant_id TEXT NOT NULL,
   command_id TEXT NOT NULL,
   before_version INTEGER NOT NULL,
   after_version INTEGER NOT NULL,
   outcome_code TEXT NOT NULL,
-  PRIMARY KEY (session_id, command_id),
-  FOREIGN KEY (session_id, command_id) REFERENCES authoritative_command_receipts(session_id, command_id)
+  PRIMARY KEY (session_id, participant_id, command_id),
+  FOREIGN KEY (session_id, participant_id, command_id) REFERENCES authoritative_command_receipts(session_id, participant_id, command_id)
 );
 CREATE TABLE IF NOT EXISTS authoritative_domain_events (
   event_id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL,
+  participant_id TEXT NOT NULL,
   command_id TEXT NOT NULL,
   event_type TEXT NOT NULL,
   event_json JSONB NOT NULL,
-  FOREIGN KEY (session_id, command_id) REFERENCES authoritative_command_receipts(session_id, command_id)
+  FOREIGN KEY (session_id, participant_id, command_id) REFERENCES authoritative_command_receipts(session_id, participant_id, command_id)
 );
 CREATE TABLE IF NOT EXISTS authoritative_operational_events (
   event_id TEXT PRIMARY KEY,

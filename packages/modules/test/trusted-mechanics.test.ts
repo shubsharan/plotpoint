@@ -198,6 +198,28 @@ describe("trusted mechanic registry", () => {
     ).toMatchObject({ valid: false });
   });
 
+  it("rejects server effect declarations until an authoritative effect outbox exists", () => {
+    const base = composition();
+    const model = base.aggregateModels[0]!;
+    expect(
+      resolveTrustedMechanic({
+        binding,
+        composition: composition({
+          aggregateModels: [
+            {
+              ...model,
+              effects: [{ type: "notify", schema: { id: TARGET_DISCOVERY_OUTCOME_SCHEMA } }],
+            },
+          ],
+        }),
+        configuration,
+      }),
+    ).toEqual({
+      kind: "invalid",
+      diagnostic: { code: "model-contract-mismatch", logicalIds: [TARGET_DISCOVERY_MODEL] },
+    });
+  });
+
   it("returns a complete validated binding and exact initializer input", () => {
     const adapter = resolved();
     expect(adapter.validateBinding({ binding, composition: composition(), configuration })).toEqual(

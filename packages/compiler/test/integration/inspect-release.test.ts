@@ -42,11 +42,11 @@ function supportedHost(manifest: ReleaseManifest): HostReleaseSupport {
       major: manifest.hostApi.major,
       minor: manifest.hostApi.minimumMinor,
     },
-    aggregateSchemas: manifest.aggregateSchemas.map((schema) => ({
-      id: schema.id,
-      kind: schema.kind,
-      versions: [schema.version],
-    })),
+    aggregateSchemas: manifest.aggregateSchemas.map((schema) => {
+      const inventory = manifest.inventory.find(({ path }) => path === schema.path);
+      if (inventory === undefined) throw new Error("aggregate-schema-inventory-missing");
+      return { id: schema.id, kind: schema.kind, digest: inventory.digest };
+    }),
     capabilities: manifest.capabilities.map((capability) => ({
       id: capability.id,
       major: capability.major,

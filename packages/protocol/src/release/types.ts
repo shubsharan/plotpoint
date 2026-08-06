@@ -13,7 +13,6 @@ export interface HostApiRequirement {
 export interface AggregateSchemaRequirement {
   readonly id: string;
   readonly kind: AggregateKind;
-  readonly version: number;
   readonly path: string;
 }
 
@@ -157,7 +156,7 @@ export interface HostReleaseSupport {
   readonly aggregateSchemas: readonly {
     readonly id: string;
     readonly kind: AggregateKind;
-    readonly versions: readonly number[];
+    readonly digest: Sha256Digest;
   }[];
   readonly capabilities: readonly {
     readonly id: string;

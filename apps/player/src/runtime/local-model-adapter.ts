@@ -136,7 +136,13 @@ export function createLocalModelAdapter(input: {
           if (next !== view) {
             view = next;
             // oxlint-disable-next-line unicorn/no-useless-spread -- listeners may unsubscribe while notified
-            for (const listener of [...listeners]) listener();
+            for (const listener of [...listeners]) {
+              try {
+                listener();
+              } catch {
+                // The transition is durable; subscriber repair is isolated from its result.
+              }
+            }
           }
           return result;
         },

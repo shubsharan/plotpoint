@@ -1,5 +1,70 @@
 # Research: Unified Game Composition
 
+## Remediation Research: Four Ownership Boundaries
+
+### Decision: Generate One Environment-Neutral Web Runtime
+
+- **Decision**: Keep runtime behavior in one importable kernel and bundle that exact source into a
+  generated TypeScript module. Production bootstrap owns only message transport, release-bundle loading,
+  kernel start, and disposal. Unit tests may import the kernel; vertical tests execute the generated
+  bundle through WebView-style messages. Verification compares generated output with a fresh build.
+- **Rationale**: A large handwritten bootstrap and separately tested helpers create two implementations.
+  Sharing an interface is insufficient when lifecycle, scoping, refresh, and errors can diverge.
+- **Rejected**: Maintain parity tests between two implementations. This preserves the duplication that
+  caused the review failure.
+- **Lifecycle detail**: Each component factory receives a child cleanup scope. Successful return merges
+  it into the application scope; throw or invalid return rolls back only that child. After a transition
+  commit, refresh and listener failures become safe recovery diagnostics and cannot rewrite success.
+
+### Decision: One Run-Scoped Controller and Secret-First Join
+
+- **Decision**: Construct one controller from a verified installed run. It owns the whole shared state
+  machine and all triggers. One deterministic SecureStore envelope key exists per run. Store the complete
+  pending envelope before SQLite reservation; delete it if the reservation loses. Commit binding plus
+  initial pull atomically, then reduce the envelope to credential-only form.
+- **Rationale**: Startup can recover a known key after any crash, and the App no longer coordinates
+  mutable IDs, cached surfaces, credentials, and two controller objects independently.
+- **Connectivity**: Use `Network.addNetworkStateListener`; only unreachable-to-reachable transitions
+  request work. Existing keyed single-flight remains the concurrency boundary.
+- **Rejected**: Patch each individual crash window. A single ownership/state machine is smaller and
+  makes every restart test call only `start()`.
+
+### Decision: Mechanic-Owned Execute and Participant-Scoped Idempotency
+
+- **Decision**: Trusted mechanics expose one `execute` operation over participant, current aggregate,
+  public command, and observations. The mechanic validates authority/observations, decides stale/no-op
+  semantics, and invokes the exact pinned model when mutation is necessary. Locks and receipts use
+  `(sessionId, participantId, commandId)` and retain canonical intent/digest plus exact result JSON.
+- **Rationale**: Domain policy belongs with the mechanic that understands whether stale intent is still
+  valid. The service remains a transaction shell and cannot contradict the adapter.
+- **Target discovery**: An undiscovered valid target is accepted against current aggregate despite stale
+  expected version; an already-discovered target is a stable current-version no-op; invalid authority or
+  observations never mutate.
+- **Effects**: Registration rejects any server aggregate model with effect declarations. Local effect
+  intents remain durable; general server delivery stays deferred.
+
+### Decision: Commit Evidence; Never Reconstruct Meaning
+
+- **Decision**: Add one append-only host-owned gameplay event ledger. Each owning transaction records a
+  durable sequence, commit time, kind, optional internal command ID, and validated generic evidence.
+  Report export reads only this ledger in one transaction, orders by committed sequence, aliases command
+  IDs, applies existing allowlists, and validates the unchanged public report.
+- **Rationale**: Expected/result version arithmetic cannot reveal actual synchronization phase or
+  observation consumption. Policy-aware mechanics must commit the disposition they actually evaluated.
+- **Rejected**: Add more inference guards to the report join. More edge cases cannot turn inferred
+  semantics into facts.
+
+### Decision: Remove Aggregate Generations and Digest Host Storage Exactly
+
+- **Decision**: Remove aggregate `schemaVersion`/`schema_version` from release inventory, projections,
+  shared storage, server aggregates, and bridge/runtime contracts. Agreement is pinned release identity,
+  logical schema ID, and exact inventoried digest. SQLite compatibility is a digest over canonical
+  `sqlite_master` table/index/trigger definitions.
+- **Rationale**: The release already owns immutable bytes and identity. A second per-schema counter is
+  independent compatibility authority forbidden by ADR 0006; table names alone do not describe storage.
+- **Clean break**: No migration, legacy reader, alias, or active-session migration. Mismatch directs the
+  operator to reset/reinstall.
+
 ## Composition Source and Compatibility
 
 **Decision**: Keep `plotpoint.project.json` as the only authored composition truth and correct Project

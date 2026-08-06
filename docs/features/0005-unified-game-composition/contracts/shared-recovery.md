@@ -1,5 +1,24 @@
 # Contract: Shared Recovery State Machine
 
+## Run-Scoped Controller Amendment
+
+One controller created from a verified installed run owns `start`, `join`, `enqueue`, `foreground`,
+`connectivityChanged`, `retry`, `snapshot`, `subscribe`, and `dispose`. It emits exactly `local-only`,
+`join-required`, `joining`, `synchronizing`, `bound`, `revoked`, or `recovery-required`. `start()` alone
+finishes/cleans interrupted secret preparation, resumes a complete pending join, schedules one pass for
+an active binding, and exposes revoked or unrecoverable state before WebView mount.
+
+One deterministic SecureStore envelope exists per run. Pending form includes immutable join identity,
+invitation, and participant credential; bound form retains only the credential. Secret write precedes
+SQLite reservation. A losing reservation deletes its unused envelope. Binding and the validated initial
+pull commit atomically; later cleanup failure is diagnostic, never join failure.
+
+The complete pull is validated before a mutation transaction starts. The transaction compare-or-inserts
+results, replaces projections, reconciles outbox, advances cursor/status, appends evidence, and commits
+once. Revocation commits state and blocked work, removes credentials, and prevents any further game
+message before presentation can remount. Only unreachable-to-reachable network transitions trigger a
+reconnect pass.
+
 This contract fixes player-owned persistence and foreground orchestration while preserving Host API
 1.1 Shared Play and Sync semantics through their corrected plain pre-release shapes.
 

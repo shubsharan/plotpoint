@@ -29,9 +29,7 @@ function fixture(overrides: Readonly<Record<string, Uint8Array>> = {}): {
   const manifest: ReleaseManifest = {
     releaseFormatVersion: 1,
     hostApi: { major: 1, minimumMinor: 0 },
-    aggregateSchemas: [
-      { id: "fixture.player", kind: "player", version: 1, path: "schemas/player.json" },
-    ],
+    aggregateSchemas: [{ id: "fixture.player", kind: "player", path: "schemas/player.json" }],
     capabilities: [],
     entrypoints: { logic: "bundles/logic.js", presentation: "bundles/presentation.js" },
     inventory: entries.map(({ path, kind, bytes }) => ({

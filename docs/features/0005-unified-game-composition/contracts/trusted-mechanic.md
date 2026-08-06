@@ -1,5 +1,22 @@
 # Contract: Trusted Mechanic
 
+## Authoritative Execute Amendment
+
+The adapter exposes one authoritative `execute` operation receiving participant identity, the current
+aggregate, the public command, and observations. It validates authority and observations, owns stale and
+already-satisfied policy, and calls the exact-version deterministic model internally only when a
+transition is required. The service owns locking, transaction orchestration, persistence, and response
+construction, but no domain conflict decision.
+
+Target discovery accepts an undiscovered valid target against the current aggregate even when the
+submitted version is stale. An already-discovered target returns a stable no-op at the current version.
+Invalid authority or observations return rejected/invalid without mutation. The mechanic emits generic
+`captured`, `consumed`, `denied`, or `expired` evidence when it evaluates observation policy.
+
+Authoritative receipts and advisory locks are scoped by `(sessionId, participantId, commandId)` and
+store canonical request digest plus exact participant-visible result JSON. Exact retry returns original
+bytes; changed reuse conflicts. Registration rejects any server aggregate model with non-empty effects.
+
 Trusted Mechanic is the closed boundary by which a verified release selects platform-owned
 authoritative behavior. It is not a plugin API and never causes the server to import or execute release
 bundle code.

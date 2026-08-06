@@ -147,6 +147,12 @@ Reducers describe effect intents; they do not execute side effects.
 
 Notifications, webhooks, scheduled work, analytics delivery, media processing, and external integrations run after the state transaction commits. They are delivered through durable outboxes and must be idempotent.
 
+This is an authority requirement, not permission to drop declared effects. A runtime that supports
+server effects must commit an authoritative effect outbox in the same transaction as aggregate state
+before acknowledging success. Feature 0005 deliberately does not implement that server boundary, so it
+rejects server aggregate models with non-empty effect declarations. Local effect intents remain durable
+host evidence; generalized delivery is deferred.
+
 ### 3.8 Composition happens at build time
 
 Game modules, mechanics, components, schemas, and content references are resolved by the compiler. The installed release is complete.
@@ -275,6 +281,10 @@ Functions, class instances, cyclic references, browser handles, and native handl
 
 The web runtime loads the installed release, maintains the current player view, evaluates deterministic logic, and renders the game.
 
+Production and acceptance use one environment-neutral executable kernel bundled into the installed
+runtime. The bootstrap is transport glue, not a second implementation of mounting, command adaptation,
+component scoping, or cleanup.
+
 Selectors and UI functions remain inside the web runtime. Functions and closures do not cross the native bridge.
 
 ### 6.2 Native host
@@ -292,6 +302,10 @@ The native host owns:
 - diagnostics.
 
 The WebView is disposable. Accepted durable progress must survive a WebView reload, process termination, application update, device restart, and temporary loss of connectivity.
+
+For a shared run, one run-scoped controller owns join, synchronization, connectivity, revocation,
+recovery, credentials, and the UI state projected by the App. Startup itself resumes every recoverable
+durable boundary; presentation does not orchestrate recovery helpers.
 
 ### 6.3 Bridge
 

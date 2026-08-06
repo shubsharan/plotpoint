@@ -26,7 +26,6 @@ interface ClaimedCommand {
     readonly aggregateKind: "team";
     readonly aggregateId: string;
     readonly schemaId: string;
-    readonly schemaVersion: number;
   };
   readonly expectedStateVersion: number;
   readonly commandType: string;
@@ -124,7 +123,6 @@ function claimedCommand(sessionId: string): ClaimedCommand {
       aggregateKind: "team",
       aggregateId: `team-${sessionId}`,
       schemaId: "example.counter",
-      schemaVersion: 1,
     },
     expectedStateVersion: 0,
     commandType: "example.increment",

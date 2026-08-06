@@ -7,12 +7,14 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { createPostgresPool, migrateAuthoritativeHunt, type PostgresPool } from "@plotpoint/db";
 import { TARGET_DISCOVERY_COMMAND, TARGET_DISCOVERY_STATE_SCHEMA } from "@plotpoint/modules";
 import {
-  isGamePlayReport,
+  inspectGameRelease,
   isReleaseId,
+  isGamePlayReport,
   isSharedJoinResponse,
   isSyncCommand,
   isSyncCommandResult,
   isSyncPull,
+  openRelease,
   type SharedJoinResponse,
   type SyncCommand,
   type SyncCommandResult,
@@ -24,6 +26,139 @@ import { compileProject } from "../../../packages/compiler/dist/index.js";
 import { createSecret } from "../src/security.js";
 import { createApiServer } from "../src/server.js";
 import { SharedSessionService } from "../src/shared-session-service.js";
+
+interface PlayerAcceptanceDatabase {
+  execAsync(query: string): Promise<void>;
+  runAsync(query: string, ...parameters: unknown[]): Promise<unknown>;
+  close(): void;
+}
+
+interface PlayerAcceptanceStore {
+  enqueue(sessionId: string, command: object, enqueuedAt: string): Promise<unknown>;
+  applyPull(context: object, pull: SyncPull): Promise<void>;
+  recordSyncEvent(
+    sessionId: string,
+    elapsedMs: number,
+    phase: string,
+    disposition: string,
+  ): Promise<void>;
+}
+
+interface PlayerAcceptanceController {
+  start(): Promise<void>;
+  join(input: { serviceUrl: string; sessionId: string; invitation: string }): Promise<void>;
+  enqueue(command: object): Promise<unknown>;
+  retry(): Promise<void>;
+  snapshot(): Readonly<Record<string, unknown>>;
+  dispose(): void;
+}
+
+interface MountedGeneratedRuntime {
+  readonly root: {
+    readonly children: readonly {
+      readonly dataset: Readonly<Record<string, string>>;
+    }[];
+  };
+  unmount(): Promise<void>;
+}
+
+async function loadPlayerAcceptance() {
+  const reportUrl = new URL("../../player/src/reports/create-game-play-report.ts", import.meta.url)
+    .href;
+  const databaseUrl = new URL("../../player/src/shared/database.ts", import.meta.url).href;
+  const sqliteUrl = new URL("../../player/test/helpers/shared-sqlite.ts", import.meta.url).href;
+  const controllerUrl = new URL("../../player/src/shared/session-controller.ts", import.meta.url)
+    .href;
+  const coordinatorUrl = new URL("../../player/src/shared/sync-coordinator.ts", import.meta.url)
+    .href;
+  const runtimeUrl = new URL("../../player/src/runtime/bootstrap.ts", import.meta.url).href;
+  const runtimeHarnessUrl = new URL(
+    "../../player/test/helpers/generated-web-runtime.ts",
+    import.meta.url,
+  ).href;
+  const hostBridgeUrl = new URL("../../player/src/bridge/host-bridge.ts", import.meta.url).href;
+  const sharedBridgeUrl = new URL("../../player/src/shared/host-bridge.ts", import.meta.url).href;
+  const [
+    reportModule,
+    databaseModule,
+    sqliteModule,
+    controllerModule,
+    coordinatorModule,
+    runtimeModule,
+    runtimeHarnessModule,
+    hostBridgeModule,
+    sharedBridgeModule,
+  ]: unknown[] = await Promise.all([
+    import(reportUrl),
+    import(databaseUrl),
+    import(sqliteUrl),
+    import(controllerUrl),
+    import(coordinatorUrl),
+    import(runtimeUrl),
+    import(runtimeHarnessUrl),
+    import(hostBridgeUrl),
+    import(sharedBridgeUrl),
+  ]);
+  if (
+    !isObject(reportModule) ||
+    typeof reportModule.createGamePlayReport !== "function" ||
+    !isObject(databaseModule) ||
+    typeof databaseModule.SharedSyncStore !== "function" ||
+    !isObject(sqliteModule) ||
+    typeof sqliteModule.createSharedTestDatabase !== "function" ||
+    !isObject(controllerModule) ||
+    typeof controllerModule.SharedPlayController !== "function" ||
+    !isObject(coordinatorModule) ||
+    typeof coordinatorModule.SharedSyncCoordinator !== "function" ||
+    !isObject(runtimeModule) ||
+    typeof runtimeModule.buildRuntimeBootstrap !== "function" ||
+    !isObject(runtimeHarnessModule) ||
+    typeof runtimeHarnessModule.mountGeneratedWebRuntime !== "function" ||
+    !isObject(hostBridgeModule) ||
+    typeof hostBridgeModule.routeHostBridgeMessage !== "function" ||
+    !isObject(sharedBridgeModule) ||
+    typeof sharedBridgeModule.routeSharedBridgeMessage !== "function"
+  ) {
+    throw new Error("co-op-player-acceptance-module-invalid");
+  }
+  return {
+    createGamePlayReport: reportModule.createGamePlayReport as (
+      database: object,
+      runId: string,
+      platform: "ios" | "android",
+    ) => Promise<unknown>,
+    SharedSyncStore: databaseModule.SharedSyncStore as new (
+      database: PlayerAcceptanceDatabase,
+    ) => PlayerAcceptanceStore,
+    createSharedTestDatabase: sqliteModule.createSharedTestDatabase as (
+      runId: string,
+      releaseId: `sha256:${string}`,
+    ) => Promise<PlayerAcceptanceDatabase>,
+    SharedSyncCoordinator: coordinatorModule.SharedSyncCoordinator as new (
+      store: PlayerAcceptanceStore,
+      credentials: object,
+    ) => { request(sessionId: string, trigger: string): Promise<void> },
+    SharedPlayController: controllerModule.SharedPlayController as new (
+      context: object,
+      store: PlayerAcceptanceStore,
+      credentials: object,
+      scheduler: object,
+    ) => PlayerAcceptanceController,
+    buildRuntimeBootstrap: runtimeModule.buildRuntimeBootstrap as (input: object) => string,
+    mountGeneratedWebRuntime: runtimeHarnessModule.mountGeneratedWebRuntime as (
+      html: string,
+      routeMessage: (message: string) => Promise<unknown>,
+    ) => Promise<MountedGeneratedRuntime>,
+    routeHostBridgeMessage: hostBridgeModule.routeHostBridgeMessage as (
+      message: string,
+      handlers: object,
+    ) => Promise<unknown>,
+    routeSharedBridgeMessage: sharedBridgeModule.routeSharedBridgeMessage as (
+      message: string,
+      handlers: object,
+    ) => Promise<unknown>,
+  };
+}
 
 const PARTICIPANTS = ["participant-one", "participant-two", "participant-three"] as const;
 const REVISED_MAXIMUM_AGE_MS = 30_000;
@@ -77,6 +212,7 @@ let firstReleaseId: `sha256:${string}`;
 let revisedReleaseId: `sha256:${string}`;
 let configuration: TargetConfiguration;
 let revisedConfiguration: TargetConfiguration;
+let revisedReleaseBytes: Uint8Array;
 
 function isObject(value: unknown): value is Readonly<Record<string, unknown>> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -151,18 +287,6 @@ function commandResult(value: unknown): SyncCommandResult {
 function syncPull(value: unknown): SyncPull {
   if (!isSyncPull(value)) throw new Error("co-op-sync-response-invalid");
   return value;
-}
-
-async function buildProductionGamePlayReport(evidence: object): Promise<unknown> {
-  // Keep the acceptance dependency test-only: apps/api must not gain a production dependency on the
-  // native player, while this vertical fixture still executes the one production report builder.
-  const moduleUrl = new URL("../../player/src/reports/create-game-play-report.ts", import.meta.url)
-    .href;
-  const reportModule: unknown = await import(moduleUrl);
-  if (!isObject(reportModule) || typeof reportModule.buildGamePlayReport !== "function") {
-    throw new Error("co-op-game-play-report-builder-missing");
-  }
-  return reportModule.buildGamePlayReport(evidence);
 }
 
 async function responseJson(response: Response): Promise<unknown> {
@@ -286,7 +410,6 @@ function discoveryCommand(input: {
       aggregateKind: "team",
       aggregateId: input.session.teamId,
       schemaId: TARGET_DISCOVERY_STATE_SCHEMA,
-      schemaVersion: 1,
     },
     expectedStateVersion: input.expectedStateVersion,
     type: TARGET_DISCOVERY_COMMAND,
@@ -398,7 +521,8 @@ beforeAll(async () => {
   if (address === null || typeof address === "string") throw new Error("co-op-address-invalid");
   origin = `http://127.0.0.1:${address.port}`;
   await registerRelease(await readFile(firstOutput), firstReleaseId);
-  await registerRelease(await readFile(revisedOutput), revisedReleaseId);
+  revisedReleaseBytes = await readFile(revisedOutput);
+  await registerRelease(revisedReleaseBytes, revisedReleaseId);
 }, 120_000);
 
 afterAll(async () => {
@@ -436,61 +560,89 @@ describe("co-op game acceptance", () => {
       resultingStateVersion: 0,
     });
 
-    const reportValue = await buildProductionGamePlayReport({
-      releaseId: firstReleaseId,
-      platform: "ios",
-      sharedMembership: "active",
-      lifecycle: [],
-      commands: [
-        {
-          elapsedMs: 1,
-          sourceSequence: 0,
-          scope: "shared",
-          commandId: staleCommand.commandId,
-          terminal: rejected.terminal,
-          expectedStateVersion: staleCommand.expectedStateVersion,
-          resultingStateVersion: rejected.resultingStateVersion,
-        },
-      ],
-      capabilities: [
-        {
-          elapsedMs: 2,
-          sourceSequence: 0,
-          capabilityId: "plotpoint.location.foreground",
-          disposition: "expired",
-        },
-      ],
-      synchronization: [],
-      recovery: [],
-      diagnostics: [],
-    });
-    expect(isGamePlayReport(reportValue)).toBe(true);
-    if (!isGamePlayReport(reportValue)) throw new Error("co-op-game-play-report-invalid");
-    const report = reportValue;
-    expect(report.events).toEqual([
-      expect.objectContaining({
-        kind: "command",
-        scope: "shared",
-        commandAlias: "command-001",
-        terminal: "rejected",
-      }),
-      expect.objectContaining({ kind: "capability", disposition: "expired" }),
-    ]);
-    const serializedReport = JSON.stringify(report);
-    expect(serializedReport).not.toMatch(
-      /ferry-building|rincon-park|south-park|latitude|longitude|payload|outcomeCode|maximumAgeMs|serviceOrigin|session-|participant-|team-/,
+    const player = await loadPlayerAcceptance();
+    const playerDatabase = await player.createSharedTestDatabase(
+      "co-op-report-run",
+      firstReleaseId,
     );
-    expect(serializedReport).not.toContain(staleCommand.commandId);
-    expect(serializedReport).not.toContain(rejected.outcomeCode);
-    expect(serializedReport).not.toContain(String(firstTarget.maximumAgeMs));
-    expect(serializedReport).not.toContain(String(firstTarget.latitude));
-    expect(serializedReport).not.toContain(String(firstTarget.longitude));
-    expect(serializedReport).not.toContain(first.session.sessionId);
-    expect(serializedReport).not.toContain(first.session.teamId);
-    expect(serializedReport).not.toContain(origin);
-    for (const participant of first.participants) {
-      expect(serializedReport).not.toContain(participant.response.participantId);
-      expect(serializedReport).not.toContain(participant.credential);
+    const reportParticipant = first.participants[0];
+    if (reportParticipant === undefined) throw new Error("co-op-report-participant-missing");
+    try {
+      await playerDatabase.runAsync(
+        `INSERT INTO shared_sessions
+         (session_id,run_id,release_id,participant_id,team_id,service_origin,credential_key,
+          membership_status,transport_status,sync_status,cursor,confirmed_at)
+         VALUES (?,?,?,?,?,?,?,'active','online','current','0',?)`,
+        first.session.sessionId,
+        "co-op-report-run",
+        firstReleaseId,
+        reportParticipant.response.participantId,
+        first.session.teamId,
+        origin,
+        "co-op-report-envelope",
+        "2030-01-01T00:00:00.000Z",
+      );
+      const playerStore = new player.SharedSyncStore(playerDatabase);
+      await playerStore.enqueue(
+        first.session.sessionId,
+        {
+          commandId: staleCommand.commandId,
+          target: staleCommand.target,
+          expectedStateVersion: staleCommand.expectedStateVersion,
+          type: staleCommand.type,
+          payload: staleCommand.payload,
+          observationIds: staleCommand.observations.map(({ observationId }) => observationId),
+        },
+        "2030-01-01T00:00:00.001Z",
+      );
+      const committedPull = await pull(first.session, reportParticipant);
+      await playerStore.applyPull(
+        {
+          sessionId: first.session.sessionId,
+          runId: "co-op-report-run",
+          expectedReleaseId: firstReleaseId,
+          serviceOrigin: origin,
+          credentialKey: "co-op-report-envelope",
+        },
+        committedPull,
+      );
+      await playerStore.recordSyncEvent(first.session.sessionId, 3, "current", "snapshot-replaced");
+      const reportValue = await player.createGamePlayReport(
+        { raw: () => playerDatabase },
+        "co-op-report-run",
+        "ios",
+      );
+      if (!isGamePlayReport(reportValue)) throw new Error("co-op-game-play-report-invalid");
+      const report = reportValue;
+      expect(report.events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "command",
+            scope: "shared",
+            commandAlias: "command-001",
+            terminal: "rejected",
+          }),
+          expect.objectContaining({ kind: "capability", disposition: "expired" }),
+        ]),
+      );
+      const serializedReport = JSON.stringify(report);
+      expect(serializedReport).not.toMatch(
+        /ferry-building|rincon-park|south-park|latitude|longitude|payload|outcomeCode|maximumAgeMs|serviceOrigin|session-|participant-|team-/,
+      );
+      expect(serializedReport).not.toContain(staleCommand.commandId);
+      expect(serializedReport).not.toContain(rejected.outcomeCode);
+      expect(serializedReport).not.toContain(String(firstTarget.maximumAgeMs));
+      expect(serializedReport).not.toContain(String(firstTarget.latitude));
+      expect(serializedReport).not.toContain(String(firstTarget.longitude));
+      expect(serializedReport).not.toContain(first.session.sessionId);
+      expect(serializedReport).not.toContain(first.session.teamId);
+      expect(serializedReport).not.toContain(origin);
+      for (const participant of first.participants) {
+        expect(serializedReport).not.toContain(participant.response.participantId);
+        expect(serializedReport).not.toContain(participant.credential);
+      }
+    } finally {
+      playerDatabase.close();
     }
 
     const queued: readonly QueuedCommand[] = configuration.targets.map((target, index) => ({
@@ -516,7 +668,7 @@ describe("co-op game acceptance", () => {
     if (restartedFirst === undefined) throw new Error("co-op-restarted-command-missing");
     const retried = await submitQueued(first.session, first.participants, restartedFirst);
     expect(retried).toMatchObject({
-      disposition: "duplicate",
+      disposition: "decided",
       terminal: "accepted",
       outcomeCode: "target-discovered",
       resultingStateVersion: 1,
@@ -594,5 +746,246 @@ describe("co-op game acceptance", () => {
         }),
       ],
     });
+
+    const controllerSession = createdSession(
+      await operatorPost("/v1/shared-sessions", {
+        creationId: "co-op-controller-session",
+        releaseId: revisedReleaseId,
+        teamLabel: "Installed controller acceptance",
+      }),
+    );
+    const controllerInvitation = createdInvitation(
+      await operatorPost(`/v1/shared-sessions/${controllerSession.sessionId}/invitations`, {
+        invitationId: "co-op-controller-invitation",
+        expiresAt: "2031-01-01T00:00:00.000Z",
+      }),
+    );
+    const controllerDatabase = await player.createSharedTestDatabase(
+      "co-op-controller-run",
+      revisedReleaseId,
+    );
+    const envelopes = new Map<string, unknown>();
+    const controllerCredential = createSecret();
+    const credentials = {
+      generateJoinRequestId: () => "co-op-controller-join",
+      generateCredential: () => controllerCredential,
+      putCredential: async (key: string, value: string) => void envelopes.set(key, value),
+      getCredential: async (key: string) => {
+        const value = envelopes.get(key);
+        if (typeof value === "string") return value;
+        return isObject(value) && typeof value.participantCredential === "string"
+          ? value.participantCredential
+          : null;
+      },
+      removeCredential: async (key: string) => void envelopes.delete(key),
+      putInvitation: async (key: string, value: string) => void envelopes.set(key, value),
+      getInvitation: async (key: string) => {
+        const value = envelopes.get(key);
+        return typeof value === "string" ? value : null;
+      },
+      removeInvitation: async (key: string) => void envelopes.delete(key),
+      putEnvelope: async (key: string, value: unknown) => void envelopes.set(key, value),
+      getEnvelope: async (key: string) => envelopes.get(key) ?? null,
+      removeEnvelope: async (key: string) => void envelopes.delete(key),
+    };
+    try {
+      await controllerDatabase.execAsync(`
+        CREATE TABLE observations (
+          run_id TEXT NOT NULL, observation_id TEXT NOT NULL, recorded_at TEXT NOT NULL,
+          captured_at TEXT NOT NULL, sensor_captured_at TEXT, age_ms INTEGER,
+          availability TEXT NOT NULL, latitude REAL, longitude REAL, horizontal_accuracy REAL,
+          diagnostic_code TEXT, elapsed_ms INTEGER NOT NULL,
+          PRIMARY KEY(run_id, observation_id)
+        );
+      `);
+      const controllerStore = new player.SharedSyncStore(controllerDatabase);
+      const coordinator = new player.SharedSyncCoordinator(controllerStore, credentials);
+      const controller = new player.SharedPlayController(
+        {
+          runId: "co-op-controller-run",
+          releaseId: revisedReleaseId,
+          sharedRequired: true,
+        },
+        controllerStore,
+        credentials,
+        coordinator,
+      );
+      await controller.start();
+      expect(controller.snapshot()).toMatchObject({ status: "join-required" });
+      await controller.join({
+        serviceUrl: origin,
+        sessionId: controllerSession.sessionId,
+        invitation: controllerInvitation.invitation,
+      });
+      expect(controller.snapshot()).toMatchObject({ status: "bound" });
+
+      const target = revisedConfiguration.targets[0];
+      if (target === undefined) throw new Error("co-op-controller-target-missing");
+      const command = discoveryCommand({
+        session: controllerSession,
+        target,
+        commandId: "co-op-controller-command",
+        expectedStateVersion: 0,
+        ageMs: 1_000,
+      });
+      const evidence = command.observations[0];
+      if (evidence === undefined || evidence.availability !== "available") {
+        throw new Error("co-op-controller-observation-missing");
+      }
+      await controllerDatabase.runAsync(
+        `INSERT INTO observations
+         (run_id,observation_id,recorded_at,captured_at,sensor_captured_at,age_ms,availability,
+          latitude,longitude,horizontal_accuracy,diagnostic_code,elapsed_ms)
+         VALUES (?,?,?,?,?,?,?,?,?,?,NULL,?)`,
+        "co-op-controller-run",
+        evidence.observationId,
+        evidence.recordedAt,
+        evidence.capturedAt,
+        evidence.capturedAt,
+        evidence.ageMs,
+        evidence.availability,
+        evidence.latitude,
+        evidence.longitude,
+        evidence.horizontalAccuracy,
+        1,
+      );
+      await controller.enqueue({
+        commandId: command.commandId,
+        target: command.target,
+        expectedStateVersion: command.expectedStateVersion,
+        type: command.type,
+        payload: command.payload,
+        observationIds: [evidence.observationId],
+      });
+      await controller.retry();
+      expect(controller.snapshot()).toMatchObject({
+        status: "bound",
+        view: {
+          actions: expect.arrayContaining([expect.objectContaining({ terminal: "accepted" })]),
+        },
+      });
+
+      const openedRelease = await openRelease(revisedReleaseBytes);
+      if (openedRelease.kind !== "opened") throw new Error("co-op-runtime-release-invalid");
+      const inspection = await inspectGameRelease(revisedReleaseBytes);
+      if ("kind" in inspection) throw new Error("co-op-runtime-inspection-invalid");
+      const logic = openedRelease.entries.find(
+        ({ path }) => path === openedRelease.manifest.entrypoints.logic,
+      );
+      const presentation = openedRelease.entries.find(
+        ({ path }) => path === openedRelease.manifest.entrypoints.presentation,
+      );
+      const contentPath = inspection.gameComposition.resources.find(
+        ({ id, role }) => id === "co-op.targets" && role === "content",
+      )?.path;
+      const assetPath = inspection.gameComposition.resources.find(
+        ({ id, role }) => id === "co-op.map" && role === "asset",
+      )?.path;
+      const content = openedRelease.entries.find(({ path }) => path === contentPath);
+      const asset = openedRelease.entries.find(({ path }) => path === assetPath);
+      if (
+        logic === undefined ||
+        presentation === undefined ||
+        content === undefined ||
+        asset === undefined
+      ) {
+        throw new Error("co-op-runtime-entry-missing");
+      }
+      const runtimeMessages: string[] = [];
+      const runtimeHtml = player.buildRuntimeBootstrap({
+        logicSource: new TextDecoder().decode(logic.bytes),
+        presentationSource: new TextDecoder().decode(presentation.bytes),
+        gameComposition: inspection.gameComposition,
+        content: { "co-op.targets": JSON.parse(new TextDecoder().decode(content.bytes)) },
+        assets: { "co-op.map": new TextDecoder().decode(asset.bytes) },
+        sharedBindingAvailable: true,
+      });
+      const routeRuntimeMessage = async (message: string): Promise<unknown> => {
+        const decoded: unknown = JSON.parse(message);
+        if (!isObject(decoded) || typeof decoded.type !== "string") {
+          throw new Error("co-op-runtime-message-invalid");
+        }
+        runtimeMessages.push(decoded.type);
+        if (decoded.type.startsWith("shared.")) {
+          return player.routeSharedBridgeMessage(message, {
+            getView: async () => {
+              const snapshot = controller.snapshot();
+              if (snapshot.status !== "bound") throw new Error("co-op-controller-not-bound");
+              return snapshot.view;
+            },
+            enqueue: (intent: object) => controller.enqueue(intent),
+          });
+        }
+        return player.routeHostBridgeMessage(message, {
+          runtimeReady: async () => ({
+            runId: "co-op-controller-run",
+            releaseId: revisedReleaseId,
+            aggregate: {
+              modelId: "co-op.player",
+              aggregateId: "co-op-controller-run",
+              aggregateKind: "player",
+              schemaId: "co-op.player-state",
+              stateVersion: 0,
+              state: {},
+            },
+          }),
+          commitTransition: async () => {
+            throw new Error("co-op-local-transition-unexpected");
+          },
+          requestCapability: async () => {
+            throw new Error("co-op-capability-request-unexpected");
+          },
+        });
+      };
+      const runtimeMount = await player.mountGeneratedWebRuntime(runtimeHtml, routeRuntimeMessage);
+      for (
+        let attempt = 0;
+        attempt < 100 && runtimeMount.root.children[0]?.dataset.confirmed !== "true";
+        attempt += 1
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      expect(runtimeMessages).toContain("runtime.ready");
+      expect(runtimeMessages).toContain("shared.view.get");
+      expect(runtimeMount.root.children[0]?.dataset).toMatchObject({
+        component: "co-op.clue-board",
+        confirmed: "true",
+        confirmedTargets: "1",
+      });
+      await runtimeMount.unmount();
+      controller.dispose();
+
+      const restartedCoordinator = new player.SharedSyncCoordinator(controllerStore, credentials);
+      const restarted = new player.SharedPlayController(
+        {
+          runId: "co-op-controller-run",
+          releaseId: revisedReleaseId,
+          sharedRequired: true,
+        },
+        controllerStore,
+        credentials,
+        restartedCoordinator,
+      );
+      await restarted.start();
+      expect(restarted.snapshot()).toMatchObject({ status: "bound" });
+      const controllerReportValue = await player.createGamePlayReport(
+        { raw: () => controllerDatabase },
+        "co-op-controller-run",
+        "android",
+      );
+      if (!isGamePlayReport(controllerReportValue)) {
+        throw new Error("co-op-controller-report-invalid");
+      }
+      expect(controllerReportValue.events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: "command", scope: "shared", terminal: "accepted" }),
+          expect.objectContaining({ kind: "capability", disposition: "consumed" }),
+          expect.objectContaining({ kind: "synchronization", disposition: "pull-applied" }),
+        ]),
+      );
+      restarted.dispose();
+    } finally {
+      controllerDatabase.close();
+    }
   }, 120_000);
 });

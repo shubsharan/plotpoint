@@ -1,12 +1,11 @@
 {
-  "releaseId": "sha256:1ac4013511e3019b1c84fe46af3f86d003fbf1ffc0477c5144eadebac02aab9e",
+  "releaseId": "sha256:3bfc3ddf86a38dcac2da81ff851cf111e99b59f01ef92bcb1fae0f3890cccb1b",
   "manifest": {
     "aggregateSchemas": [
       {
         "id": "tour.player-state",
         "kind": "player",
-        "path": "schemas/aggregate/746f75722e706c617965722d7374617465.json",
-        "version": 1
+        "path": "schemas/aggregate/746f75722e706c617965722d7374617465.json"
       }
     ],
     "capabilities": [

@@ -1,5 +1,47 @@
 # Data Model: Unified Game Composition
 
+## Remediation Ownership Model
+
+### Release Schema Contract
+
+`ReleaseSchemaContract = { releaseId, schemaId, schemaDigest }`. Aggregate generations do not exist.
+Every runtime, controller, persistence, projection, and mechanic validator receives this same resolved
+contract from the verified release inventory.
+
+### Shared Play Controller
+
+One controller belongs to one installed run. Its observable state is exactly `local-only`,
+`join-required`, `joining`, `synchronizing`, `bound`, `revoked`, or `recovery-required`. It owns start,
+join, enqueue, foreground, connectivity, retry, snapshot, subscription, and disposal. Web presentation
+is a projection of controller state and holds no parallel session authority.
+
+### Run Secret Envelope
+
+One deterministic SecureStore key is derived from the run ID. The pending envelope contains immutable
+join identity, invitation, and participant credential. The bound envelope contains the participant
+credential only. The complete pending envelope is written before its SQLite reservation. Binding and
+initial pull commit together; envelope reduction is post-commit cleanup.
+
+### Authoritative Receipt
+
+The primary identity is `(sessionId, participantId, commandId)`. A receipt stores canonical intent JSON,
+its digest, and exact participant-visible result JSON. Exact same-participant retry returns the stored
+result bytes, changed intent conflicts, and another participant may reuse the command ID independently.
+Client outbox rows likewise keep canonical intent in pending and terminal forms.
+
+### Gameplay Event
+
+`GameplayEvent = { runId, sequence, committedAt, kind, commandId?, evidence }`. Sequence is durable and
+strictly ordered per run. Evidence is a validated generic allowlisted object; event kinds cover local
+commit, shared result, capability disposition, synchronization, lifecycle, and recovery. Events append
+in the transaction committing their fact. Report export is a projection of this table only.
+
+### Host Storage Identity
+
+Compatibility is one expected digest computed over canonical `sqlite_master` definitions for every
+application table, index, and trigger. Name-only inventories and migrations are absent. A mismatch opens
+no transaction and returns reset/reinstall guidance.
+
 Serialized, persisted, and cross-process interfaces in this feature use plain names. Schema IDs and
 other logical IDs do not encode a generation suffix. Because Plotpoint is pre-release, corrected shapes
 replace the discarded shapes directly; no compatibility readers or migrations are part of the model.

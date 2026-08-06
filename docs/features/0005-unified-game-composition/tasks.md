@@ -245,6 +245,96 @@ verification gates after all player, WebView, SecureStore, and shared-UI changes
 - [x] T076 After T071-T075, run `pnpm --filter @plotpoint/player exec expo run:ios --device "iPhone 17 Pro" --no-bundler`, verify simulator build/install/launch, and record fresh iOS evidence in `docs/features/0005-unified-game-composition/evidence/implementation.md`
 - [x] T077 After T071-T076, run `ANDROID_HOME=/Users/shubhankarsharan/Library/Android/sdk pnpm --filter @plotpoint/player exec expo run:android --device Plotpoint_API_36 --no-bundler`, verify emulator build/install/launch, and record fresh Android evidence plus physical-device `NOT RUN` in `docs/features/0005-unified-game-composition/evidence/implementation.md`
 
+> **SUPERSEDED COMPLETION CLAIM**: T001-T077 remain factual implementation history. Review after T077
+> showed that Phase 8 did not prove the installed product loop. The authoritative remediation and
+> completion track begins at T078; `evidence/implementation.md` is historical only.
+
+---
+
+## Phase 9: Foundational Contract Reset
+
+**Purpose**: Reopen the feature honestly, reset the four ownership boundaries, remove aggregate schema
+generations, and make the corrected storage contracts executable before story work depends on them.
+
+- [x] T078 Revise `spec.md`, `plan.md`, `research.md`, `data-model.md`, `quickstart.md`, affected contracts,
+      `docs/architecture.md`, and `docs/product.md`; supersede historical Phase 8 evidence and initialize
+      `evidence/remediation.md` to `NOT RUN`
+- [x] T079 Add failing clean-break contract tests proving no aggregate `schemaVersion`, `schema_version`,
+      generation counter, or aggregate manifest version survives; old shapes fail; server effect declarations
+      are rejected; and generated Web runtime source is current
+- [x] T080 Add failing SQLite/PostgreSQL tests for exact host schema digest, participant-scoped receipts,
+      canonical pending/terminal intent, pre-transaction pull validation, and the append-only evidence ledger
+- [x] T081 Remove aggregate schema counters across release inventory, shared protocol, bridge/runtime
+      projections, SQLite and PostgreSQL; resolve schema identity only from release, logical ID, and digest
+- [x] T082 Replace names-only SQLite compatibility checks with an exact canonical `sqlite_master` digest,
+      establish the clean-break storage schema, and reject mismatches with reset/reinstall guidance
+- [x] T083 Run the Phase 9 focused contract/storage suites and record the checkpoint in
+      `evidence/remediation.md`
+
+---
+
+## Phase 10: User Story 6 - Single Runtime and Authoritative Execution (Priority: P1)
+
+- [x] T084 [US6] Add failing runtime tests for production-bundle parity, WebView transport, child-scope
+      rollback, listener isolation, and committed-terminal preservation across refresh/listener failure
+- [x] T085 [US6] Move mounting, scoping, local adaptation, bridge clients, notifications, and disposal into
+      one environment-neutral Web runtime kernel; generate its TypeScript source with the existing bundler and
+      make `buildRuntimeBootstrap` a thin transport/release loader with a freshness gate
+- [x] T086 [US6] Add failing authority tests for three stale participants, stale valid acceptance,
+      already-satisfied no-op, invalid authority/observations, participant-scoped command IDs, exact retries,
+      changed-body conflicts, and a terminal report for every valid stale command
+- [x] T087 [US6] Replace service-owned authorize/dispatch with one trusted adapter `execute` operation;
+      scope locks and receipts by `(sessionId, participantId, commandId)`, persist canonical request digest and
+      exact result JSON, and reject server models with effects
+- [x] T088 [US6] Run production-runtime and authoritative-execution checkpoints and record their results
+
+---
+
+## Phase 11: User Story 7 - Run-Scoped Recovery and Shared Authority (Priority: P1)
+
+- [x] T089 [US7] Add failing restart-only tests for every secret, reservation, send, response, binding,
+      invitation cleanup, submission, pull, validation, and snapshot-commit boundary
+- [x] T090 [US7] Implement one deterministic secret-first per-run SecureStore envelope, atomic binding plus
+      initial pull, post-commit envelope reduction, and recoverable interrupted preparation
+- [x] T091 [US7] Replace App/session/coordinator fragments with one `SharedPlayController` and observable
+      `local-only | join-required | joining | synchronizing | bound | revoked | recovery-required` state
+- [x] T092 [US7] Add `expo-network` `~57.0.1`; route startup, foreground, retry, and only unreachable-to-
+      reachable transitions through keyed single-flight; render the App exclusively from controller state
+- [x] T093 [US7] Validate complete pulls before mutation, commit reconciliation once, and make revocation
+      synchronously unmount the WebView, block outbox work, and remove credentials before accepting messages
+- [x] T094 [US7] Run the complete recovery/connectivity/revocation matrix and record the checkpoint
+
+---
+
+## Phase 12: User Story 8 - Committed Reporting and Installed Journeys (Priority: P1)
+
+- [x] T095 [US8] Add failing evidence tests for 5-second/30-second mechanic policy, unused observations,
+      nonzero synchronization chronology, byte-equivalent export, committed stale terminals, and private-value
+      absence
+- [x] T096 [US8] Add append-only `game_play_events`; atomically record local terminals and actual
+      observation use, participant results and mechanic capability evidence, real synchronization disposition,
+      lifecycle, and recovery transitions
+- [x] T097 [US8] Make target discovery emit `captured | consumed | denied | expired`; replace multi-table
+      report reconstruction with one transactional ordered ledger projection using existing aliases,
+      allowlists, and the unchanged public `GamePlayReport` validator
+- [x] T098 [US8] Route field-puzzle acceptance through the generated production runtime and bridge
+- [x] T099 [US8] Replace API-only co-op acceptance with the compiled installed release, generated runtime,
+      WebView messages, real SQLite/controller/HTTP client, disposable PostgreSQL, controller recreation,
+      ledger report, configuration revision, distinct release, and fresh session
+- [x] T100 [US8] Run both installed journeys and the committed-evidence/privacy matrix and record results
+
+---
+
+## Phase 13: Cross-Cutting Verification and Fresh Evidence
+
+- [x] T101 Run focused adversarial suites, PostgreSQL/Testcontainers, the deterministic four-example
+      compiler matrix, `pnpm verify`, mandatory workflow validation, and `git diff --check`; record exact results
+- [x] T102 Restore the constitution assessments to `PASS` only if the final design and fresh evidence prove
+      all four boundaries and no completion claim depends on historical Phase 8 evidence
+- [x] T103 After all player changes, run iOS simulator build/install/launch and record separate results
+- [x] T104 After iOS, run Android emulator build/install/launch and record separate results; retain physical
+      iOS and Android as `NOT RUN` unless separately authorized and executed
+
 ---
 
 ## Dependencies and Execution Order
@@ -260,7 +350,12 @@ Phase 1 Failing Vertical Journeys
               -> Phase 7 US5 Release-Pinned Play
       -> Phase 5 US3 Durable Logic and Progression
 
-US4 + US5 + US3 -> Phase 8 Complete Journeys and Evidence
+US4 + US5 + US3 -> Phase 8 Historical Evidence (superseded)
+  -> Phase 9 Contract Reset
+      -> Phase 10 US6 Single Runtime + Authority
+          -> Phase 11 US7 Shared Controller
+              -> Phase 12 US8 Committed Evidence + Installed Journeys
+                  -> Phase 13 Fresh Verification
 ```
 
 - **Setup (Phase 1)** has no dependency; T002-T004 begin only after the rename in T001.

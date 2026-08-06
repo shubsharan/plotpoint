@@ -70,9 +70,7 @@ function manifest(): ReleaseManifest {
   return {
     releaseFormatVersion: 1,
     hostApi: { major: 1, minimumMinor: 2 },
-    aggregateSchemas: [
-      { id: "puzzle.player", kind: "player", version: 3, path: "schemas/player.json" },
-    ],
+    aggregateSchemas: [{ id: "puzzle.player", kind: "player", path: "schemas/player.json" }],
     capabilities: [{ id: "plotpoint.media.playback", major: 1, minimumMinor: 0 }],
     entrypoints: { logic: "bundles/logic.js", presentation: "bundles/presentation.js" },
     inventory: Object.entries(payloads).map(([path, bytes]) => ({

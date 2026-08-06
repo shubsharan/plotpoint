@@ -154,7 +154,6 @@ export async function assembleRelease(input: AssembleReleaseInput): Promise<Asse
           Object.freeze({
             id: registration.id,
             kind: registration.kind,
-            version: 1,
             path: generatedReleaseEntryPath("aggregate-schema", registration.id),
           }),
         ),

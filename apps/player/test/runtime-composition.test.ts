@@ -112,7 +112,6 @@ const sharedProjection = {
   aggregateKind: "team",
   aggregateId: "team-1",
   schemaId: "shared-projection",
-  schemaVersion: 1,
   stateVersion: 3,
   value: { ready: true },
 } satisfies SharedProjection;
@@ -377,7 +376,6 @@ describe("runtime composition lifecycle", () => {
         command,
         model,
         "shared-projection",
-        1,
         sharedProjection,
       ),
     ).toEqual({
@@ -390,7 +388,6 @@ describe("runtime composition lifecycle", () => {
         aggregateKind: "team",
         aggregateId: "team-1",
         schemaId: "shared-state",
-        schemaVersion: 1,
       },
     });
     for (const authorityField of [
@@ -404,7 +401,6 @@ describe("runtime composition lifecycle", () => {
           command,
           model,
           "shared-projection",
-          1,
           sharedProjection,
         ),
       ).toThrow("runtime-shared-command-input-invalid");

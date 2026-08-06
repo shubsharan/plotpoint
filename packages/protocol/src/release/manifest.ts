@@ -112,17 +112,16 @@ export function validateReleaseManifest(value: unknown): ManifestValidationResul
     const path = `/aggregateSchemas/${index}`;
     if (
       !isObject(schema) ||
-      !hasExactFields(schema, ["id", "kind", "path", "version"]) ||
+      !hasExactFields(schema, ["id", "kind", "path"]) ||
       !isCanonicalId(schema.id) ||
       typeof schema.kind !== "string" ||
       !AGGREGATE_KINDS.has(schema.kind) ||
-      !isPositiveInteger(schema.version) ||
       typeof schema.path !== "string" ||
       !isCanonicalArchivePath(schema.path)
     ) {
       return invalid("invalid-aggregate-schema", path);
     }
-    const key = `${schema.id}\0${schema.kind}\0${String(schema.version).padStart(16, "0")}\0${schema.path}`;
+    const key = `${schema.id}\0${schema.kind}\0${schema.path}`;
     if (previousAggregateKey !== undefined && compareOrdinal(previousAggregateKey, key) >= 0) {
       return invalid("aggregate-schemas-not-ordinal-or-unique", path);
     }

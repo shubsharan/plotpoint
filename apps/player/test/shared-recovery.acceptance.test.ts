@@ -19,7 +19,6 @@ function projection(stateVersion: number) {
     aggregateKind: "team" as const,
     aggregateId: "team-1",
     schemaId: "shared-projection",
-    schemaVersion: 1,
     stateVersion,
     value: { completed: stateVersion },
   };
@@ -62,7 +61,6 @@ function command(commandId: string): SharedCommandIntent {
       aggregateKind: "team",
       aggregateId: "team-1",
       schemaId: "shared-state",
-      schemaVersion: 1,
     },
     expectedStateVersion: 0,
     type: "shared.action",
@@ -76,6 +74,38 @@ async function durableBytes(database: TestSharedSqliteDatabase): Promise<string>
 }
 
 describe("shared recovery acceptance", () => {
+  it("rejects a release-invalid projection before opening a mutation transaction", async () => {
+    const database = await createSharedTestDatabase();
+    try {
+      await database.runAsync(
+        `INSERT INTO shared_sessions
+         (session_id,run_id,release_id,participant_id,team_id,service_origin,credential_key,membership_status,
+          transport_status,sync_status,cursor,confirmed_at)
+         VALUES (?,?,?,?,?,?,?,'active','online','current','0',?)`,
+        "session-1",
+        "run-1",
+        releaseId,
+        "participant-1",
+        "team-1",
+        "https://service.example",
+        bindingContext.credentialKey,
+        "2030-01-01T00:00:00.000Z",
+      );
+      const store = new SharedSyncStore(database, () => false);
+      const before = await durableBytes(database);
+      const transactionStarts = database.transactionStarts;
+
+      await expect(
+        store.applyPull(bindingContext, pull({ cursor: "1", stateVersion: 1 })),
+      ).rejects.toThrow("shared-pull-invalid");
+
+      expect(database.transactionStarts).toBe(transactionStarts);
+      expect(await durableBytes(database)).toBe(before);
+    } finally {
+      database.close();
+    }
+  });
+
   it("converges 100 response-loss retries and repeated corrective/revoked pulls byte-exactly", async () => {
     const database = await createSharedTestDatabase();
     try {

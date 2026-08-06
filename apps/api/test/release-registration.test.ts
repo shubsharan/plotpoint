@@ -125,13 +125,11 @@ async function releaseFixture(
       {
         id: "co-op.player-state",
         kind: "player",
-        version: 1,
         path: schemaPaths["co-op.player-state"],
       },
       {
         id: "plotpoint.location.team-state",
         kind: "team",
-        version: 1,
         path: schemaPaths["plotpoint.location.team-state"],
       },
     ],
@@ -194,7 +192,6 @@ describe("trusted release registration", () => {
     const stored = database.query.mock.calls[0]?.[1] as readonly string[];
     expect(JSON.parse(stored[1] ?? "null")).toMatchObject({
       gameComposition: { trustedMechanic: { id: "plotpoint.location.target-discovery" } },
-      stateSchemaVersion: 1,
     });
     expect(JSON.parse(stored[2] ?? "null")).toHaveProperty("targets");
     expect(stored.join("\n")).not.toContain("export {}");

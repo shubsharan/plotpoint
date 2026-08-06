@@ -213,53 +213,68 @@ describe("trusted target discovery", () => {
       ...initialized.aggregate,
       aggregateId: participant.teamId,
     };
-    const authorization = mechanic.authorize({
+    const first = mechanic.execute({
       participant,
-      command: syncCommand(available(), 0),
-      observations: [available()],
-    });
-    if (authorization.kind !== "authorized") throw new Error(authorization.kind);
-    const first = mechanic.model.execute({
       aggregate,
-      command: authorization.command,
-      observations: authorization.observations,
+      command: syncCommand(available(), 99),
+      observations: [available()],
     });
     expect(first).toMatchObject({
-      kind: "recorded",
-      record: { terminal: "accepted", outcome: { code: "target-discovered" } },
-      aggregate: { stateVersion: 1 },
+      terminal: "accepted",
+      outcomeCode: "target-discovered",
+      aggregateAfter: { stateVersion: 1 },
     });
     expect(JSON.stringify(first)).not.toMatch(/latitude|longitude|horizontalAccuracy/);
-    if (first.kind !== "recorded") throw new Error(first.diagnostics[0]?.code);
-
-    const repeatedAuthorization = mechanic.authorize({
-      participant,
-      command: syncCommand(available(), 1),
-      observations: [available()],
-    });
-    if (repeatedAuthorization.kind !== "authorized") throw new Error(repeatedAuthorization.kind);
     expect(
-      mechanic.model.execute({
-        aggregate: first.aggregate,
-        command: repeatedAuthorization.command,
-        observations: repeatedAuthorization.observations,
+      mechanic.execute({
+        participant,
+        aggregate: first.aggregateAfter,
+        command: syncCommand(available(), 0),
+        observations: [available()],
       }),
     ).toMatchObject({
-      kind: "recorded",
-      record: { terminal: "no-op", outcome: { code: "target-already-discovered" } },
-      aggregate: { stateVersion: 1 },
+      terminal: "no-op",
+      outcomeCode: "target-already-discovered",
+      aggregateAfter: { stateVersion: 1 },
     });
 
-    expect(mechanic.project({ participant, aggregate: first.aggregate })).toEqual({
+    expect(mechanic.project({ participant, aggregate: first.aggregateAfter })).toEqual({
       kind: "projected",
       projection: {
         aggregateKind: "team",
         aggregateId: "team-1",
         schemaId: TARGET_DISCOVERY_PROJECTION_SCHEMA,
-        schemaVersion: 1,
         stateVersion: 1,
-        value: first.aggregate.state,
+        value: first.aggregateAfter.state,
       },
+    });
+  });
+
+  it("commits mechanic-owned freshness dispositions for revised 5-second and 30-second policies", () => {
+    const executeWithMaximumAge = (maximumAgeMs: number) => {
+      const revised = { targets: config.targets.map((target) => ({ ...target, maximumAgeMs })) };
+      const resolved = resolveTrustedMechanic({ binding, composition, configuration: revised });
+      if (resolved.kind !== "resolved" || resolved.aggregateKind !== "team") {
+        throw new Error("revised-mechanic-resolution-failed");
+      }
+      const initialized = resolved.adapter.model.initialize(revised);
+      if (initialized.kind !== "initialized") throw new Error("revised-mechanic-init-failed");
+      const aggregate = { ...initialized.aggregate, aggregateId: participant.teamId };
+      return resolved.adapter.execute({
+        participant,
+        aggregate,
+        command: syncCommand(available({ ageMs: 10_000 }), 0),
+        observations: [available({ ageMs: 10_000 })],
+      });
+    };
+
+    expect(executeWithMaximumAge(5_000)).toMatchObject({
+      terminal: "rejected",
+      capabilityEvidence: [{ disposition: "expired" }],
+    });
+    expect(executeWithMaximumAge(30_000)).toMatchObject({
+      terminal: "accepted",
+      capabilityEvidence: [{ disposition: "consumed" }],
     });
   });
 
@@ -317,7 +332,6 @@ function syncCommand(observation: LocationObservation | undefined, version = 7):
       aggregateKind: "team",
       aggregateId: participant.teamId,
       schemaId: TARGET_DISCOVERY_STATE_SCHEMA,
-      schemaVersion: 1,
     },
     expectedStateVersion: version,
     type: TARGET_DISCOVERY_COMMAND,

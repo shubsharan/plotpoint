@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as FileSystem from "expo-file-system/legacy";
+import * as Network from "expo-network";
 import * as Sharing from "expo-sharing";
 import { StatusBar } from "expo-status-bar";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
@@ -55,7 +56,10 @@ import {
 } from "./src/shared/host-bridge";
 import { createParticipantCredentialStore } from "./src/shared/credentials";
 import { SharedSyncCoordinator } from "./src/shared/sync-coordinator";
-import { SharedSessionController } from "./src/shared/session-controller";
+import {
+  SharedPlayController,
+  type SharedPlayControllerState,
+} from "./src/shared/session-controller";
 
 type ActiveRecovery = RecoveryBootstrap & {
   readonly aggregate: NonNullable<RecoveryBootstrap["aggregate"]>;
@@ -65,7 +69,6 @@ interface ActiveRuntime {
   readonly recovery: ActiveRecovery;
   readonly html: string;
   readonly composition: GameComposition;
-  readonly aggregateSchemaVersions: Readonly<Record<string, number>>;
   readonly projectionContract: SharedProjectionContract | null;
   readonly sharedSurface: SharedRuntimeSurface;
   readonly aggregateSchemaId: string;
@@ -153,9 +156,7 @@ function describeRequirements(
     releaseIdentity,
     releaseFormat: `Version ${manifest.releaseFormatVersion}`,
     hostApi: `Major ${manifest.hostApi.major}, minimum minor ${manifest.hostApi.minimumMinor}`,
-    aggregateSchemas: manifest.aggregateSchemas.map(
-      ({ id, kind, version }) => `${kind} · ${id} · version ${version}`,
-    ),
+    aggregateSchemas: manifest.aggregateSchemas.map(({ id, kind }) => `${kind} · ${id}`),
     capabilities: manifest.capabilities.map(
       ({ id, major, minimumMinor }) => `${id} · major ${major}, minimum minor ${minimumMinor}`,
     ),
@@ -237,8 +238,10 @@ export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
   const webView = useRef<WebView>(null);
   const installationInFlight = useRef(false);
-  const sharedSyncCoordinator = useRef<SharedSyncCoordinator | null>(null);
-  const sharedSessionController = useRef<SharedSessionController | null>(null);
+  const sharedPlayController = useRef<SharedPlayController | null>(null);
+  const [sharedState, setSharedState] = useState<SharedPlayControllerState>({
+    status: "local-only",
+  });
 
   const loadRun = async (
     db: PlayerDatabase,
@@ -308,9 +311,6 @@ export default function App() {
         };
       }
     }
-    const aggregateSchemaVersions = Object.freeze(
-      Object.fromEntries(opened.manifest.aggregateSchemas.map(({ id, version }) => [id, version])),
-    );
     let projectionContract: SharedProjectionContract | null = null;
     if (composition.trustedMechanic !== undefined) {
       const serverModel = composition.aggregateModels.find(
@@ -337,18 +337,40 @@ export default function App() {
       );
       projectionContract = Object.freeze({
         schemaId: composition.trustedMechanic.projectionSchema.id,
-        schemaVersion: serverSchema.version,
         validate: (value: SharedPlayView["projections"][number]["value"]) =>
           validateProjection(value),
       });
     }
-    let sessionId: string | null = null;
-    let sharedView: SharedPlayView | null = null;
-    if (composition.trustedMechanic !== undefined) {
-      const sharedStore = new SharedSyncStore(db.raw());
-      sessionId = await sharedStore.sessionForRun(recovery.runId);
-      if (sessionId !== null) sharedView = await sharedStore.view(sessionId);
-    }
+    sharedPlayController.current?.dispose();
+    const credentials = createParticipantCredentialStore();
+    const sharedStore = new SharedSyncStore(
+      db.raw(),
+      (pull) =>
+        pull.snapshot.releaseId === recovery.releaseId &&
+        (projectionContract === null ||
+          pull.snapshot.projections.every(
+            (projection) =>
+              projection.schemaId === projectionContract.schemaId &&
+              projectionContract.validate(projection.value),
+          )),
+    );
+    const coordinator = new SharedSyncCoordinator(sharedStore, credentials);
+    const controller = new SharedPlayController(
+      {
+        runId: recovery.runId,
+        releaseId: recovery.releaseId,
+        sharedRequired: composition.trustedMechanic !== undefined,
+      },
+      sharedStore,
+      credentials,
+      coordinator,
+    );
+    sharedPlayController.current = controller;
+    controller.subscribe(setSharedState);
+    await controller.start();
+    const controllerState = controller.snapshot();
+    const sessionId = ("sessionId" in controllerState ? controllerState.sessionId : null) ?? null;
+    const sharedView = controllerState.status === "bound" ? controllerState.view : null;
     const sharedSurface = deriveSharedRuntimeSurface(
       composition,
       sharedView,
@@ -358,7 +380,6 @@ export default function App() {
     setRuntime({
       recovery: activeRecovery,
       composition,
-      aggregateSchemaVersions,
       projectionContract,
       sharedSurface,
       aggregateSchemaId: aggregateRequirement.id,
@@ -370,7 +391,6 @@ export default function App() {
         gameComposition: composition,
         content,
         assets,
-        aggregateSchemaVersions,
         sharedBindingAvailable: sharedSurface.sharedBindingAvailable,
       }),
     });
@@ -386,15 +406,6 @@ export default function App() {
   useEffect(() => {
     void PlayerDatabase.open()
       .then(async (db) => {
-        const credentials = createParticipantCredentialStore();
-        const sharedStore = new SharedSyncStore(db.raw());
-        const coordinator = new SharedSyncCoordinator(sharedStore, credentials);
-        sharedSyncCoordinator.current = coordinator;
-        sharedSessionController.current = new SharedSessionController(
-          sharedStore,
-          credentials,
-          coordinator,
-        );
         setDatabase(db);
         const recovered = await recoverLatestRun(db, {
           readArtifact: readArtifactBytes,
@@ -460,28 +471,13 @@ export default function App() {
     });
   };
 
-  const scheduleSharedSync = async (
-    sessionId: string,
-    trigger: "enqueue" | "foreground" | "reconnect" | "retry",
-  ) => {
-    const coordinator = sharedSyncCoordinator.current;
-    if (coordinator === null) throw new Error("shared-sync-coordinator-missing");
-    await coordinator.request(sessionId, trigger);
-    notifySharedSyncChanged();
-  };
-
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState !== "active" || database === null || sharedSessionId === null) return;
-      const controller = sharedSessionController.current;
+      if (nextState !== "active") return;
+      const controller = sharedPlayController.current;
       if (controller === null) return;
-      void new SharedSyncStore(database.raw())
-        .view(sharedSessionId)
-        .then((view) =>
-          view.transport === "offline" || view.transport === "degraded"
-            ? controller.reconnect(sharedSessionId)
-            : controller.foreground(sharedSessionId),
-        )
+      void controller
+        .foreground()
         .then(notifySharedSyncChanged)
         .catch((error: unknown) => {
           setStatus(error instanceof Error ? error.message : "Shared synchronization failed");
@@ -489,7 +485,19 @@ export default function App() {
         });
     });
     return () => subscription.remove();
-  }, [database, sharedSessionId]);
+  }, []);
+
+  useEffect(() => {
+    const subscription = Network.addNetworkStateListener((state) => {
+      const reachable = state.isInternetReachable ?? state.isConnected ?? false;
+      void sharedPlayController.current
+        ?.connectivityChanged(reachable)
+        .catch((error: unknown) =>
+          setStatus(error instanceof Error ? error.message : "Shared synchronization failed"),
+        );
+    });
+    return () => subscription.remove();
+  }, []);
 
   const onBridgeMessage = async (event: WebViewMessageEvent) => {
     if (database === null || runtime === null) return;
@@ -500,9 +508,8 @@ export default function App() {
       decodedType = undefined;
     }
     if (typeof decodedType === "string" && decodedType.startsWith("shared.")) {
-      const store = new SharedSyncStore(database.raw());
       const handlers =
-        sharedSessionId === null || runtime.sharedSurface.kind !== "bound"
+        sharedState.status !== "bound"
           ? {
               getView: async (): Promise<SharedPlayView> => {
                 throw new Error("shared-session-missing");
@@ -514,28 +521,16 @@ export default function App() {
           : createCompositionSharedBridgeHandlers({
               composition: runtime.composition,
               expectedReleaseId: runtime.recovery.releaseId,
-              aggregateSchemaVersions: runtime.aggregateSchemaVersions,
               projectionContract:
                 runtime.projectionContract ??
                 (() => {
                   throw new Error("shared-projection-contract-missing");
                 })(),
-              getView: () => store.view(sharedSessionId),
-              enqueue: async (command) => {
-                const result = await store.enqueue(
-                  sharedSessionId,
-                  command,
-                  new Date().toISOString(),
-                );
-                if (result.terminal === "pending") {
-                  void scheduleSharedSync(sharedSessionId, "enqueue").catch((error: unknown) => {
-                    setStatus(
-                      error instanceof Error ? error.message : "Shared synchronization failed",
-                    );
-                    notifySharedSyncChanged();
-                  });
-                }
-                return result;
+              getView: async () => sharedState.view,
+              enqueue: (command) => {
+                const controller = sharedPlayController.current;
+                if (controller === null) throw new Error("shared-controller-missing");
+                return controller.enqueue(command);
               },
             });
       const response = await routeSharedBridgeMessage(event.nativeEvent.data, handlers);
@@ -602,16 +597,14 @@ export default function App() {
   };
 
   const joinSharedSession = async () => {
-    if (database === null || runtime === null || runtime.sharedSurface.kind !== "join") return;
+    if (database === null || runtime === null || sharedState.status !== "join-required") return;
     setStatus("Joining shared play…");
     try {
-      const controller = sharedSessionController.current;
+      const controller = sharedPlayController.current;
       if (controller === null) throw new Error("shared-session-controller-missing");
       await controller.join({
         serviceUrl,
         sessionId: sessionCode,
-        runId: runtime.recovery.runId,
-        expectedReleaseId: runtime.recovery.releaseId,
         invitation,
       });
       setInvitation("");
@@ -622,15 +615,11 @@ export default function App() {
   };
 
   const retrySharedSynchronization = async () => {
-    if (sharedSessionId === null) return;
-    const controller = sharedSessionController.current;
+    const controller = sharedPlayController.current;
     if (controller === null) return;
     try {
-      await controller.retry(sharedSessionId);
+      await controller.retry();
       notifySharedSyncChanged();
-      if (database !== null && runtime !== null) {
-        await loadRun(database, runtime.recovery, "Shared synchronization recovered.");
-      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Shared synchronization failed");
       notifySharedSyncChanged();
@@ -668,7 +657,7 @@ export default function App() {
           <Text style={styles.failureAction}>{installFailure.action}</Text>
         </View>
       )}
-      {runtime?.sharedSurface.kind === "join" ? (
+      {runtime !== null && sharedState.status === "join-required" ? (
         <View style={styles.joinPanel}>
           <Text style={styles.detailLabel}>JOIN SHARED PLAY</Text>
           <TextInput
@@ -705,11 +694,12 @@ export default function App() {
           />
         </View>
       ) : null}
-      {runtime?.sharedSurface.kind === "recovery" ? (
+      {runtime !== null &&
+      (sharedState.status === "recovery-required" || sharedState.status === "revoked") ? (
         <View style={styles.failurePanel}>
           <Text style={styles.detailLabel}>SHARED PLAY RECOVERY</Text>
           <Text selectable style={styles.failureCode}>
-            {runtime.sharedSurface.code}
+            {sharedState.status === "revoked" ? "shared-membership-revoked" : sharedState.code}
           </Text>
           <Text style={styles.failureAction}>
             Retry synchronization or reinstall the matching immutable release before continuing.
@@ -761,10 +751,14 @@ export default function App() {
           <Text style={styles.emptyTitle}>Player ready, release-free.</Text>
           <Text>Serve a verified puzzle on your private network and scan its QR code.</Text>
         </View>
-      ) : runtime.sharedSurface.kind === "join" || runtime.sharedSurface.kind === "recovery" ? (
+      ) : sharedState.status === "join-required" ||
+        sharedState.status === "joining" ||
+        sharedState.status === "synchronizing" ||
+        sharedState.status === "recovery-required" ||
+        sharedState.status === "revoked" ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>
-            {runtime.sharedSurface.kind === "join"
+            {sharedState.status === "join-required"
               ? "Shared session required."
               : "Shared binding unavailable."}
           </Text>

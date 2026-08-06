@@ -1,5 +1,9 @@
 import * as SQLite from "expo-sqlite";
-import type { LocalAggregateView } from "@plotpoint/protocol";
+import {
+  computeReleaseId,
+  FOREGROUND_LOCATION_CAPABILITY,
+  type LocalAggregateView,
+} from "@plotpoint/protocol";
 
 import type {
   DurableCommandRecord,
@@ -70,6 +74,21 @@ CREATE TABLE IF NOT EXISTS run_events (
   kind TEXT NOT NULL CHECK(kind IN ('lifecycle','diagnostic')),
   phase TEXT, disposition TEXT, code TEXT, command_id TEXT
 );
+CREATE TABLE IF NOT EXISTS game_play_events (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL REFERENCES runs(run_id), committed_at TEXT NOT NULL,
+  elapsed_ms INTEGER NOT NULL, kind TEXT NOT NULL,
+  command_id TEXT, evidence_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS game_play_events_run ON game_play_events(run_id, sequence);
+CREATE TRIGGER IF NOT EXISTS game_play_events_no_update
+BEFORE UPDATE ON game_play_events BEGIN
+  SELECT RAISE(ABORT, 'game-play-evidence-immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS game_play_events_no_delete
+BEFORE DELETE ON game_play_events BEGIN
+  SELECT RAISE(ABORT, 'game-play-evidence-immutable');
+END;
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_release
   ON runs(release_id) WHERE status = 'active';
 `;
@@ -125,7 +144,19 @@ const LOCAL_SCHEMA_COLUMNS = Object.freeze({
     "code",
     "command_id",
   ],
+  game_play_events: [
+    "sequence",
+    "run_id",
+    "committed_at",
+    "elapsed_ms",
+    "kind",
+    "command_id",
+    "evidence_json",
+  ],
 } as const);
+
+export const HOST_STORAGE_SCHEMA_DIGEST =
+  "sha256:5d21cdf48d1626c9d1f8493ce3cfae774fd2a19d06ce72ff632b1170fbac3ff5";
 
 export interface ObservationMigrationDatabase {
   getAllAsync<T>(query: string, ...parameters: unknown[]): Promise<T[]>;
@@ -175,6 +206,30 @@ export async function migratePlayerDatabase(database: ObservationMigrationDataba
   await assertPlayerDatabaseSchema(database);
   await database.execAsync(BASE_MIGRATION);
   if (!(await hasCorrectedLocalSchema(database))) {
+    throw new Error(PLAYER_DATABASE_INCOMPATIBLE);
+  }
+}
+
+export async function hostStorageSchemaDigest(
+  database: Pick<ObservationMigrationDatabase, "getAllAsync">,
+): Promise<`sha256:${string}`> {
+  const definitions = await database.getAllAsync<{
+    readonly type: string;
+    readonly name: string;
+    readonly tbl_name: string;
+    readonly sql: string;
+  }>(
+    `SELECT type,name,tbl_name,sql FROM sqlite_master
+     WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'
+     ORDER BY type,name,tbl_name`,
+  );
+  return computeReleaseId(new TextEncoder().encode(JSON.stringify(definitions)));
+}
+
+export async function assertHostStorageSchemaDigest(
+  database: Pick<ObservationMigrationDatabase, "getAllAsync">,
+): Promise<void> {
+  if ((await hostStorageSchemaDigest(database)) !== HOST_STORAGE_SCHEMA_DIGEST) {
     throw new Error(PLAYER_DATABASE_INCOMPATIBLE);
   }
 }
@@ -268,6 +323,7 @@ export class PlayerDatabase implements TransitionStore {
     await assertSharedDatabaseSchema(database);
     await migratePlayerDatabase(database);
     await migrateSharedDatabase(database);
+    await assertHostStorageSchemaDigest(database);
     return new PlayerDatabase(database);
   }
 
@@ -422,24 +478,39 @@ export class PlayerDatabase implements TransitionStore {
     diagnosticCode?: string;
     elapsedMs: number;
   }): Promise<void> {
-    await this.database.runAsync(
-      `INSERT INTO observations
+    await this.database.withExclusiveTransactionAsync(async (transaction) => {
+      await transaction.runAsync(
+        `INSERT INTO observations
        (run_id, observation_id, recorded_at, captured_at, age_ms, availability, latitude, longitude,
         sensor_captured_at, horizontal_accuracy, diagnostic_code, elapsed_ms)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      input.runId,
-      input.observationId,
-      input.recordedAt,
-      input.capturedAt ?? input.recordedAt,
-      input.ageMs ?? null,
-      input.availability,
-      input.latitude ?? null,
-      input.longitude ?? null,
-      input.capturedAt ?? null,
-      input.horizontalAccuracy ?? null,
-      input.diagnosticCode ?? null,
-      input.elapsedMs,
-    );
+        input.runId,
+        input.observationId,
+        input.recordedAt,
+        input.capturedAt ?? input.recordedAt,
+        input.ageMs ?? null,
+        input.availability,
+        input.latitude ?? null,
+        input.longitude ?? null,
+        input.capturedAt ?? null,
+        input.horizontalAccuracy ?? null,
+        input.diagnosticCode ?? null,
+        input.elapsedMs,
+      );
+      await transaction.runAsync(
+        `INSERT INTO game_play_events
+         (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
+         VALUES (?,?,?,?,NULL,?)`,
+        input.runId,
+        input.recordedAt,
+        input.elapsedMs,
+        "capability",
+        JSON.stringify({
+          capabilityId: FOREGROUND_LOCATION_CAPABILITY.id,
+          disposition: input.availability === "available" ? "captured" : "denied",
+        }),
+      );
+    });
   }
 
   async recordRecoveryEvent(runId: string, code: string, elapsedMs: number): Promise<void> {
@@ -469,18 +540,41 @@ export class PlayerDatabase implements TransitionStore {
     const phase = event.kind === "lifecycle" ? event.phase : null;
     const disposition = event.kind === "lifecycle" ? event.disposition : null;
     const code = event.kind === "diagnostic" ? event.code : (event.diagnosticCode ?? null);
-    await this.database.runAsync(
-      `INSERT INTO run_events
-       (run_id, elapsed_ms, kind, phase, disposition, code, command_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      runId,
-      event.elapsedMs,
-      event.kind,
-      phase,
-      disposition,
-      code,
-      event.commandId ?? null,
-    );
+    const evidence =
+      event.kind === "lifecycle"
+        ? event.phase === "recovery" && event.disposition === "application-restored"
+          ? { kind: "recovery", value: { disposition: "run-restored" } }
+          : ["mounted", "recovered", "unmounted", "mount-failed"].includes(event.disposition)
+            ? { kind: "lifecycle", value: { disposition: event.disposition } }
+            : null
+        : event.code === "delivery-interrupted" || event.code === "runtime-recovery-failed"
+          ? { kind: "diagnostic", value: { code: event.code, scope: "local" } }
+          : null;
+    await this.database.withExclusiveTransactionAsync(async (transaction) => {
+      await transaction.runAsync(
+        `INSERT INTO run_events
+         (run_id, elapsed_ms, kind, phase, disposition, code, command_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        runId,
+        event.elapsedMs,
+        event.kind,
+        phase,
+        disposition,
+        code,
+        event.commandId ?? null,
+      );
+      if (evidence === null) return;
+      await transaction.runAsync(
+        `INSERT INTO game_play_events
+         (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
+         VALUES (?,datetime('now'),?,?,?,?)`,
+        runId,
+        event.elapsedMs,
+        evidence.kind,
+        event.commandId ?? null,
+        JSON.stringify(evidence.value),
+      );
+    });
   }
 
   async transaction<T>(operation: (transaction: TransitionTransaction) => Promise<T>): Promise<T> {
@@ -563,12 +657,41 @@ export class PlayerDatabase implements TransitionStore {
           resultingStateVersion,
           Date.now(),
         );
+        await database.runAsync(
+          `INSERT INTO game_play_events
+           (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
+           VALUES (?,datetime('now'),?,'command',?,?)`,
+          runId,
+          Date.now(),
+          candidate.commandId,
+          JSON.stringify({
+            scope: "local",
+            terminal: candidate.terminal,
+            expectedStateVersion: candidate.expectedStateVersion,
+            resultingStateVersion,
+          }),
+        );
         for (const observationId of candidate.observationIds) {
           await database.runAsync(
             "INSERT INTO command_observations (run_id, command_id, observation_id) VALUES (?, ?, ?)",
             runId,
             candidate.commandId,
             observationId,
+          );
+        }
+        for (const observationId of candidate.consumedObservationIds ?? []) {
+          await database.runAsync(
+            `INSERT INTO game_play_events
+             (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
+             VALUES (?,datetime('now'),?,'capability',?,?)`,
+            runId,
+            Date.now(),
+            candidate.commandId,
+            JSON.stringify({
+              observationId,
+              capabilityId: FOREGROUND_LOCATION_CAPABILITY.id,
+              disposition: "consumed",
+            }),
           );
         }
         if (candidate.terminal !== "accepted") return result;

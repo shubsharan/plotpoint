@@ -23,7 +23,6 @@ const target = {
   aggregateKind: "team",
   aggregateId: "team-1",
   schemaId: "example.shared-state",
-  schemaVersion: 1,
 } as const;
 
 const intent: SharedCommandIntent = {
@@ -95,6 +94,12 @@ describe("generic shared play contracts", () => {
   it("rejects unknown fields and replacement observation values", () => {
     expect(isSharedCommandIntent({ ...intent, hunt: {} })).toBe(false);
     expect(isSharedCommandIntent({ ...intent, observations: [{ latitude: 1 }] })).toBe(false);
+    expect(
+      isSharedCommandIntent({
+        ...intent,
+        target: { ...intent.target, schemaVersion: 1 },
+      }),
+    ).toBe(false);
   });
 
   it("preserves every terminal through snapshot recovery", () => {

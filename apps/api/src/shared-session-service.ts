@@ -12,6 +12,7 @@ import {
   isSharedJoinRequest,
   isSharedJoinResponse,
   isSyncCommand,
+  isSyncCommandResult,
   openRelease,
   parseGameComposition,
   type GameComposition,
@@ -60,7 +61,6 @@ interface AggregateRow {
   release_id: `sha256:${string}`;
   team_id: string;
   schema_id: string;
-  schema_version: number;
   state_version: number;
   state_json: unknown;
   manifest_json: unknown;
@@ -69,6 +69,7 @@ interface AggregateRow {
 
 interface ReceiptRow {
   request_digest: string;
+  result_json?: string;
   terminal: SyncCommandResult["terminal"];
   outcome_code: string;
   resulting_state_version: number;
@@ -77,7 +78,6 @@ interface ReceiptRow {
 
 interface RegistrationEnvelope {
   readonly gameComposition: GameComposition;
-  readonly stateSchemaVersion: number;
   readonly schemaDigests: readonly RegisteredSchemaDigest[];
 }
 
@@ -89,7 +89,6 @@ interface RegisteredSchemaDigest {
 
 interface RegisteredMechanic {
   readonly composition: GameComposition;
-  readonly stateSchemaVersion: number;
   readonly configuration: JsonObject;
   readonly resolution: Extract<TrustedMechanicResolution, { readonly kind: "resolved" }>;
 }
@@ -103,6 +102,11 @@ function terminalResult(
   disposition: "decided" | "duplicate",
   row: ReceiptRow,
 ): SyncCommandResult {
+  if (row.result_json !== undefined) {
+    const stored: unknown = JSON.parse(row.result_json);
+    if (isSyncCommandResult(stored) && stored.commandId === commandId) return stored;
+    throw new Error("command-result-corrupt");
+  }
   return {
     commandId,
     disposition,
@@ -159,12 +163,6 @@ function canonicalObject(value: unknown): JsonObject | null {
 function parseRegistrationEnvelope(value: unknown): RegistrationEnvelope | null {
   if (!object(value) || !Object.hasOwn(value, "gameComposition")) return null;
   if (
-    !Number.isSafeInteger(value.stateSchemaVersion) ||
-    (value.stateSchemaVersion as number) <= 0
-  ) {
-    return null;
-  }
-  if (
     !Array.isArray(value.schemaDigests) ||
     !value.schemaDigests.every(
       (entry) =>
@@ -188,7 +186,6 @@ function parseRegistrationEnvelope(value: unknown): RegistrationEnvelope | null 
   if (parsed.kind === "invalid") return null;
   return {
     gameComposition: parsed.gameComposition,
-    stateSchemaVersion: value.stateSchemaVersion as number,
     schemaDigests,
   };
 }
@@ -231,7 +228,6 @@ function resolveRegisteredMechanic(
   if (validated.kind !== "valid") throw new Error("release-registration-invalid");
   const registered = {
     composition: envelope.gameComposition,
-    stateSchemaVersion: envelope.stateSchemaVersion,
     configuration: validated.value.configuration,
     resolution,
   };
@@ -247,21 +243,6 @@ function resolveRegisteredMechanic(
     throw new Error("release-registration-invalid");
   }
   return registered;
-}
-
-function stateSchemaVersion(manifest: ReleaseManifest, model: RegisteredMechanic): number | null {
-  const stateSchemaId = model.resolution.adapter.model.stateSchema.id;
-  const resource = model.composition.resources.find(
-    ({ id, role }) => id === stateSchemaId && role === "schema",
-  );
-  if (resource === undefined) return null;
-  const matches = manifest.aggregateSchemas.filter(
-    (schema) =>
-      schema.id === stateSchemaId &&
-      schema.kind === model.resolution.adapter.model.aggregateKind &&
-      schema.path === resource.path,
-  );
-  return matches.length === 1 ? (matches[0]?.version ?? null) : null;
 }
 
 function inventoriedSchemaDigest(
@@ -363,12 +344,10 @@ function registeredSchemaDigests(
 function aggregateForRow<Kind extends "team" | "session">(
   row: AggregateRow,
   adapter: TrustedMechanicAdapter<Kind>,
-  expectedSchemaVersion: number,
 ): Aggregate<JsonObject, Kind> {
   const state = adapter.model.stateSchema.validate(row.state_json);
   if (
     row.schema_id !== adapter.model.stateSchema.id ||
-    row.schema_version !== expectedSchemaVersion ||
     !Number.isSafeInteger(Number(row.state_version)) ||
     Number(row.state_version) < 0 ||
     !state.valid
@@ -385,98 +364,14 @@ function aggregateForRow<Kind extends "team" | "session">(
   };
 }
 
-function trustedOutcomeCode(value: unknown): string | null {
-  return object(value) &&
-    Object.keys(value).length === 1 &&
-    typeof value.code === "string" &&
-    /^[a-z][a-z0-9-]{0,63}$/.test(value.code)
-    ? value.code
-    : null;
-}
-
-function primaryDiagnostic(value: readonly { readonly code: string }[]): string {
-  return value[0]?.code ?? "execution-invalid";
-}
-
-interface DispatchResult<Kind extends "team" | "session"> {
-  readonly terminal: SyncCommandResult["terminal"];
-  readonly outcomeCode: string;
-  readonly aggregateBefore: Aggregate<JsonObject, Kind>;
-  readonly aggregateAfter: Aggregate<JsonObject, Kind>;
-  readonly domainEvents: readonly JsonObject[];
-}
-
-function dispatchTrustedCommand<Kind extends "team" | "session">(
-  adapter: TrustedMechanicAdapter<Kind>,
-  row: AggregateRow,
-  participant: AuthorizedParticipant,
-  command: SyncCommand,
-  expectedSchemaVersion: number,
-): DispatchResult<Kind> {
-  const aggregate = aggregateForRow(row, adapter, expectedSchemaVersion);
-  const authorization = adapter.authorize({
-    participant,
-    command,
-    observations: command.observations,
-  });
-  if (authorization.kind === "rejected") {
-    return {
-      terminal: "rejected",
-      outcomeCode: authorization.outcome.code,
-      aggregateBefore: aggregate,
-      aggregateAfter: aggregate,
-      domainEvents: [],
-    };
-  }
-  if (authorization.kind === "invalid") {
-    return {
-      terminal: "invalid",
-      outcomeCode: primaryDiagnostic(authorization.diagnostics),
-      aggregateBefore: aggregate,
-      aggregateAfter: aggregate,
-      domainEvents: [],
-    };
-  }
-  const execution = adapter.model.execute({
-    aggregate,
-    command: authorization.command,
-    observations: authorization.observations,
-  });
-  if (execution.kind === "preflight-invalid") {
-    return {
-      terminal: "invalid",
-      outcomeCode: primaryDiagnostic(execution.diagnostics),
-      aggregateBefore: aggregate,
-      aggregateAfter: aggregate,
-      domainEvents: [],
-    };
-  }
-  let outcomeCode: string;
-  if (execution.record.terminal === "invalid") {
-    outcomeCode = primaryDiagnostic(execution.record.diagnostics);
-  } else {
-    const code = trustedOutcomeCode(execution.record.outcome);
-    if (code === null) throw new Error("trusted-outcome-invalid");
-    outcomeCode = code;
-  }
-  return {
-    terminal: execution.record.terminal,
-    outcomeCode,
-    aggregateBefore: aggregate,
-    aggregateAfter: execution.aggregate,
-    domainEvents: execution.record.domainEvents ?? [],
-  };
-}
-
 function projectAggregate<Kind extends "team" | "session">(
   adapter: TrustedMechanicAdapter<Kind>,
   row: AggregateRow,
   participant: AuthorizedParticipant,
-  expectedSchemaVersion: number,
 ) {
   return adapter.project({
     participant,
-    aggregate: aggregateForRow(row, adapter, expectedSchemaVersion),
+    aggregate: aggregateForRow(row, adapter),
   });
 }
 
@@ -540,7 +435,6 @@ export class SharedSessionService {
     if (validated.kind !== "valid") throw mechanicFailure(validated.diagnostic.code);
     const registered: RegisteredMechanic = {
       composition: inspection.gameComposition,
-      stateSchemaVersion: 0,
       configuration: validated.value.configuration,
       resolution,
     };
@@ -552,11 +446,8 @@ export class SharedSessionService {
     if (schemaDigests === null) {
       throw new SharedSessionServiceError("schema-contract-mismatch", 422);
     }
-    const version = stateSchemaVersion(inspection.release.manifest, registered);
-    if (version === null) throw new SharedSessionServiceError("schema-contract-mismatch", 422);
     const manifestJson: RegistrationEnvelope = {
       gameComposition: inspection.gameComposition,
-      stateSchemaVersion: version,
       schemaDigests,
     };
     const persisted = await this.pool.query(
@@ -656,12 +547,11 @@ export class SharedSessionService {
         [sessionId, input.creationId, digest, input.releaseId, teamId, input.teamLabel],
       );
       await client.query(
-        "INSERT INTO team_aggregates(session_id, team_id, schema_id, schema_version, state_version, state_json) VALUES ($1,$2,$3,$4,0,$5)",
+        "INSERT INTO team_aggregates(session_id, team_id, schema_id, state_version, state_json) VALUES ($1,$2,$3,0,$4)",
         [
           sessionId,
           teamId,
           initialized.aggregate.schemaId,
-          registered.stateSchemaVersion,
           JSON.stringify(initialized.aggregate.state),
         ],
       );
@@ -869,12 +759,12 @@ export class SharedSessionService {
     return withReadCommittedTransaction(this.pool, async (client) => {
       const participant = await this.authenticate(client, sessionId, credential, "FOR SHARE");
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
-        `shared-command:${sessionId}:${command.commandId}`,
+        `shared-command:${sessionId}:${participant.participant_id}:${command.commandId}`,
       ]);
       const duplicate = await queryOne<ReceiptRow>(
         client,
-        "SELECT request_digest, terminal, outcome_code, resulting_state_version, decision_position::text FROM authoritative_command_receipts WHERE session_id = $1 AND command_id = $2",
-        [sessionId, command.commandId],
+        "SELECT request_digest, result_json, terminal, outcome_code, resulting_state_version, decision_position::text FROM authoritative_command_receipts WHERE session_id = $1 AND participant_id = $2 AND command_id = $3",
+        [sessionId, participant.participant_id, command.commandId],
       );
       if (duplicate !== null) {
         if (duplicate.request_digest !== digest) {
@@ -885,7 +775,7 @@ export class SharedSessionService {
       const row = await queryOne<AggregateRow>(
         client,
         `SELECT sessions.release_id, aggregates.team_id, aggregates.schema_id,
-                aggregates.schema_version, aggregates.state_version, aggregates.state_json,
+                aggregates.state_version, aggregates.state_json,
                 releases.manifest_json, releases.mechanic_config_json
          FROM team_aggregates aggregates JOIN hunt_sessions sessions USING(session_id)
          JOIN release_registrations releases USING(release_id)
@@ -901,20 +791,18 @@ export class SharedSessionService {
       };
       const dispatch =
         registered.resolution.aggregateKind === "team"
-          ? dispatchTrustedCommand(
-              registered.resolution.adapter,
-              row,
-              authorizedParticipant,
+          ? registered.resolution.adapter.execute({
+              participant: authorizedParticipant,
+              aggregate: aggregateForRow(row, registered.resolution.adapter),
               command,
-              registered.stateSchemaVersion,
-            )
-          : dispatchTrustedCommand(
-              registered.resolution.adapter,
-              row,
-              authorizedParticipant,
+              observations: command.observations,
+            })
+          : registered.resolution.adapter.execute({
+              participant: authorizedParticipant,
+              aggregate: aggregateForRow(row, registered.resolution.adapter),
               command,
-              registered.stateSchemaVersion,
-            );
+              observations: command.observations,
+            });
 
       if (dispatch.aggregateAfter.stateVersion !== dispatch.aggregateBefore.stateVersion) {
         await client.query(
@@ -929,25 +817,37 @@ export class SharedSessionService {
       }
       const receipt = await queryOne<ReceiptRow>(
         client,
-        `INSERT INTO authoritative_command_receipts(session_id, command_id, participant_id, request_digest, terminal, outcome_code, resulting_state_version)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `INSERT INTO authoritative_command_receipts(session_id, command_id, participant_id, request_digest, request_json, terminal, outcome_code, resulting_state_version, result_json)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'{}')
          RETURNING request_digest, terminal, outcome_code, resulting_state_version, decision_position::text`,
         [
           sessionId,
           command.commandId,
           participant.participant_id,
           digest,
+          JSON.stringify(canonicalCommand),
           dispatch.terminal,
           dispatch.outcomeCode,
           dispatch.aggregateAfter.stateVersion,
         ],
       );
       if (receipt === null) throw new Error("command-receipt-missing");
+      const decided: SyncCommandResult = {
+        ...terminalResult(command.commandId, "decided", receipt),
+        ...(dispatch.capabilityEvidence.length === 0
+          ? {}
+          : { capabilityEvidence: dispatch.capabilityEvidence }),
+      };
+      await client.query(
+        "UPDATE authoritative_command_receipts SET result_json = $4 WHERE session_id = $1 AND participant_id = $2 AND command_id = $3",
+        [sessionId, participant.participant_id, command.commandId, JSON.stringify(decided)],
+      );
       if (dispatch.terminal === "accepted") {
         await client.query(
-          "INSERT INTO authoritative_command_journal(session_id, command_id, before_version, after_version, outcome_code) VALUES ($1,$2,$3,$4,$5)",
+          "INSERT INTO authoritative_command_journal(session_id, participant_id, command_id, before_version, after_version, outcome_code) VALUES ($1,$2,$3,$4,$5,$6)",
           [
             sessionId,
+            participant.participant_id,
             command.commandId,
             dispatch.aggregateBefore.stateVersion,
             dispatch.aggregateAfter.stateVersion,
@@ -956,10 +856,11 @@ export class SharedSessionService {
         );
         for (const event of dispatch.domainEvents) {
           await client.query(
-            "INSERT INTO authoritative_domain_events(event_id, session_id, command_id, event_type, event_json) VALUES ($1,$2,$3,$4,$5)",
+            "INSERT INTO authoritative_domain_events(event_id, session_id, participant_id, command_id, event_type, event_json) VALUES ($1,$2,$3,$4,$5,$6)",
             [
               createOpaqueId("event"),
               sessionId,
+              participant.participant_id,
               command.commandId,
               typeof event.type === "string" ? event.type : "domain-event",
               JSON.stringify(event),
@@ -978,7 +879,7 @@ export class SharedSessionService {
           dispatch.aggregateAfter.stateVersion,
         ],
       );
-      return terminalResult(command.commandId, "decided", receipt);
+      return decided;
     });
   }
 
@@ -991,7 +892,7 @@ export class SharedSessionService {
       const row = await queryOne<AggregateRow>(
         client,
         `SELECT sessions.release_id, aggregates.team_id, aggregates.schema_id,
-                aggregates.schema_version, aggregates.state_version, aggregates.state_json,
+                aggregates.state_version, aggregates.state_json,
                 releases.manifest_json, releases.mechanic_config_json
          FROM team_aggregates aggregates JOIN hunt_sessions sessions USING(session_id)
          JOIN release_registrations releases USING(release_id)
@@ -1007,18 +908,8 @@ export class SharedSessionService {
       };
       const projection =
         registered.resolution.aggregateKind === "team"
-          ? projectAggregate(
-              registered.resolution.adapter,
-              row,
-              authorizedParticipant,
-              registered.stateSchemaVersion,
-            )
-          : projectAggregate(
-              registered.resolution.adapter,
-              row,
-              authorizedParticipant,
-              registered.stateSchemaVersion,
-            );
+          ? projectAggregate(registered.resolution.adapter, row, authorizedParticipant)
+          : projectAggregate(registered.resolution.adapter, row, authorizedParticipant);
       if (projection.kind !== "projected") throw mechanicFailure(projection.diagnostic.code);
       const high = await queryOne<{ position: string }>(
         client,
@@ -1028,7 +919,7 @@ export class SharedSessionService {
       const reset = requested === null || requested > highWater;
       const after = reset ? 0 : requested;
       const results = await client.query<ReceiptRow & { command_id: string }>(
-        `SELECT command_id, request_digest, terminal, outcome_code, resulting_state_version, decision_position::text
+        `SELECT command_id, request_digest, result_json, terminal, outcome_code, resulting_state_version, decision_position::text
          FROM authoritative_command_receipts WHERE participant_id = $1 AND decision_position > $2 AND decision_position <= $3
          ORDER BY decision_position`,
         [participant.participant_id, after, highWater],

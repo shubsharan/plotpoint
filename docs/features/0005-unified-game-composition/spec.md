@@ -1,14 +1,19 @@
 ---
-status: Pending
+status: Active
 ---
 
 # Feature Specification: Unified Game Composition
 
 **Branch**: `feature/0005-unified-game-composition`
 **Epic**: [Plotpoint Core Product Loops](../../epics/0001-plotpoint-core-platform/epic.md)
-**PR**: Pending
+**PR**: [](<>)
 **Created**: 2026-08-05
 **Input**: Unify the game-authoring, runtime, progression, and authoritative multiplayer architecture; repair shared recovery and release-pinned joining; and make the co-op game a genuinely runnable end-to-end reference game.
+
+**Remediation**: Reopened 2026-08-06 after review showed that the Phase 8 commands passed while the
+installed product loop, runtime singularity, recovery ownership, and report semantics were not yet
+proved. User Stories 1-5 and tasks T001-T077 remain implementation history; User Stories 6-8 define
+the completion authority for the reopened feature.
 
 ## User Scenarios & Testing _(mandatory)_
 
@@ -174,6 +179,89 @@ exact or safely recoverable bindings persist and that revocation never reverses.
    active membership, **Then** the prior revoked binding and blocked actions remain unchanged and an
    explicit reactivation conflict is reported.
 
+### User Story 6 - Execute One Coherent Installed Runtime (Priority: P1)
+
+A player and an acceptance test execute the same generated Web runtime kernel. The kernel resolves the
+installed release composition, scopes component lifecycles, adapts local commands, and talks to the
+native host through the production bridge. Schema agreement comes only from the pinned release,
+logical schema identity, and exact inventoried bytes.
+
+**Why this priority**: Passing helper-level tests cannot prove the installed game when production uses
+a second handwritten implementation.
+
+**Independent Test**: Compile and install each reference release, execute the generated production
+runtime over WebView-style message transport, and prove that its lifecycle and command behavior match
+the directly imported kernel without a second bootstrap implementation.
+
+**Acceptance Scenarios**:
+
+1. **Given** a compiled release, **When** production and vertical tests start it, **Then** both execute
+   the same generated kernel source and exchange the unchanged Host API messages.
+2. **Given** a component factory that throws, **When** it is mounted, **Then** only that factory's child
+   scope is rolled back and no cleanup leaks into the application scope.
+3. **Given** a committed local transition followed by refresh or listener failure, **When** the command
+   completes, **Then** its terminal result remains successful and the failure becomes recovery state
+   plus a safe diagnostic.
+4. **Given** an aggregate schema inventory entry, **When** it is compiled, persisted, or projected,
+   **Then** agreement uses release identity, logical schema ID, and inventoried digest with no aggregate
+   generation counter.
+
+---
+
+### User Story 7 - Resume Shared Play from Every Durable Boundary (Priority: P1)
+
+A participant opens one installed run and one run-scoped controller determines whether play is local,
+needs a join, is joining, is synchronizing, is bound, is revoked, or requires recovery. Startup alone
+finishes recoverable join preparation, resumes a pending join, schedules synchronization for a binding,
+and exposes revocation before a WebView can accept another command.
+
+**Why this priority**: Recovery is a product behavior. Requiring the App or a test to orchestrate
+internal steps makes crash safety and revocation timing accidental.
+
+**Independent Test**: Recreate the controller and stores at every durable join, submission, pull, and
+commit interruption, call only `start()`, and prove convergence or an explicit recovery state.
+
+**Acceptance Scenarios**:
+
+1. **Given** an interrupted secret preparation or complete pending join, **When** a new controller
+   starts, **Then** it cleans or resumes the deterministic per-run envelope without user reconstruction.
+2. **Given** an active binding, **When** startup, foreground, explicit retry, or unreachable-to-reachable
+   connectivity occurs, **Then** one keyed single-flight synchronization pass covers the trigger.
+3. **Given** a release-mismatched or malformed pull, **When** it is received, **Then** the entire local
+   database remains unchanged because validation precedes the mutation transaction.
+4. **Given** authoritative revocation, **When** it commits, **Then** controller state becomes revoked,
+   credentials are removed, queued work is blocked, and the WebView is unmounted before another game
+   message is accepted.
+
+---
+
+### User Story 8 - Export Truthful Evidence and Prove the Product Loop (Priority: P1)
+
+An operator exports a deterministic Game Play Report projected only from generic evidence committed by
+the boundary that observed each fact. The completed co-op journey crosses the compiled release,
+generated Web runtime, real native stores and controller, HTTP service, disposable PostgreSQL, restart,
+and report export.
+
+**Why this priority**: A report that reconstructs semantics from unrelated tables can be plausible and
+wrong, and an API-only journey cannot establish installed-player completion.
+
+**Independent Test**: Run the installed co-op journey twice with 5-second and 30-second observation
+policies and prove that the unchanged report exporter emits the mechanic-committed dispositions,
+truthful nonzero synchronization chronology, stable bytes, and no private values.
+
+**Acceptance Scenarios**:
+
+1. **Given** a committed local command, shared pull, synchronization, lifecycle, or recovery transition,
+   **When** it completes, **Then** its responsible transaction appends validated generic evidence.
+2. **Given** an observation evaluated by the trusted location mechanic, **When** policy decides its use,
+   **Then** the mechanic commits `captured`, `consumed`, `denied`, or `expired`; the reporter never reads
+   policy configuration or invents a threshold.
+3. **Given** the same durable ledger, **When** reports are exported repeatedly, **Then** their bytes are
+   identical and command aliases, ordering, and privacy allowlists are deterministic.
+4. **Given** the co-op acceptance, **When** it completes, **Then** it used the compiled installed release,
+   generated production runtime and bridge, real SQLite/controller/HTTP path, disposable PostgreSQL,
+   controller recreation, and ledger-backed report rather than handcrafted projections or events.
+
 ### Edge Cases
 
 - A configured application export is missing or statically malformed, or its statically valid `mount`
@@ -260,31 +348,44 @@ exact or safely recoverable bindings persist and that revocation never reverses.
   definition when progression is used.
 - **FR-015**: Local runtime adaptation MUST resolve the correct aggregate model, command, and optional
   progression and map the complete result to the host contract without game-specific protocol glue.
-- **FR-016**: Shared commands MUST move through an explicit durable lifecycle that prevents the same
-  queued row from being selected indefinitely while preserving safe exact retry after interruption.
+- **FR-016**: Shared commands MUST move through an explicit durable lifecycle and store canonical intent
+  JSON in pending and terminal rows. Terminal reuse MUST compare the complete canonical intent. Client
+  and authoritative idempotency MUST be participant-scoped so `(sessionId, participantId, commandId)`
+  identifies one request while another participant may independently reuse the command ID.
 - **FR-017**: At most one synchronization run per shared session MUST submit queued work and apply a
   pull at a time. Each synchronization request MUST return a stable per-session drain promise that
   resolves only after the pass covering that request's trigger has finished.
-- **FR-018**: One synchronization pass MUST select each command eligible when the pass starts at most
+- **FR-018**: One run-scoped shared-play controller MUST own join, synchronization, revocation, recovery,
+  and observable UI state. Its `start()` MUST resume recoverable pending work and schedule one immediate
+  synchronization for an active binding. One synchronization pass MUST select each command eligible at the pass start at most
   once in stable order, perform at most one pull, terminate, and persist honest transport and recovery
   status visible to the game. A trigger arriving after the active pass claims its batch MUST request one
   coalesced trailing pass, and the triggering caller MUST await that trailing pass.
 - **FR-019**: Corrective and repeated snapshots MUST be idempotent even when retained terminal results
   no longer have corresponding outbox rows.
-- **FR-020**: Snapshot replacement, result reconciliation, outbox reconciliation, cursor advancement,
+- **FR-020**: The complete candidate pull, including immutable identity and every projection payload,
+  MUST be validated before opening the mutation transaction. Snapshot replacement, result reconciliation,
+  outbox reconciliation, cursor advancement,
   and membership changes MUST remain atomic. An authenticated revocation MUST atomically mark local
   membership revoked and every queued or submitting action blocked before credential removal.
   Membership MAY transition from active to revoked but MUST NOT transition from revoked to active for
   the same binding and credential.
-- **FR-021**: Every shared projection MUST match the release-declared schema ID and digest and
-  pass payload validation before persistence or component exposure.
-- **FR-022**: The player MUST reserve at most one pending-or-bound shared session per run and make the
-  exact join request plus its secret references durable before the first network attempt. Parallel or
+- **FR-021**: Every shared projection MUST match the pinned release's logical schema ID and exact
+  inventoried digest and pass payload validation before persistence or component exposure. Aggregate
+  schema-generation counters MUST NOT participate in agreement or survive in release, bridge, SQLite,
+  PostgreSQL, projection, or runtime contracts.
+- **FR-022**: The player MUST store one deterministic SecureStore envelope per run before reserving its
+  pending SQLite row. A pending envelope contains immutable join identity, invitation, and participant
+  credential; a bound envelope retains only the participant credential. If reservation loses a race,
+  the unused envelope MUST be deleted. The player MUST reserve at most one pending-or-bound shared
+  session per run and make the exact join request durable before the first network attempt. Parallel or
   changed joins for the run MUST conflict before submission. Joining shared play MUST then prove equality
   among the installed run release, join response release, authorized snapshot release, and persisted
   shared-session release before exposing the view.
 - **FR-023**: Exact join retries MUST preserve the original immutable run, release, session, participant,
   team, service, and credential-key binding; changed reuse MUST fail without partially updating it.
+  Binding and initial pull MUST commit atomically. Later envelope cleanup failure MUST be diagnostic and
+  MUST NOT convert the committed join into failure.
 - **FR-024**: Shared bridge errors for a well-formed request MUST preserve its request identity so the
   caller always reaches a terminal response.
 - **FR-025**: Local-only releases MUST remain playable without shared-session controls or shared
@@ -297,12 +398,17 @@ exact or safely recoverable bindings persist and that revocation never reverses.
   every configured target and complete the game.
 - **FR-027**: The field puzzle and co-op game MUST each pass one integrated external-consumer-style
   compile, install, mount, action, recovery, and report acceptance path appropriate to their authority.
-  The field-puzzle path MUST consume the compiled composition through the generated runtime adapter and
-  MUST NOT import a superseded author `logic` or `presentation` root directly.
+  Both paths MUST consume the compiled composition through the generated production Web runtime and
+  WebView-style message transport. The co-op path MUST additionally use real SQLite stores, the
+  run-scoped controller and HTTP client, disposable PostgreSQL, controller recreation, and committed
+  evidence export. Neither path may call a superseded helper directly.
 - **FR-028**: Existing immutable release identity, deterministic replay, atomic local persistence,
   privacy redaction, authorization, and trusted-code boundaries MUST remain intact or change only
   through an explicitly accepted architecture decision.
-- **FR-029**: Every Project Configuration release MUST export one host-owned Game Play Report
+- **FR-029**: Every Project Configuration release MUST export one host-owned Game Play Report projected
+  in one transaction from an append-only host-owned gameplay evidence ledger. Evidence semantics MUST
+  be committed in the same transaction as the fact they describe; the report layer MUST NOT infer
+  observation use, freshness policy, synchronization phase, or result version from other tables.
   selected only by run and optional shared-session binding. The export MUST NOT execute release code,
   select a game-specific report builder, or include game-specific completion fields, protected values,
   credentials, precise locations, service identities, or raw durable state.
@@ -318,7 +424,8 @@ exact or safely recoverable bindings persist and that revocation never reverses.
   as explicit invalid clean-break fixtures.
 - **FR-032**: Repository-owned interface, type, function, schema, command, component, mechanic, report,
   catalog, and contract-document names MUST use stable plain names without embedded generation suffixes.
-  No per-interface or per-schema compatibility layer is added. Existing centralized
+  No per-interface, per-schema, aggregate-manifest, `schemaVersion`, or `schema_version` counter is
+  added or retained. Existing centralized
   project/release format, Host API/capability, and `/v1` HTTP route metadata remain the only compatibility
   discriminators in scope; any future schema or interface evolution MUST use a centralized mechanism.
 
