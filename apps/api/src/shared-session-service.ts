@@ -54,6 +54,7 @@ interface ParticipantRow {
   session_id: string;
   team_id: string;
   status: "active" | "revoked";
+  receipt_position: string;
   revocation_operation_id?: string | null;
 }
 
@@ -117,21 +118,20 @@ function terminalResult(
   };
 }
 
-function parseCursor(cursor: string | undefined): number | null {
-  if (cursor === undefined || cursor === "") return 0;
+function parseCursor(cursor: string | undefined): bigint | null {
+  if (cursor === undefined || cursor === "") return 0n;
   try {
     const decoded = Buffer.from(cursor, "base64url").toString("utf8");
     if (!/^:\d+$/.test(decoded) || Buffer.from(decoded).toString("base64url") !== cursor) {
       return null;
     }
-    const value = Number(decoded.slice(1));
-    return Number.isSafeInteger(value) && value >= 0 ? value : null;
+    return BigInt(decoded.slice(1));
   } catch {
     return null;
   }
 }
 
-function encodeCursor(position: number): string {
+function encodeCursor(position: bigint): string {
   return Buffer.from(`:${position}`).toString("base64url");
 }
 
@@ -728,14 +728,14 @@ export class SharedSessionService {
     client: PostgresClient,
     sessionId: string,
     credential: string,
-    lock: "FOR SHARE" | "",
+    lock: "FOR UPDATE" | "",
   ): Promise<ParticipantRow> {
     if (!isSecret(credential)) {
       throw new SharedSessionServiceError("participant-not-authorized", 401);
     }
     const participant = await queryOne<ParticipantRow>(
       client,
-      `SELECT participant_id, session_id, team_id, status FROM hunt_participants WHERE credential_digest = $1 AND session_id = $2 ${lock}`,
+      `SELECT participant_id, session_id, team_id, status, receipt_position::text FROM hunt_participants WHERE credential_digest = $1 AND session_id = $2 ${lock}`,
       [credentialDigest(credential, this.pepper), sessionId],
     );
     if (participant === null) {
@@ -757,10 +757,7 @@ export class SharedSessionService {
     if (canonicalCommand === null) throw new SharedSessionServiceError("command-invalid", 400);
     const digest = requestDigest(canonicalCommand);
     return withReadCommittedTransaction(this.pool, async (client) => {
-      const participant = await this.authenticate(client, sessionId, credential, "FOR SHARE");
-      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
-        `shared-command:${sessionId}:${participant.participant_id}:${command.commandId}`,
-      ]);
+      const participant = await this.authenticate(client, sessionId, credential, "FOR UPDATE");
       const duplicate = await queryOne<ReceiptRow>(
         client,
         "SELECT request_digest, result_json, terminal, outcome_code, resulting_state_version, decision_position::text FROM authoritative_command_receipts WHERE session_id = $1 AND participant_id = $2 AND command_id = $3",
@@ -815,10 +812,17 @@ export class SharedSessionService {
           ],
         );
       }
+      const position = await queryOne<{ receipt_position: string }>(
+        client,
+        `UPDATE hunt_participants SET receipt_position = receipt_position + 1
+         WHERE session_id = $1 AND participant_id = $2 RETURNING receipt_position::text`,
+        [sessionId, participant.participant_id],
+      );
+      if (position === null) throw new Error("participant-receipt-position-missing");
       const receipt = await queryOne<ReceiptRow>(
         client,
-        `INSERT INTO authoritative_command_receipts(session_id, command_id, participant_id, request_digest, request_json, terminal, outcome_code, resulting_state_version, result_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'{}')
+        `INSERT INTO authoritative_command_receipts(session_id, command_id, participant_id, request_digest, request_json, terminal, outcome_code, resulting_state_version, result_json, decision_position)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'{}',$9)
          RETURNING request_digest, terminal, outcome_code, resulting_state_version, decision_position::text`,
         [
           sessionId,
@@ -829,6 +833,7 @@ export class SharedSessionService {
           dispatch.terminal,
           dispatch.outcomeCode,
           dispatch.aggregateAfter.stateVersion,
+          position.receipt_position,
         ],
       );
       if (receipt === null) throw new Error("command-receipt-missing");
@@ -911,18 +916,20 @@ export class SharedSessionService {
           ? projectAggregate(registered.resolution.adapter, row, authorizedParticipant)
           : projectAggregate(registered.resolution.adapter, row, authorizedParticipant);
       if (projection.kind !== "projected") throw mechanicFailure(projection.diagnostic.code);
-      const high = await queryOne<{ position: string }>(
-        client,
-        "SELECT COALESCE(MAX(decision_position), 0)::text AS position FROM authoritative_command_receipts",
-      );
-      const highWater = Number(high?.position ?? 0);
+      let highWater: bigint;
+      try {
+        highWater = BigInt(participant.receipt_position);
+      } catch {
+        throw new Error("participant-receipt-position-invalid");
+      }
+      if (highWater < 0n) throw new Error("participant-receipt-position-invalid");
       const reset = requested === null || requested > highWater;
-      const after = reset ? 0 : requested;
+      const after = reset ? 0n : requested;
       const results = await client.query<ReceiptRow & { command_id: string }>(
         `SELECT command_id, request_digest, result_json, terminal, outcome_code, resulting_state_version, decision_position::text
          FROM authoritative_command_receipts WHERE participant_id = $1 AND decision_position > $2 AND decision_position <= $3
          ORDER BY decision_position`,
-        [participant.participant_id, after, highWater],
+        [participant.participant_id, after.toString(), highWater.toString()],
       );
       const pull: SyncPull = {
         kind: "snapshot",

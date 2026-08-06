@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Pool, PoolClient } from "pg";
-import { AUTHORITATIVE_HUNT_MIGRATION, withReadCommittedTransaction } from "../src/index.js";
+import {
+  AUTHORITATIVE_HUNT_MIGRATION,
+  migrateAuthoritativeHunt,
+  withReadCommittedTransaction,
+} from "../src/index.js";
 
 describe("authoritative PostgreSQL boundary", () => {
   it("contains only the simplified durable records", () => {
@@ -25,6 +29,12 @@ describe("authoritative PostgreSQL boundary", () => {
     ]) {
       expect(AUTHORITATIVE_HUNT_MIGRATION).not.toContain(deferred);
     }
+    expect(AUTHORITATIVE_HUNT_MIGRATION).toContain("receipt_position BIGINT NOT NULL DEFAULT 0");
+    expect(AUTHORITATIVE_HUNT_MIGRATION).toContain(
+      "UNIQUE (session_id, participant_id, decision_position)",
+    );
+    expect(AUTHORITATIVE_HUNT_MIGRATION).not.toContain("CREATE SEQUENCE");
+    expect(AUTHORITATIVE_HUNT_MIGRATION).not.toContain("nextval(");
   });
 
   it("commits READ COMMITTED work on one checked-out client", async () => {
@@ -61,6 +71,24 @@ describe("authoritative PostgreSQL boundary", () => {
       "BEGIN ISOLATION LEVEL READ COMMITTED",
       "ROLLBACK",
     ]);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an earlier pre-release schema with reset-or-reinstall guidance", async () => {
+    const query = vi.fn(async (text: string) =>
+      text === "SELECT version FROM plotpoint_migrations ORDER BY version"
+        ? { rows: [{ version: 1 }], rowCount: 1 }
+        : { rows: [], rowCount: 0 },
+    );
+    const release = vi.fn();
+    const client = { query, release } as unknown as PoolClient;
+    const pool = { connect: vi.fn().mockResolvedValue(client) } as unknown as Pool;
+
+    await expect(migrateAuthoritativeHunt(pool)).rejects.toThrow(
+      "authoritative-database-incompatible-reset-or-reinstall",
+    );
+    expect(query).not.toHaveBeenCalledWith(AUTHORITATIVE_HUNT_MIGRATION);
+    expect(query).toHaveBeenLastCalledWith("ROLLBACK");
     expect(release).toHaveBeenCalledOnce();
   });
 });

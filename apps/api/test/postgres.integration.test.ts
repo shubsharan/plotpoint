@@ -194,6 +194,156 @@ describe("generic shared-session PostgreSQL integration", () => {
     });
   }, 120_000);
 
+  it("keeps participant cursors commit-safe, contiguous, and mutually independent", async () => {
+    const session = await service.createSession({
+      creationId: "creation-participant-cursors",
+      releaseId,
+      teamLabel: "Participant cursors",
+    });
+    const invitations = await Promise.all(
+      ["one", "two"].map((suffix) =>
+        service.createInvitation(
+          session.sessionId,
+          `invitation-participant-cursors-${suffix}`,
+          "2031-01-01T00:00:00.000Z",
+        ),
+      ),
+    );
+    const credentials = [createSecret(), createSecret()] as const;
+    const participants = await Promise.all(
+      invitations.map((invitation, index) =>
+        service.join(session.sessionId, {
+          joinRequestId: `join-participant-cursors-${index + 1}`,
+          expectedReleaseId: releaseId,
+          invitation: invitation.invitation,
+          participantCredential: credentials[index]!,
+        }),
+      ),
+    );
+    const heldClient = await pool.connect();
+    try {
+      await heldClient.query("BEGIN");
+      await heldClient.query(
+        "SELECT participant_id FROM hunt_participants WHERE session_id = $1 AND participant_id = $2 FOR UPDATE",
+        [session.sessionId, participants[0]!.participantId],
+      );
+      await heldClient.query(
+        "UPDATE hunt_participants SET receipt_position = 1 WHERE session_id = $1 AND participant_id = $2",
+        [session.sessionId, participants[0]!.participantId],
+      );
+      const heldResult = {
+        commandId: "held-command",
+        disposition: "decided",
+        terminal: "no-op",
+        outcomeCode: "held-no-op",
+        resultingStateVersion: 0,
+        decisionPosition: "1",
+      } as const;
+      await heldClient.query(
+        `INSERT INTO authoritative_command_receipts
+         (session_id,command_id,participant_id,request_digest,request_json,terminal,outcome_code,
+          resulting_state_version,result_json,decision_position)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1)`,
+        [
+          session.sessionId,
+          heldResult.commandId,
+          participants[0]!.participantId,
+          "held-request-digest",
+          "{}",
+          heldResult.terminal,
+          heldResult.outcomeCode,
+          heldResult.resultingStateVersion,
+          JSON.stringify(heldResult),
+        ],
+      );
+
+      const beforeCommit = await service.pull(
+        session.sessionId,
+        credentials[0],
+        participants[0]!.sync.nextCursor,
+      );
+      expect(beforeCommit.nextCursor).toBe(participants[0]!.sync.nextCursor);
+      expect(beforeCommit.commandResults).toEqual([]);
+
+      const independent = await pool.connect();
+      try {
+        await independent.query("BEGIN");
+        const position = await independent.query<{ receipt_position: string }>(
+          `UPDATE hunt_participants SET receipt_position = receipt_position + 1
+           WHERE session_id = $1 AND participant_id = $2 RETURNING receipt_position::text`,
+          [session.sessionId, participants[1]!.participantId],
+        );
+        expect(position.rows).toEqual([{ receipt_position: "1" }]);
+        const independentResult = {
+          commandId: "independent-command",
+          disposition: "decided",
+          terminal: "no-op",
+          outcomeCode: "independent-no-op",
+          resultingStateVersion: 0,
+          decisionPosition: "1",
+        } as const;
+        await independent.query(
+          `INSERT INTO authoritative_command_receipts
+           (session_id,command_id,participant_id,request_digest,request_json,terminal,outcome_code,
+            resulting_state_version,result_json,decision_position)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1)`,
+          [
+            session.sessionId,
+            independentResult.commandId,
+            participants[1]!.participantId,
+            "independent-request-digest",
+            "{}",
+            independentResult.terminal,
+            independentResult.outcomeCode,
+            independentResult.resultingStateVersion,
+            JSON.stringify(independentResult),
+          ],
+        );
+        await independent.query("COMMIT");
+      } finally {
+        independent.release();
+      }
+
+      await heldClient.query("COMMIT");
+      const committed = await service.pull(
+        session.sessionId,
+        credentials[0],
+        participants[0]!.sync.nextCursor,
+      );
+      expect(committed.commandResults).toEqual([
+        expect.objectContaining({ commandId: "held-command", decisionPosition: "1" }),
+      ]);
+      const independentPull = await service.pull(
+        session.sessionId,
+        credentials[1],
+        participants[1]!.sync.nextCursor,
+      );
+      expect(independentPull.commandResults).toEqual([
+        expect.objectContaining({ commandId: "independent-command", decisionPosition: "1" }),
+      ]);
+
+      await expect(
+        service.submit(session.sessionId, credentials[0], {
+          commandId: "after-held-command",
+          target: {
+            aggregateKind: "team",
+            aggregateId: session.teamId,
+            schemaId: TARGET_DISCOVERY_STATE_SCHEMA,
+          },
+          expectedStateVersion: 0,
+          type: TARGET_DISCOVERY_COMMAND,
+          payload: { targetId: "ferry-building" },
+          observations: [available("observation-after-held", 37.7955, -122.3937)],
+        }),
+      ).resolves.toMatchObject({ decisionPosition: "2" });
+    } catch (error) {
+      await heldClient.query("ROLLBACK");
+      throw error;
+    } finally {
+      heldClient.release();
+    }
+  }, 120_000);
+
   it("checks release pinning before invitation consumption and preserves exact join retry identity", async () => {
     const session = await service.createSession({
       creationId: "creation-release-pin",

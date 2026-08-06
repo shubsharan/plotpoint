@@ -354,9 +354,9 @@ without adding compatibility paths or a second owner for any boundary.
 - [x] T109 Make verified runtime preparation independent of synchronization success, render only controller
       state, resolve operational sync failure into retryable recovery, centralize bound-view notification,
       share one exact projection resolver, and close the scheduler claim boundary
-- [ ] T110 Add failing PostgreSQL tests proving a participant cursor cannot pass an uncommitted receipt and
+- [x] T110 Add failing PostgreSQL tests proving a participant cursor cannot pass an uncommitted receipt and
       that same-participant ordering is contiguous while different participants remain independent
-- [ ] T111 Replace the global receipt sequence with one transactionally incremented participant position,
+- [x] T111 Replace the global receipt sequence with one transactionally incremented participant position,
       preserve opaque cursor/result strings, and update server pull plus report ordering consistently
 - [ ] T112 Add failing mechanic and secret-recovery tests proving `execute` is the sole authoritative decision
       operation and one mandatory per-run envelope is the sole SecureStore representation

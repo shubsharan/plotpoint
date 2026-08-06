@@ -112,6 +112,7 @@ function serviceFixture(options: FixtureOptions = {}) {
   let invitationConsumed = false;
   let consumedCredentialDigest: string | null = null;
   let stateVersion = 0;
+  let receiptPosition = 0;
   let state: unknown = {
     complete: false,
     completedTargets: 0,
@@ -199,6 +200,7 @@ function serviceFixture(options: FixtureOptions = {}) {
           session_id: "session-1",
           team_id: teamId,
           status: "active",
+          receipt_position: String(receiptPosition),
         },
       ]);
     }
@@ -237,6 +239,10 @@ function serviceFixture(options: FixtureOptions = {}) {
       state = JSON.parse(String(values[3]));
       return rows([]);
     }
+    if (text.startsWith("UPDATE hunt_participants SET receipt_position")) {
+      receiptPosition += 1;
+      return rows([{ receipt_position: String(receiptPosition) }]);
+    }
     if (text.startsWith("INSERT INTO authoritative_command_receipts")) {
       return rows([
         {
@@ -244,12 +250,11 @@ function serviceFixture(options: FixtureOptions = {}) {
           terminal: String(values[5]),
           outcome_code: String(values[6]),
           resulting_state_version: Number(values[7]),
-          decision_position: "1",
+          decision_position: String(values[8]),
         },
       ]);
     }
     if (text.startsWith("UPDATE authoritative_command_receipts SET result_json")) return rows([]);
-    if (text.includes("COALESCE(MAX(decision_position)")) return rows([{ position: "0" }]);
     if (text.includes("FROM authoritative_command_receipts WHERE participant_id")) return rows([]);
     throw new Error(`unexpected-query:${text}`);
   });

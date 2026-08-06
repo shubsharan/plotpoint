@@ -1302,7 +1302,7 @@ export class SharedSyncStore {
       outcome_code: string;
       resulting_state_version: number;
     }>(
-      "SELECT * FROM shared_results WHERE session_id=? ORDER BY decision_position,command_id",
+      "SELECT * FROM shared_results WHERE session_id=? ORDER BY CAST(decision_position AS INTEGER),command_id",
       sessionId,
     );
     const pending = await this.database.getAllAsync<{ command_id: string; status: string }>(

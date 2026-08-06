@@ -90,3 +90,19 @@ remain local to their tests. The bounded runner completed 94 files and 657 tests
   mounting, retryability, and fresh-bound notification. The same exact projection resolver rejects empty,
   multiple, wrong-release, wrong-kind, wrong-ID, wrong-schema, and invalid-payload snapshots before any
   SQLite mutation and before Web exposure.
+
+## Phase 14 Checkpoint 3: Participant-Scoped Commit-Safe Cursors
+
+- Status: **PASS** on 2026-08-06.
+- Red evidence: the PostgreSQL schema test first observed the global sequence, missing participant counter,
+  and globally unique receipt position.
+- PostgreSQL/Testcontainers integration: **PASS**, 1 file and 4 tests, including a held uncommitted receipt,
+  an authenticated concurrent pull that stayed at the committed cursor, same-participant positions 1 then
+  2, and an independent participant position 1 while the first participant row remained locked.
+- API plus database focused unit suites: **PASS**, 2 files and 12 tests.
+- `pnpm --filter @plotpoint/api test`: **PASS**, 6 files and 26 tests.
+- `pnpm --filter @plotpoint/api check-types` and `pnpm --filter @plotpoint/db check-types`: **PASS**.
+- `git diff --check`: **PASS**.
+- PostgreSQL now increments `hunt_participants.receipt_position` under the participant row lock in the same
+  transaction as the receipt. Repeatable-read pull uses that participant's committed counter; an earlier
+  pre-release schema is rejected with reset-or-reinstall guidance rather than migrated.

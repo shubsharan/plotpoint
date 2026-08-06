@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS hunt_participants (
   join_request_id TEXT NOT NULL,
   credential_digest TEXT NOT NULL UNIQUE,
   status TEXT NOT NULL CHECK (status IN ('active', 'revoked')),
+  receipt_position BIGINT NOT NULL DEFAULT 0,
   joined_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
   revoked_at TIMESTAMPTZ,
   revocation_operation_id TEXT UNIQUE,
@@ -47,7 +48,6 @@ CREATE TABLE IF NOT EXISTS team_aggregates (
   state_json JSONB NOT NULL,
   PRIMARY KEY (session_id, team_id)
 );
-CREATE SEQUENCE IF NOT EXISTS command_decision_position;
 CREATE TABLE IF NOT EXISTS authoritative_command_receipts (
   session_id TEXT NOT NULL REFERENCES hunt_sessions(session_id),
   command_id TEXT NOT NULL,
@@ -58,10 +58,10 @@ CREATE TABLE IF NOT EXISTS authoritative_command_receipts (
   outcome_code TEXT NOT NULL,
   resulting_state_version INTEGER NOT NULL CHECK (resulting_state_version >= 0),
   result_json TEXT NOT NULL,
-  decision_position BIGINT NOT NULL DEFAULT nextval('command_decision_position'),
+  decision_position BIGINT NOT NULL,
   decided_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp(),
   PRIMARY KEY (session_id, participant_id, command_id),
-  UNIQUE (decision_position)
+  UNIQUE (session_id, participant_id, decision_position)
 );
 CREATE TABLE IF NOT EXISTS authoritative_command_journal (
   session_id TEXT NOT NULL,
