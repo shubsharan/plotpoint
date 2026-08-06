@@ -363,7 +363,7 @@ without adding compatibility paths or a second owner for any boundary.
 - [x] T113 Remove public mechanic authorization and two-secret fallbacks, collapse pending/bound storage to one
       immutable envelope key, update exact schema digests, and rewrite the trusted-mechanic/shared-recovery
       contracts plus architecture around the implemented boundaries
-- [ ] T114 Run focused adversarial suites, PostgreSQL/Testcontainers, four-release byte reproduction,
+- [x] T114 Run focused adversarial suites, PostgreSQL/Testcontainers, four-release byte reproduction,
       `pnpm verify`, workflow validation, and `git diff --check`; then run fresh iOS simulator and Android
       emulator build/install/launch gates, record exact evidence, and retain physical devices as `NOT RUN`
 

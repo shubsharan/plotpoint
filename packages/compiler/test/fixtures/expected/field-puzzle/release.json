@@ -1,5 +1,5 @@
 {
-  "releaseId": "sha256:22834f9a8058b285a56362f2241e3f4924674cde16f072b06428c4a4ad78a2a6",
+  "releaseId": "sha256:65bf7468b7e2166f620af6200da8844e844cb0d64760fa04e3cc18862ae6a2dd",
   "manifest": {
     "aggregateSchemas": [
       {
@@ -31,8 +31,8 @@
         "path": "bundles/logic.js"
       },
       {
-        "byteLength": 934,
-        "digest": "sha256:d52852b20a2b6abf5b951da0a9f581d46d55f6f94f247192faf4ea73ffa09800",
+        "byteLength": 5020,
+        "digest": "sha256:8d05c4b8bfcbb95bee6b3130476bd320a8d46ea18adefef7561d7feeec8b455d",
         "kind": "presentation-bundle",
         "path": "bundles/presentation.js"
       },

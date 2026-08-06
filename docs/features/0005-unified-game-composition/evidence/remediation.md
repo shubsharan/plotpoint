@@ -29,31 +29,30 @@ not carried forward.
 ## Four-Example Compiler Matrix
 
 - Validate, compile, inspect, verify, and reproduce all four examples: **PASS**. Both compiled copies were
-  byte-identical. Release identities were field puzzle `sha256:22834f9a8058b285a56362f2241e3f4924674cde16f072b06428c4a4ad78a2a6`,
+  byte-identical. Release identities were field puzzle `sha256:65bf7468b7e2166f620af6200da8844e844cb0d64760fa04e3cc18862ae6a2dd`,
   minimal puzzle `sha256:ad2a33ec8f88a67a45f7cdcdac82d68a24f533925267232434f598e8c31697ba`,
   branching tour `sha256:3bfc3ddf86a38dcac2da81ff851cf111e99b59f01ef92bcb1fae0f3890cccb1b`,
   and co-op `sha256:6b3a9adb1e9a9549a6a791f049fd6d9bdd3660b8e9a84d90d2023d9e265d58f2`.
 
 ## Repository Gates
 
-- `pnpm verify`: **PASS**; format, lint, type checks, build, 94 test files and 657 tests, Spec Kit
+- `pnpm verify`: **PASS**; format, lint, type checks, build, 93 test files and 662 tests, Spec Kit
   workflow contract tests, documentation synchronization, and workflow validation completed successfully.
 - Mandatory workflow validation: **PASS** within `pnpm verify`.
 - `git diff --check`: **PASS** after the final Spec Kit synchronization and cross-artifact analysis.
 
-The full Vitest runner is intentionally bounded to one worker because compiler and installed-player tests
-spawn real subprocesses. The unbounded runner oversubscribed the machine and caused unrelated timeouts;
-the project-level timeout is 15 seconds for those real boundaries, while explicit adversarial deadlines
-remain local to their tests. The bounded runner completed 94 files and 657 tests.
+The full Vitest runner completed 93 files and 662 tests. The project-level timeout is 15 seconds for real
+compiler and installed-player boundaries, while explicit adversarial deadlines remain local to their tests.
 
 ## Native Simulation
 
 - iOS simulator build/install/launch: **PASS** after final player production changes using Expo's native
   run for the iPhone 17 Pro simulator; Xcode reported `Build Succeeded`, installation/open succeeded, and
-  an explicit simulator launch returned process ID 6109.
+  an explicit simulator launch returned process ID 35832.
 - Android emulator build/install/launch: **PASS** after final player production changes using Expo's native
-  run for emulator 5554; Gradle built and installed successfully, and an explicit activity launch returned
-  application process ID 10634. The initial sandboxed Gradle-cache attempt was retried with approved access.
+  run for `Plotpoint_API_36`; Gradle built and installed successfully, and an explicit activity launch
+  returned application process ID 11642. The serial-form selector was rejected before build; the configured
+  AVD name was resolved from adb, and the sandboxed Gradle-cache attempt was retried with approved access.
 
 ## Physical Devices
 
@@ -127,3 +126,27 @@ remain local to their tests. The bounded runner completed 94 files and 657 tests
 - `TrustedMechanicAdapter` now exposes only binding validation, complete execution, and projection. The
   player has one mandatory envelope protocol and one immutable pending/bound key, with no fallback reader,
   schema migration, alias, or compatibility adapter. The governing contracts are single current documents.
+
+## Phase 14 Final Acceptance
+
+- Status: **PASS** on 2026-08-06 after all four dependency checkpoints.
+- `pnpm verify`: **PASS**, including generated-runtime freshness, format, lint, all package type checks and
+  builds, 93 test files and 662 tests, Spec Kit workflow tests, and workflow validation. The sole lint
+  warning remains the pre-existing unused helper in the generated-runtime test harness.
+- PostgreSQL/Testcontainers: **PASS** inside the complete suite, including the participant-row lock,
+  repeatable-read cursor high-water, installed co-op controller, and report journey.
+- Fresh four-release validation, compile, inspect, verify, second compile, and byte comparison: **PASS**.
+  Release IDs are field puzzle
+  `sha256:65bf7468b7e2166f620af6200da8844e844cb0d64760fa04e3cc18862ae6a2dd`, minimal local puzzle
+  `sha256:ad2a33ec8f88a67a45f7cdcdac82d68a24f533925267232434f598e8c31697ba`, branching media tour
+  `sha256:3bfc3ddf86a38dcac2da81ff851cf111e99b59f01ef92bcb1fae0f3890cccb1b`, and co-op game
+  `sha256:6b3a9adb1e9a9549a6a791f049fd6d9bdd3660b8e9a84d90d2023d9e265d58f2`.
+- The field release golden was intentionally regenerated after the playable component changed; the first
+  full gate identified the stale pre-remediation identity, while both fresh compilations were already
+  byte-identical. The corrected golden passed its focused compiler suite and the repeated full gate.
+- iOS simulator: **PASS** on iPhone 17 Pro. Xcode reported `Build Succeeded` with zero errors and warnings,
+  Expo installed/opened `com.plotpoint.player`, and explicit `simctl launch` returned PID 35832.
+- Android emulator: **PASS** on `Plotpoint_API_36`. The approved Gradle-cache retry reported
+  `BUILD SUCCESSFUL`, installed/opened `com.plotpoint.player`, and explicit activity/package/PID checks
+  returned PID 11642. The earlier selector and sandbox-cache attempts made no build or source change.
+- Physical iOS and physical Android: **NOT RUN**.
