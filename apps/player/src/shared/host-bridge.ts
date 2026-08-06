@@ -161,18 +161,31 @@ export function createCompositionSharedBridgeHandlers(input: {
   });
 }
 
-function parse(raw: string): SharedRequest | null {
-  let value: unknown;
-  try {
-    value = JSON.parse(raw);
-  } catch {
-    return null;
+function hasLoneSurrogate(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const current = value.charCodeAt(index);
+    if (current >= 0xd800 && current <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return true;
+      index += 1;
+    } else if (current >= 0xdc00 && current <= 0xdfff) {
+      return true;
+    }
   }
+  return false;
+}
+
+function isValidRequestId(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && !hasLoneSurrogate(value);
+}
+
+function parse(value: unknown): SharedRequest | null {
   if (
     !object(value) ||
-    Object.keys(value).some((key) => !["version", "requestId", "type", "payload"].includes(key)) ||
+    Object.keys(value).length !== 4 ||
+    !["payload", "requestId", "type", "version"].every((key) => Object.hasOwn(value, key)) ||
     value.version !== HOST_BRIDGE_VERSION ||
-    typeof value.requestId !== "string" ||
+    !isValidRequestId(value.requestId) ||
     !["shared.view.get", "shared.command.enqueue"].includes(value.type as string) ||
     !object(value.payload)
   )
@@ -188,18 +201,29 @@ function parse(raw: string): SharedRequest | null {
   return value as unknown as SharedRequest;
 }
 
+function errorResponse(requestId: string, code: string): CanonicalJsonObject {
+  return {
+    version: HOST_BRIDGE_VERSION,
+    requestId,
+    type: "host.error",
+    payload: { code },
+  };
+}
+
 export async function routeSharedBridgeMessage(
   raw: string,
   handlers: SharedBridgeHandlers,
 ): Promise<CanonicalJsonObject> {
-  const request = parse(raw);
-  if (request === null)
-    return {
-      version: HOST_BRIDGE_VERSION,
-      requestId: "unknown",
-      type: "host.error",
-      payload: { code: "shared-message-invalid" },
-    };
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(raw) as unknown;
+  } catch {
+    return errorResponse("unknown", "shared-message-invalid");
+  }
+  const requestId =
+    object(decoded) && isValidRequestId(decoded.requestId) ? decoded.requestId : "unknown";
+  const request = parse(decoded);
+  if (request === null) return errorResponse(requestId, "shared-message-invalid");
   try {
     let payload: SharedPlayView | SharedCommandStatus;
     if (request.type === "shared.view.get") payload = await handlers.getView();
@@ -215,11 +239,9 @@ export async function routeSharedBridgeMessage(
       payload: payload as unknown as CanonicalJsonObject,
     };
   } catch (error) {
-    return {
-      version: HOST_BRIDGE_VERSION,
-      requestId: request.requestId,
-      type: "host.error",
-      payload: { code: error instanceof Error ? error.message : "shared-operation-failed" },
-    };
+    return errorResponse(
+      request.requestId,
+      error instanceof Error ? error.message : "shared-operation-failed",
+    );
   }
 }

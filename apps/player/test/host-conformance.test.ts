@@ -8,7 +8,6 @@ import {
 
 import { routeHostBridgeMessage, type HostBridgeHandlers } from "../src/bridge/host-bridge";
 import { installReleaseFromDescriptor } from "../src/install/install-release";
-import type { DurableTransitionResult } from "../src/model";
 import { buildPlayReport } from "../src/reports/create-play-report";
 import { deriveHostSupportFromManifest } from "../src/runtime/host-support";
 import { validateRecoveryRecords } from "../src/runtime/recovery";
@@ -91,7 +90,6 @@ describe("Host API  release conformance", () => {
             fetchJson: async () => ({
               finalUrl: descriptorUrl,
               value: {
-                version: 1,
                 releaseUrl,
                 expectedReleaseId: fixture.release.releaseId,
               },
@@ -108,51 +106,51 @@ describe("Host API  release conformance", () => {
 
       const candidate = fixture.transitionRequest.payload.candidate;
       if (candidate.terminal !== "accepted") throw new Error("fixture-terminal-invalid");
-      const durableResult = {
-        kind: "accepted",
-        commandId: candidate.commandId,
-        commandOutcome: "accepted",
-        aggregateId: candidate.target.aggregateId,
-        aggregateKind: candidate.target.aggregateKind,
-        schemaId: candidate.target.schemaId,
-        schemaVersion: candidate.target.schemaVersion,
-        expectedVersion: candidate.expectedVersion,
-        resultingVersion: candidate.expectedVersion + 1,
-        outcome: candidate.outcome,
-        observationIds: candidate.observationIds,
-      } satisfies DurableTransitionResult;
+      if (candidate.nextState === undefined) throw new Error("fixture-next-state-missing");
+      const durableResult = fixture.transitionResult;
       expect(
         validateRecoveryRecords(
           fixture.release.manifest,
+          fixture.composition,
           {
             snapshot: {
+              model_id: candidate.modelId,
               aggregate_id: candidate.target.aggregateId,
               aggregate_kind: candidate.target.aggregateKind,
               schema_id: candidate.target.schemaId,
-              schema_version: candidate.target.schemaVersion,
               state_version: 1,
               state_json: JSON.stringify(candidate.nextState),
+              progression_json: null,
+              initial_state_json: JSON.stringify(fixture.bootstrap.aggregate.state),
+              initial_progression_json: null,
               journal_position: 1,
             },
             journals: [
               {
                 sequence: 1,
                 command_id: candidate.commandId,
-                outcome_json: JSON.stringify(candidate.outcome),
-                progression_json: JSON.stringify(candidate.progressionChanges),
+                record_json: JSON.stringify({ candidate, result: durableResult }),
               },
             ],
             receipts: [
               {
                 command_id: candidate.commandId,
-                expected_version: 0,
-                resulting_version: 1,
+                expected_state_version: candidate.expectedStateVersion,
+                candidate_json: JSON.stringify(candidate),
                 result_json: JSON.stringify(durableResult),
+                resulting_state_version: durableResult.resultingStateVersion,
               },
             ],
             observationLinks: [],
           },
-          () => true,
+          {
+            validateState: ({ schemaId }) => schemaId === candidate.target.schemaId,
+            validateSchema: (schemaId) =>
+              fixture.composition.resources.some(
+                (resource) => resource.role === "schema" && resource.id === schemaId,
+              ),
+            validateProgression: () => false,
+          },
         ),
       ).toMatchObject({ kind: "valid", aggregate: { stateVersion: 1 } });
 
@@ -168,7 +166,7 @@ describe("Host API  release conformance", () => {
             {
               sequence: 1,
               commandId: candidate.commandId,
-              progressionChanges: candidate.progressionChanges,
+              progressionChanges: [],
             },
           ],
           capabilities: [],
@@ -177,7 +175,7 @@ describe("Host API  release conformance", () => {
         }),
       ).toMatchObject({
         releaseId: fixture.release.releaseId,
-        events: [{ kind: "command", terminal: "accepted", resultingVersion: 1 }],
+        events: [{ kind: "command", terminal: "accepted", resultingStateVersion: 1 }],
       });
     }
   });
@@ -205,11 +203,16 @@ describe("Host API  release conformance", () => {
     });
   });
 
-  it.each(hostFaultFixtures)("returns the declared error for $name", async ({ raw, code }) => {
-    const fixture = fixtures[0];
-    if (fixture === undefined) throw new Error("field-conformance-fixture-missing");
-    const result: HostToWebBridgeEnvelope = await routeHostBridgeMessage(raw, handlersFor(fixture));
-    expect(result.type).toBe("host.error");
-    expect(result.payload).toMatchObject({ code });
-  });
+  it.each(hostFaultFixtures)(
+    "returns the declared correlated error for $name",
+    async ({ raw, code, requestId }) => {
+      const fixture = fixtures[0];
+      if (fixture === undefined) throw new Error("field-conformance-fixture-missing");
+      const result: HostToWebBridgeEnvelope = await routeHostBridgeMessage(
+        raw,
+        handlersFor(fixture),
+      );
+      expect(result).toMatchObject({ requestId, type: "host.error", payload: { code } });
+    },
+  );
 });

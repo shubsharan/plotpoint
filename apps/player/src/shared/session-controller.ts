@@ -3,14 +3,28 @@ import type { SyncPull } from "@plotpoint/protocol";
 import type { ParticipantCredentialStore } from "./credentials";
 import { SharedSyncStore } from "./database";
 import { SharedHttpClient } from "./http-client";
+import type { SharedSyncCoordinator } from "./sync-coordinator";
 
 export class SharedSessionController {
   constructor(
     private readonly store: SharedSyncStore,
     private readonly credentials: ParticipantCredentialStore,
+    private readonly scheduler: Pick<SharedSyncCoordinator, "request">,
     private readonly clientFactory: (url: string) => SharedHttpClient = (url) =>
       new SharedHttpClient(url),
   ) {}
+
+  foreground(sessionId: string): Promise<void> {
+    return this.scheduler.request(sessionId, "foreground");
+  }
+
+  reconnect(sessionId: string): Promise<void> {
+    return this.scheduler.request(sessionId, "reconnect");
+  }
+
+  retry(sessionId: string): Promise<void> {
+    return this.scheduler.request(sessionId, "retry");
+  }
 
   async join(input: {
     readonly serviceUrl: string;

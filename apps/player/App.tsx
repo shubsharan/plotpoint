@@ -1,5 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Button, Platform, SafeAreaView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  AppState,
+  Button,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
@@ -229,6 +238,8 @@ export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
   const webView = useRef<WebView>(null);
   const installationInFlight = useRef(false);
+  const sharedSyncCoordinator = useRef<SharedSyncCoordinator | null>(null);
+  const sharedSessionController = useRef<SharedSessionController | null>(null);
 
   const loadRun = async (
     db: PlayerDatabase,
@@ -376,6 +387,15 @@ export default function App() {
   useEffect(() => {
     void PlayerDatabase.open()
       .then(async (db) => {
+        const credentials = createParticipantCredentialStore();
+        const sharedStore = new SharedSyncStore(db.raw());
+        const coordinator = new SharedSyncCoordinator(sharedStore, credentials);
+        sharedSyncCoordinator.current = coordinator;
+        sharedSessionController.current = new SharedSessionController(
+          sharedStore,
+          credentials,
+          coordinator,
+        );
         setDatabase(db);
         const recovered = await recoverLatestRun(db, {
           readArtifact: readArtifactBytes,
@@ -432,6 +452,46 @@ export default function App() {
     );
   };
 
+  const notifySharedSyncChanged = () => {
+    reply({
+      version: 1,
+      requestId: "notification",
+      type: "shared.sync.changed",
+      payload: {},
+    });
+  };
+
+  const scheduleSharedSync = async (
+    sessionId: string,
+    trigger: "enqueue" | "foreground" | "reconnect" | "retry",
+  ) => {
+    const coordinator = sharedSyncCoordinator.current;
+    if (coordinator === null) throw new Error("shared-sync-coordinator-missing");
+    await coordinator.request(sessionId, trigger);
+    notifySharedSyncChanged();
+  };
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active" || database === null || sharedSessionId === null) return;
+      const controller = sharedSessionController.current;
+      if (controller === null) return;
+      void new SharedSyncStore(database.raw())
+        .view(sharedSessionId)
+        .then((view) =>
+          view.transport === "offline" || view.transport === "degraded"
+            ? controller.reconnect(sharedSessionId)
+            : controller.foreground(sharedSessionId),
+        )
+        .then(notifySharedSyncChanged)
+        .catch((error: unknown) => {
+          setStatus(error instanceof Error ? error.message : "Shared synchronization failed");
+          notifySharedSyncChanged();
+        });
+    });
+    return () => subscription.remove();
+  }, [database, sharedSessionId]);
+
   const onBridgeMessage = async (event: WebViewMessageEvent) => {
     if (database === null || runtime === null) return;
     let decodedType: unknown;
@@ -441,51 +501,46 @@ export default function App() {
       decodedType = undefined;
     }
     if (typeof decodedType === "string" && decodedType.startsWith("shared.")) {
-      if (sharedSessionId === null || runtime.sharedSurface.kind !== "bound") {
-        reply({
-          version: 1,
-          requestId: "unknown",
-          type: "host.error",
-          payload: { code: "shared-session-missing" },
-        });
-        return;
-      }
       const store = new SharedSyncStore(database.raw());
-      const response = await routeSharedBridgeMessage(
-        event.nativeEvent.data,
-        createCompositionSharedBridgeHandlers({
-          composition: runtime.composition,
-          expectedReleaseId: runtime.recovery.releaseId,
-          aggregateSchemaVersions: runtime.aggregateSchemaVersions,
-          projectionContract:
-            runtime.projectionContract ??
-            (() => {
-              throw new Error("shared-projection-contract-missing");
-            })(),
-          getView: () => store.view(sharedSessionId),
-          enqueue: (command) => store.enqueue(sharedSessionId, command, new Date().toISOString()),
-        }),
-      );
+      const handlers =
+        sharedSessionId === null || runtime.sharedSurface.kind !== "bound"
+          ? {
+              getView: async (): Promise<SharedPlayView> => {
+                throw new Error("shared-session-missing");
+              },
+              enqueue: async (): Promise<never> => {
+                throw new Error("shared-session-missing");
+              },
+            }
+          : createCompositionSharedBridgeHandlers({
+              composition: runtime.composition,
+              expectedReleaseId: runtime.recovery.releaseId,
+              aggregateSchemaVersions: runtime.aggregateSchemaVersions,
+              projectionContract:
+                runtime.projectionContract ??
+                (() => {
+                  throw new Error("shared-projection-contract-missing");
+                })(),
+              getView: () => store.view(sharedSessionId),
+              enqueue: async (command) => {
+                const result = await store.enqueue(
+                  sharedSessionId,
+                  command,
+                  new Date().toISOString(),
+                );
+                if (result.terminal === "pending") {
+                  void scheduleSharedSync(sharedSessionId, "enqueue").catch((error: unknown) => {
+                    setStatus(
+                      error instanceof Error ? error.message : "Shared synchronization failed",
+                    );
+                    notifySharedSyncChanged();
+                  });
+                }
+                return result;
+              },
+            });
+      const response = await routeSharedBridgeMessage(event.nativeEvent.data, handlers);
       reply(response);
-      void new SharedSyncCoordinator(store, createParticipantCredentialStore())
-        .synchronize(sharedSessionId)
-        .then(() =>
-          reply({
-            version: 1,
-            requestId: "notification",
-            type: "shared.sync.changed",
-            payload: {},
-          }),
-        )
-        .catch((error: unknown) => {
-          setStatus(error instanceof Error ? error.message : "Shared synchronization failed");
-          reply({
-            version: 1,
-            requestId: "notification",
-            type: "shared.sync.changed",
-            payload: {},
-          });
-        });
       return;
     }
     const response = await routeHostBridgeMessage(
@@ -554,8 +609,9 @@ export default function App() {
     if (database === null || runtime === null || runtime.sharedSurface.kind !== "join") return;
     setStatus("Joining shared play…");
     try {
-      const store = new SharedSyncStore(database.raw());
-      await new SharedSessionController(store, createParticipantCredentialStore()).join({
+      const controller = sharedSessionController.current;
+      if (controller === null) throw new Error("shared-session-controller-missing");
+      await controller.join({
         serviceUrl,
         sessionId: sessionCode,
         runId: runtime.recovery.runId,
@@ -565,6 +621,22 @@ export default function App() {
       await loadRun(database, runtime.recovery, "Verified shared-session binding opened.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Shared join failed");
+    }
+  };
+
+  const retrySharedSynchronization = async () => {
+    if (sharedSessionId === null) return;
+    const controller = sharedSessionController.current;
+    if (controller === null) return;
+    try {
+      await controller.retry(sharedSessionId);
+      notifySharedSyncChanged();
+      if (database !== null && runtime !== null) {
+        await loadRun(database, runtime.recovery, "Shared synchronization recovered.");
+      }
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Shared synchronization failed");
+      notifySharedSyncChanged();
     }
   };
 
@@ -645,6 +717,12 @@ export default function App() {
           <Text style={styles.failureAction}>
             Retry synchronization or reinstall the matching immutable release before continuing.
           </Text>
+          {sharedSessionId === null ? null : (
+            <Button
+              title="Retry synchronization"
+              onPress={() => void retrySharedSynchronization()}
+            />
+          )}
         </View>
       ) : null}
       {releaseDetails === null ? null : (

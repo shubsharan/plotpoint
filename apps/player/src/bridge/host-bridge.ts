@@ -60,8 +60,16 @@ export async function routeHostBridgeMessage(
   } catch {
     return errorEnvelope("host-invalid-json", "unknown");
   }
+  const requestId =
+    decoded !== null &&
+    typeof decoded === "object" &&
+    !Array.isArray(decoded) &&
+    typeof (decoded as { readonly requestId?: unknown }).requestId === "string" &&
+    (decoded as { readonly requestId: string }).requestId.length > 0
+      ? (decoded as { readonly requestId: string }).requestId
+      : "unknown";
   const parsed = parseHostBridgeEnvelope(decoded, "web-to-host");
-  if (parsed.kind === "invalid") return errorEnvelope(parsed.code, "unknown");
+  if (parsed.kind === "invalid") return errorEnvelope(parsed.code, requestId);
   const request = parsed.envelope;
   try {
     if (request.type === "runtime.ready") {
