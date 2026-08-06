@@ -1,66 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import type { GameComposition, SharedCommandIntent, SyncPull } from "@plotpoint/protocol";
+import type { SharedCommandIntent, SyncPull } from "@plotpoint/protocol";
 
-import { SharedSyncStore, type SharedBindingContext } from "../src/shared/database";
-import { resolveSharedProjection } from "../src/shared/host-bridge";
+import { SharedSyncStore, type SharedSessionBinding } from "../src/shared/database";
 import { createSharedTestDatabase, type TestSharedSqliteDatabase } from "./helpers/shared-sqlite";
 
 const releaseId = `sha256:${"a".repeat(64)}` as const;
-const bindingContext: SharedBindingContext = {
+const bindingContext: SharedSessionBinding = {
   sessionId: "session-1",
   runId: "run-1",
-  expectedReleaseId: releaseId,
+  releaseId,
+  participantId: "participant-1",
+  teamId: "team-1",
   serviceOrigin: "https://service.example",
   envelopeKey: "plotpoint.shared.session-1.envelope",
 };
-const sharedComposition = {
-  application: { components: [] },
-  aggregateModels: [
-    {
-      id: "shared-model",
-      authority: "server",
-      kind: "team",
-      stateSchema: { id: "shared-state" },
-      initializationSchema: { id: "shared-initialization" },
-      events: [],
-      effects: [],
-    },
-  ],
-  commands: [],
-  progressions: [],
-  components: [],
-  resources: [],
-  trustedMechanic: {
-    id: "shared-mechanic",
-    aggregateModel: "shared-model",
-    commands: [],
-    configuration: "shared-configuration",
-    projectionSchema: { id: "shared-projection" },
-    capabilities: [],
-  },
-} satisfies GameComposition;
 const projectionContract = {
   schemaId: "shared-projection",
   validate: (value: SyncPull["snapshot"]["projections"][number]["value"]) =>
     typeof value.completed === "number",
 };
-
-function validatesProjection(candidate: SyncPull): boolean {
-  return (
-    resolveSharedProjection(
-      sharedComposition,
-      {
-        releaseId: candidate.snapshot.releaseId,
-        sessionId: candidate.snapshot.sessionId,
-        teamId: candidate.snapshot.teamId,
-        projections: candidate.snapshot.projections,
-      },
-      releaseId,
-      projectionContract,
-    ).kind === "resolved"
-  );
-}
 
 function projection(stateVersion: number) {
   return {
@@ -139,7 +98,11 @@ describe("shared recovery acceptance", () => {
         bindingContext.envelopeKey,
         "2030-01-01T00:00:00.000Z",
       );
-      const store = new SharedSyncStore(database, validatesProjection);
+      const store = new SharedSyncStore(database, {
+        aggregateKind: "team",
+        schemaId: projectionContract.schemaId,
+        validate: projectionContract.validate,
+      });
       const before = await durableBytes(database);
       const transactionStarts = database.transactionStarts;
 
@@ -200,7 +163,11 @@ describe("shared recovery acceptance", () => {
   it("converges 100 response-loss retries and repeated corrective/revoked pulls byte-exactly", async () => {
     const database = await createSharedTestDatabase();
     try {
-      const store = new SharedSyncStore(database);
+      const store = new SharedSyncStore(database, {
+        aggregateKind: "team",
+        schemaId: projectionContract.schemaId,
+        validate: projectionContract.validate,
+      });
       await database.runAsync(
         `INSERT INTO shared_sessions
          (session_id,run_id,release_id,participant_id,team_id,service_origin,envelope_key,membership_status,

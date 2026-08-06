@@ -150,3 +150,36 @@ compiler and installed-player boundaries, while explicit adversarial deadlines r
   `BUILD SUCCESSFUL`, installed/opened `com.plotpoint.player`, and explicit activity/package/PID checks
   returned PID 11642. The earlier selector and sandbox-cache attempts made no build or source change.
 - Physical iOS and physical Android: **NOT RUN**.
+
+## Phase 15 Root-Cause Simplification
+
+- Status: **PASS** on 2026-08-06 after the four ownership boundaries and reviewer-discovered seam defects
+  were corrected at their owners.
+- Protocol/compiler semantic-parity checkpoint: **PASS**. Protocol completed 14 files and 149 tests;
+  compiler completed 26 files and 170 tests. The compiler now maps every protocol composition issue and
+  retains only source/material diagnostics after the shared analyzer passes.
+- Generated-runtime command, capability, and lifecycle checkpoint: **PASS** inside the player project's
+  25 files and 195 tests. Executable tests cover shared identical attempts, changed reuse, ordered distinct
+  commands, exact component minors, queue closure with a lost host reply, and awaited root cleanup.
+- Canonical shared reconciliation and typed-ledger checkpoint: **PASS**. Exact binding is checked before and
+  inside transactions; full result JSON includes capability evidence; typed deltas make locked retries
+  zero-write; 100 normal/corrective/revoked retries preserve the complete ledger; failure facts, recovery,
+  revocation, clock skew, and interruption remain transaction-owned.
+- Installed field/co-op and PostgreSQL/Testcontainers journeys: **PASS**. API completed 6 files and 26
+  tests, including the installed three-participant co-op journey; the field journey passed in the player
+  project.
+- Four-release validate/compile/inspect/verify/second-compile/`cmp` matrix: **PASS** with unchanged identities:
+  field puzzle `sha256:65bf7468b7e2166f620af6200da8844e844cb0d64760fa04e3cc18862ae6a2dd`,
+  minimal local puzzle `sha256:ad2a33ec8f88a67a45f7cdcdac82d68a24f533925267232434f598e8c31697ba`,
+  branching media tour `sha256:3bfc3ddf86a38dcac2da81ff851cf111e99b59f01ef92bcb1fae0f3890cccb1b`,
+  and co-op game `sha256:6b3a9adb1e9a9549a6a791f049fd6d9bdd3660b8e9a84d90d2023d9e265d58f2`.
+- `pnpm verify`: **PASS** with clean format/lint, all package type checks/builds, 95 test files and 682
+  tests, Spec Kit workflow tests, and workflow validation. `git diff --check`: **PASS**.
+- Fresh iOS simulator: **PASS** on iPhone 17 Pro. Xcode reported `Build Succeeded`, zero errors and one
+  duplicate-library warning; Expo installed/opened `com.plotpoint.player`, and explicit `simctl launch`
+  returned PID 72008.
+- Fresh Android emulator: **PASS** on `Plotpoint_API_36`. Gradle reported `BUILD SUCCESSFUL`, Expo
+  installed/opened `com.plotpoint.player`, and explicit activity/package/PID checks returned PID 12345.
+  An initial explicit serial selector found no Expo device name; the sole-connected-device retry succeeded
+  without a source change.
+- Physical iOS and physical Android: **NOT RUN**.

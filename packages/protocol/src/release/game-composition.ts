@@ -116,6 +116,30 @@ export type GameCompositionParseResult =
   | { readonly kind: "valid"; readonly gameComposition: GameComposition }
   | InvalidRelease;
 
+export type GameCompositionIssueCode =
+  | "application-component-missing"
+  | "command-aggregate-mismatch"
+  | "command-reference-missing"
+  | "component-shared-projection-mismatch"
+  | "content-reference-missing"
+  | "duplicate-command-type"
+  | "initialization-schema-mismatch"
+  | "local-model-count-invalid"
+  | "multiple-model-progressions"
+  | "progression-aggregate-mismatch"
+  | "resource-reference-missing"
+  | "schema-reference-missing"
+  | "trusted-configuration-schema-missing"
+  | "unselected-server-model"
+  | "unselected-trusted-command";
+
+export interface GameCompositionIssue {
+  readonly code: GameCompositionIssueCode;
+  readonly path: string;
+  readonly subject: string;
+  readonly related?: string;
+}
+
 function invalid(reason: string, path = ""): InvalidRelease {
   return {
     kind: "invalid",
@@ -355,79 +379,208 @@ function shape(value: unknown): value is GameComposition {
   return true;
 }
 
-function referencesAreValid(composition: GameComposition): boolean {
+export function analyzeGameComposition(composition: GameComposition): GameCompositionIssue[] {
   const models = new Map(composition.aggregateModels.map((model) => [model.id, model]));
   const commands = new Map(composition.commands.map((item) => [item.id, item]));
   const components = new Set(composition.components.map((item) => item.id));
   const resources = new Map(composition.resources.map((item) => [item.id, item]));
-  const schema = (referenceValue: SchemaReference) =>
-    resources.get(referenceValue.id)?.role === "schema";
+  const binding = composition.trustedMechanic;
+  const issues: GameCompositionIssue[] = [];
+  const add = (code: GameCompositionIssueCode, path: string, subject: string, related?: string) =>
+    issues.push(
+      Object.freeze({ code, path, subject, ...(related === undefined ? {} : { related }) }),
+    );
+  const requireSchema = (referenceValue: SchemaReference, path: string, subject: string) => {
+    if (resources.get(referenceValue.id)?.role !== "schema") {
+      add("schema-reference-missing", path, subject, referenceValue.id);
+    }
+  };
 
-  if (composition.aggregateModels.filter((model) => model.authority === "local").length !== 1)
-    return false;
-  if (!composition.application.components.every((item) => components.has(item))) return false;
+  const localModels = composition.aggregateModels.filter((model) => model.authority === "local");
+  if (localModels.length !== 1) {
+    add("local-model-count-invalid", "/aggregateModels", String(localModels.length));
+  }
+
+  for (const componentId of composition.application.components) {
+    if (!components.has(componentId)) {
+      add("application-component-missing", "/application/components", componentId);
+    }
+  }
 
   for (const model of composition.aggregateModels) {
-    if (!schema(model.stateSchema) || !schema(model.initializationSchema)) return false;
-    if (
-      model.authority === "local" &&
-      model.initializationContent !== undefined &&
-      resources.get(model.initializationContent)?.role !== "content"
-    )
-      return false;
-    if (![...model.events, ...model.effects].every((item) => schema(item.schema))) return false;
+    const modelPath = `/aggregateModels/${model.id}`;
+    requireSchema(model.stateSchema, `${modelPath}/stateSchema`, model.id);
+    requireSchema(model.initializationSchema, `${modelPath}/initializationSchema`, model.id);
+    if (model.authority === "local" && model.initializationContent !== undefined) {
+      const selected = resources.get(model.initializationContent);
+      if (selected?.role !== "content") {
+        add(
+          "content-reference-missing",
+          `${modelPath}/initializationContent`,
+          model.id,
+          model.initializationContent,
+        );
+      } else if (selected.schema?.id !== model.initializationSchema.id) {
+        add(
+          "initialization-schema-mismatch",
+          `${modelPath}/initializationContent`,
+          model.id,
+          model.initializationContent,
+        );
+      }
+    }
+    for (const [kind, records] of [
+      ["events", model.events],
+      ["effects", model.effects],
+    ] as const) {
+      for (const record of records) {
+        requireSchema(record.schema, `${modelPath}/${kind}/${record.type}/schema`, model.id);
+      }
+    }
   }
+
+  const commandTypeOwners = new Map<string, string>();
   for (const item of composition.commands) {
     const model = models.get(item.aggregateModel);
+    const commandPath = `/commands/${item.id}`;
     if (
       model === undefined ||
-      !schema(item.payloadSchema) ||
-      !schema(item.outcomeSchema) ||
       (item.execution === "local" ? model.authority !== "local" : model.authority !== "server")
-    )
-      return false;
+    ) {
+      add(
+        "command-aggregate-mismatch",
+        `${commandPath}/aggregateModel`,
+        item.id,
+        item.aggregateModel,
+      );
+    }
+    requireSchema(item.payloadSchema, `${commandPath}/payloadSchema`, item.id);
+    requireSchema(item.outcomeSchema, `${commandPath}/outcomeSchema`, item.id);
+    const typeKey = `${item.aggregateModel}\0${item.type}`;
+    const prior = commandTypeOwners.get(typeKey);
+    if (prior === undefined) commandTypeOwners.set(typeKey, item.id);
+    else add("duplicate-command-type", `${commandPath}/type`, item.id, prior);
   }
+
+  const progressionOwners = new Map<string, string>();
   for (const item of composition.progressions) {
-    if (
-      models.get(item.aggregateModel)?.authority !== "local" ||
-      resources.get(item.id)?.role !== "progression-descriptor"
-    )
-      return false;
+    const progressionPath = `/progressions/${item.id}`;
+    if (models.get(item.aggregateModel)?.authority !== "local") {
+      add(
+        "progression-aggregate-mismatch",
+        `${progressionPath}/aggregateModel`,
+        item.id,
+        item.aggregateModel,
+      );
+    }
+    if (resources.get(item.id)?.role !== "progression-descriptor") {
+      add("resource-reference-missing", progressionPath, item.id, item.id);
+    }
+    const prior = progressionOwners.get(item.aggregateModel);
+    if (prior === undefined) progressionOwners.set(item.aggregateModel, item.id);
+    else add("multiple-model-progressions", `${progressionPath}/aggregateModel`, item.id, prior);
   }
   for (const item of composition.components) {
+    const componentPath = `/components/${item.id}`;
+    if (resources.get(item.id)?.role !== "component-descriptor") {
+      add("resource-reference-missing", componentPath, item.id, item.id);
+    }
+    for (const commandId of item.commands) {
+      if (!commands.has(commandId)) {
+        add("command-reference-missing", `${componentPath}/commands`, item.id, commandId);
+      }
+    }
+    const selectsTrustedCommand = item.commands.some(
+      (commandId) => commands.get(commandId)?.execution === "trusted-mechanic",
+    );
     if (
-      resources.get(item.id)?.role !== "component-descriptor" ||
-      !item.commands.every((commandId) => commands.has(commandId)) ||
-      !item.content.every((resourceId) => resources.get(resourceId)?.role === "content") ||
-      !item.assets.every((resourceId) => resources.get(resourceId)?.role === "asset") ||
-      (item.sharedProjection !== undefined && !schema(item.sharedProjection))
-    )
-      return false;
+      selectsTrustedCommand &&
+      (binding === undefined || item.sharedProjection?.id !== binding.projectionSchema.id)
+    ) {
+      add(
+        "component-shared-projection-mismatch",
+        `${componentPath}/sharedProjection`,
+        item.id,
+        binding?.projectionSchema.id,
+      );
+    }
+    for (const resourceId of item.content) {
+      if (resources.get(resourceId)?.role !== "content") {
+        add("content-reference-missing", `${componentPath}/content`, item.id, resourceId);
+      }
+    }
+    for (const resourceId of item.assets) {
+      if (resources.get(resourceId)?.role !== "asset") {
+        add("resource-reference-missing", `${componentPath}/assets`, item.id, resourceId);
+      }
+    }
+    if (item.sharedProjection !== undefined) {
+      requireSchema(item.sharedProjection, `${componentPath}/sharedProjection`, item.id);
+    }
   }
   for (const item of composition.resources) {
-    if (item.role === "content" && item.schema !== undefined && !schema(item.schema)) return false;
+    if (item.role === "content" && item.schema !== undefined) {
+      requireSchema(item.schema, `/resources/${item.id}/schema`, item.id);
+    }
   }
-  const binding = composition.trustedMechanic;
   if (binding !== undefined) {
     const model = models.get(binding.aggregateModel);
-    if (
-      model?.authority !== "server" ||
-      !binding.commands.every(
-        (commandId) =>
-          commands.get(commandId)?.execution === "trusted-mechanic" &&
-          commands.get(commandId)?.aggregateModel === binding.aggregateModel,
-      ) ||
-      resources.get(binding.configuration)?.role !== "content" ||
-      !schema(binding.projectionSchema)
-    )
-      return false;
+    const bindingPath = `/trustedMechanic/${binding.id}`;
+    if (model?.authority !== "server") {
+      add(
+        "command-aggregate-mismatch",
+        `${bindingPath}/aggregateModel`,
+        binding.id,
+        binding.aggregateModel,
+      );
+    }
+    for (const commandId of binding.commands) {
+      const command = commands.get(commandId);
+      if (
+        command?.execution !== "trusted-mechanic" ||
+        command.aggregateModel !== binding.aggregateModel
+      ) {
+        add("command-reference-missing", `${bindingPath}/commands`, binding.id, commandId);
+      }
+    }
+    const configuration = resources.get(binding.configuration);
+    if (configuration?.role !== "content") {
+      add(
+        "content-reference-missing",
+        `${bindingPath}/configuration`,
+        binding.id,
+        binding.configuration,
+      );
+    } else if (configuration.schema === undefined) {
+      add(
+        "trusted-configuration-schema-missing",
+        `${bindingPath}/configuration`,
+        binding.id,
+        binding.configuration,
+      );
+    }
+    requireSchema(binding.projectionSchema, `${bindingPath}/projectionSchema`, binding.id);
   }
-  return true;
+
+  const selectedServerModel = binding?.aggregateModel;
+  const selectedCommands = new Set(binding?.commands ?? []);
+  for (const model of composition.aggregateModels) {
+    if (model.authority === "server" && model.id !== selectedServerModel) {
+      add("unselected-server-model", `/aggregateModels/${model.id}/authority`, model.id);
+    }
+  }
+  for (const command of composition.commands) {
+    if (command.execution === "trusted-mechanic" && !selectedCommands.has(command.id)) {
+      add("unselected-trusted-command", `/commands/${command.id}/execution`, command.id);
+    }
+  }
+  return issues;
 }
 
 export function parseGameComposition(value: unknown): GameCompositionParseResult {
-  if (!shape(value) || !referencesAreValid(value))
-    return invalid("invalid-catalog-shape-or-reference");
+  if (!shape(value)) return invalid("invalid-catalog-shape-or-reference");
+  const [issue] = analyzeGameComposition(value);
+  if (issue !== undefined) return invalid(issue.code, issue.path);
   const canonical = encodeCanonicalJson(value);
   if (canonical.kind === "invalid") return invalid("catalog-not-canonicalizable");
   return {

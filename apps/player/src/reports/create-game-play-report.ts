@@ -281,38 +281,10 @@ function parseJsonObject(value: string, code: string): Record<string, unknown> {
   return record;
 }
 
-function elapsedFromNumber(value: number, startedAtMs: number): number {
-  if (!Number.isSafeInteger(value)) throw new Error("report-elapsed-invalid");
-  const elapsed = value >= startedAtMs ? value - startedAtMs : value;
-  if (!nonNegativeInteger(elapsed)) throw new Error("report-elapsed-invalid");
-  return elapsed;
-}
-
-function syncEvent(
-  phase: string,
-  disposition: string,
-): Pick<SynchronizationEvent, "phase" | "disposition"> {
-  if (phase === "connecting" && disposition === "started") {
-    return { phase: "connecting", disposition: "scheduled" };
-  }
-  if (phase === "submitting" && disposition === "started") {
-    return { phase: "submitting", disposition: "batch-claimed" };
-  }
-  if (phase === "pulling" && disposition === "started") {
-    return { phase: "pulling", disposition: "scheduled" };
-  }
-  if (phase === "current" && disposition === "snapshot-replaced") {
-    return { phase: "current", disposition: "pull-applied" };
-  }
-  if (
-    phase === "revoked" &&
-    (disposition === "snapshot-replaced" || disposition === "participant-revoked")
-  ) {
-    return { phase: "revoked", disposition: "membership-revoked" };
-  }
-  if (phase === "degraded" && disposition === "transport-failed") {
-    return { phase: "degraded", disposition: "pull-failed" };
-  }
+function synchronizationEvidence(
+  phase: unknown,
+  disposition: unknown,
+): Pick<SynchronizationEvent, "phase" | "disposition"> | null {
   const allowedPhases: readonly SynchronizationEvent["phase"][] = [
     "offline",
     "connecting",
@@ -332,16 +304,15 @@ function syncEvent(
     "pull-failed",
     "membership-revoked",
   ];
-  if (
+  return typeof phase === "string" &&
+    typeof disposition === "string" &&
     allowedPhases.includes(phase as SynchronizationEvent["phase"]) &&
     allowedDispositions.includes(disposition as SynchronizationEvent["disposition"])
-  ) {
-    return {
-      phase: phase as SynchronizationEvent["phase"],
-      disposition: disposition as SynchronizationEvent["disposition"],
-    };
-  }
-  throw new Error("report-sync-event-unsupported");
+    ? {
+        phase: phase as SynchronizationEvent["phase"],
+        disposition: disposition as SynchronizationEvent["disposition"],
+      }
+    : null;
 }
 
 async function readGamePlayReportEvidence(
@@ -354,8 +325,7 @@ async function readGamePlayReportEvidence(
     readonly started_at: string;
   }>("SELECT release_id, started_at FROM runs WHERE run_id = ?", runId);
   if (run === null) throw new Error("report-run-missing");
-  const startedAtMs = Date.parse(run.started_at);
-  if (!Number.isFinite(startedAtMs)) throw new Error("report-run-incoherent");
+  if (!Number.isFinite(Date.parse(run.started_at))) throw new Error("report-run-incoherent");
 
   const lifecycle: Array<GamePlayReportEvidence["lifecycle"][number]> = [];
   const commands: Array<GamePlayReportEvidence["commands"][number]> = [];
@@ -375,7 +345,8 @@ async function readGamePlayReportEvidence(
     runId,
   );
   for (const row of rows) {
-    const elapsedMs = elapsedFromNumber(row.elapsed_ms, startedAtMs);
+    if (!nonNegativeInteger(row.elapsed_ms)) throw new Error("report-elapsed-invalid");
+    const elapsedMs = row.elapsed_ms;
     const value = parseJsonObject(row.evidence_json, "report-ledger-evidence-invalid");
     const ordered = { elapsedMs, sourceSequence: row.sequence };
     if (row.kind === "lifecycle" && typeof value.disposition === "string") {
@@ -411,13 +382,10 @@ async function readGamePlayReportEvidence(
         capabilityId: value.capabilityId,
         disposition: value.disposition as CapabilityEvent["disposition"],
       });
-    } else if (
-      row.kind === "synchronization" &&
-      typeof value.phase === "string" &&
-      typeof value.disposition === "string"
-    ) {
-      const mapped = syncEvent(value.phase, value.disposition);
-      synchronization.push({ ...ordered, ...mapped });
+    } else if (row.kind === "synchronization") {
+      const event = synchronizationEvidence(value.phase, value.disposition);
+      if (event === null) throw new Error("report-ledger-evidence-invalid");
+      synchronization.push({ ...ordered, ...event });
     } else if (row.kind === "recovery" && typeof value.disposition === "string") {
       recovery.push({ ...ordered, disposition: value.disposition as RecoveryEvent["disposition"] });
     } else if (row.kind === "diagnostic" && typeof value.code === "string") {

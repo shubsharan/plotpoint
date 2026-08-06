@@ -11,6 +11,11 @@ later replace four fragmented boundaries with one generated Web runtime kernel, 
 controller, one authoritative mechanic execution port, and one committed evidence ledger. No new ADR
 is required: accepted ADRs 0001, 0004, 0005, and 0006 already govern these changes.
 
+**Root-cause update (2026-08-06)**: Phase 15 reopens the post-review result without changing public
+release, Host API, shared-wire, or Game Play Report shapes. It removes duplicated semantic validation,
+global runtime dependency state, decomposed shared-result identity, stringly evidence translation, and
+duplicated ledger schema ownership. ADR-0006 already requires these durable contracts to evolve centrally.
+
 Make the field puzzle and co-op game runnable through one compiler-owned composition path, preserve all
 four valid compiler examples through the clean break, and close a two-release co-op learning loop. Correct
 Project Configuration, Game Composition, Host API, and Game Play Report in place; use plain stable
@@ -84,10 +89,10 @@ Only the final T102 post-design checkpoint may restore this gate to `PASS` after
 
 ### Post-Design Gate
 
-**PASS - REMEDIATION VERIFIED.** Phases 9-13 now establish the single generated runtime, run-scoped
-controller, mechanic-owned execution boundary, and committed-evidence ledger. Fresh results in
-`evidence/remediation.md` replace the superseded Phase 8 completion claim; no conclusion below depends
-on historical evidence.
+**PASS - PHASE 15 ROOT-CAUSE SIMPLIFICATION VERIFIED.** Protocol now owns serialized composition
+semantics; the sole generated runtime owns serialized local execution and root cleanup; `SharedSyncStore`
+owns exact binding and reconciliation; and one typed gameplay ledger owns report evidence and host time.
+Fresh provider-free, byte-reproduction, repository, simulator, and emulator evidence closes T124.
 
 - **PASS - One composition authority**: Project Configuration lowers to generated registries and
   Game Composition; no executable DSL or duplicate author runtime registry remains.
@@ -100,8 +105,9 @@ on historical evidence.
   or active-session migration is promised.
 - **PASS - Failure atomicity**: Binding validation precedes view mutation; result reconciliation is
   compare-or-insert; one transaction owns snapshot/result/outbox/cursor/member status.
-- **PASS - Verification proportionality**: Contract, replay, duplicate, interruption, corrective,
-  redaction, and two-game lifecycle tests cover every changed authority boundary.
+- **PASS - Verification proportionality**: Fresh parity, concurrency, cleanup, exact replay, interruption,
+  clock-skew, failure-evidence, installed-journey, four-release, repository, simulator, and emulator gates
+  cover the Phase 15 adversarial matrix; physical devices remain explicitly `NOT RUN`.
 - **PASS - Governance**: The design introduces no constitution exception. Accepted ADR 0001 governs
   its implementation boundaries and accepted ADR 0006 governs centralized contract evolution.
 

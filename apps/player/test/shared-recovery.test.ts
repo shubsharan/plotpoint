@@ -6,7 +6,7 @@ import type {
 } from "@plotpoint/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { SharedSyncStore, type SharedBindingContext } from "../src/shared/database";
+import { SharedSyncStore, type SharedSessionBinding } from "../src/shared/database";
 import {
   createSharedTestDatabase,
   TEST_SQLITE_INTERRUPTED_AFTER_WRITE,
@@ -16,12 +16,19 @@ import {
 
 const releaseId = `sha256:${"a".repeat(64)}` as const;
 const sessionId = "session-1";
-const bindingContext: SharedBindingContext = {
+const bindingContext: SharedSessionBinding = {
   sessionId,
   runId: "run-1",
-  expectedReleaseId: releaseId,
+  releaseId,
+  participantId: "participant-1",
+  teamId: "team-1",
   serviceOrigin: "https://example.test",
   envelopeKey: "plotpoint.shared.session-1.envelope",
+};
+const projectionRule = {
+  aggregateKind: "team" as const,
+  schemaId: "example.counter",
+  validate: () => true,
 };
 
 interface SubmissionBatchRecord {
@@ -103,6 +110,7 @@ function result(
   terminal: SharedTerminal,
   resultingStateVersion: number,
   decisionPosition: string,
+  capabilityEvidence?: SyncCommandResult["capabilityEvidence"],
 ): SyncCommandResult {
   return {
     commandId,
@@ -111,6 +119,7 @@ function result(
     outcomeCode: `${terminal}-outcome`,
     resultingStateVersion,
     decisionPosition,
+    ...(capabilityEvidence === undefined ? {} : { capabilityEvidence }),
   };
 }
 
@@ -134,7 +143,8 @@ async function setup(): Promise<{
     bindingContext.envelopeKey,
     "2030-01-01T00:00:00.000Z",
   );
-  const store = new SharedSyncStore(database) as SharedSyncStore & Phase6SubmissionStore;
+  const store = new SharedSyncStore(database, projectionRule) as SharedSyncStore &
+    Phase6SubmissionStore;
   return { database, store };
 }
 
@@ -287,12 +297,9 @@ describe("shared SQLite recovery", () => {
 
     await store.applyPull(bindingContext, authoritativePull);
     const once = await database.sharedState(sessionId);
-    expect(once.results.map(({ terminal }) => terminal)).toEqual([
-      "accepted",
-      "no-op",
-      "rejected",
-      "invalid",
-    ]);
+    expect(
+      once.results.map(({ result_json }) => JSON.parse(result_json as string).terminal),
+    ).toEqual(["accepted", "invalid", "no-op", "rejected"]);
     expect(once.outbox).toEqual([]);
 
     await expect(store.applyPull(bindingContext, authoritativePull)).resolves.toBeUndefined();
@@ -328,6 +335,105 @@ describe("shared SQLite recovery", () => {
 
     await expect(store.applyPull(bindingContext, conflictingPull)).rejects.toThrow();
     await expect(database.sharedState(sessionId)).resolves.toEqual(before);
+  });
+
+  it("treats capability evidence as part of the complete result identity", async () => {
+    const { database, store } = await setup();
+    const originalCommand = command("command-evidence");
+    const original = result("command-evidence", "accepted", 1, "1", [
+      {
+        observationId: "observation-1",
+        capabilityId: "plotpoint.location.foreground",
+        disposition: "consumed",
+      },
+    ]);
+    await enqueue(store, originalCommand, "2030-01-01T00:00:01.000Z");
+    await store.applyPull(bindingContext, pull({ results: [original] }));
+    const before = await database.sharedState(sessionId);
+    const changedEvidence = {
+      ...original,
+      capabilityEvidence: [
+        { ...original.capabilityEvidence![0]!, disposition: "expired" as const },
+      ],
+    };
+
+    await expect(
+      store.applyPull(bindingContext, pull({ cursor: "cursor-2", results: [changedEvidence] })),
+    ).rejects.toThrow("shared-result-identity-conflict");
+    await expect(database.sharedState(sessionId)).resolves.toEqual(before);
+  });
+
+  it("restores synchronization status for an exact successful pull without replay evidence", async () => {
+    const { database, store } = await setup();
+    const exact = pull();
+    await store.applyPull(bindingContext, exact);
+    const applied = await database.sharedState(sessionId);
+
+    await store.beginSubmissionBatch(sessionId);
+    await store.applyPull(bindingContext, exact);
+
+    const restored = await database.sharedState(sessionId);
+    expect(restored.sessions).toEqual([
+      expect.objectContaining({ transport_status: "online", sync_status: "current" }),
+    ]);
+    expect(restored.gameplayEvents).toEqual(applied.gameplayEvents);
+  });
+
+  it("orders opaque decimal decision positions numerically", async () => {
+    const { store } = await setup();
+    await enqueue(store, command("command-two"), "2030-01-01T00:00:01.000Z");
+    await enqueue(store, command("command-ten"), "2030-01-01T00:00:02.000Z");
+    await store.applyPull(
+      bindingContext,
+      pull({
+        results: [
+          result("command-ten", "accepted", 2, "10"),
+          result("command-two", "accepted", 1, "2"),
+        ],
+      }),
+    );
+
+    const view = await store.view(sessionId);
+    expect(view.actions.map(({ commandId }) => commandId)).toEqual(["command-two", "command-ten"]);
+  });
+
+  it("uses host time for shared evidence regardless of server clock skew", async () => {
+    const database = await createSharedTestDatabase();
+    databases.push(database);
+    await database.runAsync(
+      `INSERT INTO shared_sessions
+       (session_id,run_id,release_id,participant_id,team_id,service_origin,envelope_key,membership_status,
+        transport_status,sync_status,cursor,confirmed_at)
+       VALUES (?,?,?,?,?,?,?,'active','offline','current','0',?)`,
+      sessionId,
+      "run-1",
+      releaseId,
+      "participant-1",
+      "team-1",
+      "https://example.test",
+      bindingContext.envelopeKey,
+      "2030-01-01T00:00:00.000Z",
+    );
+    const hostTimes = [new Date("2030-01-01T00:00:05.000Z"), new Date("2030-01-01T00:00:06.000Z")];
+    const store = new SharedSyncStore(database, projectionRule, () => hostTimes.shift()!);
+    await store.applyPull(
+      bindingContext,
+      pull({ cursor: "future", confirmedAt: "2099-01-01T00:00:00.000Z" }),
+    );
+    await store.applyPull(
+      bindingContext,
+      pull({ cursor: "past", confirmedAt: "1900-01-01T00:00:00.000Z" }),
+    );
+
+    await expect(
+      database.getAllAsync<{ committed_at: string; elapsed_ms: number }>(
+        "SELECT committed_at,elapsed_ms FROM game_play_events WHERE run_id=? ORDER BY sequence",
+        "run-1",
+      ),
+    ).resolves.toEqual([
+      { committed_at: "2030-01-01T00:00:05.000Z", elapsed_ms: 5000 },
+      { committed_at: "2030-01-01T00:00:06.000Z", elapsed_ms: 6000 },
+    ]);
   });
 
   it("rejects duplicate projection identities before starting a transaction", async () => {

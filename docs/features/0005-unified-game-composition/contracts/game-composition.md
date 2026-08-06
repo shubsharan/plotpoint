@@ -346,6 +346,11 @@ dependencies, catalog/registry/inventory disagreement, or capability-union/manif
 These checks prove the supported composition and import boundary. They do not prove arbitrary trusted
 JavaScript lacks ambient access inside the single WebView.
 
+One protocol-owned semantic analyzer implements these catalog rules. Project validation maps its issues
+to author-facing locations, parsing rejects any issue, and release inspection consumes the parsed result.
+Compiler-specific source, path, and material checks remain separate and cannot weaken or redefine catalog
+ownership semantics.
+
 ## Naming and Compatibility
 
 Repository interfaces, schema IDs, command IDs, component IDs, mechanic IDs, generated exports, and

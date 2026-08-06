@@ -36,12 +36,6 @@ interface PlayerAcceptanceDatabase {
 interface PlayerAcceptanceStore {
   enqueue(sessionId: string, command: object, enqueuedAt: string): Promise<unknown>;
   applyPull(context: object, pull: SyncPull): Promise<void>;
-  recordSyncEvent(
-    sessionId: string,
-    elapsedMs: number,
-    phase: string,
-    disposition: string,
-  ): Promise<void>;
 }
 
 interface PlayerAcceptanceController {
@@ -129,6 +123,11 @@ async function loadPlayerAcceptance() {
     ) => Promise<unknown>,
     SharedSyncStore: databaseModule.SharedSyncStore as new (
       database: PlayerAcceptanceDatabase,
+      projectionRule: {
+        readonly aggregateKind: "team";
+        readonly schemaId: string;
+        validate(value: Readonly<Record<string, unknown>>): boolean;
+      },
     ) => PlayerAcceptanceStore,
     createSharedTestDatabase: sqliteModule.createSharedTestDatabase as (
       runId: string,
@@ -163,6 +162,18 @@ async function loadPlayerAcceptance() {
 const PARTICIPANTS = ["participant-one", "participant-two", "participant-three"] as const;
 const REVISED_MAXIMUM_AGE_MS = 30_000;
 const OPERATOR_TOKEN = "operator-token";
+
+const playerProjectionRule = {
+  aggregateKind: "team" as const,
+  schemaId: "plotpoint.location.team-projection",
+  validate(value: Readonly<Record<string, unknown>>): boolean {
+    return (
+      typeof value.complete === "boolean" &&
+      Number.isSafeInteger(value.completedTargets) &&
+      Array.isArray(value.targets)
+    );
+  },
+};
 
 interface Target {
   readonly targetId: string;
@@ -582,7 +593,7 @@ describe("co-op game acceptance", () => {
         "co-op-report-envelope",
         "2030-01-01T00:00:00.000Z",
       );
-      const playerStore = new player.SharedSyncStore(playerDatabase);
+      const playerStore = new player.SharedSyncStore(playerDatabase, playerProjectionRule);
       await playerStore.enqueue(
         first.session.sessionId,
         {
@@ -600,13 +611,14 @@ describe("co-op game acceptance", () => {
         {
           sessionId: first.session.sessionId,
           runId: "co-op-report-run",
-          expectedReleaseId: firstReleaseId,
+          releaseId: firstReleaseId,
+          participantId: reportParticipant.response.participantId,
+          teamId: first.session.teamId,
           serviceOrigin: origin,
           envelopeKey: "co-op-report-envelope",
         },
         committedPull,
       );
-      await playerStore.recordSyncEvent(first.session.sessionId, 3, "current", "snapshot-replaced");
       const reportValue = await player.createGamePlayReport(
         { raw: () => playerDatabase },
         "co-op-report-run",
@@ -783,7 +795,7 @@ describe("co-op game acceptance", () => {
           PRIMARY KEY(run_id, observation_id)
         );
       `);
-      const controllerStore = new player.SharedSyncStore(controllerDatabase);
+      const controllerStore = new player.SharedSyncStore(controllerDatabase, playerProjectionRule);
       const coordinator = new player.SharedSyncCoordinator(controllerStore, credentials);
       const controller = new player.SharedPlayController(
         {

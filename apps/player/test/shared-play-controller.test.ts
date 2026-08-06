@@ -86,6 +86,7 @@ describe("run-scoped shared play controller", () => {
       commitJoinedSession: vi.fn(async () => {
         bound = true;
       }),
+      recordRecoveryEvidence: vi.fn(async () => undefined),
       view: vi.fn(async () => view()),
     };
     const credentials = {

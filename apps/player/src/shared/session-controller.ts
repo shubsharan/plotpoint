@@ -12,7 +12,7 @@ import {
   SharedSyncStore,
   type PendingSharedJoin,
   type PendingSharedJoinInput,
-  type SharedBindingContext,
+  type SharedSessionBinding,
 } from "./database";
 import { SharedHttpClient } from "./http-client";
 import type { SharedSyncCoordinator } from "./sync-coordinator";
@@ -143,6 +143,7 @@ export class SharedSessionController {
     const existing = await this.store.pendingJoinForRun(input.runId);
     const orphanKey = secureStoreKey(input.runId);
     const orphan = existing === null ? await this.credentials.getEnvelope(orphanKey) : null;
+    const resumed = existing !== null || orphan?.kind === "pending";
     let attempt: PendingSharedJoin;
     let credential: string;
     let invitation: string;
@@ -190,11 +191,11 @@ export class SharedSessionController {
         invitation: input.invitation,
         participantCredential: credential,
       };
-      await this.credentials.putEnvelope(envelopeKey, envelope);
+      attempt = await this.store.reservePendingJoin(candidate);
       try {
-        attempt = await this.store.reservePendingJoin(candidate);
+        await this.credentials.putEnvelope(envelopeKey, envelope);
       } catch (error) {
-        await this.credentials.removeEnvelope(envelopeKey);
+        await this.store.cancelPreparingJoin(input.runId, attempt.requestDigest);
         throw error;
       }
       attempt = await this.store.markPendingJoinReady(input.runId, attempt.requestDigest);
@@ -205,6 +206,10 @@ export class SharedSessionController {
       );
       const storedEnvelope = await this.credentials.getEnvelope(attempt.envelopeKey);
       if (storedEnvelope?.kind !== "pending") {
+        if (attempt.status === "preparing") {
+          await this.store.cancelPreparingJoin(attempt.runId, attempt.requestDigest);
+          return this.join(input);
+        }
         throw new Error("shared-pending-join-envelope-missing");
       }
       if (!isReleaseId(attempt.invitationDigest)) {
@@ -247,34 +252,32 @@ export class SharedSessionController {
       invitation,
       participantCredential: credential,
     });
-    const context: SharedBindingContext = {
+    const binding: SharedSessionBinding = {
       sessionId: attempt.sessionId,
       runId: attempt.runId,
-      expectedReleaseId: attempt.expectedReleaseId,
+      releaseId: result.releaseId,
+      participantId: result.participantId,
+      teamId: result.teamId,
       serviceOrigin: attempt.serviceOrigin,
       envelopeKey: attempt.envelopeKey,
     };
     await this.store.commitJoinedSession({
-      context,
-      response: {
-        participantId: result.participantId,
-        teamId: result.teamId,
-        releaseId: result.releaseId,
-      },
+      binding,
       pull: result.sync,
+      ...(resumed ? { recoveryDisposition: "join-resumed" as const } : {}),
     });
     try {
       await this.credentials.putEnvelope(attempt.envelopeKey, {
         kind: "bound",
         participantCredential: credential,
       });
-    } catch {
-      await this.store.recordSyncEvent(
-        attempt.sessionId,
-        0,
-        "recovery",
-        "envelope-reduction-failed",
-      );
+    } catch (error) {
+      try {
+        await this.store.recordDiagnosticEvidence(attempt.sessionId, "delivery-interrupted");
+      } catch (diagnosticError) {
+        console.warn("shared-delivery-diagnostic-failed", diagnosticError);
+      }
+      console.warn("shared-envelope-reduction-failed", error);
     }
     return result.sync;
   }

@@ -48,10 +48,6 @@ export class GeneratedRuntimeElement {
   }
 }
 
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
 export async function mountGeneratedWebRuntime(
   html: string,
   routeMessage: (message: string) => Promise<unknown>,

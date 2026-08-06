@@ -31,7 +31,7 @@ export interface SharedDatabaseState {
   readonly outbox: readonly Readonly<Record<string, unknown>>[];
   readonly projections: readonly Readonly<Record<string, unknown>>[];
   readonly results: readonly Readonly<Record<string, unknown>>[];
-  readonly syncEvents: readonly Readonly<Record<string, unknown>>[];
+  readonly gameplayEvents: readonly Readonly<Record<string, unknown>>[];
 }
 
 export class TestSharedSqliteDatabase implements SharedSqlDatabase {
@@ -124,11 +124,13 @@ export class TestSharedSqliteDatabase implements SharedSqlDatabase {
         sessionId,
       ),
       results: await this.getAllAsync<Readonly<Record<string, unknown>>>(
-        "SELECT * FROM shared_results WHERE session_id=? ORDER BY decision_position,command_id",
+        "SELECT * FROM shared_results WHERE session_id=? ORDER BY command_id",
         sessionId,
       ),
-      syncEvents: await this.getAllAsync<Readonly<Record<string, unknown>>>(
-        "SELECT * FROM shared_sync_events WHERE session_id=? ORDER BY sequence",
+      gameplayEvents: await this.getAllAsync<Readonly<Record<string, unknown>>>(
+        `SELECT events.* FROM game_play_events AS events
+         JOIN shared_sessions AS sessions ON sessions.run_id=events.run_id
+         WHERE sessions.session_id=? ORDER BY events.sequence`,
         sessionId,
       ),
     };

@@ -369,6 +369,41 @@ without adding compatibility paths or a second owner for any boundary.
 
 ---
 
+## Phase 15: Root-Cause Simplification
+
+**Purpose**: Replace repeated boundary hardening with one semantic composition validator, one generated
+runtime command/lifecycle owner, one canonical shared reconciliation transaction, and one typed gameplay
+evidence ledger. Public release, Host API, shared wire, and report shapes remain unchanged; player storage
+uses the existing pre-release reset-or-reinstall policy.
+
+- [x] T115 Reopen Feature 0005 honestly for Phase 15; update `spec.md`, `plan.md`, `data-model.md`, affected
+      contracts, `docs/architecture.md`, `tasks.md`, and `evidence/remediation.md`; retain ADR-0006 as the
+      governing central-contract decision and reset only the new checkpoint to `NOT RUN`
+- [x] T116 Add failing protocol/compiler parity tests for initialization-content schema disagreement,
+      duplicate model command types, multiple progressions per model, unselected server models, and
+      unselected trusted commands in protocol inspection and compiler composition tests
+- [x] T117 Add protocol-owned `analyzeGameComposition`, make parsing/inspection/compiler validation consume
+      its semantic issues, and leave only source/material checks in compiler-specific validation
+- [x] T118 Add failing executable generated-runtime tests for concurrent identical and conflicting command
+      identities, ordered distinct commands, component-specific capability minors, and awaited reverse cleanup
+- [x] T119 Implement one runtime-lifetime local command lane and attempt map, component-local capability
+      clients, and immediate registration with the sole root mount scope; regenerate the production runtime
+- [x] T120 Add failing SQLite/report tests for exact pre-transaction binding, full canonical result comparison,
+      complete-ledger byte idempotency, truthful submit/pull failures, host-clock chronology, envelope recovery,
+      and interruption atomicity
+- [x] T121 Apply the clean-break shared schema with exact `SharedSessionBinding`, canonical result JSON and pull
+      digest, typed reconciliation deltas, zero-write identical replay, and no `shared_sync_events` table
+- [x] T122 Centralize gameplay-ledger schema and typed evidence writing, remove report inference and mixed clock
+      units, and record only transaction-owned result, synchronization, revocation, and recovery transitions
+- [x] T123 Run the focused protocol/compiler/runtime/player suites, both installed journeys, PostgreSQL/
+      Testcontainers, and the four-release validate/compile/inspect/verify/byte-reproduction matrix; update
+      Phase 15 evidence without carrying forward prior completion claims
+- [x] T124 Run `pnpm verify`, mandatory workflow validation, and `git diff --check`; then run fresh iOS simulator
+      and Android emulator build/install/launch gates, record exact results, restore the post-design gate only
+      if all required evidence passes, and retain physical iOS/Android as `NOT RUN`
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase Dependencies
@@ -389,6 +424,7 @@ US4 + US5 + US3 -> Phase 8 Historical Evidence (superseded)
                   -> Phase 12 US8 Committed Evidence + Installed Journeys
                   -> Phase 13 Fresh Verification
                       -> Phase 14 Post-Review Cohesion Remediation
+                          -> Phase 15 Root-Cause Simplification
 ```
 
 - **Setup (Phase 1)** has no dependency; T002-T004 begin only after the rename in T001.

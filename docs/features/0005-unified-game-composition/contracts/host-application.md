@@ -116,6 +116,12 @@ the application. The player-owned mount scope invokes registered cleanup once in
 component/application throw, invalid element/handle, unmount, remount, or disposal. It attempts all
 remaining cleanup after one fails and surfaces a stable lifecycle diagnostic.
 
+Component cleanup registers directly with that sole root scope while the synchronous factory is open;
+there is no child fire-and-forget rollback path. Local command invocations share one serialized lane and
+runtime-lifetime command-ID attempt map. Exact calls share a result, changed reuse fails, and an already
+observed duplicate never advances state or notifies listeners again. Capability clients are constructed
+from each component's exact declared requirement rather than selected from a global ID-only registry.
+
 ## Local Transition
 
 The existing `transition.commit` request receives `transition.result`; both retain their current names

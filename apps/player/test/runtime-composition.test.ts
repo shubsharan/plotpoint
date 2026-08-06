@@ -187,9 +187,27 @@ describe("generated runtime composition", () => {
   it("owns duplicate reconciliation and version validation in the generated kernel", () => {
     const html = runtimeGlue();
 
+    expect(html).toContain("localCommandAttempts");
+    expect(html).toContain("localCommandLane");
+    expect(html).toContain("runtime-local-command-identity-conflict");
     expect(html).toContain(
       "result.disposition !== 'committed' && result.disposition !== 'duplicate'",
     );
     expect(html).toContain("runtime-local-transition-version-invalid");
+  });
+
+  it("constructs exact capability clients inside each component scope", () => {
+    const html = runtimeGlue();
+
+    expect(html).toContain("createCapabilityClient");
+    expect(html).not.toContain("const capabilityRegistry");
+  });
+
+  it("registers component cleanup directly with the root mount scope", () => {
+    const html = runtimeGlue();
+
+    expect(html).not.toContain("componentCleanup");
+    expect(html).not.toContain("void result.catch");
+    expect(html).toContain("lifecycle.defer(cleanup)");
   });
 });

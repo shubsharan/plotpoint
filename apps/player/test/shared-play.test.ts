@@ -12,17 +12,19 @@ import {
 import {
   SHARED_MIGRATION,
   SharedSyncStore,
-  type SharedBindingContext,
+  type SharedSessionBinding,
   type SharedSqlDatabase,
 } from "../src/shared/database";
 import { SharedHttpClient } from "../src/shared/http-client";
 import { SharedSyncCoordinator } from "../src/shared/sync-coordinator";
 
 const releaseId = `sha256:${"a".repeat(64)}` as const;
-const bindingContext: SharedBindingContext = {
+const bindingContext: SharedSessionBinding = {
   sessionId: "session-1",
   runId: "run-1",
-  expectedReleaseId: releaseId,
+  releaseId,
+  participantId: "participant-1",
+  teamId: "team-1",
   serviceOrigin: "https://example.test",
   envelopeKey: "plotpoint.shared.session-1.envelope",
 };
@@ -582,7 +584,11 @@ describe("shared player architecture", () => {
       }),
       getFirstAsync: vi.fn(async (sql: string) =>
         sql.includes("FROM runs")
-          ? { release_id: releaseId, status: "active" }
+          ? {
+              release_id: releaseId,
+              status: "active",
+              started_at: "2030-01-01T00:00:00.000Z",
+            }
           : {
               session_id: "session-1",
               run_id: "run-1",
@@ -597,6 +603,7 @@ describe("shared player architecture", () => {
       getAllAsync: vi.fn(async () => []),
     } as unknown as SharedSqlDatabase;
     const database = {
+      getFirstAsync: transaction.getFirstAsync,
       withExclusiveTransactionAsync: async (operation: (tx: SharedSqlDatabase) => Promise<void>) =>
         operation(transaction),
     } as unknown as SharedSqlDatabase;
@@ -624,7 +631,11 @@ describe("shared player architecture", () => {
       runAsync,
       getFirstAsync: vi.fn(async (sql: string) =>
         sql.includes("FROM runs")
-          ? { release_id: releaseId, status: "active" }
+          ? {
+              release_id: releaseId,
+              status: "active",
+              started_at: "2030-01-01T00:00:00.000Z",
+            }
           : {
               session_id: "session-1",
               run_id: "run-1",
@@ -639,6 +650,7 @@ describe("shared player architecture", () => {
       getAllAsync: vi.fn(async () => []),
     } as unknown as SharedSqlDatabase;
     const database = {
+      getFirstAsync: transaction.getFirstAsync,
       withExclusiveTransactionAsync: async (operation: (tx: SharedSqlDatabase) => Promise<void>) =>
         operation(transaction),
     } as unknown as SharedSqlDatabase;
@@ -665,7 +677,7 @@ describe("shared player architecture", () => {
       })),
       beginSubmissionBatch: vi.fn(async () => ({ sessionId: "session-1", commands: [] })),
       failSubmissionBatch: vi.fn(async () => undefined),
-      recordSyncEvent: vi.fn(async () => undefined),
+      recordSyncEvidence: vi.fn(async () => undefined),
       markRevoked: vi.fn(async () => {
         order.push("revocation-commit");
       }),
@@ -715,7 +727,7 @@ describe("shared player architecture", () => {
       })),
       beginSubmissionBatch: vi.fn(async () => ({ sessionId: "session-1", commands: [] })),
       failSubmissionBatch: vi.fn(async () => undefined),
-      recordSyncEvent: vi.fn(async () => undefined),
+      recordSyncEvidence: vi.fn(async () => undefined),
       markRevoked: vi.fn(async () => {
         throw new Error("revocation-commit-interrupted");
       }),
@@ -766,7 +778,7 @@ describe("shared player architecture", () => {
       })),
       beginSubmissionBatch: vi.fn(async () => ({ sessionId: "session-1", commands: [] })),
       failSubmissionBatch: vi.fn(async () => undefined),
-      recordSyncEvent: vi.fn(async () => undefined),
+      recordSyncEvidence: vi.fn(async () => undefined),
       applyPull: vi.fn(async () => {
         order.push("snapshot-commit");
       }),
@@ -808,6 +820,21 @@ describe("shared player architecture", () => {
     const committed: string[][] = [];
     let failAt = 3;
     const database = {
+      getFirstAsync: async () => ({
+        session_id: "session-1",
+        run_id: "run-1",
+        release_id: releaseId,
+        participant_id: "participant-1",
+        team_id: "team-1",
+        service_origin: bindingContext.serviceOrigin,
+        envelope_key: bindingContext.envelopeKey,
+        membership_status: "active",
+        transport_status: "online",
+        sync_status: "syncing",
+        cursor: "0",
+        confirmed_at: null,
+        last_pull_digest: "",
+      }),
       withExclusiveTransactionAsync: async (
         operation: (tx: SharedSqlDatabase) => Promise<void>,
       ) => {
@@ -822,7 +849,11 @@ describe("shared player architecture", () => {
           },
           getFirstAsync: async (sql: string) => {
             if (sql.includes("FROM runs")) {
-              return { release_id: releaseId, status: "active" };
+              return {
+                release_id: releaseId,
+                status: "active",
+                started_at: "2030-01-01T00:00:00.000Z",
+              };
             }
             if (sql.includes("FROM shared_sessions")) {
               return {
@@ -838,16 +869,25 @@ describe("shared player architecture", () => {
               };
             }
             if (sql.includes("expected_state_version") && sql.includes("FROM shared_outbox")) {
-              return { expected_state_version: 0, observation_ids_json: "[]" };
+              return {
+                intent_json: JSON.stringify(command),
+                expected_state_version: 0,
+                observation_ids_json: "[]",
+              };
             }
             return null;
           },
+          getAllAsync: async () => [],
         } as unknown as SharedSqlDatabase;
         await operation(tx);
         committed.push(pending);
       },
     } as unknown as SharedSqlDatabase;
-    const store = new SharedSyncStore(database);
+    const store = new SharedSyncStore(database, {
+      aggregateKind: "team",
+      schemaId: "example.counter",
+      validate: () => true,
+    });
     const pull = {
       kind: "snapshot" as const,
       reset: false,
@@ -884,6 +924,11 @@ describe("shared player architecture", () => {
     expect(committed).toEqual([]);
     failAt = Number.POSITIVE_INFINITY;
     await expect(store.applyPull(bindingContext, pull)).resolves.toBeUndefined();
-    expect(committed[0]!.at(-1)).toContain("UPDATE shared_sessions");
+    expect(committed[0]).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("UPDATE shared_sessions"),
+        expect.stringContaining("INSERT INTO game_play_events"),
+      ]),
+    );
   });
 });

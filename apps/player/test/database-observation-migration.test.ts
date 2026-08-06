@@ -146,6 +146,7 @@ describe("corrected player database schema", () => {
       "sync_status",
       "cursor",
       "confirmed_at",
+      "last_pull_digest",
     ]);
     await expect(columns("game_play_events")).resolves.toEqual([
       "sequence",

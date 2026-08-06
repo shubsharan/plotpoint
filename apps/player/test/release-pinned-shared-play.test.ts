@@ -18,8 +18,8 @@ interface PendingJoinRecord {
   readonly sessionId: string;
   readonly serviceOrigin: string;
   readonly joinRequestId: string;
-  readonly requestDigest: `sha256:${string}`;
-  readonly invitationDigest: `sha256:${string}`;
+  readonly requestDigest: string;
+  readonly invitationDigest: string;
   readonly envelopeKey: string;
   readonly status: "preparing" | "ready" | "submitting";
 }
@@ -168,7 +168,48 @@ function bindingContext(
 
 async function setupJoin(): Promise<JoinFixture> {
   const database = await createDatabase();
-  const store = new SharedSyncStore(database) as unknown as ReleasePinnedSharedStore;
+  const actual = new SharedSyncStore(database, {
+    aggregateKind: "team",
+    schemaId: "example.shared-state",
+    validate: () => true,
+  });
+  const store: ReleasePinnedSharedStore = {
+    reservePendingJoin: (input) => actual.reservePendingJoin(input),
+    markPendingJoinReady: (runId, requestDigest) =>
+      actual.markPendingJoinReady(runId, requestDigest),
+    markPendingJoinSubmitting: (runId, requestDigest) =>
+      actual.markPendingJoinSubmitting(runId, requestDigest),
+    pendingJoinForRun: (runId) => actual.pendingJoinForRun(runId),
+    commitJoinedSession: ({ context, response: identity, pull: candidate }) =>
+      actual.commitJoinedSession({
+        binding: {
+          sessionId: context.sessionId,
+          runId: context.runId,
+          releaseId:
+            context.expectedReleaseId === releaseA ? identity.releaseId : context.expectedReleaseId,
+          participantId: identity.participantId,
+          teamId: identity.teamId,
+          serviceOrigin: context.serviceOrigin,
+          envelopeKey: context.envelopeKey,
+        },
+        pull: candidate,
+      }),
+    applyPull: (context, candidate) =>
+      actual.applyPull(
+        {
+          sessionId: context.sessionId,
+          runId: context.runId,
+          releaseId: context.expectedReleaseId,
+          participantId: context.sessionId === "session-b" ? "participant-b" : "participant-a",
+          teamId: context.sessionId === "session-b" ? "team-b" : "team-a",
+          serviceOrigin: context.serviceOrigin,
+          envelopeKey: context.envelopeKey,
+        },
+        candidate,
+      ),
+    session: (sessionId) => actual.session(sessionId),
+    view: (sessionId) => actual.view(sessionId),
+  };
   const candidate = pending();
   await store.reservePendingJoin(candidate);
   await store.markPendingJoinReady("run-a", candidate.requestDigest);
@@ -193,7 +234,7 @@ async function assertNoExposedJoin(fixture: JoinFixture): Promise<void> {
     outbox: [],
     projections: [],
     results: [],
-    syncEvents: [],
+    gameplayEvents: [],
   } satisfies SharedDatabaseState);
 }
 

@@ -1,7 +1,7 @@
-import type { SyncCommand } from "@plotpoint/protocol";
+import type { SyncCommand, SyncPull } from "@plotpoint/protocol";
 
 import type { ParticipantCredentialStore } from "./credentials";
-import { SharedSyncStore, type SharedBindingContext } from "./database";
+import { SharedSyncStore, type SharedSessionBinding } from "./database";
 import { SharedHttpClient, SharedHttpError } from "./http-client";
 
 export type SharedSyncTrigger = "startup" | "enqueue" | "foreground" | "reconnect" | "retry";
@@ -82,21 +82,33 @@ export class SharedSyncCoordinator {
     if (envelope?.kind !== "bound") throw new Error("shared-bound-envelope-missing");
     const credential = envelope.participantCredential;
     const client = this.clientFactory(session.serviceOrigin);
-    const context: SharedBindingContext = {
+    const binding: SharedSessionBinding = {
       sessionId: session.sessionId,
       runId: session.runId,
-      expectedReleaseId: session.releaseId,
+      releaseId: session.releaseId,
+      participantId: session.participantId,
+      teamId: session.teamId,
       serviceOrigin: session.serviceOrigin,
       envelopeKey: session.envelopeKey,
     };
     let batchClaimed = false;
+    let networkFailure: "submit-failed" | "pull-failed" | undefined;
     try {
       onClaimComplete();
       const batch = await this.store.beginSubmissionBatch(sessionId);
       batchClaimed = true;
       if (batch.sessionId !== sessionId)
         throw new Error("shared-submission-batch-session-mismatch");
-      await this.store.recordSyncEvent(sessionId, 0, "connecting", "started");
+      await this.store.recordSyncEvidence(sessionId, {
+        phase: "connecting",
+        disposition: "scheduled",
+      });
+      if (batch.commands.length > 0) {
+        await this.store.recordSyncEvidence(sessionId, {
+          phase: "submitting",
+          disposition: "batch-claimed",
+        });
+      }
       for (const command of batch.commands) {
         const observations = await this.store.observations(session.runId, command.observationIds);
         const request: SyncCommand = {
@@ -107,17 +119,34 @@ export class SharedSyncCoordinator {
           payload: command.payload,
           observations,
         };
-        await this.store.recordSyncEvent(sessionId, 0, "submitting", "started", command.commandId);
-        await client.submit(sessionId, credential, request);
+        try {
+          await client.submit(sessionId, credential, request);
+        } catch (error) {
+          networkFailure = "submit-failed";
+          throw error;
+        }
+        await this.store.recordSyncEvidence(sessionId, {
+          phase: "submitting",
+          disposition: "submit-succeeded",
+          commandId: command.commandId,
+        });
       }
-      await this.store.recordSyncEvent(sessionId, 0, "pulling", "started");
-      const pull = await client.pull(sessionId, credential, session.cursor);
-      await this.store.applyPull(context, pull);
+      await this.store.recordSyncEvidence(sessionId, {
+        phase: "pulling",
+        disposition: "scheduled",
+      });
+      let pull: SyncPull;
+      try {
+        pull = await client.pull(sessionId, credential, session.cursor);
+      } catch (error) {
+        networkFailure = "pull-failed";
+        throw error;
+      }
+      await this.store.applyPull(binding, pull);
       if (pull.snapshot.membershipStatus === "revoked") {
         await this.credentials.removeEnvelope(session.envelopeKey);
         return "revoked";
       }
-      await this.store.recordSyncEvent(sessionId, 0, "current", "snapshot-replaced");
       return "current";
     } catch (error) {
       if (error instanceof SharedHttpError && error.code === "participant-revoked") {
@@ -125,8 +154,10 @@ export class SharedSyncCoordinator {
         await this.credentials.removeEnvelope(session.envelopeKey);
         return "revoked";
       }
-      if (batchClaimed) await this.store.failSubmissionBatch(sessionId);
-      await this.store.recordSyncEvent(sessionId, 0, "degraded", "transport-failed");
+      if (batchClaimed) {
+        if (networkFailure === undefined) await this.store.recoverSubmissionBatch(sessionId);
+        else await this.store.failSubmissionBatch(sessionId, networkFailure);
+      }
       throw error;
     }
   }

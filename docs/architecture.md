@@ -611,6 +611,15 @@ mechanic configuration, or joins across operational tables.
 
 The exact contract is [Game Play Report ](features/0005-unified-game-composition/contracts/game-play-report.md).
 
+### Root Ownership
+
+Four small owners prevent cross-boundary drift. Protocol analyzes Game Composition semantics once for the
+compiler, parser, and inspector. The generated Web runtime serializes local attempts, constructs capability
+clients per component, and registers cleanup directly with one awaited mount scope. `SharedSyncStore`
+validates one exact binding and commits canonical pull reconciliation. A single typed gameplay-ledger module
+owns schema declaration, evidence encoding, and host-relative time; report code only validates, redacts, aliases,
+and orders committed facts.
+
 ## Authority and Persistence Boundaries
 
 | Fact                                              | Decision authority                      | Durable owner                                   |

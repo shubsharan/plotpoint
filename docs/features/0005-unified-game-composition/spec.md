@@ -428,6 +428,17 @@ truthful nonzero synchronization chronology, stable bytes, and no private values
   added or retained. Existing centralized
   project/release format, Host API/capability, and `/v1` HTTP route metadata remain the only compatibility
   discriminators in scope; any future schema or interface evolution MUST use a centralized mechanism.
+- **FR-033**: Game Composition semantic validity MUST have one protocol-owned implementation consumed by
+  compiler validation, serialized parsing, and release inspection. Compiler-only source and material checks
+  MAY add author diagnostics but MUST NOT redefine serialized ownership rules.
+- **FR-034**: The generated runtime MUST serialize local command preparation, coalesce exact command-ID
+  retries, reject changed reuse, scope capability clients per component requirement, and route every mount
+  cleanup through one awaited player-owned scope.
+- **FR-035**: Shared reconciliation MUST validate the complete candidate against one exact immutable binding
+  before mutation, persist and compare canonical full terminal results, and perform zero durable writes when
+  an identical pull has no local recovery delta.
+- **FR-036**: Gameplay evidence MUST be a typed transaction-owned fact using host-relative elapsed time.
+  Report generation MUST project those facts without inferring failure stage, recovery meaning, or clock unit.
 
 ### Key Entities
 
@@ -494,6 +505,10 @@ truthful nonzero synchronization chronology, stable bytes, and no private values
 - **SC-011**: Static contract and fixture checks find zero repository-owned generation suffixes in
   maintained public interfaces, logical IDs, catalog paths, or Feature 0005
   contract filenames, excluding the centralized `/v1` HTTP route prefix.
+- **SC-012**: The Phase 15 adversarial matrix proves compiler/protocol semantic parity, exact concurrent local
+  retries, component-specific capability versions, awaited cleanup, pre-transaction shared identity rejection,
+  full-result conflict detection, complete-ledger byte idempotency, truthful failure evidence, and bounded
+  chronology under server/device clock skew.
 
 ## Assumptions
 

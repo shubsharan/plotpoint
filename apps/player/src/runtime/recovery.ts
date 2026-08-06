@@ -622,14 +622,7 @@ export function validateRecoveryRecords(
 }
 
 async function failClosed(database: PlayerDatabase, runId: string, code: string): Promise<never> {
-  await database.raw().runAsync("UPDATE runs SET status = 'invalid' WHERE run_id = ?", runId);
-  await database.recordRunEvent(runId, {
-    kind: "lifecycle",
-    elapsedMs: 0,
-    phase: "recovery",
-    disposition: "failed",
-    diagnosticCode: code,
-  });
+  await database.failRecovery(runId, code);
   throw new Error(code);
 }
 

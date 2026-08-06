@@ -70,6 +70,8 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
   if (captured.kind === "invalid") return captured;
   const { snapshot } = captured;
 
+  const capabilities = validateCapabilities(snapshot);
+  if (capabilities.kind === "invalid") return capabilities;
   const references = validateReferences(snapshot.registries);
   if (references.length > 0) return invalid(references);
   const localModel = snapshot.registries.aggregateModels.find(
@@ -138,16 +140,10 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
   if (definitionExports.length > 0) return invalid(definitionExports);
 
   const components = validateComponents(snapshot, presentation.graph);
-  const capabilities = validateCapabilities(snapshot);
   const compatibility = validateCompatibilityRequirements(snapshot);
-  if (
-    components.kind === "invalid" ||
-    capabilities.kind === "invalid" ||
-    compatibility.length > 0
-  ) {
+  if (components.kind === "invalid" || compatibility.length > 0) {
     return invalid([
       ...(components.kind === "invalid" ? components.diagnostics : []),
-      ...(capabilities.kind === "invalid" ? capabilities.diagnostics : []),
       ...compatibility,
     ]);
   }

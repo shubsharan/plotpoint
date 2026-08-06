@@ -5,7 +5,7 @@ import type { SharedPlayView, SyncCommand, SyncCommandResult, SyncPull } from "@
 import type { ParticipantCredentialStore } from "../src/shared/credentials";
 import {
   SharedSyncStore,
-  type SharedBindingContext,
+  type SharedSessionBinding,
   type SharedSqlDatabase,
 } from "../src/shared/database";
 import { SharedHttpClient } from "../src/shared/http-client";
@@ -51,17 +51,15 @@ interface SchedulerStore {
     readonly sessionId: string;
     readonly commands: readonly ClaimedCommand[];
   }>;
-  failSubmissionBatch(sessionId: string): Promise<void>;
-  observations(runId: string, ids: readonly string[]): Promise<readonly []>;
-  applyPull(context: SharedBindingContext, pull: SyncPull): Promise<void>;
-  markRevoked(sessionId: string): Promise<void>;
-  recordSyncEvent(
+  failSubmissionBatch(
     sessionId: string,
-    elapsedMs: number,
-    phase: string,
-    disposition: string,
-    commandId?: string,
+    disposition: "submit-failed" | "pull-failed",
   ): Promise<void>;
+  recoverSubmissionBatch(sessionId: string): Promise<void>;
+  observations(runId: string, ids: readonly string[]): Promise<readonly []>;
+  applyPull(context: SharedSessionBinding, pull: SyncPull): Promise<void>;
+  markRevoked(sessionId: string): Promise<void>;
+  recordSyncEvidence(sessionId: string, evidence: Readonly<Record<string, unknown>>): Promise<void>;
 }
 
 interface SchedulerClient {
@@ -147,10 +145,11 @@ function createHarness(
         (async (sessionId: string) => ({ sessionId, commands: [] as const })),
     ),
     failSubmissionBatch: vi.fn(async () => undefined),
+    recoverSubmissionBatch: vi.fn(async () => undefined),
     observations: vi.fn(async () => [] as const),
     applyPull: vi.fn(async () => undefined),
     markRevoked: vi.fn(async () => undefined),
-    recordSyncEvent: vi.fn(async () => undefined),
+    recordSyncEvidence: vi.fn(async () => undefined),
   } satisfies SchedulerStore;
   const client = {
     submit: vi.fn(
@@ -222,7 +221,9 @@ describe("shared sync coordinator", () => {
       {
         sessionId: "session-1",
         runId: "run-session-1",
-        expectedReleaseId: releaseId,
+        releaseId,
+        participantId: "participant-session-1",
+        teamId: "team-session-1",
         serviceOrigin: "https://session-1.example.test",
         envelopeKey: "envelope-key-session-1",
       },
@@ -417,5 +418,46 @@ describe("shared sync coordinator", () => {
     expect(harness.client.submit).toHaveBeenCalledTimes(1);
     expect(harness.client.pull).toHaveBeenCalledTimes(1);
     expect(durableStatus).toBe("terminal");
+  });
+
+  it.each([
+    ["submit-failed", { submit: async () => Promise.reject(new Error("submit-offline")) }],
+    ["pull-failed", { pull: async () => Promise.reject(new Error("pull-offline")) }],
+  ] as const)(
+    "commits truthful %s evidence with failure recovery",
+    async (disposition, failure) => {
+      const harness = createHarness({
+        beginSubmissionBatch: async (sessionId) => ({
+          sessionId,
+          commands: disposition === "submit-failed" ? [claimedCommand(sessionId)] : [],
+        }),
+        ...failure,
+      });
+
+      await expect(request(harness.coordinator, "session-1", "retry")).rejects.toThrow(
+        disposition === "submit-failed" ? "submit-offline" : "pull-offline",
+      );
+      expect(harness.store.failSubmissionBatch).toHaveBeenCalledWith("session-1", disposition);
+      expect(harness.store.recordSyncEvidence).not.toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({ phase: "degraded" }),
+      );
+    },
+  );
+
+  it("recovers claimed work without inventing a network failure", async () => {
+    const harness = createHarness({
+      beginSubmissionBatch: async (sessionId) => ({
+        sessionId,
+        commands: [claimedCommand(sessionId)],
+      }),
+    });
+    harness.store.observations.mockRejectedValueOnce(new Error("observation-read-failed"));
+
+    await expect(request(harness.coordinator, "session-1", "retry")).rejects.toThrow(
+      "observation-read-failed",
+    );
+    expect(harness.store.recoverSubmissionBatch).toHaveBeenCalledWith("session-1");
+    expect(harness.store.failSubmissionBatch).not.toHaveBeenCalled();
   });
 });

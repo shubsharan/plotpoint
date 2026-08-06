@@ -85,6 +85,10 @@ window.__plotpointReceive = (message) => {
   if (waiter) { pending.delete(parsed.requestId); parsed.type === 'host.error' ? waiter.reject(parsed.payload) : waiter.resolve(parsed.payload); }
   window.dispatchEvent(new CustomEvent('plotpoint-host', { detail: parsed }));
 };
+const cancelPending = () => {
+  for (const waiter of pending.values()) waiter.reject(new Error('runtime-disposed'));
+  pending.clear();
+};
 (async () => {
   const logicUrl = URL.createObjectURL(new Blob([${logic}], { type: 'text/javascript' }));
   const presentationUrl = URL.createObjectURL(new Blob([${presentation}], { type: 'text/javascript' }));
@@ -187,6 +191,19 @@ window.__plotpointReceive = (message) => {
 
   let currentLocalView = deepFreeze({ ...bootstrap.aggregate });
   const localListeners = new Set();
+  function canonicalFingerprintValue(value) {
+    if (Array.isArray(value)) return value.map(canonicalFingerprintValue);
+    if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+    if (typeof value === 'number' && Number.isFinite(value) && !Object.is(value, -0)) return value;
+    if (!isRecord(value) ||
+        (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)) {
+      throw new Error('runtime-local-command-input-invalid');
+    }
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, canonicalFingerprintValue(value[key])])
+    );
+  }
+  const canonicalFingerprint = (value) => JSON.stringify(canonicalFingerprintValue(value));
   const diagnosticCodes = (diagnostics, fallback) => {
     if (!Array.isArray(diagnostics)) return [fallback];
     const codes = diagnostics.map((diagnostic) => isRecord(diagnostic) ? diagnostic.code : undefined);
@@ -295,6 +312,39 @@ window.__plotpointReceive = (message) => {
     }
     throw new Error('runtime-local-execution-record-invalid');
   };
+  const localCommandAttempts = new Map();
+  let localCommandLane = Promise.resolve();
+  let localCommandLaneOpen = true;
+  const executeLocalCommand = async (descriptor, commandInput) => {
+    const candidate = prepareLocalCandidate(descriptor, commandInput);
+    if (candidate.disposition === 'not-recorded') return candidate;
+    const result = await send('transition.commit', { candidate });
+    if (!isRecord(result) || result.commandId !== commandInput.commandId ||
+        result.terminal !== candidate.terminal ||
+        (result.disposition !== 'committed' && result.disposition !== 'duplicate') ||
+        !Number.isSafeInteger(result.resultingStateVersion)) {
+      throw new Error('runtime-local-transition-result-invalid');
+    }
+    if (result.terminal === 'accepted') {
+      if (result.disposition === 'duplicate' &&
+          result.resultingStateVersion === currentLocalView.stateVersion) {
+        return result;
+      }
+      if (result.resultingStateVersion !== currentLocalView.stateVersion + 1) {
+        throw new Error('runtime-local-transition-version-invalid');
+      }
+      currentLocalView = deepFreeze({
+        ...currentLocalView,
+        stateVersion: result.resultingStateVersion,
+        ...(candidate.nextState === undefined ? {} : { state: candidate.nextState }),
+        ...(candidate.nextProgression === undefined ? {} : { progression: candidate.nextProgression })
+      });
+      for (const listener of [...localListeners]) {
+        try { listener(); } catch (error) { console.warn('runtime-local-listener-failed', error); }
+      }
+    }
+    return result;
+  };
   const localCommandRegistry = Object.freeze(Object.fromEntries(
     localCommandDescriptors.map((descriptor) => {
       const contract = generatedLocalModel.commandContracts[descriptor.type];
@@ -304,35 +354,27 @@ window.__plotpointReceive = (message) => {
         throw new Error('runtime-local-command-registry-mismatch:' + descriptor.id);
       }
       return [descriptor.id, Object.freeze({
-        async execute(commandInput) {
+        execute(commandInput) {
+          if (!localCommandLaneOpen) throw new Error('runtime-local-command-lane-closed');
           if (!allowedKeys(commandInput, ['commandId', 'payload'], ['observations']) ||
               typeof commandInput.commandId !== 'string' || commandInput.commandId.length === 0 ||
               !isRecord(commandInput.payload)) {
             throw new Error('runtime-local-command-input-invalid');
           }
-          const candidate = prepareLocalCandidate(descriptor, commandInput);
-          if (candidate.disposition === 'not-recorded') return candidate;
-          const result = await send('transition.commit', { candidate });
-          if (!isRecord(result) || result.commandId !== commandInput.commandId ||
-              result.terminal !== candidate.terminal ||
-              (result.disposition !== 'committed' && result.disposition !== 'duplicate') ||
-              !Number.isSafeInteger(result.resultingStateVersion)) {
-            throw new Error('runtime-local-transition-result-invalid');
-          }
-          if (result.terminal === 'accepted') {
-            if (result.resultingStateVersion !== currentLocalView.stateVersion + 1) {
-              throw new Error('runtime-local-transition-version-invalid');
+          const fingerprint = descriptor.id + '\0' + canonicalFingerprint(commandInput);
+          const prior = localCommandAttempts.get(commandInput.commandId);
+          if (prior !== undefined) {
+            if (prior.fingerprint !== fingerprint) {
+              throw new Error('runtime-local-command-identity-conflict');
             }
-            currentLocalView = deepFreeze({
-              ...currentLocalView,
-              stateVersion: result.resultingStateVersion,
-              ...(candidate.nextState === undefined ? {} : { state: candidate.nextState }),
-              ...(candidate.nextProgression === undefined ? {} : { progression: candidate.nextProgression })
-            });
-            for (const listener of [...localListeners]) {
-              try { listener(); } catch (error) { console.warn('runtime-local-listener-failed', error); }
-            }
+            return prior.result;
           }
+          const result = localCommandLane.then(() => {
+            if (!localCommandLaneOpen) throw new Error('runtime-local-command-lane-closed');
+            return executeLocalCommand(descriptor, commandInput);
+          });
+          localCommandAttempts.set(commandInput.commandId, Object.freeze({ fingerprint, result }));
+          localCommandLane = result.then(() => undefined, () => undefined);
           return result;
         }
       })];
@@ -387,8 +429,7 @@ window.__plotpointReceive = (message) => {
   if (!isRecord(contentRegistry) || !isRecord(assetRegistry)) {
     throw new Error('runtime-resource-registry-invalid');
   }
-  const capabilityRegistry = Object.fromEntries(composition.components.flatMap((componentDescriptor) =>
-    componentDescriptor.capabilities.map((capability) => [capability.id, Object.freeze({
+  const createCapabilityClient = (capability) => Object.freeze({
       async request(requestInput) {
         const expected = { id: capability.id, major: capability.major, minor: capability.minimumMinor };
         const result = await send('capability.request', { capability: expected, input: requestInput });
@@ -399,8 +440,7 @@ window.__plotpointReceive = (message) => {
         }
         return deepFreeze(result.output);
       }
-    })])
-  ));
+    });
   const sharedListeners = new Set();
   const onSharedSyncChanged = (event) => {
     if (event.detail && event.detail.type === 'shared.sync.changed') {
@@ -412,6 +452,7 @@ window.__plotpointReceive = (message) => {
   window.addEventListener('plotpoint-host', onSharedSyncChanged);
   lifecycle.defer(() => window.removeEventListener('plotpoint-host', onSharedSyncChanged));
   const componentFactories = Object.create(null);
+  let componentMountFailure;
   for (const componentId of composition.application.components) {
     const componentDescriptor = composition.components.find(({ id }) => id === componentId);
     const implementation = generatedComponents[componentId];
@@ -420,12 +461,11 @@ window.__plotpointReceive = (message) => {
     }
     componentFactories[componentId] = () => {
       let componentMounting = true;
-      const componentCleanup = [];
       const componentLifecycle = Object.freeze({
         defer(cleanup) {
           if (!componentMounting) throw new Error('runtime-component-mount-scope-closed');
           if (typeof cleanup !== 'function') throw new Error('runtime-component-cleanup-invalid');
-          componentCleanup.push(cleanup);
+          lifecycle.defer(cleanup);
         }
       });
       const localCommandIds = componentDescriptor.commands.filter((commandId) =>
@@ -443,7 +483,11 @@ window.__plotpointReceive = (message) => {
         }),
         content: select(contentRegistry, componentDescriptor.content, 'runtime-component-content-missing'),
         assets: select(assetRegistry, componentDescriptor.assets, 'runtime-component-asset-missing'),
-        capabilities: select(capabilityRegistry, componentDescriptor.capabilities.map(({ id }) => id), 'runtime-component-capability-missing')
+        capabilities: Object.freeze(Object.fromEntries(
+          componentDescriptor.capabilities.map((capability) =>
+            [capability.id, createCapabilityClient(capability)]
+          )
+        ))
       };
       if (componentDescriptor.sharedProjection !== undefined && ${sharedBindingAvailable}) {
         const mechanic = composition.trustedMechanic;
@@ -497,17 +541,10 @@ window.__plotpointReceive = (message) => {
         if (!(element instanceof HTMLElement)) {
           throw new Error('runtime-component-element-invalid:' + componentId);
         }
-      }
-      catch (error) {
-        for (const cleanup of componentCleanup.reverse()) {
-          try {
-            const result = cleanup();
-            if (result && typeof result.then === 'function') void result.catch(() => {});
-          } catch {}
-        }
+      } catch (error) {
+        componentMountFailure ??= error;
         throw error;
       } finally { componentMounting = false; }
-      for (const cleanup of componentCleanup) lifecycle.defer(cleanup);
       return element;
     };
   }
@@ -518,6 +555,7 @@ window.__plotpointReceive = (message) => {
   let applicationHandle;
   try {
     applicationHandle = await application.mount({ root, components });
+    if (componentMountFailure !== undefined) throw componentMountFailure;
     if (!isRecord(applicationHandle) || !exactKeys(applicationHandle, ['unmount']) || typeof applicationHandle.unmount !== 'function') {
       throw new Error('runtime-application-handle-invalid');
     }
@@ -532,8 +570,12 @@ window.__plotpointReceive = (message) => {
     if (disposalPromise) return disposalPromise;
     disposalPromise = (async () => {
       const failures = [];
+      localCommandLaneOpen = false;
+      cancelPending();
+      await localCommandLane;
       try { await applicationHandle.unmount(); } catch (error) { failures.push(error); }
       try { await cleanupMountScope(); } catch (error) { failures.push(error); }
+      localCommandAttempts.clear();
       if (failures.length > 0) throw new Error('runtime-application-unmount-failed');
     })();
     return disposalPromise;

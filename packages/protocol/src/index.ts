@@ -10,7 +10,7 @@ export type { ReleaseInspectionLimits } from "./release/inspect.js";
 export { openRelease } from "./release/open.js";
 export { GAME_COMPOSITION_PATH } from "./release/paths.js";
 export { verifyRelease } from "./release/verify.js";
-export { parseGameComposition } from "./release/game-composition.js";
+export { analyzeGameComposition, parseGameComposition } from "./release/game-composition.js";
 export type {
   AggregateModelDescriptor,
   CommandDescriptor,
@@ -19,6 +19,8 @@ export type {
   EventOrEffectDescriptor,
   GameCapabilityRequirement,
   GameComposition,
+  GameCompositionIssue,
+  GameCompositionIssueCode,
   GameCompositionParseResult,
   GameReleaseInspection,
   LocalAggregateModelDescriptor,

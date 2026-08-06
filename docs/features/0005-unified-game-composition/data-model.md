@@ -334,17 +334,25 @@ confirmed time, and unique validated projections. Sync Pull adds unique exact co
 cursor. Decision positions and cursors are opaque numeric strings ordered only within the authenticated
 participant.
 
+`SharedSessionBinding` is the exact immutable run, release, session, participant, team, service-origin,
+and envelope-key identity used for join and pull validation. Candidate snapshot fields never become their
+own expected identity.
+
 One exclusive transaction validates identities and schemas, compares or inserts immutable terminals,
 replaces the complete projection set, removes only terminal-matched outbox rows, handles revocation or
-requeues interrupted rows, updates status/cursor/time, and commits once. Reapplying an identical normal,
-corrective, or revoked pull is byte-equivalent. A changed repeated terminal or missing both terminal and
+requeues interrupted rows, updates status/cursor/time, and commits once. Canonical full result JSON includes
+capability evidence, and the session retains the canonical last-pull digest. Reapplying an identical normal,
+corrective, or revoked pull is byte-equivalent across the complete database, including the gameplay ledger.
+A changed repeated terminal or missing both terminal and
 outbox provenance fails without exposing candidate changes. If the stored binding is already revoked,
 an active candidate fails as a reactivation conflict and leaves the revoked binding, projections, and
 blocked outbox byte-equivalent.
 
 ## Game Play Report
 
-One host-owned report covers local and optional shared evidence for a run. It contains release,
+One typed host-owned gameplay evidence union is appended by the transaction responsible for each fact.
+The ledger schema has one declaration and stores host-relative elapsed time; server confirmation time remains
+snapshot metadata. One host-owned report covers local and optional shared evidence for a run. It contains release,
 platform, committed duration, optional membership status, and generic lifecycle, command, capability,
 synchronization, recovery, and report-safe diagnostic events.
 

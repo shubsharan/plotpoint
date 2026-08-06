@@ -27,6 +27,11 @@ import {
   migrateSharedDatabase,
   SHARED_DATABASE_TABLES,
 } from "../shared/database";
+import {
+  appendGameplayEvidence,
+  GAMEPLAY_LEDGER_COLUMNS,
+  GAMEPLAY_LEDGER_MIGRATION,
+} from "./gameplay-evidence";
 
 const BASE_MIGRATION = `
 PRAGMA journal_mode = WAL;
@@ -74,21 +79,7 @@ CREATE TABLE IF NOT EXISTS run_events (
   kind TEXT NOT NULL CHECK(kind IN ('lifecycle','diagnostic')),
   phase TEXT, disposition TEXT, code TEXT, command_id TEXT
 );
-CREATE TABLE IF NOT EXISTS game_play_events (
-  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-  run_id TEXT NOT NULL REFERENCES runs(run_id), committed_at TEXT NOT NULL,
-  elapsed_ms INTEGER NOT NULL, kind TEXT NOT NULL,
-  command_id TEXT, evidence_json TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS game_play_events_run ON game_play_events(run_id, sequence);
-CREATE TRIGGER IF NOT EXISTS game_play_events_no_update
-BEFORE UPDATE ON game_play_events BEGIN
-  SELECT RAISE(ABORT, 'game-play-evidence-immutable');
-END;
-CREATE TRIGGER IF NOT EXISTS game_play_events_no_delete
-BEFORE DELETE ON game_play_events BEGIN
-  SELECT RAISE(ABORT, 'game-play-evidence-immutable');
-END;
+${GAMEPLAY_LEDGER_MIGRATION}
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_run_per_release
   ON runs(release_id) WHERE status = 'active';
 `;
@@ -144,19 +135,11 @@ const LOCAL_SCHEMA_COLUMNS = Object.freeze({
     "code",
     "command_id",
   ],
-  game_play_events: [
-    "sequence",
-    "run_id",
-    "committed_at",
-    "elapsed_ms",
-    "kind",
-    "command_id",
-    "evidence_json",
-  ],
+  game_play_events: GAMEPLAY_LEDGER_COLUMNS,
 } as const);
 
 export const HOST_STORAGE_SCHEMA_DIGEST =
-  "sha256:b8b5747584b111d39f75743893e8281d75cf1c7f61baee911fb9e1e1f95e7ebe";
+  "sha256:7a0f8e110e0237ebff8888bb86795829602ea3299356012c1ad0cf71a5176c68";
 
 export interface ObservationMigrationDatabase {
   getAllAsync<T>(query: string, ...parameters: unknown[]): Promise<T[]>;
@@ -497,19 +480,15 @@ export class PlayerDatabase implements TransitionStore {
         input.diagnosticCode ?? null,
         input.elapsedMs,
       );
-      await transaction.runAsync(
-        `INSERT INTO game_play_events
-         (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
-         VALUES (?,?,?,?,NULL,?)`,
-        input.runId,
-        input.recordedAt,
-        input.elapsedMs,
-        "capability",
-        JSON.stringify({
+      await appendGameplayEvidence(transaction, {
+        runId: input.runId,
+        timing: { committedAt: input.recordedAt, elapsedMs: input.elapsedMs },
+        evidence: {
+          kind: "capability",
           capabilityId: FOREGROUND_LOCATION_CAPABILITY.id,
           disposition: input.availability === "available" ? "captured" : "denied",
-        }),
-      );
+        },
+      });
     });
   }
 
@@ -519,6 +498,27 @@ export class PlayerDatabase implements TransitionStore {
       elapsedMs,
       phase: "recovery",
       disposition: code,
+    });
+  }
+
+  async failRecovery(runId: string, code: string): Promise<void> {
+    if (!/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(code)) {
+      throw new Error("run-event-value-invalid");
+    }
+    await this.database.withExclusiveTransactionAsync(async (transaction) => {
+      await transaction.runAsync("UPDATE runs SET status='invalid' WHERE run_id=?", runId);
+      await transaction.runAsync(
+        `INSERT INTO run_events
+         (run_id,elapsed_ms,kind,phase,disposition,code,command_id)
+         VALUES (?,0,'lifecycle','recovery','failed',?,NULL)`,
+        runId,
+        code,
+      );
+      await appendGameplayEvidence(transaction, {
+        runId,
+        timing: { elapsedMs: 0 },
+        evidence: { kind: "diagnostic", code, scope: "local" },
+      });
     });
   }
 
@@ -564,16 +564,28 @@ export class PlayerDatabase implements TransitionStore {
         event.commandId ?? null,
       );
       if (evidence === null) return;
-      await transaction.runAsync(
-        `INSERT INTO game_play_events
-         (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
-         VALUES (?,datetime('now'),?,?,?,?)`,
+      await appendGameplayEvidence(transaction, {
         runId,
-        event.elapsedMs,
-        evidence.kind,
-        event.commandId ?? null,
-        JSON.stringify(evidence.value),
-      );
+        timing: { elapsedMs: event.elapsedMs },
+        evidence:
+          evidence.kind === "recovery"
+            ? { kind: "recovery", disposition: "run-restored" }
+            : evidence.kind === "lifecycle"
+              ? {
+                  kind: "lifecycle",
+                  disposition: evidence.value.disposition as
+                    | "mounted"
+                    | "recovered"
+                    | "unmounted"
+                    | "mount-failed",
+                }
+              : {
+                  kind: "diagnostic",
+                  code: evidence.value.code as string,
+                  scope: "local",
+                  ...(event.commandId === undefined ? {} : { commandId: event.commandId }),
+                },
+      });
     });
   }
 
@@ -657,20 +669,17 @@ export class PlayerDatabase implements TransitionStore {
           resultingStateVersion,
           Date.now(),
         );
-        await database.runAsync(
-          `INSERT INTO game_play_events
-           (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
-           VALUES (?,datetime('now'),?,'command',?,?)`,
+        await appendGameplayEvidence(database, {
           runId,
-          Date.now(),
-          candidate.commandId,
-          JSON.stringify({
+          evidence: {
+            kind: "command",
+            commandId: candidate.commandId,
             scope: "local",
             terminal: candidate.terminal,
             expectedStateVersion: candidate.expectedStateVersion,
             resultingStateVersion,
-          }),
-        );
+          },
+        });
         for (const observationId of candidate.observationIds) {
           await database.runAsync(
             "INSERT INTO command_observations (run_id, command_id, observation_id) VALUES (?, ?, ?)",
@@ -680,19 +689,16 @@ export class PlayerDatabase implements TransitionStore {
           );
         }
         for (const observationId of candidate.consumedObservationIds ?? []) {
-          await database.runAsync(
-            `INSERT INTO game_play_events
-             (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
-             VALUES (?,datetime('now'),?,'capability',?,?)`,
+          await appendGameplayEvidence(database, {
             runId,
-            Date.now(),
-            candidate.commandId,
-            JSON.stringify({
+            evidence: {
+              kind: "capability",
+              commandId: candidate.commandId,
               observationId,
               capabilityId: FOREGROUND_LOCATION_CAPABILITY.id,
               disposition: "consumed",
-            }),
-          );
+            },
+          });
         }
         if (candidate.terminal !== "accepted") return result;
 

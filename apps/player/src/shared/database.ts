@@ -1,8 +1,10 @@
 import {
+  computeReleaseId,
   isLocationObservation,
   isSharedCommandIntent,
   isSyncPull,
   type LocationObservation,
+  type GamePlayReportEvent,
   type SharedCommandIntent,
   type SharedCommandStatus,
   type SharedPlayView,
@@ -13,23 +15,13 @@ import {
 import { canonicalizeValue } from "@plotpoint/runtime";
 
 import { PLAYER_DATABASE_INCOMPATIBLE } from "../persistence/schema-policy";
+import {
+  appendGameplayEvidence,
+  GAMEPLAY_LEDGER_MIGRATION,
+} from "../persistence/gameplay-evidence";
 
 export const SHARED_MIGRATION = `
-CREATE TABLE IF NOT EXISTS game_play_events (
-  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-  run_id TEXT NOT NULL REFERENCES runs(run_id), committed_at TEXT NOT NULL,
-  elapsed_ms INTEGER NOT NULL, kind TEXT NOT NULL,
-  command_id TEXT, evidence_json TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS game_play_events_run ON game_play_events(run_id, sequence);
-CREATE TRIGGER IF NOT EXISTS game_play_events_no_update
-BEFORE UPDATE ON game_play_events BEGIN
-  SELECT RAISE(ABORT, 'game-play-evidence-immutable');
-END;
-CREATE TRIGGER IF NOT EXISTS game_play_events_no_delete
-BEFORE DELETE ON game_play_events BEGIN
-  SELECT RAISE(ABORT, 'game-play-evidence-immutable');
-END;
+${GAMEPLAY_LEDGER_MIGRATION}
 CREATE TABLE IF NOT EXISTS pending_shared_joins (
   session_id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE REFERENCES runs(run_id),
   expected_release_id TEXT NOT NULL, service_origin TEXT NOT NULL, join_request_id TEXT NOT NULL,
@@ -44,7 +36,7 @@ CREATE TABLE IF NOT EXISTS shared_sessions (
   membership_status TEXT NOT NULL CHECK(membership_status IN ('active','revoked')),
   transport_status TEXT NOT NULL CHECK(transport_status IN ('offline','connecting','online','degraded')),
   sync_status TEXT NOT NULL CHECK(sync_status IN ('current','syncing','recovery-required','revoked')),
-  cursor TEXT NOT NULL DEFAULT '0', confirmed_at TEXT
+  cursor TEXT NOT NULL DEFAULT '0', confirmed_at TEXT, last_pull_digest TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS shared_outbox (
   session_id TEXT NOT NULL REFERENCES shared_sessions(session_id), command_id TEXT NOT NULL,
@@ -62,18 +54,11 @@ CREATE TABLE IF NOT EXISTS shared_projections (
 );
 CREATE TABLE IF NOT EXISTS shared_results (
   session_id TEXT NOT NULL REFERENCES shared_sessions(session_id), command_id TEXT NOT NULL,
-  intent_json TEXT NOT NULL,
-  terminal TEXT NOT NULL CHECK(terminal IN ('accepted','no-op','rejected','invalid')),
-  outcome_code TEXT NOT NULL, resulting_state_version INTEGER NOT NULL, expected_state_version INTEGER NOT NULL,
-  observation_ids_json TEXT NOT NULL,
-  decision_position TEXT NOT NULL, decided_at TEXT NOT NULL, PRIMARY KEY(session_id, command_id)
-);
-CREATE TABLE IF NOT EXISTS shared_sync_events (
-  sequence INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL REFERENCES shared_sessions(session_id),
-  elapsed_ms INTEGER NOT NULL, phase TEXT NOT NULL, disposition TEXT NOT NULL, command_id TEXT
+  intent_json TEXT NOT NULL, result_json TEXT NOT NULL,
+  expected_state_version INTEGER NOT NULL, observation_ids_json TEXT NOT NULL,
+  PRIMARY KEY(session_id, command_id)
 );
 CREATE INDEX IF NOT EXISTS shared_outbox_status ON shared_outbox(session_id, status, enqueued_at);
-CREATE INDEX IF NOT EXISTS shared_sync_events_session ON shared_sync_events(session_id, sequence);
 CREATE TRIGGER IF NOT EXISTS pending_shared_join_no_bound_insert
 BEFORE INSERT ON pending_shared_joins
 WHEN EXISTS (SELECT 1 FROM shared_sessions WHERE run_id=NEW.run_id OR session_id=NEW.session_id)
@@ -146,6 +131,7 @@ const SHARED_SCHEMA_COLUMNS = Object.freeze({
     "sync_status",
     "cursor",
     "confirmed_at",
+    "last_pull_digest",
   ],
   shared_outbox: [
     "session_id",
@@ -171,27 +157,13 @@ const SHARED_SCHEMA_COLUMNS = Object.freeze({
     "session_id",
     "command_id",
     "intent_json",
-    "terminal",
-    "outcome_code",
-    "resulting_state_version",
+    "result_json",
     "expected_state_version",
     "observation_ids_json",
-    "decision_position",
-    "decided_at",
-  ],
-  shared_sync_events: [
-    "sequence",
-    "session_id",
-    "elapsed_ms",
-    "phase",
-    "disposition",
-    "command_id",
   ],
 } as const);
 
 const SHARED_SCHEMA_TRIGGERS = Object.freeze([
-  "game_play_events_no_delete",
-  "game_play_events_no_update",
   "pending_shared_join_no_bound_insert",
   "pending_shared_join_immutable",
   "shared_session_no_pending_insert",
@@ -225,21 +197,7 @@ export interface PendingSharedJoin {
 
 export type PendingSharedJoinInput = Omit<PendingSharedJoin, "status">;
 
-export interface SharedBindingContext {
-  readonly sessionId: string;
-  readonly runId: string;
-  readonly expectedReleaseId: `sha256:${string}`;
-  readonly serviceOrigin: string;
-  readonly envelopeKey: string;
-}
-
-export interface SharedJoinResponseIdentity {
-  readonly releaseId: `sha256:${string}`;
-  readonly participantId: string;
-  readonly teamId: string;
-}
-
-export interface SharedSessionRecord {
+export interface SharedSessionBinding {
   readonly sessionId: string;
   readonly runId: string;
   readonly releaseId: `sha256:${string}`;
@@ -248,8 +206,20 @@ export interface SharedSessionRecord {
   readonly serviceOrigin: string;
   readonly envelopeKey: string;
 }
+
+export interface SharedProjectionRule {
+  readonly aggregateKind: SharedProjection["aggregateKind"];
+  readonly schemaId: string;
+  readonly validate: (value: SharedProjection["value"]) => boolean;
+}
+
+export type SharedSessionRecord = SharedSessionBinding;
 
 export type SharedOutboxStatus = "queued" | "submitting" | "blocked-revoked";
+type SynchronizationEvidence = Omit<
+  Extract<GamePlayReportEvent, { readonly kind: "synchronization" }>,
+  "kind" | "elapsedMs"
+> & { readonly commandId?: string };
 
 export interface SharedOutboxRecord {
   readonly sessionId: string;
@@ -278,6 +248,10 @@ interface StoredSessionBinding {
   readonly envelope_key: string;
   readonly membership_status: "active" | "revoked";
   readonly sync_status: SharedPlayView["synchronization"];
+  readonly transport_status: SharedPlayView["transport"];
+  readonly cursor: string;
+  readonly confirmed_at: string | null;
+  readonly last_pull_digest: string;
 }
 
 interface StoredPendingSharedJoin {
@@ -312,12 +286,39 @@ interface StoredOutboxRow {
 
 interface StoredResultRow {
   readonly intent_json: string;
-  readonly terminal: SyncCommandResult["terminal"];
-  readonly outcome_code: string;
-  readonly resulting_state_version: number;
+  readonly result_json: string;
   readonly expected_state_version: number;
   readonly observation_ids_json: string;
-  readonly decision_position: string;
+}
+
+interface ReconciliationResultInsertion {
+  readonly result: SyncCommandResult;
+  readonly source: {
+    readonly intent_json: string;
+    readonly expected_state_version: number;
+    readonly observation_ids_json: string;
+  };
+}
+
+interface SharedReconciliationDelta {
+  readonly digest: string;
+  readonly resultInsertions: readonly ReconciliationResultInsertion[];
+  readonly replacementProjections:
+    | readonly {
+        readonly aggregate_kind: string;
+        readonly aggregate_id: string;
+        readonly schema_id: string;
+        readonly state_version: number;
+        readonly value_json: string;
+      }[]
+    | null;
+  readonly matchedOutboxIds: readonly string[];
+  readonly requeueInterrupted: boolean;
+  readonly membershipChanged: boolean;
+  readonly pullChanged: boolean;
+  readonly statusChanged: boolean;
+  readonly outboxStatusChanged: boolean;
+  readonly isEmpty: boolean;
 }
 
 function deepFreeze<T>(value: T): T {
@@ -380,21 +381,15 @@ function pendingJoinMatches(row: StoredPendingSharedJoin, input: PendingSharedJo
   );
 }
 
-function bindingMatches(
-  row: StoredSessionBinding,
-  context: SharedBindingContext,
-  response?: SharedJoinResponseIdentity,
-): boolean {
+function bindingMatches(row: StoredSessionBinding, binding: SharedSessionBinding): boolean {
   return (
-    row.session_id === context.sessionId &&
-    row.run_id === context.runId &&
-    row.release_id === context.expectedReleaseId &&
-    row.service_origin === context.serviceOrigin &&
-    row.envelope_key === context.envelopeKey &&
-    (response === undefined ||
-      (row.release_id === response.releaseId &&
-        row.participant_id === response.participantId &&
-        row.team_id === response.teamId))
+    row.session_id === binding.sessionId &&
+    row.run_id === binding.runId &&
+    row.release_id === binding.releaseId &&
+    row.participant_id === binding.participantId &&
+    row.team_id === binding.teamId &&
+    row.service_origin === binding.serviceOrigin &&
+    row.envelope_key === binding.envelopeKey
   );
 }
 
@@ -435,17 +430,58 @@ function assertUniquePullCollections(pull: SyncPull): void {
 
   const commandIds = new Set<string>();
   for (const result of pull.commandResults) {
+    if (!/^[0-9]+$/.test(result.decisionPosition)) {
+      throw new Error("shared-result-position-invalid");
+    }
     if (commandIds.has(result.commandId)) throw new Error("shared-result-duplicate");
     commandIds.add(result.commandId);
   }
 }
 
-function resultMatches(row: StoredResultRow, result: SyncCommandResult): boolean {
+function canonicalJson(value: unknown, code: string): string {
+  const canonical = canonicalizeValue(value);
+  if (canonical.kind !== "valid") throw new Error(code);
+  return canonical.canonical.text;
+}
+
+function canonicalResult(result: SyncCommandResult): string {
+  return canonicalJson(result, "shared-result-invalid");
+}
+
+function pullDigest(pull: SyncPull): string {
+  return computeReleaseId(new TextEncoder().encode(canonicalJson(pull, "shared-pull-invalid")));
+}
+
+function normalizedBinding(binding: SharedSessionBinding): SharedSessionBinding {
+  return Object.freeze({
+    ...binding,
+    serviceOrigin: canonicalServiceOrigin(binding.serviceOrigin),
+  });
+}
+
+function pullMatchesBinding(
+  binding: SharedSessionBinding,
+  pull: SyncPull,
+  projectionRule: SharedProjectionRule | undefined,
+): boolean {
+  if (
+    pull.snapshot.sessionId !== binding.sessionId ||
+    pull.snapshot.releaseId !== binding.releaseId ||
+    pull.snapshot.participantId !== binding.participantId ||
+    pull.snapshot.teamId !== binding.teamId
+  ) {
+    return false;
+  }
+  if (projectionRule === undefined) return pull.snapshot.projections.length === 0;
+  if (pull.snapshot.projections.length !== 1) return false;
+  const projection = pull.snapshot.projections[0];
+  const aggregateId = projectionRule.aggregateKind === "team" ? binding.teamId : binding.sessionId;
   return (
-    row.terminal === result.terminal &&
-    row.outcome_code === result.outcomeCode &&
-    row.resulting_state_version === result.resultingStateVersion &&
-    row.decision_position === result.decisionPosition
+    projection !== undefined &&
+    projection.aggregateKind === projectionRule.aggregateKind &&
+    projection.aggregateId === aggregateId &&
+    projection.schemaId === projectionRule.schemaId &&
+    projectionRule.validate(projection.value)
   );
 }
 
@@ -496,7 +532,8 @@ export async function migrateSharedDatabase(database: SharedSqlDatabase): Promis
 export class SharedSyncStore {
   constructor(
     private readonly database: SharedSqlDatabase,
-    private readonly validateReleasePull: (pull: SyncPull) => boolean = () => true,
+    private readonly projectionRule?: SharedProjectionRule,
+    private readonly now: () => Date = () => new Date(),
   ) {}
 
   async reservePendingJoin(input: PendingSharedJoinInput): Promise<PendingSharedJoin> {
@@ -580,42 +617,45 @@ export class SharedSyncStore {
     return row === null ? null : parsePendingSharedJoin(row);
   }
 
+  async cancelPreparingJoin(runId: string, requestDigest: string): Promise<void> {
+    await this.database.withExclusiveTransactionAsync(async (tx) => {
+      const deleted = await tx.runAsync(
+        `DELETE FROM pending_shared_joins
+         WHERE run_id=? AND request_digest=? AND status='preparing'`,
+        runId,
+        requestDigest,
+      );
+      if (deleted.changes !== undefined && deleted.changes !== 1) {
+        throw new Error("shared-pending-join-cancel-conflict");
+      }
+    });
+  }
+
   async commitJoinedSession(input: {
-    readonly context: SharedBindingContext;
-    readonly response: SharedJoinResponseIdentity;
+    readonly binding: SharedSessionBinding;
     readonly pull: SyncPull;
+    readonly recoveryDisposition?: "join-resumed";
   }): Promise<void> {
-    const joinContext = {
-      ...input.context,
-      serviceOrigin: canonicalServiceOrigin(input.context.serviceOrigin),
-    };
-    if (
-      !isSyncPull(input.pull) ||
-      !this.validateReleasePull(input.pull) ||
-      input.pull.snapshot.sessionId !== joinContext.sessionId ||
-      input.response.releaseId !== joinContext.expectedReleaseId ||
-      input.pull.snapshot.releaseId !== joinContext.expectedReleaseId ||
-      input.pull.snapshot.participantId !== input.response.participantId ||
-      input.pull.snapshot.teamId !== input.response.teamId
-    ) {
+    const binding = normalizedBinding(input.binding);
+    if (!isSyncPull(input.pull) || !pullMatchesBinding(binding, input.pull, this.projectionRule)) {
       throw new Error("shared-join-snapshot-invalid");
     }
     assertUniquePullCollections(input.pull);
     await this.database.withExclusiveTransactionAsync(async (tx) => {
       const run = await tx.getFirstAsync<StoredRun>(
         "SELECT release_id,status FROM runs WHERE run_id=?",
-        joinContext.runId,
+        binding.runId,
       );
       if (run === null || run.status !== "active") throw new Error("shared-run-not-active");
-      if (run.release_id !== joinContext.expectedReleaseId) {
+      if (run.release_id !== binding.releaseId) {
         throw new Error("shared-run-release-mismatch");
       }
       const existingForSession = await tx.getFirstAsync<StoredSessionBinding>(
         "SELECT * FROM shared_sessions WHERE session_id=?",
-        joinContext.sessionId,
+        binding.sessionId,
       );
       if (existingForSession !== null) {
-        if (!bindingMatches(existingForSession, joinContext, input.response)) {
+        if (!bindingMatches(existingForSession, binding)) {
           throw new Error("shared-session-binding-conflict");
         }
         if (
@@ -624,30 +664,37 @@ export class SharedSyncStore {
         ) {
           throw new Error("membership-reactivation-conflict");
         }
-        await this.replaceSnapshot(tx, joinContext, input.pull);
+        await this.replaceSnapshot(tx, binding, input.pull);
+        if (input.recoveryDisposition !== undefined) {
+          await appendGameplayEvidence(tx, {
+            runId: binding.runId,
+            now: this.now,
+            evidence: { kind: "recovery", disposition: input.recoveryDisposition },
+          });
+        }
         return;
       }
 
       const existingForRun = await tx.getFirstAsync<{ session_id: string }>(
         "SELECT session_id FROM shared_sessions WHERE run_id=?",
-        joinContext.runId,
+        binding.runId,
       );
       if (existingForRun !== null) throw new Error("shared-run-binding-conflict");
       const pending = await tx.getFirstAsync<StoredPendingSharedJoin>(
         "SELECT * FROM pending_shared_joins WHERE run_id=?",
-        joinContext.runId,
+        binding.runId,
       );
       if (pending === null) throw new Error("shared-pending-join-missing");
       if (
         pending.status !== "submitting" ||
         !pendingJoinMatches(pending, {
-          sessionId: joinContext.sessionId,
-          runId: joinContext.runId,
-          expectedReleaseId: joinContext.expectedReleaseId,
-          serviceOrigin: joinContext.serviceOrigin,
+          sessionId: binding.sessionId,
+          runId: binding.runId,
+          expectedReleaseId: binding.releaseId,
+          serviceOrigin: binding.serviceOrigin,
           joinRequestId: pending.join_request_id,
           invitationDigest: pending.invitation_digest,
-          envelopeKey: joinContext.envelopeKey,
+          envelopeKey: binding.envelopeKey,
           requestDigest: pending.request_digest,
         })
       ) {
@@ -665,18 +712,24 @@ export class SharedSyncStore {
       await tx.runAsync(
         `INSERT INTO shared_sessions
          (session_id,run_id,release_id,participant_id,team_id,service_origin,envelope_key,
-          membership_status,transport_status,sync_status,cursor,confirmed_at)
-         VALUES (?,?,?,?,?,?,?,?,'offline','recovery-required','0',NULL)`,
-        joinContext.sessionId,
-        joinContext.runId,
-        input.response.releaseId,
-        input.response.participantId,
-        input.response.teamId,
-        joinContext.serviceOrigin,
-        joinContext.envelopeKey,
-        input.pull.snapshot.membershipStatus,
+          membership_status,transport_status,sync_status,cursor,confirmed_at,last_pull_digest)
+         VALUES (?,?,?,?,?,?,?,'active','offline','recovery-required','0',NULL,'')`,
+        binding.sessionId,
+        binding.runId,
+        binding.releaseId,
+        binding.participantId,
+        binding.teamId,
+        binding.serviceOrigin,
+        binding.envelopeKey,
       );
-      await this.replaceSnapshot(tx, joinContext, input.pull);
+      await this.replaceSnapshot(tx, binding, input.pull);
+      if (input.recoveryDisposition !== undefined) {
+        await appendGameplayEvidence(tx, {
+          runId: binding.runId,
+          now: this.now,
+          evidence: { kind: "recovery", disposition: input.recoveryDisposition },
+        });
+      }
     });
   }
 
@@ -729,11 +782,9 @@ export class SharedSyncStore {
     await this.database.withExclusiveTransactionAsync(async (tx) => {
       const result = await tx.getFirstAsync<{
         intent_json: string;
-        terminal: SharedCommandStatus["terminal"];
-        outcome_code: string;
-        resulting_state_version: number;
+        result_json: string;
       }>(
-        "SELECT intent_json, terminal, outcome_code, resulting_state_version FROM shared_results WHERE session_id=? AND command_id=?",
+        "SELECT intent_json,result_json FROM shared_results WHERE session_id=? AND command_id=?",
         sessionId,
         command.commandId,
       );
@@ -741,12 +792,13 @@ export class SharedSyncStore {
         if (result.intent_json !== canonicalIntent(command)) {
           throw new Error("shared-command-identity-conflict");
         }
+        const terminal = JSON.parse(result.result_json) as SyncCommandResult;
         output = {
           commandId: command.commandId,
           disposition: "already-terminal",
-          terminal: result.terminal,
-          outcomeCode: result.outcome_code,
-          resultingStateVersion: result.resulting_state_version,
+          terminal: terminal.terminal,
+          outcomeCode: terminal.outcomeCode,
+          resultingStateVersion: terminal.resultingStateVersion,
         };
         return;
       }
@@ -848,7 +900,21 @@ export class SharedSyncStore {
     return output;
   }
 
-  async failSubmissionBatch(sessionId: string): Promise<void> {
+  async recoverSubmissionBatch(sessionId: string): Promise<void> {
+    await this.recoverSubmissionBatchWithEvidence(sessionId);
+  }
+
+  async failSubmissionBatch(
+    sessionId: string,
+    disposition: "submit-failed" | "pull-failed",
+  ): Promise<void> {
+    await this.recoverSubmissionBatchWithEvidence(sessionId, disposition);
+  }
+
+  private async recoverSubmissionBatchWithEvidence(
+    sessionId: string,
+    disposition?: "submit-failed" | "pull-failed",
+  ): Promise<void> {
     await this.database.withExclusiveTransactionAsync(async (tx) => {
       const session = await tx.getFirstAsync<StoredSessionBinding>(
         "SELECT * FROM shared_sessions WHERE session_id=?",
@@ -877,6 +943,13 @@ export class SharedSyncStore {
          WHERE session_id=?`,
         sessionId,
       );
+      if (disposition !== undefined) {
+        await appendGameplayEvidence(tx, {
+          runId: session.run_id,
+          now: this.now,
+          evidence: { kind: "synchronization", phase: "degraded", disposition },
+        });
+      }
     });
   }
 
@@ -926,47 +999,71 @@ export class SharedSyncStore {
     return output;
   }
 
-  async applyPull(context: SharedBindingContext, pull: SyncPull): Promise<void> {
-    const bindingContext = {
-      ...context,
-      serviceOrigin: canonicalServiceOrigin(context.serviceOrigin),
-    };
-    if (
-      !isSyncPull(pull) ||
-      !this.validateReleasePull(pull) ||
-      pull.snapshot.sessionId !== bindingContext.sessionId
-    ) {
+  async applyPull(candidate: SharedSessionBinding, pull: SyncPull): Promise<void> {
+    const binding = normalizedBinding(candidate);
+    if (!isSyncPull(pull) || !pullMatchesBinding(binding, pull, this.projectionRule)) {
       throw new Error("shared-pull-invalid");
     }
     assertUniquePullCollections(pull);
+    const session = await this.database.getFirstAsync<StoredSessionBinding>(
+      "SELECT * FROM shared_sessions WHERE session_id=?",
+      binding.sessionId,
+    );
+    if (session === null || !bindingMatches(session, binding)) {
+      throw new Error("shared-snapshot-binding-conflict");
+    }
+    const digest = pullDigest(pull);
+    const outbox = await this.database.getFirstAsync<{ status: SharedOutboxStatus }>(
+      "SELECT status FROM shared_outbox WHERE session_id=? LIMIT 1",
+      binding.sessionId,
+    );
+    const desiredTransport = pull.snapshot.membershipStatus === "revoked" ? "degraded" : "online";
+    const desiredSynchronization =
+      pull.snapshot.membershipStatus === "revoked"
+        ? "revoked"
+        : outbox === null
+          ? "current"
+          : "recovery-required";
+    const outboxNeedsReconciliation =
+      outbox?.status === "submitting" ||
+      (pull.snapshot.membershipStatus === "revoked" && outbox?.status !== "blocked-revoked");
+    if (
+      session.last_pull_digest === digest &&
+      session.membership_status === pull.snapshot.membershipStatus &&
+      session.cursor === pull.nextCursor &&
+      session.confirmed_at === pull.snapshot.confirmedAt &&
+      session.transport_status === desiredTransport &&
+      session.sync_status === desiredSynchronization &&
+      !outboxNeedsReconciliation
+    ) {
+      return;
+    }
     await this.database.withExclusiveTransactionAsync((tx) =>
-      this.replaceSnapshot(tx, bindingContext, pull),
+      this.replaceSnapshot(tx, binding, pull),
     );
   }
 
   private async replaceSnapshot(
     tx: SharedSqlDatabase,
-    context: SharedBindingContext,
+    binding: SharedSessionBinding,
     pull: SyncPull,
   ): Promise<void> {
     const run = await tx.getFirstAsync<StoredRun>(
       "SELECT release_id,status FROM runs WHERE run_id=?",
-      context.runId,
+      binding.runId,
     );
     if (run === null || run.status !== "active") throw new Error("shared-run-not-active");
-    if (run.release_id !== context.expectedReleaseId) {
+    if (run.release_id !== binding.releaseId) {
       throw new Error("shared-run-release-mismatch");
     }
     const session = await tx.getFirstAsync<StoredSessionBinding>(
       "SELECT * FROM shared_sessions WHERE session_id=?",
-      context.sessionId,
+      binding.sessionId,
     );
     if (session === null) throw new Error("shared-session-missing");
     if (
-      !bindingMatches(session, context) ||
-      session.release_id !== pull.snapshot.releaseId ||
-      session.participant_id !== pull.snapshot.participantId ||
-      session.team_id !== pull.snapshot.teamId
+      !bindingMatches(session, binding) ||
+      !pullMatchesBinding(binding, pull, this.projectionRule)
     ) {
       throw new Error("shared-snapshot-binding-conflict");
     }
@@ -975,6 +1072,7 @@ export class SharedSyncStore {
     }
 
     const matchedOutboxIds: string[] = [];
+    const insertedResults: ReconciliationResultInsertion[] = [];
     for (const result of pull.commandResults) {
       const source = await tx.getFirstAsync<{
         intent_json: string;
@@ -982,16 +1080,16 @@ export class SharedSyncStore {
         observation_ids_json: string;
       }>(
         "SELECT intent_json,expected_state_version,observation_ids_json FROM shared_outbox WHERE session_id=? AND command_id=?",
-        context.sessionId,
+        binding.sessionId,
         result.commandId,
       );
       const existing = await tx.getFirstAsync<StoredResultRow>(
         "SELECT * FROM shared_results WHERE session_id=? AND command_id=?",
-        context.sessionId,
+        binding.sessionId,
         result.commandId,
       );
       if (existing !== null) {
-        if (!resultMatches(existing, result)) {
+        if (existing.result_json !== canonicalResult(result)) {
           throw new Error("shared-result-identity-conflict");
         }
         if (
@@ -1004,74 +1102,132 @@ export class SharedSyncStore {
         }
       } else {
         if (source === null) throw new Error("shared-result-source-missing");
-        await tx.runAsync(
-          `INSERT INTO shared_results
-           (session_id,command_id,intent_json,terminal,outcome_code,resulting_state_version,
-            expected_state_version,observation_ids_json,decision_position,decided_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?)`,
-          context.sessionId,
-          result.commandId,
-          source.intent_json,
-          result.terminal,
-          result.outcomeCode,
-          result.resultingStateVersion,
-          source.expected_state_version,
-          source.observation_ids_json,
-          result.decisionPosition,
-          pull.snapshot.confirmedAt,
-        );
-        const committedAt = pull.snapshot.confirmedAt;
-        const committedMs = Date.parse(committedAt);
-        if (!Number.isFinite(committedMs)) throw new Error("shared-result-time-invalid");
-        await tx.runAsync(
-          `INSERT INTO game_play_events
-           (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
-           VALUES (?,?,?,'command',?,?)`,
-          context.runId,
-          committedAt,
-          committedMs,
-          result.commandId,
-          JSON.stringify({
-            scope: "shared",
-            terminal: result.terminal,
-            expectedStateVersion: source.expected_state_version,
-            resultingStateVersion: result.resultingStateVersion,
-          }),
-        );
-        for (const evidence of result.capabilityEvidence ?? []) {
-          await tx.runAsync(
-            `INSERT INTO game_play_events
-             (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
-             VALUES (?,?,?,'capability',?,?)`,
-            context.runId,
-            committedAt,
-            committedMs,
-            result.commandId,
-            JSON.stringify(evidence),
-          );
-        }
+        insertedResults.push({ result, source });
       }
       if (source !== null) matchedOutboxIds.push(result.commandId);
     }
 
-    await tx.runAsync("DELETE FROM shared_projections WHERE session_id=?", context.sessionId);
-    for (const item of pull.snapshot.projections) {
+    const storedProjections = await tx.getAllAsync<{
+      readonly aggregate_kind: string;
+      readonly aggregate_id: string;
+      readonly schema_id: string;
+      readonly state_version: number;
+      readonly value_json: string;
+    }>(
+      `SELECT aggregate_kind,aggregate_id,schema_id,state_version,value_json
+       FROM shared_projections WHERE session_id=? ORDER BY aggregate_kind,aggregate_id,schema_id`,
+      binding.sessionId,
+    );
+    const nextProjections = pull.snapshot.projections.map((projection) => ({
+      aggregate_kind: projection.aggregateKind,
+      aggregate_id: projection.aggregateId,
+      schema_id: projection.schemaId,
+      state_version: projection.stateVersion,
+      value_json: canonicalJson(projection.value, "shared-projection-invalid"),
+    }));
+    const projectionChanged = JSON.stringify(storedProjections) !== JSON.stringify(nextProjections);
+    const submitting = await tx.getFirstAsync<{ command_id: string }>(
+      "SELECT command_id FROM shared_outbox WHERE session_id=? AND status='submitting' LIMIT 1",
+      binding.sessionId,
+    );
+    const digest = pullDigest(pull);
+    const membershipChanged = session.membership_status !== pull.snapshot.membershipStatus;
+    const outboxRows = await tx.getAllAsync<{
+      readonly command_id: string;
+      readonly status: SharedOutboxStatus;
+    }>("SELECT command_id,status FROM shared_outbox WHERE session_id=?", binding.sessionId);
+    const matched = new Set(matchedOutboxIds);
+    const remainingOutbox = outboxRows.filter(({ command_id }) => !matched.has(command_id));
+    const desiredTransport = pull.snapshot.membershipStatus === "revoked" ? "degraded" : "online";
+    const desiredSynchronization =
+      pull.snapshot.membershipStatus === "revoked"
+        ? "revoked"
+        : remainingOutbox.length === 0
+          ? "current"
+          : "recovery-required";
+    const statusChanged =
+      session.membership_status !== pull.snapshot.membershipStatus ||
+      session.transport_status !== desiredTransport ||
+      session.sync_status !== desiredSynchronization ||
+      session.cursor !== pull.nextCursor ||
+      session.confirmed_at !== pull.snapshot.confirmedAt ||
+      session.last_pull_digest !== digest;
+    const outboxStatusChanged =
+      pull.snapshot.membershipStatus === "revoked"
+        ? remainingOutbox.some(({ status }) => status !== "blocked-revoked")
+        : remainingOutbox.some(({ status }) => status === "submitting");
+    const delta: SharedReconciliationDelta = {
+      digest,
+      resultInsertions: insertedResults,
+      replacementProjections: projectionChanged ? nextProjections : null,
+      matchedOutboxIds,
+      requeueInterrupted: submitting !== null,
+      membershipChanged,
+      pullChanged: session.last_pull_digest !== digest,
+      statusChanged,
+      outboxStatusChanged,
+      isEmpty:
+        insertedResults.length === 0 &&
+        matchedOutboxIds.length === 0 &&
+        !projectionChanged &&
+        !outboxStatusChanged &&
+        !statusChanged,
+    };
+    if (delta.isEmpty) return;
+    const reconciliationAt = this.now();
+    const reconciliationNow = () => reconciliationAt;
+    for (const { result, source } of delta.resultInsertions) {
       await tx.runAsync(
-        `INSERT INTO shared_projections
-         (session_id,aggregate_kind,aggregate_id,schema_id,state_version,value_json)
+        `INSERT INTO shared_results
+         (session_id,command_id,intent_json,result_json,expected_state_version,observation_ids_json)
          VALUES (?,?,?,?,?,?)`,
-        context.sessionId,
-        item.aggregateKind,
-        item.aggregateId,
-        item.schemaId,
-        item.stateVersion,
-        JSON.stringify(item.value),
+        binding.sessionId,
+        result.commandId,
+        source.intent_json,
+        canonicalResult(result),
+        source.expected_state_version,
+        source.observation_ids_json,
       );
+      await appendGameplayEvidence(tx, {
+        runId: binding.runId,
+        now: reconciliationNow,
+        evidence: {
+          kind: "command",
+          commandId: result.commandId,
+          scope: "shared",
+          terminal: result.terminal,
+          expectedStateVersion: source.expected_state_version,
+          resultingStateVersion: result.resultingStateVersion,
+        },
+      });
+      for (const evidence of result.capabilityEvidence ?? []) {
+        await appendGameplayEvidence(tx, {
+          runId: binding.runId,
+          now: reconciliationNow,
+          evidence: { kind: "capability", commandId: result.commandId, ...evidence },
+        });
+      }
     }
-    for (const commandId of matchedOutboxIds) {
+    if (delta.replacementProjections !== null) {
+      await tx.runAsync("DELETE FROM shared_projections WHERE session_id=?", binding.sessionId);
+      for (const item of delta.replacementProjections) {
+        await tx.runAsync(
+          `INSERT INTO shared_projections
+           (session_id,aggregate_kind,aggregate_id,schema_id,state_version,value_json)
+           VALUES (?,?,?,?,?,?)`,
+          binding.sessionId,
+          item.aggregate_kind,
+          item.aggregate_id,
+          item.schema_id,
+          item.state_version,
+          item.value_json,
+        );
+      }
+    }
+    for (const commandId of delta.matchedOutboxIds) {
       await tx.runAsync(
         "DELETE FROM shared_outbox WHERE session_id=? AND command_id=?",
-        context.sessionId,
+        binding.sessionId,
         commandId,
       );
     }
@@ -1080,63 +1236,63 @@ export class SharedSyncStore {
       await tx.runAsync(
         `UPDATE shared_outbox SET status='blocked-revoked'
          WHERE session_id=? AND status IN ('queued','submitting')`,
-        context.sessionId,
+        binding.sessionId,
       );
       await tx.runAsync(
         `UPDATE shared_sessions
          SET membership_status='revoked',transport_status='degraded',sync_status='revoked',
-          cursor=?,confirmed_at=? WHERE session_id=?`,
+          cursor=?,confirmed_at=?,last_pull_digest=? WHERE session_id=?`,
         pull.nextCursor,
         pull.snapshot.confirmedAt,
-        context.sessionId,
+        delta.digest,
+        binding.sessionId,
       );
-      await tx.runAsync(
-        `INSERT INTO game_play_events
-         (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
-         VALUES (?,?,?,'diagnostic',NULL,?)`,
-        context.runId,
-        pull.snapshot.confirmedAt,
-        Date.parse(pull.snapshot.confirmedAt),
-        JSON.stringify({ code: "shared-membership-revoked", scope: "shared" }),
-      );
-      await tx.runAsync(
-        `INSERT INTO game_play_events
-         (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
-         VALUES (?,?,?,'synchronization',NULL,?)`,
-        context.runId,
-        pull.snapshot.confirmedAt,
-        Date.parse(pull.snapshot.confirmedAt),
-        JSON.stringify({ phase: "revoked", disposition: "snapshot-replaced" }),
-      );
+      if (delta.membershipChanged) {
+        await appendGameplayEvidence(tx, {
+          runId: binding.runId,
+          now: reconciliationNow,
+          evidence: {
+            kind: "synchronization",
+            phase: "revoked",
+            disposition: "membership-revoked",
+          },
+        });
+        await appendGameplayEvidence(tx, {
+          runId: binding.runId,
+          now: reconciliationNow,
+          evidence: { kind: "diagnostic", code: "shared-membership-revoked", scope: "shared" },
+        });
+      }
       return;
     }
 
-    await tx.runAsync(
-      "UPDATE shared_outbox SET status='queued' WHERE session_id=? AND status='submitting'",
-      context.sessionId,
-    );
-    await tx.runAsync(
-      `INSERT INTO game_play_events
-       (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
-       VALUES (?,?,?,'recovery',NULL,?)`,
-      context.runId,
-      pull.snapshot.confirmedAt,
-      Date.parse(pull.snapshot.confirmedAt),
-      JSON.stringify({ disposition: "snapshot-replaced" }),
-    );
+    if (delta.requeueInterrupted) {
+      await tx.runAsync(
+        "UPDATE shared_outbox SET status='queued' WHERE session_id=? AND status='submitting'",
+        binding.sessionId,
+      );
+    }
     const remaining = await tx.getFirstAsync<{ command_id: string }>(
       "SELECT command_id FROM shared_outbox WHERE session_id=? LIMIT 1",
-      context.sessionId,
+      binding.sessionId,
     );
     await tx.runAsync(
       `UPDATE shared_sessions
-       SET membership_status='active',transport_status='online',sync_status=?,cursor=?,confirmed_at=?
+       SET membership_status='active',transport_status='online',sync_status=?,cursor=?,confirmed_at=?,last_pull_digest=?
        WHERE session_id=?`,
       remaining === null ? "current" : "recovery-required",
       pull.nextCursor,
       pull.snapshot.confirmedAt,
-      context.sessionId,
+      delta.digest,
+      binding.sessionId,
     );
+    if (delta.pullChanged) {
+      await appendGameplayEvidence(tx, {
+        runId: binding.runId,
+        now: reconciliationNow,
+        evidence: { kind: "synchronization", phase: "current", disposition: "pull-applied" },
+      });
+    }
   }
 
   async markRevoked(sessionId: string): Promise<void> {
@@ -1146,6 +1302,7 @@ export class SharedSyncStore {
         run_id: string;
       }>("SELECT membership_status,run_id FROM shared_sessions WHERE session_id=?", sessionId);
       if (session === null) throw new Error("shared-session-missing");
+      if (session.membership_status === "revoked") return;
       await tx.runAsync(
         "UPDATE shared_sessions SET membership_status='revoked',sync_status='revoked',transport_status='degraded' WHERE session_id=?",
         sessionId,
@@ -1155,75 +1312,51 @@ export class SharedSyncStore {
          WHERE session_id=? AND status IN ('queued','submitting')`,
         sessionId,
       );
-      const committedAt = new Date().toISOString();
-      await tx.runAsync(
-        `INSERT INTO game_play_events
-         (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
-         VALUES (?,?,?,'synchronization',NULL,?)`,
-        session.run_id,
-        committedAt,
-        Date.now(),
-        JSON.stringify({ phase: "revoked", disposition: "participant-revoked" }),
-      );
-      await tx.runAsync(
-        `INSERT INTO game_play_events
-         (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
-         VALUES (?,?,?,'diagnostic',NULL,?)`,
-        session.run_id,
-        committedAt,
-        Date.now(),
-        JSON.stringify({ code: "shared-membership-revoked", scope: "shared" }),
-      );
+      const revokedAt = this.now();
+      await appendGameplayEvidence(tx, {
+        runId: session.run_id,
+        now: () => revokedAt,
+        evidence: {
+          kind: "synchronization",
+          phase: "revoked",
+          disposition: "membership-revoked",
+        },
+      });
+      await appendGameplayEvidence(tx, {
+        runId: session.run_id,
+        now: () => revokedAt,
+        evidence: { kind: "diagnostic", code: "shared-membership-revoked", scope: "shared" },
+      });
     });
   }
 
-  async recordSyncEvent(
-    sessionId: string,
-    elapsedMs: number,
-    phase: string,
-    disposition: string,
-    commandId?: string,
-  ): Promise<void> {
-    if (
-      !Number.isSafeInteger(elapsedMs) ||
-      elapsedMs < 0 ||
-      !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(phase) ||
-      !/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(disposition)
-    )
-      throw new Error("shared-sync-event-invalid");
+  async recordSyncEvidence(sessionId: string, evidence: SynchronizationEvidence): Promise<void> {
     await this.database.withExclusiveTransactionAsync(async (tx) => {
-      const committedAt = new Date().toISOString();
-      const run = await tx.getFirstAsync<{ run_id: string; started_at: string }>(
-        `SELECT sessions.run_id,runs.started_at FROM shared_sessions AS sessions
-         JOIN runs ON runs.run_id=sessions.run_id WHERE sessions.session_id=?`,
+      const run = await tx.getFirstAsync<{ run_id: string }>(
+        "SELECT run_id FROM shared_sessions WHERE session_id=?",
         sessionId,
       );
       if (run === null) throw new Error("shared-session-missing");
-      const calculatedElapsed = Date.now() - Date.parse(run.started_at);
-      const truthfulElapsed = elapsedMs === 0 ? Math.max(0, calculatedElapsed) : elapsedMs;
-      await tx.runAsync(
-        "INSERT INTO shared_sync_events(session_id,elapsed_ms,phase,disposition,command_id) VALUES (?,?,?,?,?)",
-        sessionId,
-        truthfulElapsed,
-        phase,
-        disposition,
-        commandId ?? null,
-      );
-      await tx.runAsync(
-        `INSERT INTO game_play_events
-         (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
-         VALUES (?,?,?,'synchronization',?,?)`,
-        run.run_id,
-        committedAt,
-        truthfulElapsed,
-        commandId ?? null,
-        JSON.stringify({ phase, disposition }),
-      );
-      await tx.runAsync(
-        `DELETE FROM shared_sync_events WHERE session_id=? AND sequence NOT IN (SELECT sequence FROM shared_sync_events WHERE session_id=? ORDER BY sequence DESC LIMIT 500)`,
-        sessionId,
+      await appendGameplayEvidence(tx, {
+        runId: run.run_id,
+        now: this.now,
+        evidence: { kind: "synchronization", ...evidence },
+      });
+    });
+  }
+
+  async recordDiagnosticEvidence(sessionId: string, code: "delivery-interrupted"): Promise<void> {
+    await this.database.withExclusiveTransactionAsync(async (tx) => {
+      const run = await tx.getFirstAsync<{ run_id: string }>(
+        "SELECT run_id FROM shared_sessions WHERE session_id=?",
         sessionId,
       );
+      if (run === null) throw new Error("shared-session-missing");
+      await appendGameplayEvidence(tx, {
+        runId: run.run_id,
+        now: this.now,
+        evidence: { kind: "diagnostic", code, scope: "shared" },
+      });
     });
   }
 
@@ -1290,13 +1423,23 @@ export class SharedSyncStore {
     );
     const results = await this.database.getAllAsync<{
       command_id: string;
-      terminal: SharedCommandStatus["terminal"];
-      outcome_code: string;
-      resulting_state_version: number;
+      result_json: string;
     }>(
-      "SELECT * FROM shared_results WHERE session_id=? ORDER BY CAST(decision_position AS INTEGER),command_id",
+      "SELECT command_id,result_json FROM shared_results WHERE session_id=? ORDER BY command_id",
       sessionId,
     );
+    const terminalResults = results
+      .map((row) => ({
+        commandId: row.command_id,
+        result: JSON.parse(row.result_json) as SyncCommandResult,
+      }))
+      .sort((left, right) => {
+        const leftPosition = BigInt(left.result.decisionPosition);
+        const rightPosition = BigInt(right.result.decisionPosition);
+        if (leftPosition < rightPosition) return -1;
+        if (leftPosition > rightPosition) return 1;
+        return left.commandId.localeCompare(right.commandId);
+      });
     const pending = await this.database.getAllAsync<{ command_id: string; status: string }>(
       "SELECT command_id,status FROM shared_outbox WHERE session_id=? ORDER BY enqueued_at,command_id",
       sessionId,
@@ -1322,12 +1465,12 @@ export class SharedSyncStore {
           terminal:
             row.status === "blocked-revoked" ? ("blocked-revoked" as const) : ("pending" as const),
         })),
-        ...results.map((row) => ({
-          commandId: row.command_id,
+        ...terminalResults.map(({ commandId, result }) => ({
+          commandId,
           disposition: "already-terminal" as const,
-          terminal: row.terminal,
-          outcomeCode: row.outcome_code,
-          resultingStateVersion: row.resulting_state_version,
+          terminal: result.terminal,
+          outcomeCode: result.outcomeCode,
+          resultingStateVersion: result.resultingStateVersion,
         })),
       ],
     };

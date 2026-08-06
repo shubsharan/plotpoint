@@ -349,8 +349,14 @@ describe("installed field puzzle vertical journey", () => {
         presentationSource: `
           export const components = Object.freeze({
             "field.puzzle": (context) => {
-              context.lifecycle.defer(() => globalThis.__plotpointInvalidCleanup.push("first"));
-              context.lifecycle.defer(() => globalThis.__plotpointInvalidCleanup.push("second"));
+              context.lifecycle.defer(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 5));
+                globalThis.__plotpointInvalidCleanup.push("first");
+              });
+              context.lifecycle.defer(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 5));
+                globalThis.__plotpointInvalidCleanup.push("second");
+              });
               return {};
             }
           });

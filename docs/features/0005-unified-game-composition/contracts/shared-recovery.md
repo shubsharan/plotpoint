@@ -105,11 +105,20 @@ declared schema, aggregate kind, aggregate ID, and valid payload. Empty, multipl
 wrong-schema, or invalid-payload input leaves SQLite byte-identical and does not open a mutation
 transaction.
 
+The resolver receives the exact durable `SharedSessionBinding`; it never derives expected participant,
+team, release, or session identity from the candidate pull. The transaction rechecks the stored binding
+for race safety after pure validation succeeds.
+
 The exclusive apply transaction then verifies immutable identities, compare-or-inserts each terminal
 result, rejects changed repetition or missing provenance, replaces the complete projection set, removes
 only outbox rows matched by identical terminals, reconciles revocation or interrupted work, advances
 cursor and confirmed time, appends redacted evidence, and commits once. Reapplying a normal, corrective,
 or revoked pull is byte-equivalent.
+
+Terminal identity is canonical full `SyncCommandResult` JSON, including capability evidence. The session's
+canonical last-pull digest plus a typed local reconciliation delta distinguishes a true no-op from interrupted
+outbox recovery. A true no-op performs zero writes; evidence is appended only for transitions committed by
+that transaction.
 
 Authenticated pull ordering is participant-scoped. In a repeatable-read transaction the server reads
 the authenticated participant's committed `receipt_position` as its high-water mark and returns only

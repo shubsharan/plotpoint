@@ -21,10 +21,12 @@ interface PendingSharedJoin {
 
 type PendingSharedJoinInput = Omit<PendingSharedJoin, "status">;
 
-interface SharedBindingContext {
+interface SharedSessionBinding {
   readonly sessionId: string;
   readonly runId: string;
-  readonly expectedReleaseId: `sha256:${string}`;
+  readonly releaseId: `sha256:${string}`;
+  readonly participantId: string;
+  readonly teamId: string;
   readonly serviceOrigin: string;
   readonly envelopeKey: string;
 }
@@ -41,11 +43,10 @@ interface Phase7JoinStore {
   markPendingJoinSubmitting(runId: string, requestDigest: string): Promise<PendingSharedJoin>;
   pendingJoinForRun(runId: string): Promise<PendingSharedJoin | null>;
   commitJoinedSession(input: {
-    readonly context: SharedBindingContext;
-    readonly response: JoinResponseIdentity;
+    readonly binding: SharedSessionBinding;
     readonly pull: SyncPull;
   }): Promise<void>;
-  applyPull(context: SharedBindingContext, pull: SyncPull): Promise<void>;
+  applyPull(context: SharedSessionBinding, pull: SyncPull): Promise<void>;
   markRevoked(sessionId: string): Promise<void>;
 }
 
@@ -69,11 +70,13 @@ function pending(overrides: Partial<PendingSharedJoinInput> = {}): PendingShared
   };
 }
 
-function context(overrides: Partial<SharedBindingContext> = {}): SharedBindingContext {
+function context(overrides: Partial<SharedSessionBinding> = {}): SharedSessionBinding {
   return {
     sessionId: "session-1",
     runId: "run-1",
-    expectedReleaseId: releaseId,
+    releaseId,
+    participantId: "participant-1",
+    teamId: "team-1",
     serviceOrigin: "https://example.test",
     envelopeKey: "plotpoint.shared.run-1.envelope",
     ...overrides,
@@ -156,7 +159,11 @@ async function setup(): Promise<{
   await migrateSharedDatabase(database);
   return {
     database,
-    store: new SharedSyncStore(database) as unknown as Phase7JoinStore,
+    store: new SharedSyncStore(database, {
+      aggregateKind: "team",
+      schemaId: "example.counter",
+      validate: () => true,
+    }) as unknown as Phase7JoinStore,
   };
 }
 
@@ -172,14 +179,21 @@ async function advanceToSubmitting(
 async function commit(
   store: Phase7JoinStore,
   input: {
-    readonly context?: SharedBindingContext;
+    readonly context?: SharedSessionBinding;
     readonly response?: JoinResponseIdentity;
     readonly pull?: SyncPull;
   } = {},
 ): Promise<void> {
+  const binding = input.context ?? context();
+  const identity = input.response ?? response();
   await store.commitJoinedSession({
-    context: input.context ?? context(),
-    response: input.response ?? response(),
+    binding: {
+      ...binding,
+      releaseId: binding.releaseId === releaseId ? identity.releaseId : binding.releaseId,
+      participantId:
+        binding.participantId === "participant-1" ? identity.participantId : binding.participantId,
+      teamId: binding.teamId === "team-1" ? identity.teamId : binding.teamId,
+    },
     pull: input.pull ?? pull(),
   });
 }
@@ -200,7 +214,7 @@ async function durableState(database: TestSharedSqliteDatabase): Promise<unknown
        ORDER BY session_id,aggregate_kind,aggregate_id,schema_id`,
     ),
     results: await database.getAllAsync<Record<string, unknown>>(
-      "SELECT * FROM shared_results ORDER BY session_id,decision_position,command_id",
+      "SELECT * FROM shared_results ORDER BY session_id,command_id",
     ),
   };
 }
@@ -352,7 +366,7 @@ describe("release-pinned shared join SQLite recovery", () => {
     const bound = await durableState(database);
     const incompatible = [
       { context: context({ runId: "run-2" }) },
-      { context: context({ expectedReleaseId: otherReleaseId }) },
+      { context: context({ releaseId: otherReleaseId }) },
       { context: context({ sessionId: "session-changed" }) },
       { context: context({ serviceOrigin: "https://changed.example.test" }) },
       { context: context({ envelopeKey: "plotpoint.shared.run-1.envelope-changed" }) },
@@ -377,7 +391,7 @@ describe("release-pinned shared join SQLite recovery", () => {
     const before = await durableState(database);
     const conflicts = [
       context({ runId: "run-2" }),
-      context({ expectedReleaseId: otherReleaseId }),
+      context({ releaseId: otherReleaseId }),
       context({ sessionId: "session-changed" }),
       context({ serviceOrigin: "https://changed.example.test" }),
       context({ envelopeKey: "plotpoint.shared.run-1.envelope-changed" }),

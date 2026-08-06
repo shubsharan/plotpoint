@@ -27,10 +27,12 @@ interface PendingJoinRecord {
   readonly status: "preparing" | "ready" | "submitting";
 }
 
-interface BindingContext {
+interface SessionBinding {
   readonly sessionId: string;
   readonly runId: string;
-  readonly expectedReleaseId: `sha256:${string}`;
+  readonly releaseId: `sha256:${string}`;
+  readonly participantId: string;
+  readonly teamId: string;
   readonly serviceOrigin: string;
   readonly envelopeKey: string;
 }
@@ -119,15 +121,6 @@ class PendingJoinStoreHarness {
   commitError: Error | null = null;
   readonly order: string[] = [];
 
-  async recordSyncEvent(
-    _sessionId: string,
-    _elapsedMs: number,
-    phase: string,
-    disposition: string,
-  ): Promise<void> {
-    this.order.push(`${phase}-${disposition}`);
-  }
-
   async pendingJoinForRun(runId: string): Promise<PendingJoinRecord | null> {
     this.order.push("pending-read");
     return this.pending?.runId === runId ? this.pending : null;
@@ -176,10 +169,23 @@ class PendingJoinStoreHarness {
     return this.pending;
   }
 
+  async cancelPreparingJoin(runId: string, requestDigest: string): Promise<void> {
+    this.order.push("cancel-preparing");
+    if (
+      this.pending === null ||
+      this.pending.runId !== runId ||
+      this.pending.requestDigest !== requestDigest ||
+      this.pending.status !== "preparing"
+    ) {
+      throw new Error("shared-pending-join-cancel-conflict");
+    }
+    this.pending = null;
+  }
+
   async commitJoinedSession(input: {
-    readonly context: BindingContext;
-    readonly response: Omit<JoinResponse, "disposition" | "sync">;
+    readonly binding: SessionBinding;
     readonly pull: SyncPull;
+    readonly recoveryDisposition?: "join-resumed";
   }): Promise<void> {
     this.order.push("binding-commit");
     if (this.commitError !== null) {
@@ -191,21 +197,29 @@ class PendingJoinStoreHarness {
     if (
       attempt === null ||
       attempt.status !== "submitting" ||
-      input.context.sessionId !== attempt.sessionId ||
-      input.context.runId !== attempt.runId ||
-      input.context.expectedReleaseId !== attempt.expectedReleaseId ||
-      input.context.serviceOrigin !== attempt.serviceOrigin ||
-      input.context.envelopeKey !== attempt.envelopeKey ||
-      input.response.releaseId !== attempt.expectedReleaseId ||
+      input.binding.sessionId !== attempt.sessionId ||
+      input.binding.runId !== attempt.runId ||
+      input.binding.releaseId !== attempt.expectedReleaseId ||
+      input.binding.serviceOrigin !== attempt.serviceOrigin ||
+      input.binding.envelopeKey !== attempt.envelopeKey ||
       input.pull.snapshot.sessionId !== attempt.sessionId ||
-      input.pull.snapshot.releaseId !== input.response.releaseId ||
-      input.pull.snapshot.participantId !== input.response.participantId ||
-      input.pull.snapshot.teamId !== input.response.teamId
+      input.pull.snapshot.releaseId !== input.binding.releaseId ||
+      input.pull.snapshot.participantId !== input.binding.participantId ||
+      input.pull.snapshot.teamId !== input.binding.teamId
     ) {
       throw new Error("shared-session-binding-conflict");
     }
     this.bound = true;
     this.pending = null;
+    if (input.recoveryDisposition !== undefined) this.order.push(input.recoveryDisposition);
+  }
+
+  async recordRecoveryEvidence(): Promise<void> {
+    this.order.push("join-resumed");
+  }
+
+  async recordDiagnosticEvidence(): Promise<void> {
+    this.order.push("delivery-interrupted");
   }
 }
 
@@ -308,14 +322,14 @@ function seedRecoverableAttempt(harness: Harness, status: "ready" | "submitting"
 }
 
 describe("shared session controller recovery", () => {
-  it("persists one recoverable envelope before reservation and reduces it after commit", async () => {
+  it("reserves one join owner before persisting its recoverable envelope and reduces it after commit", async () => {
     const harness = createHarness();
 
     await expect(harness.controller.join(joinInput)).resolves.toEqual(pull());
 
     const position = (event: string) => harness.order.indexOf(event);
     expect(position("reserve")).toBeGreaterThanOrEqual(0);
-    expect(position("envelope-pending")).toBeLessThan(position("reserve"));
+    expect(position("reserve")).toBeLessThan(position("envelope-pending"));
     expect(position("envelope-pending")).toBeLessThan(position("ready"));
     expect(position("ready")).toBeLessThan(position("submitting"));
     expect(position("submitting")).toBeLessThan(position("send"));
@@ -351,7 +365,18 @@ describe("shared session controller recovery", () => {
       invitation: "invitation-a",
       participantCredential: "credential-a",
     });
-    expect(harness.order).toContain("recovery-envelope-reduction-failed");
+    expect(harness.order).toContain("delivery-interrupted");
+  });
+
+  it("cancels a crashed preparing reservation with no envelope and starts a fresh attempt", async () => {
+    const harness = createHarness();
+    harness.store.pending = pending("preparing");
+
+    await expect(harness.controller.join(joinInput)).resolves.toEqual(pull());
+
+    expect(harness.order).toContain("cancel-preparing");
+    expect(harness.secrets.generatedCredentials).toBe(1);
+    expect(harness.store.bound).toBe(true);
   });
 
   it("resumes a complete ready attempt without allocating a new request or secret", async () => {

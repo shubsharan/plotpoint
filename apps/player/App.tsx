@@ -49,7 +49,6 @@ import { playerRunLifecycleStore, selectReleaseRun } from "./src/runtime/run-lif
 import { SharedSyncStore } from "./src/shared/database";
 import {
   createCompositionSharedBridgeHandlers,
-  resolveSharedProjection,
   type SharedProjectionContract,
   routeSharedBridgeMessage,
 } from "./src/shared/host-bridge";
@@ -309,6 +308,7 @@ export default function App() {
       }
     }
     let projectionContract: SharedProjectionContract | null = null;
+    let projectionAggregateKind: "team" | "session" | null = null;
     if (composition.trustedMechanic !== undefined) {
       const serverModel = composition.aggregateModels.find(
         ({ id }) => id === composition.trustedMechanic?.aggregateModel,
@@ -337,29 +337,22 @@ export default function App() {
         validate: (value: SharedPlayView["projections"][number]["value"]) =>
           validateProjection(value),
       });
+      projectionAggregateKind = serverModel.kind;
     }
     sharedPlayController.current?.dispose();
     const credentials = createParticipantCredentialStore();
-    const sharedStore = new SharedSyncStore(db.raw(), (pull) => {
-      if (composition.trustedMechanic === undefined) {
-        return (
-          pull.snapshot.releaseId === recovery.releaseId && pull.snapshot.projections.length === 0
-        );
-      }
-      return (
-        resolveSharedProjection(
-          composition,
-          {
-            releaseId: pull.snapshot.releaseId,
-            sessionId: pull.snapshot.sessionId,
-            teamId: pull.snapshot.teamId,
-            projections: pull.snapshot.projections,
+    const sharedStore = new SharedSyncStore(
+      db.raw(),
+      composition.trustedMechanic === undefined ||
+        projectionContract === null ||
+        projectionAggregateKind === null
+        ? undefined
+        : {
+            aggregateKind: projectionAggregateKind,
+            schemaId: projectionContract.schemaId,
+            validate: projectionContract.validate,
           },
-          recovery.releaseId,
-          projectionContract,
-        ).kind === "resolved"
-      );
-    });
+    );
     const coordinator = new SharedSyncCoordinator(sharedStore, credentials);
     const controller = new SharedPlayController(
       {
