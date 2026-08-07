@@ -6,7 +6,7 @@ status: Active
 
 **Branch**: `feature/0005-unified-game-composition`
 **Epic**: [Plotpoint Core Product Loops](../../epics/0001-plotpoint-core-platform/epic.md)
-**PR**: [](<>)
+**PR**: [https://github.com/shubsharan/plotpoint/pull/4](https://github.com/shubsharan/plotpoint/pull/4)
 **Created**: 2026-08-05
 **Input**: Unify the game-authoring, runtime, progression, and authoritative multiplayer architecture; repair shared recovery and release-pinned joining; and make the co-op game a genuinely runnable end-to-end reference game.
 

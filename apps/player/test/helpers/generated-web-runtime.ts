@@ -129,6 +129,8 @@ export async function mountGeneratedWebRuntime(
     "__importModule",
     "URL",
     "window",
+    "setTimeout",
+    "clearTimeout",
     executableScript,
   );
   execute(
@@ -143,6 +145,8 @@ export async function mountGeneratedWebRuntime(
       },
     },
     runtimeWindow,
+    (handler: () => void, timeoutMs: number) => globalThis.setTimeout(handler, timeoutMs),
+    (timer: ReturnType<typeof setTimeout>) => globalThis.clearTimeout(timer),
   );
   for (let attempt = 0; attempt < 100 && root.children.length === 0; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0));

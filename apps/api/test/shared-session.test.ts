@@ -110,6 +110,7 @@ function serviceFixture(options: FixtureOptions = {}) {
   let participantId = "participant-1";
   let participantCreated = false;
   let invitationConsumed = false;
+  let invitationExpiresAt = "2031-01-01T00:00:00.000Z";
   let consumedCredentialDigest: string | null = null;
   let stateVersion = 0;
   let receiptPosition = 0;
@@ -171,7 +172,7 @@ function serviceFixture(options: FixtureOptions = {}) {
         {
           invitation_id: "invitation-1",
           session_id: "session-1",
-          expires_at: "2031-01-01T00:00:00.000Z",
+          expires_at: invitationExpiresAt,
           consumed_at: invitationConsumed ? "2026-08-05T00:00:00.000Z" : null,
           consumed_join_request_id: invitationConsumed ? "join-1" : null,
           consumed_credential_digest: consumedCredentialDigest,
@@ -264,6 +265,10 @@ function serviceFixture(options: FixtureOptions = {}) {
     service: new SharedSessionService(pool, "pepper-with-sufficient-length"),
     query,
     state: () => state,
+    expireInvitation: () => {
+      invitationExpiresAt = "2000-01-01T00:00:00.000Z";
+    },
+    joinState: () => ({ invitationConsumed, participantCreated }),
   };
 }
 
@@ -500,6 +505,49 @@ describe("generic shared-session service", () => {
     await expect(
       fixture.service.join("session-1", { ...input, expectedReleaseId: OTHER_RELEASE_ID }),
     ).rejects.toMatchObject({ code: "session-release-mismatch", status: 409 });
+  });
+
+  it("allows only the exact consumed join retry after invitation expiry", async () => {
+    const fixture = serviceFixture();
+    const input = {
+      joinRequestId: "join-1",
+      expectedReleaseId: RELEASE_ID,
+      invitation: createSecret(),
+      participantCredential: createSecret(),
+    };
+
+    const joined = await fixture.service.join("session-1", input);
+    fixture.expireInvitation();
+
+    await expect(fixture.service.join("session-1", input)).resolves.toMatchObject({
+      participantId: joined.participantId,
+      disposition: "duplicate",
+    });
+    await expect(
+      fixture.service.join("session-1", {
+        ...input,
+        participantCredential: createSecret(),
+      }),
+    ).rejects.toMatchObject({ code: "join-not-authorized", status: 401 });
+    await expect(
+      fixture.service.join("session-1", { ...input, joinRequestId: "changed-join" }),
+    ).rejects.toMatchObject({ code: "join-not-authorized", status: 401 });
+    expect(fixture.joinState()).toEqual({ invitationConsumed: true, participantCreated: true });
+  });
+
+  it("rejects an expired invitation that has not been consumed", async () => {
+    const fixture = serviceFixture();
+    fixture.expireInvitation();
+
+    await expect(
+      fixture.service.join("session-1", {
+        joinRequestId: "join-1",
+        expectedReleaseId: RELEASE_ID,
+        invitation: createSecret(),
+        participantCredential: createSecret(),
+      }),
+    ).rejects.toMatchObject({ code: "join-not-authorized", status: 401 });
+    expect(fixture.joinState()).toEqual({ invitationConsumed: false, participantCreated: false });
   });
 
   it("initializes the selected platform model only from registered configuration", async () => {

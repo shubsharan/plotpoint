@@ -622,11 +622,7 @@ export class SharedSessionService {
       }>(client, "SELECT * FROM hunt_invitations WHERE secret_digest = $1 FOR UPDATE", [
         invitationDigest,
       ]);
-      if (
-        invitation === null ||
-        invitation.session_id !== sessionId ||
-        Date.parse(invitation.expires_at) <= Date.now()
-      ) {
+      if (invitation === null || invitation.session_id !== sessionId) {
         throw new SharedSessionServiceError("join-not-authorized", 401);
       }
       if (invitation.consumed_at !== null) {
@@ -662,6 +658,9 @@ export class SharedSessionService {
         if (existing === null) throw new Error("join-retry-incoherent");
         if (existing.team_id !== session.team_id) throw new Error("join-retry-incoherent");
         return { ...existing, disposition: "duplicate" as const };
+      }
+      if (Date.parse(invitation.expires_at) <= Date.now()) {
+        throw new SharedSessionServiceError("join-not-authorized", 401);
       }
       const conflicting = await queryOne<{ participant_id: string }>(
         client,

@@ -101,19 +101,39 @@ export function buildRuntimeBootstrap(input: RuntimeBootstrapInput): string {
 <style>html,body,#root{margin:0;min-height:100%;font-family:ui-rounded,Georgia,serif;background:#f4f0e6;color:#142d2a}button,input{font:inherit}</style></head>
 <body><main id="root"></main><script>
 const pending = new Map(); let sequence = 0;
-const send = (type, payload) => new Promise((resolve, reject) => {
-  const requestId = 'web-' + (++sequence); pending.set(requestId, { resolve, reject });
-  window.ReactNativeWebView.postMessage(JSON.stringify({ version: ${HOST_BRIDGE_VERSION}, requestId, type, payload }));
+const clearPending = (requestId, waiter) => {
+  if (pending.get(requestId) !== waiter) return false;
+  pending.delete(requestId);
+  if (waiter.timer !== undefined) clearTimeout(waiter.timer);
+  return true;
+};
+const send = (type, payload, deadline) => new Promise((resolve, reject) => {
+  const requestId = 'web-' + (++sequence);
+  const waiter = { resolve, reject, timer: undefined };
+  pending.set(requestId, waiter);
+  if (deadline !== undefined) {
+    waiter.timer = setTimeout(() => {
+      if (clearPending(requestId, waiter)) reject(new Error(deadline.code));
+    }, deadline.timeoutMs);
+  }
+  try {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ version: ${HOST_BRIDGE_VERSION}, requestId, type, payload }));
+  } catch (error) {
+    if (clearPending(requestId, waiter)) reject(error);
+  }
 });
 window.__plotpointReceive = (message) => {
   const parsed = typeof message === 'string' ? JSON.parse(message) : message;
   const waiter = pending.get(parsed.requestId);
-  if (waiter) { pending.delete(parsed.requestId); parsed.type === 'host.error' ? waiter.reject(parsed.payload) : waiter.resolve(parsed.payload); }
+  if (waiter && clearPending(parsed.requestId, waiter)) {
+    parsed.type === 'host.error' ? waiter.reject(parsed.payload) : waiter.resolve(parsed.payload);
+  }
   window.dispatchEvent(new CustomEvent('plotpoint-host', { detail: parsed }));
 };
 const cancelPending = () => {
-  for (const waiter of pending.values()) waiter.reject(new Error('runtime-disposed'));
-  pending.clear();
+  for (const [requestId, waiter] of [...pending.entries()]) {
+    if (clearPending(requestId, waiter)) waiter.reject(new Error('runtime-disposed'));
+  }
 };
 (async () => {
   const logicUrl = URL.createObjectURL(new Blob([${logic}], { type: 'text/javascript' }));
@@ -344,7 +364,10 @@ const cancelPending = () => {
   const executeLocalCommand = async (descriptor, commandInput) => {
     const candidate = prepareLocalCandidate(descriptor, commandInput);
     if (candidate.disposition === 'not-recorded') return candidate;
-    const result = await send('transition.commit', { candidate });
+    const result = await send('transition.commit', { candidate }, {
+      timeoutMs: 15_000,
+      code: 'runtime-local-transition-response-timeout'
+    });
     if (!isRecord(result) || result.commandId !== commandInput.commandId ||
         result.terminal !== candidate.terminal ||
         (result.disposition !== 'committed' && result.disposition !== 'duplicate') ||
@@ -393,14 +416,22 @@ const cancelPending = () => {
             if (prior.fingerprint !== fingerprint) {
               throw new Error('runtime-local-command-identity-conflict');
             }
-            return prior.result;
+            if (prior.result !== undefined) return prior.result;
           }
           const result = localCommandLane.then(() => {
             if (!localCommandLaneOpen) throw new Error('runtime-local-command-lane-closed');
             return executeLocalCommand(descriptor, commandInput);
           });
           localCommandAttempts.set(commandInput.commandId, Object.freeze({ fingerprint, result }));
-          localCommandLane = result.then(() => undefined, () => undefined);
+          localCommandLane = result.then(
+            () => undefined,
+            () => {
+              const current = localCommandAttempts.get(commandInput.commandId);
+              if (current !== undefined && current.result === result) {
+                localCommandAttempts.set(commandInput.commandId, Object.freeze({ fingerprint }));
+              }
+            }
+          );
           return result;
         }
       })];

@@ -118,9 +118,12 @@ remaining cleanup after one fails and surfaces a stable lifecycle diagnostic.
 
 Component cleanup registers directly with that sole root scope while the synchronous factory is open;
 there is no child fire-and-forget rollback path. Local command invocations share one serialized lane and
-runtime-lifetime command-ID attempt map. Exact calls share a result, changed reuse fails, and an already
-observed duplicate never advances state or notifies listeners again. Capability clients are constructed
-from each component's exact declared requirement rather than selected from a global ID-only registry.
+runtime-lifetime command-ID attempt map. Concurrent exact calls share the active promise, successful
+results remain cached, and changed reuse permanently fails. A rejected bridge attempt or response timeout
+retains the immutable fingerprint but clears the active promise, so a later exact call may resend the same
+candidate. An already observed duplicate never advances state or notifies listeners again. Capability
+clients are constructed from each component's exact declared requirement rather than selected from a
+global ID-only registry.
 
 ## Local Transition
 
@@ -204,6 +207,13 @@ candidate returns the original result; changed reuse fails. Effect intents remai
 Preflight invalidity never becomes a transition candidate, never crosses the bridge, consumes no
 observation, and performs no durable mutation. After a recorded command promise resolves, a component
 may read the new committed local view; candidate state is never exposed early.
+
+Only `transition.commit` has an internal response deadline: 15 seconds after dispatch, the runtime removes
+its correlation waiter and rejects with `runtime-local-transition-response-timeout`. Normal responses,
+host errors, synchronous transport failures, and runtime disposal clear the waiter and its timer exactly
+once. A response received after timeout cannot complete or advance the local command. The runtime does not
+retry automatically; after observing failure, the component may explicitly reissue the byte-equivalent
+command and the durable host returns its original duplicate receipt when the first commit succeeded.
 
 ## Shared Surface and Correlation
 

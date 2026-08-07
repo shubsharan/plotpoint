@@ -20,6 +20,10 @@ duplicated ledger schema ownership. ADR-0006 already requires these durable cont
 centralizes cross-store restart reconciliation, proves the co-op action through the mounted production
 runtime, and makes ledger elapsed time nondecreasing without a schema or public-contract change.
 
+**Response-loss closure update (2026-08-06)**: Phase 17 preserves exact consumed join replay after
+invitation expiry and makes failed or timed-out local bridge attempts explicitly retryable under their
+existing immutable command identity. It adds no schema, protocol, migration, or background retry loop.
+
 Make the field puzzle and co-op game runnable through one compiler-owned composition path, preserve all
 four valid compiler examples through the clean break, and close a two-release co-op learning loop. Correct
 Project Configuration, Game Composition, Host API, and Game Play Report in place; use plain stable
@@ -93,9 +97,10 @@ Only the final T102 post-design checkpoint may restore this gate to `PASS` after
 
 ### Post-Design Gate
 
-**PASS - PHASE 16 COHESION CLOSURE (2026-08-06).** Reserve-first startup recovery, component-driven
-co-op acceptance, bounded device-clock chronology, provider-free verification, and fresh
-simulator/emulator evidence close T130 without expanding the public contracts or storage schema.
+**PASS - PHASE 17 RESPONSE-LOSS CLOSURE (2026-08-06).** Reserve-first startup recovery,
+component-driven co-op acceptance, bounded device-clock chronology, exact consumed join replay,
+caller-driven local bridge retry, provider-free verification, and fresh simulator/emulator evidence
+close T135 without expanding the public contracts or storage schema.
 
 - **PASS - One composition authority**: Project Configuration lowers to generated registries and
   Game Composition; no executable DSL or duplicate author runtime registry remains.

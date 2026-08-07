@@ -128,6 +128,9 @@ export const components = Object.freeze({
     catch (error) { element.dataset.conflict = error.message; }
     Promise.all([first, retry]).then(([left, right]) => {
       element.dataset.shared = String(left.resultingStateVersion === right.resultingStateVersion);
+      return command.execute({ commandId: 'same', payload: { nested: [[{ b: 2, a: 1 }]] } });
+    }).then((cached) => {
+      element.dataset.cached = String(cached.resultingStateVersion === 1);
       return Promise.all([
         command.execute({ commandId: 'second', payload: {} }),
         command.execute({ commandId: 'third', payload: {} })
@@ -169,7 +172,144 @@ export const application = Object.freeze({
     await waitForDataset(element, "complete", "true");
     expect(element.dataset.conflict).toBe("runtime-local-command-identity-conflict");
     expect(element.dataset.shared).toBe("true");
+    expect(element.dataset.cached).toBe("true");
     expect(committedVersions).toEqual([0, 1, 2]);
+    await mounted.unmount();
+  });
+
+  it("reissues an exact command after a lost bridge response and advances once", async () => {
+    const presentationSource = `
+export const components = Object.freeze({
+  runner(context) {
+    const element = document.createElement('div');
+    const command = context.local.commands.advance;
+    const execute = () => command.execute({ commandId: 'response-loss', payload: { value: 1 } })
+      .then((result) => { element.dataset.result = result.disposition; })
+      .catch((error) => { element.dataset.failure = error.message; });
+    element.addEventListener('execute', () => { void execute(); });
+    element.addEventListener('changed', () => {
+      try { command.execute({ commandId: 'response-loss', payload: { value: 2 } }); }
+      catch (error) { element.dataset.conflict = error.message; }
+    });
+    context.local.onChanged(() => {
+      element.dataset.notifications = String(Number(element.dataset.notifications || '0') + 1);
+    });
+    return element;
+  }
+});
+export const application = Object.freeze({
+  mount({ root, components }) {
+    root.replaceChildren(components.runner());
+    return Object.freeze({ unmount() { root.replaceChildren(); } });
+  }
+});`;
+    const candidates: unknown[] = [];
+    let durableVersion = 0;
+    let transitionCount = 0;
+    const commit = handlers(async ({ candidate }) => {
+      candidates.push(candidate);
+      transitionCount += 1;
+      if (durableVersion === 0) durableVersion = 1;
+      return {
+        commandId: candidate.commandId,
+        disposition: transitionCount === 1 ? "committed" : "duplicate",
+        terminal: "accepted",
+        resultingStateVersion: durableVersion,
+        outcome: candidate.terminal === "accepted" ? candidate.outcome : {},
+      };
+    });
+    const mounted = await mountGeneratedWebRuntime(
+      buildRuntimeBootstrap({ logicSource, presentationSource, gameComposition: baseComposition }),
+      async (message) => {
+        const response = await routeHostBridgeMessage(message, commit);
+        const envelope = JSON.parse(message) as { readonly type: string };
+        if (envelope.type === "transition.commit" && transitionCount === 1) {
+          return await new Promise<never>(() => undefined);
+        }
+        return response;
+      },
+    );
+    const element = mounted.root.children[0]!;
+    vi.useFakeTimers();
+    try {
+      await element.dispatchEvent("execute");
+      await vi.waitFor(() => expect(transitionCount).toBe(1));
+      await vi.advanceTimersByTimeAsync(15_000);
+      await vi.waitFor(() =>
+        expect(element.dataset.failure).toBe("runtime-local-transition-response-timeout"),
+      );
+      await element.dispatchEvent("changed");
+      expect(element.dataset.conflict).toBe("runtime-local-command-identity-conflict");
+
+      await element.dispatchEvent("execute");
+      await vi.waitFor(() => expect(element.dataset.result).toBe("duplicate"));
+      expect(transitionCount).toBe(2);
+      expect(candidates[1]).toEqual(candidates[0]);
+      expect(element.dataset.notifications).toBe("1");
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+      await mounted.unmount();
+    }
+  });
+
+  it("allows an exact retry after a settled host error without releasing identity", async () => {
+    const presentationSource = `
+export const components = Object.freeze({
+  runner(context) {
+    const element = document.createElement('div');
+    const command = context.local.commands.advance;
+    element.addEventListener('execute', () => {
+      command.execute({ commandId: 'host-error', payload: { value: 1 } })
+        .then((result) => { element.dataset.result = result.disposition; })
+        .catch((error) => {
+          element.dataset.failed = 'true';
+          element.dataset.error = String(error && (error.message || error.code) || error);
+        });
+    });
+    element.addEventListener('changed', () => {
+      try { command.execute({ commandId: 'host-error', payload: { value: 2 } }); }
+      catch (error) { element.dataset.conflict = error.message; }
+    });
+    return element;
+  }
+});
+export const application = Object.freeze({
+  mount({ root, components }) {
+    root.replaceChildren(components.runner());
+    return Object.freeze({ unmount() { root.replaceChildren(); } });
+  }
+});`;
+    let transitionCount = 0;
+    const mounted = await mountGeneratedWebRuntime(
+      buildRuntimeBootstrap({ logicSource, presentationSource, gameComposition: baseComposition }),
+      (message) =>
+        routeHostBridgeMessage(
+          message,
+          handlers(async ({ candidate }) => {
+            transitionCount += 1;
+            if (transitionCount === 1) throw new Error("host-temporarily-unavailable");
+            return {
+              commandId: candidate.commandId,
+              disposition: "committed",
+              terminal: "accepted",
+              resultingStateVersion: 1,
+              outcome: candidate.terminal === "accepted" ? candidate.outcome : {},
+            };
+          }),
+        ),
+    );
+    const element = mounted.root.children[0]!;
+    await element.dispatchEvent("execute");
+    await waitForDataset(element, "failed", "true");
+    await element.dispatchEvent("changed");
+    expect(element.dataset.conflict).toBe("runtime-local-command-identity-conflict");
+    await element.dispatchEvent("execute");
+    await waitForDataset(element, "result", "committed");
+    expect({ transitionCount, error: element.dataset.error }).toEqual({
+      transitionCount: 2,
+      error: "host-temporarily-unavailable",
+    });
     await mounted.unmount();
   });
 
@@ -243,9 +383,11 @@ export const components = Object.freeze({
   runner(context) {
     const element = document.createElement('div');
     const command = context.local.commands.advance;
-    command.execute({ commandId: 'first', payload: {} }).catch(() => undefined);
-    command.execute({ commandId: 'queued', payload: {} }).catch((error) => {
-      element.dataset.queued = error.message;
+    element.addEventListener('execute', () => {
+      command.execute({ commandId: 'first', payload: {} }).catch(() => undefined);
+      command.execute({ commandId: 'queued', payload: {} }).catch((error) => {
+        element.dataset.queued = error.message;
+      });
     });
     return element;
   }
@@ -280,11 +422,18 @@ export const application = Object.freeze({
         ),
     );
     const element = mounted.root.children[0]!;
-    await vi.waitFor(() => expect(commitCount).toBe(1));
-    const disposing = mounted.unmount();
-    await disposing;
+    vi.useFakeTimers();
+    try {
+      await element.dispatchEvent("execute");
+      await vi.waitFor(() => expect(commitCount).toBe(1));
+      expect(vi.getTimerCount()).toBe(1);
+      await mounted.unmount();
 
-    expect(commitCount).toBe(1);
-    expect(element.dataset.queued).toBe("runtime-local-command-lane-closed");
+      expect(commitCount).toBe(1);
+      expect(element.dataset.queued).toBe("runtime-local-command-lane-closed");
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -69,6 +69,11 @@ scope. Before sending, the player durably stores the exact pending request prove
 single pending invitation/credential envelope in SecureStore as defined by Shared Recovery. Response-loss retry with
 the same request returns the original response; changed reuse fails.
 
+Invitation expiration governs first consumption only. Once an invitation is consumed, the server compares
+the complete stored join identity before applying expiration: an exact retry returns the original participant
+binding even after `expires_at`, while every nonmatching consumed attempt remains `join-not-authorized`.
+An expired unconsumed invitation cannot create a participant.
+
 The response must agree internally:
 
 ```text

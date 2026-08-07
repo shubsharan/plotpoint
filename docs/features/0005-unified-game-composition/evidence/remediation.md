@@ -213,3 +213,30 @@ compiler and installed-player boundaries, while explicit adversarial deadlines r
   device-name selector; targeting the queried AVD name succeeded without a source change.
 - Spec Kit workflow validation and `git diff --check`: **PASS**. Physical iOS and physical Android remain
   explicitly **NOT RUN**.
+
+## Phase 17 Response-Loss Closure
+
+- Status: **PASS** on 2026-08-06. Invitation expiry now limits first consumption only: after a committed
+  join, the service validates the complete stored identity and returns the original binding for an exact
+  retry, while changed consumed attempts and expired unconsumed invitations remain unauthorized.
+- Red-to-green response-loss checkpoint: **PASS**. The new API regression first reproduced the premature
+  expiry rejection. Generated-runtime regressions cover concurrent sharing, successful caching, a lost
+  response followed by exact durable replay, settled host failure, permanent changed-ID conflict, and
+  waiter/timer cleanup on response and disposal.
+- Focused API/PostgreSQL/installed co-op matrix: **PASS**, 3 files and 15 tests. The real PostgreSQL test
+  moves a consumed invitation into the past, recovers its exact binding, rejects changed identities without
+  participant or invitation mutation, and preserves release-first validation. The mounted co-op action
+  continues to cross the production bridges and authoritative service.
+- Focused generated-runtime/lifecycle matrix: **PASS**, 3 files and 21 tests. `transition.commit` alone has
+  the fixed 15-second deadline; timeout retains the immutable fingerprint but releases the active promise,
+  and explicit exact reissue applies the durable duplicate once. Generated source freshness and player/API
+  type checks also pass.
+- `pnpm verify`: **PASS**, including generated-runtime freshness, formatting, lint, all package type
+  checks/builds, 95 test files and 692 tests, Spec Kit workflow contract tests, synchronization, and
+  validation.
+- Fresh iOS simulator: **PASS** on iPhone 17 Pro. Xcode reported `Build Succeeded` with zero errors and
+  warnings; Expo installed/opened `com.plotpoint.player`, and explicit `simctl launch` returned PID 73436.
+- Fresh Android emulator: **PASS** on `Plotpoint_API_36`. Gradle reported `BUILD SUCCESSFUL`; Expo installed
+  and opened the debug application, and `adb` confirmed `com.plotpoint.player` at PID 14246.
+- `git diff --check`: **PASS** after final documentation synchronization. Physical iOS and physical Android
+  remain explicitly **NOT RUN**.

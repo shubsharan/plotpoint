@@ -381,6 +381,10 @@ describe("generic shared-session PostgreSQL integration", () => {
     ]);
 
     const joined = await service.join(session.sessionId, input);
+    await pool.query("UPDATE hunt_invitations SET expires_at = $2 WHERE invitation_id = $1", [
+      "invitation-release-pin",
+      "2000-01-01T00:00:00.000Z",
+    ]);
     const duplicate = await service.join(session.sessionId, input);
     expect(joined).toMatchObject({
       releaseId,
@@ -405,6 +409,31 @@ describe("generic shared-session PostgreSQL integration", () => {
     await expect(
       service.join(session.sessionId, {
         ...input,
+        participantCredential: createSecret(),
+      }),
+    ).rejects.toMatchObject({ code: "join-not-authorized", status: 401 });
+    await expect(
+      service.join(session.sessionId, { ...input, joinRequestId: "changed-consumed-join" }),
+    ).rejects.toMatchObject({ code: "join-not-authorized", status: 401 });
+    const consumedState = await pool.query(
+      "SELECT consumed_join_request_id, consumed_credential_digest FROM hunt_invitations WHERE invitation_id = $1",
+      ["invitation-release-pin"],
+    );
+    const participantCount = await pool.query(
+      "SELECT COUNT(*)::integer AS count FROM hunt_participants WHERE session_id = $1",
+      [session.sessionId],
+    );
+    expect(consumedState.rows).toEqual([
+      {
+        consumed_join_request_id: input.joinRequestId,
+        consumed_credential_digest: expect.any(String),
+      },
+    ]);
+    expect(participantCount.rows).toEqual([{ count: 1 }]);
+
+    await expect(
+      service.join(session.sessionId, {
+        ...input,
         expectedReleaseId: `sha256:${"e".repeat(64)}`,
       }),
     ).rejects.toMatchObject({ code: "session-release-mismatch", status: 409 });
@@ -425,6 +454,28 @@ describe("generic shared-session PostgreSQL integration", () => {
       ["invitation-release-pin-changed"],
     );
     expect(changedInvitationRow.rows).toEqual([{ consumed_at: null }]);
+
+    const expiredInvitation = await service.createInvitation(
+      session.sessionId,
+      "invitation-release-pin-expired",
+      "2031-01-01T00:00:00.000Z",
+    );
+    await pool.query("UPDATE hunt_invitations SET expires_at = $2 WHERE invitation_id = $1", [
+      "invitation-release-pin-expired",
+      "2000-01-01T00:00:00.000Z",
+    ]);
+    await expect(
+      service.join(session.sessionId, {
+        ...input,
+        joinRequestId: "expired-unconsumed-join",
+        invitation: expiredInvitation.invitation,
+      }),
+    ).rejects.toMatchObject({ code: "join-not-authorized", status: 401 });
+    const expiredInvitationRow = await pool.query(
+      "SELECT consumed_at FROM hunt_invitations WHERE invitation_id = $1",
+      ["invitation-release-pin-expired"],
+    );
+    expect(expiredInvitationRow.rows).toEqual([{ consumed_at: null }]);
   }, 120_000);
 
   it("rolls back all writes when the final operational-event write fails", async () => {

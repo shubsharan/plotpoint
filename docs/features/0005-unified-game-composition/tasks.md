@@ -429,6 +429,26 @@ gaps without adding a schema, compatibility path, or second authority.
 
 ---
 
+## Phase 17: Response-Loss Closure
+
+**Purpose**: Close the two final review-blocking response-loss defects at their existing identity owners,
+without adding a schema, protocol, compatibility path, or background retry loop.
+
+- [x] T131 Add failing API and PostgreSQL regressions proving exact consumed join replay after invitation
+      expiry, nonmatching consumed rejection without mutation, expired unconsumed rejection, and release-first
+      validation
+- [x] T132 Add failing generated-runtime regressions for a lost transition response, settled host failure,
+      concurrent exact sharing, permanent changed-ID conflict, and timer cleanup; implement the fixed 15-second
+      waiter deadline and fingerprint-preserving retryable attempt record; regenerate the production runtime
+- [x] T133 Update Shared Session API and Host Application contracts with first-use invitation expiry and
+      explicit caller-driven local-command retry semantics
+- [x] T134 Run focused API unit/PostgreSQL and generated-runtime response-loss suites
+- [x] T135 Run generated-runtime freshness, installed co-op acceptance, `pnpm verify`, Spec Kit synchronization
+      and validation, `git diff --check`, fresh iOS simulator and Android emulator build/install/launch; record
+      exact evidence, and retain physical devices as `NOT RUN`
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase Dependencies
@@ -451,6 +471,7 @@ US4 + US5 + US3 -> Phase 8 Historical Evidence (superseded)
                       -> Phase 14 Post-Review Cohesion Remediation
                           -> Phase 15 Root-Cause Simplification
                               -> Phase 16 Cohesion Closure
+                                  -> Phase 17 Response-Loss Closure
 ```
 
 - **Setup (Phase 1)** has no dependency; T002-T004 begin only after the rename in T001.
