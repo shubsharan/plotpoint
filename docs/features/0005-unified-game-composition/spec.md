@@ -1,5 +1,5 @@
 ---
-status: Active
+status: Done
 ---
 
 # Feature Specification: Unified Game Composition

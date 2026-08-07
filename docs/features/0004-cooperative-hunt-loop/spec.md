@@ -1,5 +1,5 @@
 ---
-status: Pending
+status: Active
 ---
 
 # Feature Specification: Co-op Game Loop

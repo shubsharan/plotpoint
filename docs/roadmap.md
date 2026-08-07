@@ -107,7 +107,7 @@ rules.
 - Native player build-install-launch passes on the reference iOS simulator and Android emulator.
 - Physical-device location and network behavior remains explicitly deferred; simulated evidence does
   not establish it.
-- [Feature 0004 implementation evidence](features/0004-cooperative-hunt-loop/evidence/implementation.md)
+- [Feature 0005 remediation evidence](features/0005-unified-game-composition/evidence/remediation.md)
 
 ## Loop 3: Creator and Multi-Game Proof — Planned
 

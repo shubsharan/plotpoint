@@ -6,10 +6,9 @@ status: Active
 
 ## Context
 
-Plotpoint has proven deterministic runtime and immutable release foundations, but a player cannot yet
-complete a real experience. The product now advances through concrete game loops that connect
-authoring, installation, field play, recovery, learning, and revision before broader platform
-infrastructure is introduced.
+Plotpoint has proven the deterministic runtime, immutable releases, and complete provider-free and
+simulator/emulator game paths. The product now advances through physical field evidence for its active
+game loops before broader platform infrastructure is introduced.
 
 ## Outcome
 
@@ -52,8 +51,9 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 1. **Deterministic Runtime Core** _(Done)_ — deterministic command and progression contracts.
 2. **Immutable Release Pipeline** _(Done)_ — complete inspectable content-addressed releases.
 3. **Durable Offline Player** _(Active)_ — the complete Loop 1 field-puzzle product loop.
-4. **Co-op Game Loop** _(Planned)_ — authoritative shared play and recovery-driven sync.
-5. **Unified Game Composition** _(Planned)_ — one runnable composition and recovery path across the
+4. **Co-op Game Loop** _(Active)_ — authoritative shared play and recovery-driven sync, awaiting
+   physical-device evidence.
+5. **Unified Game Composition** _(Done)_ — one runnable composition and recovery path across the
    field puzzle and co-op game.
 6. **Creator and Multi-Game Proof** _(Planned)_ — external authoring and secret-role projections.
 
@@ -72,9 +72,9 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 
 - [Deterministic Runtime Core](../../features/0001-deterministic-runtime-core/spec.md) — Done
 - [Immutable Release Pipeline](../../features/0002-immutable-release-pipeline/spec.md) — Done
-- [Durable Offline Field Puzzle](../../features/0003-durable-offline-player/spec.md) — Pending
-- [Co-op Game Loop](../../features/0004-cooperative-hunt-loop/spec.md) — Pending
-- [Unified Game Composition](../../features/0005-unified-game-composition/spec.md) — Active
+- [Durable Offline Field Puzzle](../../features/0003-durable-offline-player/spec.md) — Active
+- [Co-op Game Loop](../../features/0004-cooperative-hunt-loop/spec.md) — Active
+- [Unified Game Composition](../../features/0005-unified-game-composition/spec.md) — Done
 - [Platform Architecture Guide](../../features/0006-platform-architecture-guide/spec.md) — Pending
 
 <!-- speckit:generated:epic-features END -->

@@ -11,6 +11,10 @@ status: Pending
 **Input**: Create a durable repository guide that explains how Plotpoint works: its data models,
 contracts, system boundaries, execution flows, and architectural patterns.
 
+**Delivery note**: The guide content was integrated with
+[Feature 0005 PR #4](https://github.com/shubsharan/plotpoint/pull/4). This feature remains pending
+until it has its own branch/merged PR record under the repository workflow.
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Understand the Whole Platform (Priority: P1)
