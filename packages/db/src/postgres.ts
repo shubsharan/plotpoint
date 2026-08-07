@@ -1,7 +1,7 @@
 import { Pool, type PoolClient, type PoolConfig, type QueryResult, type QueryResultRow } from "pg";
 import { AUTHORITATIVE_HUNT_MIGRATION } from "./schema.js";
 
-const AUTHORITATIVE_HUNT_SCHEMA_VERSION = 2;
+const AUTHORITATIVE_HUNT_SCHEMA_VERSION = 3;
 const MIGRATION_TABLE = `CREATE TABLE IF NOT EXISTS plotpoint_migrations (
   version INTEGER PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT transaction_timestamp()

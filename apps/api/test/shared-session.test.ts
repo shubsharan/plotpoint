@@ -99,6 +99,7 @@ const composition: GameComposition = {
 interface FixtureOptions {
   readonly projectionMismatch?: boolean;
   readonly schemaDigestMismatch?: boolean;
+  readonly decidedAt?: string;
 }
 
 function rows<Row>(values: readonly Row[]) {
@@ -232,6 +233,7 @@ function serviceFixture(options: FixtureOptions = {}) {
           state_json: state,
           manifest_json: manifestJson,
           mechanic_config_json: configuration,
+          decided_at: options.decidedAt ?? "2026-08-04T00:00:00.000Z",
         },
       ]);
     }
@@ -245,17 +247,8 @@ function serviceFixture(options: FixtureOptions = {}) {
       return rows([{ receipt_position: String(receiptPosition) }]);
     }
     if (text.startsWith("INSERT INTO authoritative_command_receipts")) {
-      return rows([
-        {
-          request_digest: String(values[3]),
-          terminal: String(values[5]),
-          outcome_code: String(values[6]),
-          resulting_state_version: Number(values[7]),
-          decision_position: String(values[8]),
-        },
-      ]);
+      return { rowCount: 1, rows: [] };
     }
-    if (text.startsWith("UPDATE authoritative_command_receipts SET result_json")) return rows([]);
     if (text.includes("FROM authoritative_command_receipts WHERE participant_id")) return rows([]);
     throw new Error(`unexpected-query:${text}`);
   });
@@ -595,7 +588,23 @@ describe("generic shared-session service", () => {
       resultingStateVersion: 1,
     });
     expect(fixture.state()).toMatchObject({ complete: true, completedTargets: 1 });
-    expect(JSON.stringify(fixture.query.mock.calls)).toMatch(/request_json/);
+    const receiptInsert = fixture.query.mock.calls.find(([text]) =>
+      String(text).startsWith("INSERT INTO authoritative_command_receipts"),
+    );
+    expect(receiptInsert).toBeDefined();
+    const [receiptSql, receiptValues] = receiptInsert!;
+    expect(receiptSql).not.toContain("request_json");
+    expect(receiptValues?.[3]).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(receiptValues)).not.toMatch(
+      /targetId|observations|latitude|longitude|horizontalAccuracy|capturedAt|recordedAt|ageMs/,
+    );
+    expect(JSON.parse(String(receiptValues?.[7]))).toEqual(
+      expect.objectContaining({
+        commandId: "command-1",
+        terminal: "accepted",
+        outcomeCode: "target-discovered",
+      }),
+    );
   });
 
   it("rejects an invalid adapter projection instead of stamping a partial view", async () => {
@@ -612,6 +621,34 @@ describe("generic shared-session service", () => {
       status: 500,
     });
     expect(fixture.query).toHaveBeenCalledWith("ROLLBACK");
+  });
+
+  it("rejects malformed authoritative transaction time before mechanic execution", async () => {
+    const fixture = serviceFixture({ decidedAt: "not-a-database-time" });
+    const created = await fixture.service.createSession({
+      creationId: "create-1",
+      releaseId: RELEASE_ID,
+      teamLabel: "Team",
+    });
+    await expect(
+      fixture.service.submit(created.sessionId, createSecret(), {
+        commandId: "command-invalid-time",
+        target: {
+          aggregateKind: "team",
+          aggregateId: created.teamId,
+          schemaId: TARGET_DISCOVERY_STATE_SCHEMA,
+        },
+        expectedStateVersion: 0,
+        type: TARGET_DISCOVERY_COMMAND,
+        payload: { targetId: "alpha" },
+        observations: [location],
+      }),
+    ).rejects.toThrow("authoritative-decision-time-invalid");
+    expect(
+      fixture.query.mock.calls.some(([text]) =>
+        String(text).startsWith("INSERT INTO authoritative_command_receipts"),
+      ),
+    ).toBe(false);
   });
 
   it("rejects adapter digest drift", async () => {

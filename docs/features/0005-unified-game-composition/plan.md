@@ -30,6 +30,11 @@ retain the old WebView until generated application/component cleanup acknowledge
 native render-process loss bypasses acknowledgement. The private lifecycle envelope adds no public Host API,
 schema, migration, deadline, or background loop.
 
+**Privacy-and-freshness closure update (2026-08-06)**: Phase 19 removes canonical command JSON from
+authoritative receipts, makes the pre-release PostgreSQL schema version 3 a clean break, and evaluates
+target-discovery freshness from PostgreSQL transaction time at authoritative execution. It changes no
+public HTTP, Host API, Sync, report, or capability shape and adds no clock service or compatibility path.
+
 Make the field puzzle and co-op game runnable through one compiler-owned composition path, preserve all
 four valid compiler examples through the clean break, and close a two-release co-op learning loop. Correct
 Project Configuration, Game Composition, Host API, and Game Play Report in place; use plain stable
@@ -103,10 +108,11 @@ Only the final T102 post-design checkpoint may restore this gate to `PASS` after
 
 ### Post-Design Gate
 
-**PASS - PHASE 17 RESPONSE-LOSS CLOSURE (2026-08-06).** Reserve-first startup recovery,
-component-driven co-op acceptance, bounded device-clock chronology, exact consumed join replay,
-caller-driven local bridge retry, provider-free verification, and fresh simulator/emulator evidence
-close T135 without expanding the public contracts or storage schema.
+**PASS - PHASE 19 PRIVACY AND FRESHNESS CLOSURE (2026-08-06).** Reserve-first startup recovery,
+component-driven co-op acceptance, bounded device-clock chronology, exact response-loss recovery,
+acknowledged runtime disposal, digest-only authoritative receipts, strict transaction-time freshness,
+and fresh provider-free verification close T145 without expanding public protocol shapes. Phase 18's
+simulator/emulator evidence remains current because Phase 19 changes no player or native code.
 
 - **PASS - One composition authority**: Project Configuration lowers to generated registries and
   Game Composition; no executable DSL or duplicate author runtime registry remains.
@@ -120,8 +126,9 @@ close T135 without expanding the public contracts or storage schema.
 - **PASS - Failure atomicity**: Binding validation precedes view mutation; result reconciliation is
   compare-or-insert; one transaction owns snapshot/result/outbox/cursor/member status.
 - **PASS - Verification proportionality**: Fresh parity, concurrency, cleanup, exact replay, interruption,
-  clock-skew, failure-evidence, installed-journey, four-release, repository, simulator, and emulator gates
-  cover the Phase 15 adversarial matrix; physical devices remain explicitly `NOT RUN`.
+  clock-skew, receipt-redaction, authoritative-freshness, failure-evidence, installed-journey, four-release,
+  repository, simulator, and emulator gates cover the remediation matrix; physical devices remain explicitly
+  `NOT RUN`.
 - **PASS - Governance**: The design introduces no constitution exception. Accepted ADR 0001 governs
   its implementation boundaries and accepted ADR 0006 governs centralized contract evolution.
 

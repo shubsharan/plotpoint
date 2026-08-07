@@ -117,7 +117,14 @@ new server request ID for operator correlation; credentials never enter bodies e
 request, logs, diagnostics, WebView messages, or reports.
 
 Raw location and protected game configuration obey the existing redaction boundary. The generic route
-does not weaken participant projection authorization.
+does not weaken participant projection authorization. For command idempotency the service canonicalizes
+the authenticated request in memory and stores only its digest plus the complete participant-visible
+result. Canonical command JSON, observation payloads, coordinates, capture timestamps, and accuracy do
+not enter authoritative receipts, journals, events, projections, logs, or reports.
+
+PostgreSQL transaction time accompanies the locked aggregate into trusted execution. It is an internal
+authority input, not a public request or response field. Exact receipt lookup precedes mechanic execution,
+so a response-loss retry returns its original result even when new execution would now reject the evidence.
 
 ## Clean Break
 

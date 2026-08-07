@@ -44,6 +44,7 @@ interface TrustedMechanicAdapter<Kind extends "team" | "session"> {
     readonly aggregate: Aggregate<JsonObject, Kind>;
     readonly command: SyncCommand;
     readonly observations: readonly PersistedObservation[];
+    readonly decidedAt: string;
   }): MechanicExecution<Kind>;
   project(input: {
     readonly participant: AuthorizedParticipant;
@@ -82,8 +83,9 @@ validated release configuration. Operator labels remain metadata outside canonic
 
 ## Execution and Results
 
-The adapter evaluates every command against the latest locked aggregate. Domain-aware policy may accept
-a stale command when its target is still available. An already-satisfied target returns a stable no-op
+The adapter evaluates every command against the latest locked aggregate and the PostgreSQL transaction
+timestamp selected with that lock. Domain-aware policy may accept a stale aggregate version when its
+target is still available. An already-satisfied target returns a stable no-op
 at the current version. Invalid participant authority, target, payload, or observations returns an
 explicit rejected or invalid terminal without mutation.
 
@@ -120,10 +122,15 @@ model and command of the same ID, target configuration conforming to
 `plotpoint.location.target-config`, Foreground Location Capability, and the declared team projection.
 
 Private target discovery verifies participant and aggregate authority, configured target, zone, age,
-and horizontal accuracy. It transforms accepted coordinates into a coordinate-free observation fact
-before deterministic execution. Raw coordinates may enter the authenticated request digest but never
-receipts, journals, projections, operational events, logs, or reports. The result exposes exact generic
-`captured`, `consumed`, `denied`, or `expired` capability evidence.
+and horizontal accuracy. Authoritative age is exactly `decidedAt - capturedAt`: a negative value is
+`location-future`, equality with `maximumAgeMs` is allowed, and a greater value is `location-stale` with
+`expired` capability evidence. The capture-time `ageMs` remains protocol/report evidence but cannot hide
+offline queue delay. The service rejects malformed database time before mechanic execution. Exact receipt
+replay bypasses re-evaluation; a new command using the same observation is evaluated at its new decision
+time. Accepted coordinates become a coordinate-free observation fact before deterministic execution.
+Raw coordinates may enter the authenticated request digest but never receipts, journals, projections,
+operational events, logs, or reports. The result exposes exact generic `captured`, `consumed`, `denied`,
+or `expired` capability evidence.
 
 ## Failure and Evolution
 

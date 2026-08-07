@@ -437,12 +437,18 @@ async function createJourneySession(
   return { session, participants };
 }
 
-function observation(target: Target, ageMs: number, observationId: string) {
+function observation(
+  target: Target,
+  capturedAgeMs: number,
+  observationId: string,
+  reportedAgeMs = capturedAgeMs,
+) {
+  const recordedAt = Date.now();
   return {
     observationId,
-    recordedAt: "2030-01-01T00:00:01.000Z",
-    capturedAt: "2030-01-01T00:00:00.000Z",
-    ageMs,
+    recordedAt: new Date(recordedAt).toISOString(),
+    capturedAt: new Date(recordedAt - capturedAgeMs).toISOString(),
+    ageMs: reportedAgeMs,
     availability: "available" as const,
     latitude: target.latitude,
     longitude: target.longitude,
@@ -456,6 +462,7 @@ function discoveryCommand(input: {
   readonly commandId: string;
   readonly expectedStateVersion: number;
   readonly ageMs: number;
+  readonly reportedAgeMs?: number;
 }): SyncCommand {
   return {
     commandId: input.commandId,
@@ -467,7 +474,9 @@ function discoveryCommand(input: {
     expectedStateVersion: input.expectedStateVersion,
     type: TARGET_DISCOVERY_COMMAND,
     payload: { targetId: input.target.targetId },
-    observations: [observation(input.target, input.ageMs, `observation-${input.commandId}`)],
+    observations: [
+      observation(input.target, input.ageMs, `observation-${input.commandId}`, input.reportedAgeMs),
+    ],
   };
 }
 
@@ -602,6 +611,7 @@ describe("co-op game acceptance", () => {
       commandId: "first-expired-observation",
       expectedStateVersion: 0,
       ageMs: firstTarget.maximumAgeMs + 1,
+      reportedAgeMs: 0,
     });
     const rejected = await submitQueued(first.session, first.participants, {
       participantIndex: 0,
@@ -907,6 +917,7 @@ describe("co-op game acceptance", () => {
         assets: { "co-op.map": new TextDecoder().decode(asset.bytes) },
         sharedBindingAvailable: true,
       });
+      const capturedAt = Date.now() - 1_000;
       const hostHandlers = player.createProductionHostBridgeHandlers({
         store: controllerDatabase,
         runtime: {
@@ -922,17 +933,17 @@ describe("co-op game acceptance", () => {
               player.recordLocationObservation(controllerDatabase, input),
           },
           runId: "co-op-controller-run",
-          startedAt: "2030-01-01T00:00:00.000Z",
+          startedAt: new Date(capturedAt).toISOString(),
           adapter: {
             requestPermission: async () => "granted",
             capture: async () => ({
-              timestamp: Date.parse("2030-01-01T00:00:00.000Z"),
+              timestamp: capturedAt,
               latitude: target.latitude,
               longitude: target.longitude,
               horizontalAccuracy: Math.min(5, target.maximumAccuracyMeters),
             }),
           },
-          now: () => new Date("2030-01-01T00:00:01.000Z"),
+          now: () => new Date(capturedAt + 1_000),
           createObservationId: () => "co-op-controller-observation",
         },
       });

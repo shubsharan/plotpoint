@@ -95,6 +95,7 @@ interface TargetDiscoveryImplementation extends TrustedMechanicAdapter<"team"> {
     readonly participant: AuthorizedParticipant;
     readonly command: SyncCommand;
     readonly observations: readonly PersistedObservation[];
+    readonly decidedAt: string;
   }): TargetDiscoveryResolution;
 }
 
@@ -647,7 +648,7 @@ export function createTargetDiscoveryAdapter(
           ])
         : validation;
     },
-    discoverTarget({ participant, command, observations }) {
+    discoverTarget({ participant, command, observations, decidedAt }) {
       if (
         !authorizedParticipant(participant) ||
         command.type !== TARGET_DISCOVERY_COMMAND ||
@@ -693,9 +694,10 @@ export function createTargetDiscoveryAdapter(
       if (observation.availability !== "available") {
         return Object.freeze({ kind: "rejected", outcome: trustedOutcome("location-unavailable") });
       }
+      const effectiveAgeMs = Date.parse(decidedAt) - Date.parse(observation.capturedAt);
       let rejection: TargetDiscoveryOutcomeCode | null = null;
-      if (observation.ageMs < 0) rejection = "location-future";
-      else if (observation.ageMs > targetConfig.maximumAgeMs) rejection = "location-stale";
+      if (effectiveAgeMs < 0) rejection = "location-future";
+      else if (effectiveAgeMs > targetConfig.maximumAgeMs) rejection = "location-stale";
       else if (observation.horizontalAccuracy > targetConfig.maximumAccuracyMeters)
         rejection = "location-inaccurate";
       else if (
@@ -728,8 +730,13 @@ export function createTargetDiscoveryAdapter(
         ]),
       });
     },
-    execute({ participant, aggregate, command, observations }) {
-      const discovery = implementation.discoverTarget({ participant, command, observations });
+    execute({ participant, aggregate, command, observations, decidedAt }) {
+      const discovery = implementation.discoverTarget({
+        participant,
+        command,
+        observations,
+        decidedAt,
+      });
       const capabilityEvidence = (disposition: "consumed" | "denied" | "expired") =>
         Object.freeze(
           command.observations.map(({ observationId }) =>

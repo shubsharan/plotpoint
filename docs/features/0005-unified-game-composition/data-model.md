@@ -25,10 +25,15 @@ initial pull commit together; envelope reduction is post-commit cleanup.
 
 ### Authoritative Receipt
 
-The primary identity is `(sessionId, participantId, commandId)`. A receipt stores canonical intent JSON,
-its digest, and exact participant-visible result JSON. Exact same-participant retry returns the stored
-result bytes, changed intent conflicts, and another participant may reuse the command ID independently.
-Client outbox rows likewise keep canonical intent in pending and terminal forms.
+The primary identity is `(sessionId, participantId, commandId)`. A receipt stores the canonical request
+digest and exact coordinate-free participant-visible result JSON, never canonical intent JSON. The API
+keeps canonical command data in memory only long enough to hash and execute it. Exact same-participant
+retry returns the stored result bytes, changed intent conflicts, and another participant may reuse the
+command ID independently. Client outbox rows still keep canonical intent because SQLite owns offline
+submission; that raw intent does not cross into PostgreSQL receipts, journals, events, or reports.
+
+The pre-release authoritative PostgreSQL schema is version 3. Version 2 is rejected with the existing
+reset-or-reinstall guidance and is neither migrated nor read through a compatibility path.
 
 ### Gameplay Event
 

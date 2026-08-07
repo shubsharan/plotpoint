@@ -101,6 +101,7 @@ const participant = Object.freeze({
   participantId: "participant-1",
   teamId: "team-1",
 });
+const DECIDED_AT = "2026-08-04T00:00:00.000Z";
 
 function adapter() {
   const result = resolveTrustedMechanic({ binding, composition, configuration: config });
@@ -150,6 +151,7 @@ describe("trusted target discovery", () => {
       aggregate: aggregate(mechanic),
       command,
       observations: command.observations,
+      decidedAt: DECIDED_AT,
     });
     expect(result).toMatchObject({
       terminal: "accepted",
@@ -164,8 +166,8 @@ describe("trusted target discovery", () => {
   it.each([
     [[], undefined, "location-missing"],
     [undefined, denied, "location-denied"],
-    [undefined, available({ ageMs: -1 }), "location-future"],
-    [undefined, available({ ageMs: 15_001 }), "location-stale"],
+    [undefined, available({ capturedAt: "2026-08-04T00:00:00.001Z", ageMs: 0 }), "location-future"],
+    [undefined, available({ capturedAt: "2026-08-03T23:59:44.999Z", ageMs: 0 }), "location-stale"],
     [undefined, available({ horizontalAccuracy: 31 }), "location-inaccurate"],
     [undefined, available({ latitude: 40 }), "location-outside-zone"],
   ])("rejects non-qualifying evidence", (observationOverride, observation, code) => {
@@ -176,6 +178,7 @@ describe("trusted target discovery", () => {
         aggregate: aggregate(),
         command,
         observations: observationOverride ?? command.observations,
+        decidedAt: DECIDED_AT,
       }),
     ).toMatchObject({ terminal: "rejected", outcomeCode: code });
   });
@@ -200,6 +203,7 @@ describe("trusted target discovery", () => {
         aggregate: aggregate(resolved.adapter, antipodalConfiguration),
         command,
         observations: command.observations,
+        decidedAt: DECIDED_AT,
       }),
     ).toMatchObject({ terminal: "rejected", outcomeCode: "location-outside-zone" });
   });
@@ -218,6 +222,7 @@ describe("trusted target discovery", () => {
       aggregate,
       command: syncCommand(available(), 99),
       observations: [available()],
+      decidedAt: DECIDED_AT,
     });
     expect(first).toMatchObject({
       terminal: "accepted",
@@ -231,6 +236,7 @@ describe("trusted target discovery", () => {
         aggregate: first.aggregateAfter,
         command: syncCommand(available(), 0),
         observations: [available()],
+        decidedAt: DECIDED_AT,
       }),
     ).toMatchObject({
       terminal: "no-op",
@@ -250,8 +256,13 @@ describe("trusted target discovery", () => {
     });
   });
 
-  it("commits mechanic-owned freshness dispositions for revised 5-second and 30-second policies", () => {
-    const executeWithMaximumAge = (maximumAgeMs: number) => {
+  it.each([
+    [5_000, "2026-08-03T23:59:55.000Z", "accepted", "consumed"],
+    [5_000, "2026-08-03T23:59:54.999Z", "rejected", "expired"],
+    [30_000, "2026-08-03T23:59:50.000Z", "accepted", "consumed"],
+  ] as const)(
+    "uses authoritative decision time for a %i ms policy",
+    (maximumAgeMs, capturedAt, terminal, disposition) => {
       const revised = { targets: config.targets.map((target) => ({ ...target, maximumAgeMs })) };
       const resolved = resolveTrustedMechanic({ binding, composition, configuration: revised });
       if (resolved.kind !== "resolved" || resolved.aggregateKind !== "team") {
@@ -260,23 +271,19 @@ describe("trusted target discovery", () => {
       const initialized = resolved.adapter.model.initialize(revised);
       if (initialized.kind !== "initialized") throw new Error("revised-mechanic-init-failed");
       const aggregate = { ...initialized.aggregate, aggregateId: participant.teamId };
-      return resolved.adapter.execute({
+      const result = resolved.adapter.execute({
         participant,
         aggregate,
-        command: syncCommand(available({ ageMs: 10_000 }), 0),
-        observations: [available({ ageMs: 10_000 })],
+        command: syncCommand(available({ capturedAt, ageMs: 0 }), 0),
+        observations: [available({ capturedAt, ageMs: 0 })],
+        decidedAt: DECIDED_AT,
       });
-    };
-
-    expect(executeWithMaximumAge(5_000)).toMatchObject({
-      terminal: "rejected",
-      capabilityEvidence: [{ disposition: "expired" }],
-    });
-    expect(executeWithMaximumAge(30_000)).toMatchObject({
-      terminal: "accepted",
-      capabilityEvidence: [{ disposition: "consumed" }],
-    });
-  });
+      expect(result).toMatchObject({
+        terminal,
+        capabilityEvidence: [{ disposition }],
+      });
+    },
+  );
 
   it("returns explicit invalid execution and projection results", () => {
     const mechanic = adapter();
@@ -287,6 +294,7 @@ describe("trusted target discovery", () => {
         aggregate: aggregate(mechanic),
         command: { ...wrongTarget, target: { ...wrongTarget.target, aggregateId: "other-team" } },
         observations: wrongTarget.observations,
+        decidedAt: DECIDED_AT,
       }),
     ).toMatchObject({ terminal: "invalid", outcomeCode: "command-target-mismatch" });
 

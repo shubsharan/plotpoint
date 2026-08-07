@@ -35,6 +35,7 @@ describe("authoritative PostgreSQL boundary", () => {
     );
     expect(AUTHORITATIVE_HUNT_MIGRATION).not.toContain("CREATE SEQUENCE");
     expect(AUTHORITATIVE_HUNT_MIGRATION).not.toContain("nextval(");
+    expect(AUTHORITATIVE_HUNT_MIGRATION).not.toContain("request_json");
   });
 
   it("commits READ COMMITTED work on one checked-out client", async () => {
@@ -54,6 +55,21 @@ describe("authoritative PostgreSQL boundary", () => {
       "SELECT 1",
       "COMMIT",
     ]);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("records the clean-break authoritative schema as version 3", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 });
+    const release = vi.fn();
+    const client = { query, release } as unknown as PoolClient;
+    const pool = { connect: vi.fn().mockResolvedValue(client) } as unknown as Pool;
+
+    await expect(migrateAuthoritativeHunt(pool)).resolves.toBeUndefined();
+    expect(query).toHaveBeenCalledWith(
+      "INSERT INTO plotpoint_migrations(version) VALUES ($1) ON CONFLICT DO NOTHING",
+      [3],
+    );
+    expect(query).toHaveBeenLastCalledWith("COMMIT");
     expect(release).toHaveBeenCalledOnce();
   });
 
@@ -77,7 +93,7 @@ describe("authoritative PostgreSQL boundary", () => {
   it("rejects an earlier pre-release schema with reset-or-reinstall guidance", async () => {
     const query = vi.fn(async (text: string) =>
       text === "SELECT version FROM plotpoint_migrations ORDER BY version"
-        ? { rows: [{ version: 1 }], rowCount: 1 }
+        ? { rows: [{ version: 2 }], rowCount: 1 }
         : { rows: [], rowCount: 0 },
     );
     const release = vi.fn();

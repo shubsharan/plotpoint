@@ -53,7 +53,6 @@ CREATE TABLE IF NOT EXISTS authoritative_command_receipts (
   command_id TEXT NOT NULL,
   participant_id TEXT NOT NULL REFERENCES hunt_participants(participant_id),
   request_digest TEXT NOT NULL,
-  request_json TEXT NOT NULL,
   terminal TEXT NOT NULL CHECK (terminal IN ('accepted', 'no-op', 'rejected', 'invalid')),
   outcome_code TEXT NOT NULL,
   resulting_state_version INTEGER NOT NULL CHECK (resulting_state_version >= 0),

@@ -66,6 +66,7 @@ interface AggregateRow {
   state_json: unknown;
   manifest_json: unknown;
   mechanic_config_json: unknown;
+  decided_at: string;
 }
 
 interface ReceiptRow {
@@ -772,13 +773,17 @@ export class SharedSessionService {
         client,
         `SELECT sessions.release_id, aggregates.team_id, aggregates.schema_id,
                 aggregates.state_version, aggregates.state_json,
-                releases.manifest_json, releases.mechanic_config_json
+                releases.manifest_json, releases.mechanic_config_json,
+                transaction_timestamp()::text AS decided_at
          FROM team_aggregates aggregates JOIN hunt_sessions sessions USING(session_id)
          JOIN release_registrations releases USING(release_id)
          WHERE aggregates.session_id = $1 AND aggregates.team_id = $2 FOR UPDATE OF aggregates`,
         [sessionId, participant.team_id],
       );
       if (row === null) throw new Error("authoritative-aggregate-missing");
+      if (typeof row.decided_at !== "string" || !Number.isFinite(Date.parse(row.decided_at))) {
+        throw new Error("authoritative-decision-time-invalid");
+      }
       const registered = resolveRegisteredMechanic(row.manifest_json, row.mechanic_config_json);
       const authorizedParticipant = {
         sessionId,
@@ -792,12 +797,14 @@ export class SharedSessionService {
               aggregate: aggregateForRow(row, registered.resolution.adapter),
               command,
               observations: command.observations,
+              decidedAt: row.decided_at,
             })
           : registered.resolution.adapter.execute({
               participant: authorizedParticipant,
               aggregate: aggregateForRow(row, registered.resolution.adapter),
               command,
               observations: command.observations,
+              decidedAt: row.decided_at,
             });
 
       if (dispatch.aggregateAfter.stateVersion !== dispatch.aggregateBefore.stateVersion) {
@@ -818,34 +825,33 @@ export class SharedSessionService {
         [sessionId, participant.participant_id],
       );
       if (position === null) throw new Error("participant-receipt-position-missing");
-      const receipt = await queryOne<ReceiptRow>(
-        client,
-        `INSERT INTO authoritative_command_receipts(session_id, command_id, participant_id, request_digest, request_json, terminal, outcome_code, resulting_state_version, result_json, decision_position)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'{}',$9)
-         RETURNING request_digest, terminal, outcome_code, resulting_state_version, decision_position::text`,
+      const decided: SyncCommandResult = {
+        commandId: command.commandId,
+        disposition: "decided",
+        terminal: dispatch.terminal,
+        outcomeCode: dispatch.outcomeCode,
+        resultingStateVersion: dispatch.aggregateAfter.stateVersion,
+        decisionPosition: position.receipt_position,
+        ...(dispatch.capabilityEvidence.length === 0
+          ? {}
+          : { capabilityEvidence: dispatch.capabilityEvidence }),
+      };
+      const receipt = await client.query(
+        `INSERT INTO authoritative_command_receipts(session_id, command_id, participant_id, request_digest, terminal, outcome_code, resulting_state_version, result_json, decision_position)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
         [
           sessionId,
           command.commandId,
           participant.participant_id,
           digest,
-          JSON.stringify(canonicalCommand),
           dispatch.terminal,
           dispatch.outcomeCode,
           dispatch.aggregateAfter.stateVersion,
+          JSON.stringify(decided),
           position.receipt_position,
         ],
       );
-      if (receipt === null) throw new Error("command-receipt-missing");
-      const decided: SyncCommandResult = {
-        ...terminalResult(command.commandId, "decided", receipt),
-        ...(dispatch.capabilityEvidence.length === 0
-          ? {}
-          : { capabilityEvidence: dispatch.capabilityEvidence }),
-      };
-      await client.query(
-        "UPDATE authoritative_command_receipts SET result_json = $4 WHERE session_id = $1 AND participant_id = $2 AND command_id = $3",
-        [sessionId, participant.participant_id, command.commandId, JSON.stringify(decided)],
-      );
+      if (receipt.rowCount !== 1) throw new Error("command-receipt-missing");
       if (dispatch.terminal === "accepted") {
         await client.query(
           "INSERT INTO authoritative_command_journal(session_id, participant_id, command_id, before_version, after_version, outcome_code) VALUES ($1,$2,$3,$4,$5,$6)",

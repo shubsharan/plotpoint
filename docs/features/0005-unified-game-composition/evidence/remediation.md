@@ -266,3 +266,25 @@ compiler and installed-player boundaries, while explicit adversarial deadlines r
   and opened the debug application, and `adb` confirmed `com.plotpoint.player` at PID 14470.
 - Physical iOS and physical Android: **NOT RUN**. No public Host API, database schema, migration, background
   retry loop, or disposal timeout was added.
+
+## Phase 19 Privacy and Freshness Closure
+
+- Status: **PASS** on 2026-08-06. PostgreSQL schema version 3 removes `request_json`; the API retains canonical
+  command data only in memory for digesting and trusted execution, constructs the complete coordinate-free
+  participant result first, and inserts the authoritative receipt once without a placeholder or later update.
+- Freshness authority: **PASS**. The aggregate lock query selects and validates PostgreSQL transaction time,
+  and target discovery evaluates `decidedAt - capturedAt`. Negative age is future, exact maximum age is allowed,
+  one millisecond beyond is stale/expired, and a misleading capture-time `ageMs` cannot hide offline queue delay.
+  Exact receipt replay still returns the stored result before mechanic execution.
+- Focused modules/database/API/PostgreSQL/installed co-op matrix: **PASS**, 5 files and 35 tests. Coverage includes
+  schema-v2 reset-or-reinstall rejection without mutation, absence of `request_json`, persisted-value redaction,
+  malformed authoritative time, real PostgreSQL offline aging and replay, changed command identity, and the
+  installed co-op action through production bridges.
+- `pnpm verify`: **PASS**, including generated-runtime freshness, formatting, lint, all package type checks and
+  builds, 97 test files and 705 tests, Spec Kit workflow contract tests, synchronization, and validation.
+- Native builds: **NOT RERUN** because Phase 19 changes no player or native code. The fresh Phase 18 iOS simulator
+  and Android emulator build/install/launch evidence remains the applicable native result. Physical iOS and
+  physical Android remain explicitly **NOT RUN**.
+- `git diff --check`: **PASS** after documentation and workflow synchronization. No public HTTP, Host API, Sync,
+  report, or capability shape changed; no migration, compatibility reader, cleanup script, generic clock service,
+  or background retry loop was added.

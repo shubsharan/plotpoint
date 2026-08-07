@@ -74,6 +74,7 @@ export interface TrustedMechanicAdapter<Kind extends "team" | "session"> {
     readonly aggregate: Aggregate<JsonObject, Kind>;
     readonly command: SyncCommand;
     readonly observations: readonly PersistedObservation[];
+    readonly decidedAt: string;
   }): MechanicExecution<Kind>;
   project(input: {
     readonly participant: AuthorizedParticipant;

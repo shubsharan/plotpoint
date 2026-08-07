@@ -471,6 +471,25 @@ without extending Host API, persistence, migration, retry-loop, or deadline scop
 
 ---
 
+## Phase 19: Privacy and Freshness Closure
+
+**Purpose**: Close the final review-blocking receipt-privacy and queued-observation freshness defects at
+their existing PostgreSQL and trusted-mechanic authorities, without changing public protocol shapes.
+
+- [x] T141 Add schema and service regressions proving authoritative receipts have no `request_json`, version 2
+      is rejected without mutation, and receipt insert values contain only a digest plus coordinate-free result
+- [x] T142 Select and validate PostgreSQL transaction time with the locked aggregate; make it a required internal
+      trusted-mechanic input and derive target-discovery freshness strictly from decision time minus capture time
+- [x] T143 Replace placeholder receipt insertion plus result update with one complete redacted receipt insert;
+      keep duplicate lookup before execution and canonical command data in memory only
+- [x] T144 Add mechanic, PostgreSQL, and installed co-op regressions for exact age boundaries, future evidence,
+      offline-aged evidence with a misleading capture-time age, exact replay, changed identity, and receipt privacy
+- [x] T145 Update architecture and Feature 0005 contracts/evidence; run focused modules/database/API/PostgreSQL/
+      installed co-op suites, `pnpm verify`, Spec Kit synchronization/validation, and `git diff --check`; preserve
+      prior simulator/emulator evidence without rerunning native builds and retain physical devices as `NOT RUN`
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase Dependencies
@@ -495,6 +514,7 @@ US4 + US5 + US3 -> Phase 8 Historical Evidence (superseded)
                               -> Phase 16 Cohesion Closure
                                   -> Phase 17 Response-Loss Closure
                                       -> Phase 18 Acknowledged Runtime Disposal Closure
+                                          -> Phase 19 Privacy and Freshness Closure
 ```
 
 - **Setup (Phase 1)** has no dependency; T002-T004 begin only after the rename in T001.

@@ -593,6 +593,13 @@ uses the committed counter as its high-water mark and returns only that particip
 it, so rollback creates no cursor gap and concurrent participants remain independent. Wire cursors and
 decision positions remain opaque numeric strings.
 
+Authoritative receipts retain only the canonical request digest and the complete coordinate-free result.
+The canonical command exists in API memory only for digesting and trusted execution; its payload and raw
+observations never enter PostgreSQL receipts. The same transaction selects PostgreSQL transaction time with
+the locked aggregate and passes it to the trusted mechanic. Target discovery derives freshness from that
+decision time and the observation's capture time, so offline queue delay cannot freeze evidence age. Exact
+receipt replay still returns the original decision before any new freshness evaluation.
+
 The platform uses complete authorized snapshots rather than deltas, WebSockets, participant projection
 stores, or background workers. This intentionally trades small repeated payloads for failure-atomic
 recovery and a smaller protocol. See
@@ -635,20 +642,20 @@ chronology bounded when the device wall clock moves backward.
 
 ## Authority and Persistence Boundaries
 
-| Fact                                              | Decision authority                      | Durable owner                                   |
-| ------------------------------------------------- | --------------------------------------- | ----------------------------------------------- |
-| Project composition                               | Compiler validation                     | Git/project files                               |
-| Release identity and inventory                    | Release compiler/verifier               | Immutable `.pprelease` bytes and install record |
-| Local command semantics                           | Release aggregate model                 | Native host transaction in SQLite               |
-| Local state, progression, receipts, journal       | Native host                             | SQLite                                          |
-| Device permissions and sensor access              | Native host/OS                          | OS state; resulting observation in SQLite       |
-| Participant credential                            | Native host                             | SecureStore                                     |
-| Queued shared intent                              | Native host                             | SQLite outbox                                   |
-| Session membership and shared command semantics   | API plus trusted mechanic adapter       | PostgreSQL                                      |
-| Authoritative team/session aggregate and receipts | API transaction                         | PostgreSQL                                      |
-| Confirmed authorized projection and cursor        | Server result, validated by native host | SQLite cache                                    |
-| Gameplay evidence                                 | Committing local/shared boundary        | SQLite append-only event ledger                 |
-| Play report                                       | Native host redaction policy            | Ledger-derived export file                      |
+| Fact                                                       | Decision authority                      | Durable owner                                   |
+| ---------------------------------------------------------- | --------------------------------------- | ----------------------------------------------- |
+| Project composition                                        | Compiler validation                     | Git/project files                               |
+| Release identity and inventory                             | Release compiler/verifier               | Immutable `.pprelease` bytes and install record |
+| Local command semantics                                    | Release aggregate model                 | Native host transaction in SQLite               |
+| Local state, progression, receipts, journal                | Native host                             | SQLite                                          |
+| Device permissions and sensor access                       | Native host/OS                          | OS state; resulting observation in SQLite       |
+| Participant credential                                     | Native host                             | SecureStore                                     |
+| Queued shared intent                                       | Native host                             | SQLite outbox                                   |
+| Session membership and shared command semantics            | API plus trusted mechanic adapter       | PostgreSQL                                      |
+| Authoritative team/session aggregate and redacted receipts | API transaction                         | PostgreSQL                                      |
+| Confirmed authorized projection and cursor                 | Server result, validated by native host | SQLite cache                                    |
+| Gameplay evidence                                          | Committing local/shared boundary        | SQLite append-only event ledger                 |
+| Play report                                                | Native host redaction policy            | Ledger-derived export file                      |
 
 The rule is simple: compute where the relevant game policy lives, but commit only in the system that
 owns the durable authority.

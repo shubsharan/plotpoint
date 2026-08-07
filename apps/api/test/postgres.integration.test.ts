@@ -15,16 +15,19 @@ let service: SharedSessionService;
 let releaseId: `sha256:${string}`;
 const outputFile = `/tmp/plotpoint-api-co-op-${globalThis.crypto.randomUUID()}.pprelease`;
 
-const available = (observationId: string, latitude: number, longitude: number) => ({
-  observationId,
-  recordedAt: "2030-01-01T00:00:01.000Z",
-  capturedAt: "2030-01-01T00:00:00.000Z",
-  ageMs: 1000,
-  availability: "available" as const,
-  latitude,
-  longitude,
-  horizontalAccuracy: 5,
-});
+const available = (observationId: string, latitude: number, longitude: number) => {
+  const recordedAt = Date.now();
+  return {
+    observationId,
+    recordedAt: new Date(recordedAt).toISOString(),
+    capturedAt: new Date(recordedAt - 1_000).toISOString(),
+    ageMs: 1_000,
+    availability: "available" as const,
+    latitude,
+    longitude,
+    horizontalAccuracy: 5,
+  };
+};
 
 describe("generic shared-session PostgreSQL integration", () => {
   beforeAll(async () => {
@@ -111,17 +114,10 @@ describe("generic shared-session PostgreSQL integration", () => {
       payload: { targetId },
       observations: [available(`observation-${commandId}`, 37.7955, -122.3937)],
     });
+    const ferryCommand = command("ferry-command", "ferry-building", 0);
     const exactRetries = await Promise.all([
-      service.submit(
-        session.sessionId,
-        credentials[0]!,
-        command("ferry-command", "ferry-building", 0),
-      ),
-      service.submit(
-        session.sessionId,
-        credentials[0]!,
-        command("ferry-command", "ferry-building", 0),
-      ),
+      service.submit(session.sessionId, credentials[0]!, ferryCommand),
+      service.submit(session.sessionId, credentials[0]!, ferryCommand),
     ]);
     expect(new Set(exactRetries.map(({ disposition }) => disposition))).toEqual(
       new Set(["decided"]),
@@ -139,11 +135,7 @@ describe("generic shared-session PostgreSQL integration", () => {
       }),
     ]);
     await expect(
-      service.submit(
-        session.sessionId,
-        credentials[1]!,
-        command("ferry-command", "ferry-building", 0),
-      ),
+      service.submit(session.sessionId, credentials[1]!, ferryCommand),
     ).resolves.toMatchObject({
       disposition: "decided",
       terminal: "no-op",
@@ -162,11 +154,7 @@ describe("generic shared-session PostgreSQL integration", () => {
       resultingStateVersion: 1,
     });
     await expect(
-      service.submit(
-        session.sessionId,
-        credentials[0]!,
-        command("ferry-command", "ferry-building", 0),
-      ),
+      service.submit(session.sessionId, credentials[0]!, ferryCommand),
     ).resolves.toMatchObject({ disposition: "decided", terminal: "accepted" });
     await expect(
       service.submit(
@@ -175,6 +163,44 @@ describe("generic shared-session PostgreSQL integration", () => {
         command("ferry-command", "rincon-park", 0),
       ),
     ).rejects.toMatchObject({ code: "command-identity-conflict", status: 409 });
+
+    const staleObservation = {
+      ...available("observation-offline-aged", 37.8009, -122.3876),
+      capturedAt: new Date(Date.now() - 60_000).toISOString(),
+      ageMs: 0,
+    };
+    const staleCommand = {
+      ...command("offline-aged-command", "rincon-park", 1),
+      observations: [staleObservation],
+    };
+    const staleResult = await service.submit(session.sessionId, credentials[0]!, staleCommand);
+    expect(staleResult).toMatchObject({
+      terminal: "rejected",
+      outcomeCode: "location-stale",
+      capabilityEvidence: [{ disposition: "expired" }],
+    });
+    await expect(service.submit(session.sessionId, credentials[0]!, staleCommand)).resolves.toEqual(
+      staleResult,
+    );
+
+    const receiptColumns = await pool.query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'authoritative_command_receipts'`,
+    );
+    expect(receiptColumns.rows.map(({ column_name }) => column_name)).not.toContain("request_json");
+    const persistedReceipt = await pool.query<{
+      request_digest: string;
+      result_json: string;
+    }>(
+      `SELECT request_digest, result_json FROM authoritative_command_receipts
+       WHERE session_id = $1 AND participant_id = $2 AND command_id = $3`,
+      [session.sessionId, joined.participantId, staleCommand.commandId],
+    );
+    expect(persistedReceipt.rows).toHaveLength(1);
+    expect(persistedReceipt.rows[0]?.request_digest).toMatch(/^[a-f0-9]{64}$/);
+    expect(persistedReceipt.rows[0]?.result_json).not.toMatch(
+      /rincon-park|payload|observations|latitude|longitude|horizontalAccuracy|capturedAt|recordedAt|ageMs/,
+    );
 
     const pull = await service.pull(session.sessionId, credentials[0]!, "0");
     expect(pull.snapshot.projections).toEqual([
@@ -241,15 +267,14 @@ describe("generic shared-session PostgreSQL integration", () => {
       } as const;
       await heldClient.query(
         `INSERT INTO authoritative_command_receipts
-         (session_id,command_id,participant_id,request_digest,request_json,terminal,outcome_code,
+         (session_id,command_id,participant_id,request_digest,terminal,outcome_code,
           resulting_state_version,result_json,decision_position)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,1)`,
         [
           session.sessionId,
           heldResult.commandId,
           participants[0]!.participantId,
           "held-request-digest",
-          "{}",
           heldResult.terminal,
           heldResult.outcomeCode,
           heldResult.resultingStateVersion,
@@ -284,15 +309,14 @@ describe("generic shared-session PostgreSQL integration", () => {
         } as const;
         await independent.query(
           `INSERT INTO authoritative_command_receipts
-           (session_id,command_id,participant_id,request_digest,request_json,terminal,outcome_code,
+           (session_id,command_id,participant_id,request_digest,terminal,outcome_code,
             resulting_state_version,result_json,decision_position)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,1)`,
           [
             session.sessionId,
             independentResult.commandId,
             participants[1]!.participantId,
             "independent-request-digest",
-            "{}",
             independentResult.terminal,
             independentResult.outcomeCode,
             independentResult.resultingStateVersion,
