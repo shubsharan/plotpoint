@@ -1,9 +1,49 @@
 import { describe, expect, it } from "vitest";
 
-import { defineCommand, type Aggregate, type Command, type JsonObject } from "@plotpoint/runtime";
-import { clock, createRuntimeHarness } from "@plotpoint/testkit";
+import {
+  defineCommand,
+  resolveCommandBinding,
+  type Aggregate,
+  type Command,
+  type CommandDefinition,
+  type JsonObject,
+} from "@plotpoint/runtime";
+import {
+  assertAccepted,
+  clock,
+  createRuntimeHarness,
+  PlotpointAssertionError,
+} from "@plotpoint/testkit";
+import { isJsonObject, modelFixture, runtimeSchema } from "./runtime-model.js";
 
 type State = JsonObject & { readonly count: number };
+const stateSchema = runtimeSchema(
+  "counter.state",
+  (value): value is State =>
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "count" in value &&
+    typeof value.count === "number",
+);
+const jsonSchema = runtimeSchema("counter.json", isJsonObject);
+
+function executable(definition: CommandDefinition<State, JsonObject, JsonObject, "player">) {
+  const binding = resolveCommandBinding({
+    registrationId: definition.definitionId,
+    definition,
+    payloadSchema: jsonSchema,
+    outcomeSchema: jsonSchema,
+  });
+  return modelFixture({
+    modelId: "counter.player",
+    aggregateKind: "player",
+    authority: "local",
+    stateSchema,
+    initializeState: () => ({ count: 0 }),
+    commandsByType: { change: binding },
+  });
+}
 
 function fixture(): {
   aggregate: Aggregate<State, "player">;
@@ -11,11 +51,11 @@ function fixture(): {
 } {
   return {
     aggregate: {
-      kind: "player",
-      id: "p1",
-      schemaVersion: 1,
+      aggregateId: "p1",
+      modelId: "counter.player",
+      aggregateKind: "player",
+      schemaId: "counter.state",
       stateVersion: 0,
-      authority: "local",
       state: { count: 0 },
     },
     command: {
@@ -32,7 +72,7 @@ describe("runtime harness", () => {
   it("runs a strict scenario 100 times with identical records", () => {
     const { aggregate, command } = fixture();
     const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-      definitionId: "repeat.v1",
+      definitionId: "repeat",
       commandType: "change",
       aggregateKind: "player",
       handle() {
@@ -49,14 +89,14 @@ describe("runtime harness", () => {
 
     const result = createRuntimeHarness({ repeat: 100 }).run({
       name: "repeatable",
-      definition,
+      model: executable(definition),
       aggregate,
       command,
       observations: [],
     });
 
-    expect(result.kind).toBe("accepted");
-    if (result.kind !== "accepted") throw new Error("expected accepted");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "accepted" } });
+    if (result.kind !== "recorded") throw new Error("expected recorded result");
     expect(result.record.terminal).toBe("accepted");
   });
 
@@ -64,7 +104,7 @@ describe("runtime harness", () => {
     const { aggregate, command } = fixture();
     let count = 0;
     const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-      definitionId: "vary.v1",
+      definitionId: "vary",
       commandType: "change",
       aggregateKind: "player",
       handle() {
@@ -83,7 +123,7 @@ describe("runtime harness", () => {
     expect(() =>
       createRuntimeHarness({ repeat: 2 }).run({
         name: "varies",
-        definition,
+        model: executable(definition),
         aggregate,
         command,
         observations: [],
@@ -91,16 +131,76 @@ describe("runtime harness", () => {
     ).toThrow(/\/aggregate\/state\/count/);
   });
 
+  it("compares complete records even when repeated aggregate state is identical", () => {
+    const { aggregate, command } = fixture();
+    let run = 0;
+    const definition = defineCommand<"player", State, JsonObject, JsonObject>({
+      definitionId: "vary-outcome",
+      commandType: "change",
+      aggregateKind: "player",
+      handle() {
+        run += 1;
+        return {
+          kind: "accepted",
+          nextState: { count: 1 },
+          outcome: { run },
+          domainEvents: [],
+          effectIntents: [],
+          progressionIntents: [],
+        };
+      },
+    });
+
+    expect(() =>
+      createRuntimeHarness({ repeat: 2 }).run({
+        name: "outcome-varies",
+        model: executable(definition),
+        aggregate,
+        command,
+        observations: [],
+      }),
+    ).toThrow(/\/record\/outcome\/run/);
+  });
+
+  it("rejects an incomplete accepted record instead of asserting from its terminal alone", () => {
+    const { aggregate, command } = fixture();
+    const incomplete = {
+      kind: "recorded",
+      aggregate,
+      record: {
+        definitionId: "incomplete",
+        policy: {
+          maxCanonicalDepth: 64,
+          maxCanonicalNodes: 10_000,
+          maxAutomaticTransitions: 100,
+        },
+        aggregateBefore: aggregate,
+        command,
+        observations: [],
+        observationTrace: [],
+        terminal: "accepted",
+        outcome: {},
+        domainEvents: [],
+        effectIntents: [],
+        progressionTrace: [],
+        diagnostics: [],
+      },
+    } as never;
+
+    expect(() => assertAccepted(incomplete)).toThrow(PlotpointAssertionError);
+  });
+
   it("detects caller and non-target mutation", () => {
     const source = fixture();
     const nonTarget: Aggregate<State> = {
       ...source.aggregate,
-      kind: "team",
-      id: "team-1",
+      aggregateKind: "team",
+      aggregateId: "team-1",
+      modelId: "counter.team",
       state: { count: 0 },
     };
     const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-      definitionId: "mutation.v1",
+      definitionId: "mutation",
       commandType: "change",
       aggregateKind: "player",
       handle() {
@@ -120,7 +220,7 @@ describe("runtime harness", () => {
     expect(() =>
       createRuntimeHarness().run({
         name: "mutation",
-        definition,
+        model: executable(definition),
         aggregate: source.aggregate,
         command: source.command,
         observations: [],
@@ -132,7 +232,7 @@ describe("runtime harness", () => {
   it("enforces exact observation consumption", () => {
     const { aggregate, command } = fixture();
     const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-      definitionId: "consume.v1",
+      definitionId: "consume",
       commandType: "change",
       aggregateKind: "player",
       handle(_target, _command, context) {
@@ -151,11 +251,11 @@ describe("runtime harness", () => {
     expect(
       createRuntimeHarness().run({
         name: "exact",
-        definition,
+        model: executable(definition),
         aggregate,
         command,
         observations: [clock(1)],
       }).kind,
-    ).toBe("accepted");
+    ).toBe("recorded");
   });
 });

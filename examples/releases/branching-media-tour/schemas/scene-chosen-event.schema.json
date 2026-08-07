@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tour.scene-chosen-event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sceneId", "type"],
+  "properties": {
+    "sceneId": { "type": "string", "minLength": 1 },
+    "type": { "const": "tour.scene-chosen" }
+  }
+}

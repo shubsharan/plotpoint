@@ -4,6 +4,7 @@ import {
   type Aggregate,
   type AggregateKind,
 } from "./aggregates.js";
+import type { ExecutableAggregateModel } from "./aggregate-model.js";
 import {
   canonicalEquals,
   canonicalizeValue,
@@ -11,19 +12,13 @@ import {
   type JsonObject,
   type JsonValue,
 } from "./canonical-json.js";
-import type {
-  Command,
-  CommandDefinition,
-  DomainEvent,
-  EffectIntent,
-  HandlerDecision,
-} from "./commands.js";
+import type { Command, DomainEvent, EffectIntent, HandlerDecision } from "./commands.js";
 import { createDiagnostic, type Diagnostic } from "./diagnostics.js";
 import type {
   ExecutionRecord,
   ExecutionResult,
-  InvalidExecution,
   PreflightInvalidExecution,
+  RecordedExecution,
   RuntimePolicy,
 } from "./execution-record.js";
 import {
@@ -31,27 +26,46 @@ import {
   ObservationFault,
   type Observation,
   type ObservationConsumption,
+  type TransitionContext,
 } from "./observations.js";
-import type { DefinedProgression } from "./progression/graph.js";
 import { evaluateProgression } from "./progression/evaluate-progression.js";
-import type { ProgressionTransition } from "./progression/state.js";
+import type { ProgressionDefinition } from "./progression/graph.js";
+import type { ProgressionTraceEntry } from "./progression/state.js";
+import { validateProgressionGraph } from "./progression/validate-graph.js";
 
-export interface ExecuteCommandInput<
+export interface ExecuteCommandInput<Kind extends AggregateKind = AggregateKind> {
+  readonly model: ExecutableAggregateModel<Kind>;
+  readonly aggregate: Aggregate<JsonObject, Kind>;
+  readonly command: Command<JsonObject, Kind>;
+  readonly observations: readonly Observation[];
+}
+
+export type EvaluatedCommand<State extends JsonObject, Outcome extends JsonObject> =
+  | { readonly kind: "decision"; readonly decision: HandlerDecision<State, Outcome> }
+  | { readonly kind: "invalid"; readonly diagnostics: readonly Diagnostic[] };
+
+export interface ExecuteCommandWithEvaluatorInput<
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
   Kind extends AggregateKind = AggregateKind,
 > {
-  readonly definition: CommandDefinition<State, Payload, Outcome, Kind>;
+  readonly definitionId: string;
+  readonly commandType: string;
+  readonly aggregateKind: Kind;
   readonly aggregate: Aggregate<State, Kind>;
   readonly command: Command<Payload, Kind>;
   readonly observations: readonly Observation[];
   readonly policy?: Partial<RuntimePolicy>;
-  readonly progression?: DefinedProgression<State, Payload, Outcome, Kind>;
+  readonly progression?: ProgressionDefinition<State, Kind>;
+  evaluate(
+    aggregate: Aggregate<State, Kind>,
+    command: Command<Payload, Kind>,
+    context: TransitionContext,
+  ): EvaluatedCommand<State, Outcome>;
 }
 
 export const DEFAULT_RUNTIME_POLICY: RuntimePolicy = Object.freeze({
-  contractVersion: 1,
   maxCanonicalDepth: DEFAULT_CANONICAL_LIMITS.maxCanonicalDepth,
   maxCanonicalNodes: DEFAULT_CANONICAL_LIMITS.maxCanonicalNodes,
   maxAutomaticTransitions: 100,
@@ -59,7 +73,6 @@ export const DEFAULT_RUNTIME_POLICY: RuntimePolicy = Object.freeze({
 
 function resolvePolicy(policy: Partial<RuntimePolicy> | undefined): RuntimePolicy | Diagnostic {
   const resolved = {
-    contractVersion: policy?.contractVersion ?? DEFAULT_RUNTIME_POLICY.contractVersion,
     maxCanonicalDepth: policy?.maxCanonicalDepth ?? DEFAULT_RUNTIME_POLICY.maxCanonicalDepth,
     maxCanonicalNodes: policy?.maxCanonicalNodes ?? DEFAULT_RUNTIME_POLICY.maxCanonicalNodes,
     maxAutomaticTransitions:
@@ -76,12 +89,6 @@ function resolvePolicy(policy: Partial<RuntimePolicy> | undefined): RuntimePolic
         reason: "non-negative-safe-integer-required",
       });
     }
-  }
-  if (resolved.contractVersion !== 1) {
-    return createDiagnostic("runtime-policy-invalid", {
-      field: "contractVersion",
-      reason: "unsupported-contract-version",
-    });
   }
   return Object.freeze(resolved as RuntimePolicy);
 }
@@ -131,25 +138,26 @@ interface RecordContext<
   readonly observationTrace: readonly ObservationConsumption[];
 }
 
-function preflightInvalid(diagnostic: Diagnostic): PreflightInvalidExecution {
+export function preflightInvalidResult(
+  diagnostics: Diagnostic | readonly Diagnostic[],
+): PreflightInvalidExecution {
   return Object.freeze({
-    kind: "invalid",
-    phase: "preflight",
-    diagnostics: Object.freeze([diagnostic]),
+    kind: "preflight-invalid",
+    diagnostics: Object.freeze(Array.isArray(diagnostics) ? [...diagnostics] : [diagnostics]),
   });
 }
 
 function invalidResult<
   State extends JsonObject,
   Payload extends JsonObject,
+  Outcome extends JsonObject,
   Kind extends AggregateKind,
 >(
   context: RecordContext<State, Payload, Kind>,
   diagnostics: readonly Diagnostic[],
-  attemptedProgressionTrace: readonly ProgressionTransition[] = [],
-): InvalidExecution<State, Payload, Kind> {
-  const record = buildRecord<State, Payload, JsonObject, Kind>({
-    formatVersion: 1,
+  attemptedProgressionTrace: readonly ProgressionTraceEntry[] = [],
+): RecordedExecution<State, Outcome, Payload, Kind> {
+  const record = buildRecord<State, Payload, Outcome, Kind>({
     definitionId: context.definitionId,
     policy: context.policy,
     aggregateBefore: context.aggregate,
@@ -157,17 +165,28 @@ function invalidResult<
     observations: context.observations,
     observationTrace: context.observationTrace,
     terminal: "invalid",
+    priorStateVersion: context.aggregate.stateVersion,
+    resultingStateVersion: context.aggregate.stateVersion,
     progressionTrace: attemptedProgressionTrace,
     diagnostics,
   });
   return Object.freeze({
-    kind: "invalid",
-    phase: "execution",
+    kind: "recorded",
     aggregate: context.aggregate,
-    diagnostics: Object.freeze([...diagnostics]),
-    attemptedProgressionTrace: Object.freeze([...attemptedProgressionTrace]),
     record,
   });
+}
+
+function recordedResult<
+  State extends JsonObject,
+  Payload extends JsonObject,
+  Outcome extends JsonObject,
+  Kind extends AggregateKind,
+>(
+  aggregate: Aggregate<State, Kind>,
+  record: ExecutionRecord<State, Outcome, Payload, Kind>,
+): RecordedExecution<State, Outcome, Payload, Kind> {
+  return Object.freeze({ kind: "recorded", aggregate, record });
 }
 
 function validateCommandShape(value: unknown): Diagnostic | null {
@@ -211,6 +230,11 @@ function validateCommandShape(value: unknown): Diagnostic | null {
   ) {
     return createDiagnostic("command-invalid", { field: "payload", reason: "not-object" });
   }
+  const allowed = new Set(["id", "type", "target", "expectedStateVersion", "payload"]);
+  const unexpected = Object.keys(command).find((field) => !allowed.has(field));
+  if (unexpected !== undefined) {
+    return createDiagnostic("command-invalid", { field: unexpected, reason: "unexpected-field" });
+  }
   return null;
 }
 
@@ -223,7 +247,7 @@ function validateDecision<State extends JsonObject, Outcome extends JsonObject>(
 ): value is HandlerDecision<State, Outcome> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const decision = value as Record<string, unknown>;
-  if (decision.kind === "rejected") {
+  if (decision.kind === "rejected" || decision.kind === "no-op") {
     return (
       decision.outcome !== null &&
       typeof decision.outcome === "object" &&
@@ -232,10 +256,13 @@ function validateDecision<State extends JsonObject, Outcome extends JsonObject>(
     );
   }
   if (decision.kind !== "accepted") return false;
+  const nextStateValid =
+    decision.nextState === undefined ||
+    (decision.nextState !== null &&
+      typeof decision.nextState === "object" &&
+      !Array.isArray(decision.nextState));
   return (
-    decision.nextState !== null &&
-    typeof decision.nextState === "object" &&
-    !Array.isArray(decision.nextState) &&
+    nextStateValid &&
     decision.outcome !== null &&
     typeof decision.outcome === "object" &&
     !Array.isArray(decision.outcome) &&
@@ -258,37 +285,33 @@ function validateDecision<State extends JsonObject, Outcome extends JsonObject>(
   );
 }
 
-export function executeCommand<
+export function executeCommandWithEvaluator<
   State extends JsonObject,
   Payload extends JsonObject,
   Outcome extends JsonObject,
   Kind extends AggregateKind,
 >(
-  input: ExecuteCommandInput<State, Payload, Outcome, Kind>,
+  input: ExecuteCommandWithEvaluatorInput<State, Payload, Outcome, Kind>,
 ): ExecutionResult<State, Outcome, Payload, Kind> {
   const resolvedPolicy = resolvePolicy(input.policy);
-  if (isDiagnostic(resolvedPolicy)) {
-    return preflightInvalid(resolvedPolicy);
-  }
+  if (isDiagnostic(resolvedPolicy)) return preflightInvalidResult(resolvedPolicy);
 
   const canonicalAggregate = canonicalClone(input.aggregate, resolvedPolicy);
-  if (isDiagnostic(canonicalAggregate)) {
-    return preflightInvalid(canonicalAggregate);
-  }
+  if (isDiagnostic(canonicalAggregate)) return preflightInvalidResult(canonicalAggregate);
   const aggregateDiagnostic = validateAggregate(canonicalAggregate);
-  if (aggregateDiagnostic !== null) return preflightInvalid(aggregateDiagnostic);
+  if (aggregateDiagnostic !== null) return preflightInvalidResult(aggregateDiagnostic);
   const aggregateClone = canonicalAggregate as unknown as Aggregate<State, Kind>;
 
   const canonicalCommand = canonicalClone(input.command, resolvedPolicy);
-  if (isDiagnostic(canonicalCommand)) return preflightInvalid(canonicalCommand);
+  if (isDiagnostic(canonicalCommand)) return preflightInvalidResult(canonicalCommand);
   const commandDiagnostic = validateCommandShape(canonicalCommand);
-  if (commandDiagnostic !== null) return preflightInvalid(commandDiagnostic);
+  if (commandDiagnostic !== null) return preflightInvalidResult(commandDiagnostic);
   const commandClone = canonicalCommand as unknown as Command<Payload, Kind>;
 
   const canonicalObservations = canonicalClone(input.observations, resolvedPolicy);
-  if (isDiagnostic(canonicalObservations)) return preflightInvalid(canonicalObservations);
+  if (isDiagnostic(canonicalObservations)) return preflightInvalidResult(canonicalObservations);
   if (!Array.isArray(canonicalObservations)) {
-    return preflightInvalid(
+    return preflightInvalidResult(
       createDiagnostic("canonical-value-invalid", {
         path: "/observations",
         reason: "not-array",
@@ -297,9 +320,10 @@ export function executeCommand<
   }
   const observationsClone = canonicalObservations as readonly unknown[];
   const invalidObservationIndex = observationsClone.findIndex((observation) => {
-    if (observation === null || typeof observation !== "object" || Array.isArray(observation))
+    if (observation === null || typeof observation !== "object" || Array.isArray(observation)) {
       return true;
-    const candidate = observation as unknown as Record<string, unknown>;
+    }
+    const candidate = observation as Record<string, unknown>;
     return (
       typeof candidate.kind !== "string" ||
       candidate.kind.length === 0 ||
@@ -309,7 +333,7 @@ export function executeCommand<
     );
   });
   if (invalidObservationIndex !== -1) {
-    return preflightInvalid(
+    return preflightInvalidResult(
       createDiagnostic("canonical-value-invalid", {
         path: `/observations/${invalidObservationIndex}`,
         reason: "invalid-observation-identity",
@@ -318,7 +342,7 @@ export function executeCommand<
   }
   const canonicalObservationScript = observationsClone as readonly Observation[];
   const contextBase = {
-    definitionId: input.definition.definitionId,
+    definitionId: input.definitionId,
     policy: resolvedPolicy,
     aggregate: aggregateClone,
     command: commandClone,
@@ -327,15 +351,15 @@ export function executeCommand<
   };
 
   if (
-    commandClone.type !== input.definition.commandType ||
-    commandClone.target.kind !== input.definition.aggregateKind ||
-    commandClone.target.kind !== aggregateClone.kind ||
-    commandClone.target.id !== aggregateClone.id
+    commandClone.type !== input.commandType ||
+    commandClone.target.kind !== input.aggregateKind ||
+    commandClone.target.kind !== aggregateClone.aggregateKind ||
+    commandClone.target.id !== aggregateClone.aggregateId
   ) {
-    return invalidResult(contextBase, [
+    return invalidResult<State, Payload, Outcome, Kind>(contextBase, [
       createDiagnostic("command-target-mismatch", {
-        aggregateId: aggregateClone.id,
-        aggregateKind: aggregateClone.kind,
+        aggregateId: aggregateClone.aggregateId,
+        aggregateKind: aggregateClone.aggregateKind,
         commandId: commandClone.id,
         targetId: commandClone.target.id,
         targetKind: commandClone.target.kind,
@@ -343,7 +367,7 @@ export function executeCommand<
     ]);
   }
   if (commandClone.expectedStateVersion !== aggregateClone.stateVersion) {
-    return invalidResult(contextBase, [
+    return invalidResult<State, Payload, Outcome, Kind>(contextBase, [
       createDiagnostic("stale-aggregate-version", {
         actual: aggregateClone.stateVersion,
         commandId: commandClone.id,
@@ -352,96 +376,119 @@ export function executeCommand<
     ]);
   }
 
-  const cursor = createObservationCursor(canonicalObservationScript);
-  let rawDecision: unknown;
-  try {
-    rawDecision = input.definition.handle(aggregateClone, commandClone, cursor.context);
-  } catch (error) {
-    const diagnostic =
-      error instanceof ObservationFault
-        ? error.diagnostic
-        : createDiagnostic("handler-threw", {
-            commandId: commandClone.id,
-            definitionId: input.definition.definitionId,
-          });
-    return invalidResult({ ...contextBase, observationTrace: cursor.trace }, [diagnostic]);
-  }
-
-  const canonicalDecision = canonicalClone(rawDecision, resolvedPolicy);
-  if (isDiagnostic(canonicalDecision) || !validateDecision<State, Outcome>(canonicalDecision)) {
-    return invalidResult({ ...contextBase, observationTrace: cursor.trace }, [
-      createDiagnostic("handler-result-invalid", {
-        commandId: commandClone.id,
-        reason: isDiagnostic(canonicalDecision) ? canonicalDecision.code : "invalid-shape",
-      }),
-    ]);
-  }
-  const decisionClone = canonicalDecision;
-
-  const recordContext = { ...contextBase, observationTrace: cursor.trace };
-  if (decisionClone.kind === "rejected") {
-    const record = buildRecord<State, Payload, Outcome, Kind>({
-      formatVersion: 1,
-      definitionId: input.definition.definitionId,
-      policy: resolvedPolicy,
-      aggregateBefore: aggregateClone,
-      command: commandClone,
-      observations: canonicalObservationScript,
-      observationTrace: cursor.trace,
-      terminal: "rejected",
-      aggregateAfter: aggregateClone,
-      outcome: decisionClone.outcome,
-      progressionTrace: [],
-      diagnostics: [],
-    });
-    return Object.freeze({
-      kind: "rejected",
-      aggregate: aggregateClone,
-      outcome: decisionClone.outcome,
-      record,
-    });
-  }
-
   if ((input.progression === undefined) !== (aggregateClone.progression === undefined)) {
-    return invalidResult(recordContext, [
+    return invalidResult<State, Payload, Outcome, Kind>(contextBase, [
       createDiagnostic("progression-graph-invalid", {
         commandId: commandClone.id,
         reason: "definition-instance-pair-required",
       }),
     ]);
   }
-  let progressionAfter = aggregateClone.progression;
-  let progressionTrace: readonly ProgressionTransition[] = [];
   if (input.progression !== undefined && aggregateClone.progression !== undefined) {
-    if (input.progression.aggregateKind !== aggregateClone.kind) {
-      return invalidResult(recordContext, [
+    if (input.progression.aggregateKind !== aggregateClone.aggregateKind) {
+      return invalidResult<State, Payload, Outcome, Kind>(contextBase, [
         createDiagnostic("progression-graph-invalid", {
           actualAggregateKind: input.progression.aggregateKind,
           commandId: commandClone.id,
-          expectedAggregateKind: aggregateClone.kind,
+          expectedAggregateKind: aggregateClone.aggregateKind,
           graphId: input.progression.graphId,
           reason: "aggregate-kind-mismatch",
         }),
       ]);
     }
+    const progressionValidation = validateProgressionGraph({
+      definition: input.progression,
+      progression: aggregateClone.progression,
+      commandId: commandClone.id,
+    });
+    if (progressionValidation.kind === "invalid") {
+      return invalidResult<State, Payload, Outcome, Kind>(contextBase, [
+        progressionValidation.diagnostic,
+      ]);
+    }
+  }
+
+  const cursor = createObservationCursor(canonicalObservationScript);
+  let evaluated: EvaluatedCommand<State, Outcome>;
+  try {
+    evaluated = input.evaluate(aggregateClone, commandClone, cursor.context);
+  } catch (error) {
+    const diagnostic =
+      error instanceof ObservationFault
+        ? error.diagnostic
+        : createDiagnostic("handler-threw", {
+            commandId: commandClone.id,
+            definitionId: input.definitionId,
+          });
+    return invalidResult<State, Payload, Outcome, Kind>(
+      { ...contextBase, observationTrace: cursor.trace },
+      [diagnostic],
+    );
+  }
+  if (evaluated.kind === "invalid") {
+    return invalidResult<State, Payload, Outcome, Kind>(
+      { ...contextBase, observationTrace: cursor.trace },
+      evaluated.diagnostics,
+    );
+  }
+
+  const canonicalDecision = canonicalClone(evaluated.decision, resolvedPolicy);
+  if (isDiagnostic(canonicalDecision) || !validateDecision<State, Outcome>(canonicalDecision)) {
+    return invalidResult<State, Payload, Outcome, Kind>(
+      { ...contextBase, observationTrace: cursor.trace },
+      [
+        createDiagnostic("handler-result-invalid", {
+          commandId: commandClone.id,
+          reason: isDiagnostic(canonicalDecision) ? canonicalDecision.code : "invalid-shape",
+        }),
+      ],
+    );
+  }
+  const decisionClone = canonicalDecision;
+  const recordContext = { ...contextBase, observationTrace: cursor.trace };
+
+  if (decisionClone.kind === "rejected" || decisionClone.kind === "no-op") {
+    const record = buildRecord<State, Payload, Outcome, Kind>({
+      definitionId: input.definitionId,
+      policy: resolvedPolicy,
+      aggregateBefore: aggregateClone,
+      command: commandClone,
+      observations: canonicalObservationScript,
+      observationTrace: cursor.trace,
+      terminal: decisionClone.kind,
+      priorStateVersion: aggregateClone.stateVersion,
+      resultingStateVersion: aggregateClone.stateVersion,
+      outcome: decisionClone.outcome,
+      progressionTrace: [],
+      diagnostics: [],
+    });
+    return recordedResult(aggregateClone, record);
+  }
+
+  const nextState = decisionClone.nextState ?? aggregateClone.state;
+  let progressionAfter = aggregateClone.progression;
+  let progressionTrace: readonly ProgressionTraceEntry[] = [];
+  if (input.progression !== undefined && aggregateClone.progression !== undefined) {
     const evaluation = evaluateProgression({
       definition: input.progression,
       progression: aggregateClone.progression,
       intents: decisionClone.progressionIntents,
-      aggregateState: decisionClone.nextState,
-      command: commandClone,
-      outcome: decisionClone.outcome,
+      aggregateState: nextState,
+      commandId: commandClone.id,
       domainEvents: decisionClone.domainEvents,
-      observationTrace: cursor.trace,
       maxAutomaticTransitions: resolvedPolicy.maxAutomaticTransitions,
     });
     if (evaluation.kind === "invalid") {
-      return invalidResult(recordContext, [evaluation.diagnostic], evaluation.attemptedTrace);
+      return invalidResult<State, Payload, Outcome, Kind>(
+        recordContext,
+        [evaluation.diagnostic],
+        evaluation.attemptedTrace,
+      );
     }
     progressionAfter = evaluation.progression;
     progressionTrace = evaluation.trace;
   } else if (decisionClone.progressionIntents.length > 0) {
-    return invalidResult(recordContext, [
+    return invalidResult<State, Payload, Outcome, Kind>(recordContext, [
       createDiagnostic("progression-intent-invalid", {
         commandId: commandClone.id,
         reason: "missing-progression",
@@ -449,7 +496,7 @@ export function executeCommand<
     ]);
   }
 
-  const stateChanged = !canonicalEquals(aggregateClone.state, decisionClone.nextState);
+  const stateChanged = !canonicalEquals(aggregateClone.state, nextState);
   const progressionChanged =
     aggregateClone.progression !== undefined && progressionAfter !== undefined
       ? !canonicalEquals(
@@ -457,47 +504,23 @@ export function executeCommand<
           progressionAfter as unknown as JsonObject,
         )
       : false;
-  if (!stateChanged && !progressionChanged) {
-    if (
-      decisionClone.domainEvents.length > 0 ||
-      decisionClone.effectIntents.length > 0 ||
-      progressionTrace.length > 0
-    ) {
-      return invalidResult(recordContext, [
-        createDiagnostic("no-op-output-invalid", {
-          commandId: commandClone.id,
-          domainEventCount: decisionClone.domainEvents.length,
-          effectIntentCount: decisionClone.effectIntents.length,
-          progressionTransitionCount: progressionTrace.length,
-        }),
-      ]);
-    }
-    const record = buildRecord<State, Payload, Outcome, Kind>({
-      formatVersion: 1,
-      definitionId: input.definition.definitionId,
-      policy: resolvedPolicy,
-      aggregateBefore: aggregateClone,
-      command: commandClone,
-      observations: canonicalObservationScript,
-      observationTrace: cursor.trace,
-      terminal: "no-op",
-      aggregateAfter: aggregateClone,
-      outcome: decisionClone.outcome,
-      progressionTrace,
-      diagnostics: [],
-    });
-    return Object.freeze({
-      kind: "no-op",
-      aggregate: aggregateClone,
-      outcome: decisionClone.outcome,
-      record,
-    });
+  const durableFactCount =
+    decisionClone.domainEvents.length +
+    decisionClone.effectIntents.length +
+    (stateChanged || progressionChanged ? 1 : 0);
+  if (durableFactCount === 0) {
+    return invalidResult<State, Payload, Outcome, Kind>(recordContext, [
+      createDiagnostic("no-op-output-invalid", {
+        commandId: commandClone.id,
+        reason: "accepted-without-durable-fact",
+      }),
+    ]);
   }
 
   if (aggregateClone.stateVersion === Number.MAX_SAFE_INTEGER) {
-    return invalidResult(recordContext, [
+    return invalidResult<State, Payload, Outcome, Kind>(recordContext, [
       createDiagnostic("state-version-overflow", {
-        aggregateId: aggregateClone.id,
+        aggregateId: aggregateClone.aggregateId,
         stateVersion: aggregateClone.stateVersion,
       }),
     ]);
@@ -506,31 +529,32 @@ export function executeCommand<
     {
       ...aggregateClone,
       stateVersion: aggregateClone.stateVersion + 1,
-      state: decisionClone.nextState,
+      state: nextState,
       ...(progressionAfter === undefined ? {} : { progression: progressionAfter }),
     },
     resolvedPolicy,
   );
   if (isDiagnostic(canonicalAggregateAfter)) {
-    return invalidResult(recordContext, [canonicalAggregateAfter]);
+    return invalidResult<State, Payload, Outcome, Kind>(recordContext, [canonicalAggregateAfter]);
   }
   const aggregateAfterDiagnostic = validateAggregate(canonicalAggregateAfter);
   if (aggregateAfterDiagnostic !== null) {
-    return invalidResult(recordContext, [aggregateAfterDiagnostic]);
+    return invalidResult<State, Payload, Outcome, Kind>(recordContext, [aggregateAfterDiagnostic]);
   }
   const aggregateAfter = canonicalAggregateAfter as unknown as Aggregate<State, Kind>;
 
   const domainEvents = decisionClone.domainEvents as readonly DomainEvent[];
   const effectIntents = decisionClone.effectIntents as readonly EffectIntent[];
   const record = buildRecord<State, Payload, Outcome, Kind>({
-    formatVersion: 1,
-    definitionId: input.definition.definitionId,
+    definitionId: input.definitionId,
     policy: resolvedPolicy,
     aggregateBefore: aggregateClone,
     command: commandClone,
     observations: canonicalObservationScript,
     observationTrace: cursor.trace,
     terminal: "accepted",
+    priorStateVersion: aggregateClone.stateVersion,
+    resultingStateVersion: aggregateAfter.stateVersion,
     aggregateAfter,
     outcome: decisionClone.outcome,
     domainEvents,
@@ -538,13 +562,15 @@ export function executeCommand<
     progressionTrace,
     diagnostics: [],
   });
-  return Object.freeze({
-    kind: "accepted",
-    aggregate: aggregateAfter,
-    outcome: decisionClone.outcome,
-    domainEvents,
-    effectIntents,
-    progressionTrace,
-    record,
+  return recordedResult(aggregateAfter, record);
+}
+
+export function executeCommand<Kind extends AggregateKind>(
+  input: ExecuteCommandInput<Kind>,
+): ExecutionResult<JsonObject, JsonObject, JsonObject, Kind> {
+  return input.model.execute({
+    aggregate: input.aggregate,
+    command: input.command,
+    observations: input.observations,
   });
 }

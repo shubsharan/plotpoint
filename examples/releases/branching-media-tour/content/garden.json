@@ -1,6 +1,6 @@
 {
   "id": "garden",
-  "mapAssetId": "tour.map.overview.v1",
+  "mapAssetId": "tour.map.overview",
   "summary": "A shaded path where visitors choose between botany and oral-history stations.",
   "title": "Listening Garden"
 }

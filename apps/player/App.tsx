@@ -1,13 +1,32 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Platform, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import {
+  AppState,
+  Button,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as FileSystem from "expo-file-system/legacy";
+import * as Network from "expo-network";
 import * as Sharing from "expo-sharing";
 import { StatusBar } from "expo-status-bar";
-import { WebView, type WebViewMessageEvent } from "react-native-webview";
-import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
+import type { WebViewMessageEvent } from "react-native-webview";
+import { Ajv2020 } from "ajv/dist/2020.js";
 
-import { openRelease, type ReleaseManifestV1 } from "@plotpoint/protocol";
+import {
+  inspectGameRelease,
+  openRelease,
+  type CanonicalJsonObject,
+  type CanonicalJsonValue,
+  type GameComposition,
+  type ProgressionInstance,
+  type ReleaseManifest,
+  type SharedPlayView,
+} from "@plotpoint/protocol";
 
 import { routeHostBridgeMessage } from "./src/bridge/host-bridge";
 import { installReleaseFromDescriptor } from "./src/install/install-release";
@@ -16,19 +35,47 @@ import {
   createNativeInstallTransport,
 } from "./src/install/native-adapters";
 import { PlayerDatabase } from "./src/persistence/database";
-import { createPlayReport } from "./src/reports/create-play-report";
-import { allowRuntimeNavigation, buildRuntimeBootstrap } from "./src/runtime/bootstrap";
+import { nativeForegroundLocationAdapter } from "./src/location/native-location-adapter";
+import { createGamePlayReport } from "./src/reports/create-game-play-report";
+import { buildRuntimeBootstrap } from "./src/runtime/bootstrap";
 import { deriveHostSupportFromManifest } from "./src/runtime/host-support";
+import {
+  ManagedRuntimeWebView,
+  type ManagedRuntimeWebViewHandle,
+} from "./src/runtime/managed-runtime-webview";
 import { createProductionHostBridgeHandlers } from "./src/runtime/production-handlers";
-import { recoverLatestRun, recoverRun, type RecoveryBootstrap } from "./src/runtime/recovery";
+import {
+  recoverLatestRun,
+  recoverRun,
+  verifyRecoveryArtifact,
+  type RecoveryBootstrap,
+} from "./src/runtime/recovery";
 import { playerRunLifecycleStore, selectReleaseRun } from "./src/runtime/run-lifecycle";
+import { SharedSyncStore } from "./src/shared/database";
+import {
+  createCompositionSharedBridgeHandlers,
+  type SharedProjectionContract,
+  routeSharedBridgeMessage,
+} from "./src/shared/host-bridge";
+import { createParticipantCredentialStore } from "./src/shared/credentials";
+import { SharedSyncCoordinator } from "./src/shared/sync-coordinator";
+import {
+  SharedPlayController,
+  type SharedPlayControllerState,
+} from "./src/shared/session-controller";
+
+type ActiveRecovery = RecoveryBootstrap & {
+  readonly aggregate: NonNullable<RecoveryBootstrap["aggregate"]>;
+};
 
 interface ActiveRuntime {
-  readonly recovery: RecoveryBootstrap;
+  readonly recovery: ActiveRecovery;
   readonly html: string;
+  readonly composition: GameComposition;
+  readonly projectionContract: SharedProjectionContract | null;
   readonly aggregateSchemaId: string;
-  readonly aggregateSchemaVersion: number;
-  readonly validateAggregate: ValidateFunction;
+  validateSchema(schemaId: string, value: CanonicalJsonObject): boolean;
+  validateProgression(progressionId: string, value: ProgressionInstance): boolean;
 }
 
 interface ReleaseDetails {
@@ -45,11 +92,58 @@ interface InstallationFailure {
   readonly action: string;
 }
 
+function sharedStateMountsRuntime(state: SharedPlayControllerState): boolean {
+  return state.status === "local-only" || state.status === "bound";
+}
+
 function base64ToBytes(value: string): Uint8Array {
   const binary = globalThis.atob(value);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   return bytes;
+}
+
+function bytesToBase64(value: Uint8Array): string {
+  let binary = "";
+  for (const byte of value) binary += String.fromCharCode(byte);
+  return globalThis.btoa(binary);
+}
+
+function assetMediaType(path: string): string {
+  const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+  switch (extension) {
+    case "svg":
+      return "image/svg+xml";
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "gif":
+      return "image/gif";
+    case "webp":
+      return "image/webp";
+    case "mp3":
+      return "audio/mpeg";
+    case "wav":
+      return "audio/wav";
+    case "mp4":
+      return "video/mp4";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+function canonicalValue(value: unknown): value is CanonicalJsonValue {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value) && !Object.is(value, -0);
+  if (Array.isArray(value)) return value.every(canonicalValue);
+  if (value === null || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (
+    (prototype === Object.prototype || prototype === null) &&
+    Object.values(value).every(canonicalValue)
+  );
 }
 
 async function readArtifactBytes(uri: string): Promise<Uint8Array> {
@@ -61,16 +155,14 @@ async function readArtifactBytes(uri: string): Promise<Uint8Array> {
 
 function describeRequirements(
   releaseIdentity: string,
-  manifest: ReleaseManifestV1,
+  manifest: ReleaseManifest,
   publication: string,
 ): ReleaseDetails {
   return {
     releaseIdentity,
     releaseFormat: `Version ${manifest.releaseFormatVersion}`,
     hostApi: `Major ${manifest.hostApi.major}, minimum minor ${manifest.hostApi.minimumMinor}`,
-    aggregateSchemas: manifest.aggregateSchemas.map(
-      ({ id, kind, version }) => `${kind} · ${id} · version ${version}`,
-    ),
+    aggregateSchemas: manifest.aggregateSchemas.map(({ id, kind }) => `${kind} · ${id}`),
     capabilities: manifest.capabilities.map(
       ({ id, major, minimumMinor }) => `${id} · major ${major}, minimum minor ${minimumMinor}`,
     ),
@@ -141,32 +233,105 @@ function installationFailure(error: unknown): InstallationFailure {
 export default function App() {
   const [database, setDatabase] = useState<PlayerDatabase | null>(null);
   const [runtime, setRuntime] = useState<ActiveRuntime | null>(null);
+  const [serviceUrl, setServiceUrl] = useState("");
+  const [sessionCode, setSessionCode] = useState("");
+  const [invitation, setInvitation] = useState("");
   const [status, setStatus] = useState("Opening local player…");
   const [releaseDetails, setReleaseDetails] = useState<ReleaseDetails | null>(null);
   const [installFailure, setInstallFailure] = useState<InstallationFailure | null>(null);
   const [scanning, setScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
-  const webView = useRef<WebView>(null);
+  const managedRuntimeView = useRef<ManagedRuntimeWebViewHandle>(null);
   const installationInFlight = useRef(false);
+  const sharedPlayController = useRef<SharedPlayController | null>(null);
+  const sharedStatePublication = useRef<Promise<void>>(Promise.resolve());
+  const runtimeWasDisposed = useRef(false);
+  const [runtimeMountGeneration, setRuntimeMountGeneration] = useState(0);
+  const [sharedState, setSharedState] = useState<SharedPlayControllerState>({
+    status: "local-only",
+  });
+
+  const reply = (message: object) => managedRuntimeView.current?.injectHostMessage(message);
+
+  const notifySharedSyncChanged = () => {
+    reply({
+      version: 1,
+      requestId: "notification",
+      type: "shared.sync.changed",
+      payload: {},
+    });
+  };
+
+  const disposeMountedRuntime = async (): Promise<void> => {
+    const mounted = managedRuntimeView.current;
+    if (mounted === null) return;
+    await mounted.dispose();
+    runtimeWasDisposed.current = true;
+  };
+
+  const prepareRuntimeRemount = (): void => {
+    if (!runtimeWasDisposed.current) return;
+    runtimeWasDisposed.current = false;
+    setRuntimeMountGeneration((generation) => generation + 1);
+  };
+
+  const publishSharedControllerState = (
+    controller: SharedPlayController,
+    state: SharedPlayControllerState,
+  ): void => {
+    const publication = sharedStatePublication.current.then(async () => {
+      if (sharedPlayController.current !== controller) return;
+      if (!sharedStateMountsRuntime(state)) await disposeMountedRuntime();
+      if (sharedPlayController.current !== controller) return;
+      if (sharedStateMountsRuntime(state)) prepareRuntimeRemount();
+      setSharedState(state);
+      if (state.status === "bound") notifySharedSyncChanged();
+    });
+    sharedStatePublication.current = publication.catch((error: unknown) => {
+      setStatus(error instanceof Error ? error.message : "Runtime disposal failed");
+    });
+  };
 
   const loadRun = async (
     db: PlayerDatabase,
     recovery: RecoveryBootstrap,
     publication = "Opened from a verified local publication.",
   ) => {
+    if (recovery.aggregate === null) throw new Error("runtime-aggregate-missing");
+    const activeRecovery: ActiveRecovery = { ...recovery, aggregate: recovery.aggregate };
     const installation = await db.installedRelease(recovery.releaseId);
     if (installation === null) throw new Error("recovery-installation-missing");
-    const opened = await openRelease(await readArtifactBytes(installation.artifactUri));
+    const artifactBytes = await readArtifactBytes(installation.artifactUri);
+    const verifiedArtifact = await verifyRecoveryArtifact({
+      bytes: artifactBytes,
+      expectedReleaseId: recovery.releaseId,
+      manifestJson: installation.manifestJson,
+    });
+    if (verifiedArtifact.kind === "invalid") throw new Error(verifiedArtifact.code);
+    const [opened, inspection] = await Promise.all([
+      openRelease(artifactBytes),
+      inspectGameRelease(artifactBytes),
+    ]);
     if (opened.kind === "invalid")
       throw new Error(opened.diagnostics[0]?.code ?? "release-open-failed");
+    if ("kind" in inspection)
+      throw new Error(inspection.diagnostics[0]?.code ?? "game-composition-invalid");
+    if (inspection.release.releaseId !== opened.releaseId) {
+      throw new Error("game-composition-release-mismatch");
+    }
+    const composition = inspection.gameComposition;
     const logicPath = opened.manifest.entrypoints.logic;
     const presentationPath = opened.manifest.entrypoints.presentation;
     const logic = opened.entries.find((entry) => entry.path === logicPath);
     const presentation = opened.entries.find((entry) => entry.path === presentationPath);
     if (logic === undefined || presentation === undefined)
       throw new Error("release-entrypoint-missing");
+    const localModel = composition.aggregateModels.find(
+      (model) => model.authority === "local" && model.id === recovery.aggregate?.modelId,
+    );
+    if (localModel?.authority !== "local") throw new Error("release-player-model-missing");
     const aggregateRequirement = opened.manifest.aggregateSchemas.find(
-      (schema) => schema.kind === "player",
+      (schema) => schema.kind === "player" && schema.id === localModel.stateSchema.id,
     );
     if (aggregateRequirement === undefined) throw new Error("release-player-schema-missing");
     const aggregateSchema = opened.entries.find(
@@ -174,23 +339,115 @@ export default function App() {
     );
     if (aggregateSchema === undefined) throw new Error("release-player-schema-entry-missing");
     const decoder = new TextDecoder();
-    const validateAggregate = new Ajv2020({
-      allErrors: true,
-      strict: true,
-    }).compile(JSON.parse(decoder.decode(aggregateSchema.bytes)) as object);
+    if (!verifiedArtifact.validateSchema(aggregateRequirement.id, activeRecovery.aggregate.state)) {
+      throw new Error("runtime-aggregate-schema-invalid");
+    }
+    const content: Record<string, CanonicalJsonValue> = Object.create(null);
+    const assets: Record<string, CanonicalJsonValue> = Object.create(null);
+    for (const resource of composition.resources) {
+      if (resource.role !== "content" && resource.role !== "asset") continue;
+      const entry = opened.entries.find(({ path }) => path === resource.path);
+      if (entry === undefined) throw new Error(`runtime-resource-entry-missing:${resource.id}`);
+      if (resource.role === "content") {
+        const value: unknown = JSON.parse(decoder.decode(entry.bytes));
+        if (!canonicalValue(value)) throw new Error(`runtime-content-invalid:${resource.id}`);
+        content[resource.id] = value;
+      } else {
+        const mediaType = assetMediaType(resource.path);
+        assets[resource.id] = {
+          uri: `data:${mediaType};base64,${bytesToBase64(entry.bytes)}`,
+          mediaType,
+        };
+      }
+    }
+    let projectionContract: SharedProjectionContract | null = null;
+    let projectionAggregateKind: "team" | "session" | null = null;
+    if (composition.trustedMechanic !== undefined) {
+      const serverModel = composition.aggregateModels.find(
+        ({ id }) => id === composition.trustedMechanic?.aggregateModel,
+      );
+      if (serverModel?.authority !== "server") throw new Error("release-server-model-missing");
+      const serverSchema = opened.manifest.aggregateSchemas.find(
+        ({ id, kind }) => id === serverModel.stateSchema.id && kind === serverModel.kind,
+      );
+      const projectionResource = composition.resources.find(
+        ({ id, role }) =>
+          id === composition.trustedMechanic?.projectionSchema.id && role === "schema",
+      );
+      const projectionEntry = opened.entries.find(({ path }) => path === projectionResource?.path);
+      if (
+        serverSchema === undefined ||
+        projectionResource === undefined ||
+        projectionEntry === undefined
+      ) {
+        throw new Error("release-projection-schema-missing");
+      }
+      const validateProjection = new Ajv2020({ allErrors: true, strict: true }).compile(
+        JSON.parse(decoder.decode(projectionEntry.bytes)) as object,
+      );
+      projectionContract = Object.freeze({
+        schemaId: composition.trustedMechanic.projectionSchema.id,
+        validate: (value: SharedPlayView["projections"][number]["value"]) =>
+          validateProjection(value),
+      });
+      projectionAggregateKind = serverModel.kind;
+    }
+    await disposeMountedRuntime();
+    await sharedStatePublication.current;
+    sharedPlayController.current?.dispose();
+    const credentials = createParticipantCredentialStore();
+    const sharedStore = new SharedSyncStore(
+      db.raw(),
+      composition.trustedMechanic === undefined ||
+        projectionContract === null ||
+        projectionAggregateKind === null
+        ? undefined
+        : {
+            aggregateKind: projectionAggregateKind,
+            schemaId: projectionContract.schemaId,
+            validate: projectionContract.validate,
+          },
+    );
+    const coordinator = new SharedSyncCoordinator(sharedStore, credentials);
+    const controller = new SharedPlayController(
+      {
+        runId: recovery.runId,
+        releaseId: recovery.releaseId,
+        sharedRequired: composition.trustedMechanic !== undefined,
+      },
+      sharedStore,
+      credentials,
+      coordinator,
+    );
+    sharedPlayController.current = controller;
+    controller.subscribe((state) => publishSharedControllerState(controller, state));
+    await sharedStatePublication.current;
     setRuntime({
-      recovery,
+      recovery: activeRecovery,
+      composition,
+      projectionContract,
       aggregateSchemaId: aggregateRequirement.id,
-      aggregateSchemaVersion: aggregateRequirement.version,
-      validateAggregate,
+      validateSchema: verifiedArtifact.validateSchema,
+      validateProgression: verifiedArtifact.validateProgression,
       html: buildRuntimeBootstrap({
         logicSource: decoder.decode(logic.bytes),
         presentationSource: decoder.decode(presentation.bytes),
+        gameComposition: composition,
+        content,
+        assets,
+        sharedBindingAvailable: composition.trustedMechanic !== undefined,
       }),
     });
     setReleaseDetails(describeRequirements(opened.releaseId, opened.manifest, publication));
     setInstallFailure(null);
-    setStatus("Release ready for offline play.");
+    await controller.start();
+    await sharedStatePublication.current;
+    const controllerState = controller.snapshot();
+    if (controllerState.status === "join-required") {
+      setStatus("Release ready to join shared play.");
+    } else if (controllerState.status === "bound") setStatus("Shared play ready.");
+    else if (controllerState.status === "recovery-required") setStatus(controllerState.code);
+    else if (controllerState.status === "local-only") setStatus("Release ready for offline play.");
   };
 
   useEffect(() => {
@@ -212,7 +469,6 @@ export default function App() {
   const install = async (descriptorUrl: string) => {
     if (database === null || installationInFlight.current) return;
     installationInFlight.current = true;
-    setScanning(false);
     setInstallFailure(null);
     setStatus("Verifying and installing release…");
     try {
@@ -238,7 +494,10 @@ export default function App() {
           ? "Published locally; fresh run created."
           : "Publication already installed; active run resumed.",
       );
+      setScanning(false);
     } catch (error) {
+      prepareRuntimeRemount();
+      setScanning(false);
       setStatus("Installation failed.");
       setInstallFailure(installationFailure(error));
     } finally {
@@ -246,14 +505,68 @@ export default function App() {
     }
   };
 
-  const reply = (message: object) => {
-    webView.current?.injectJavaScript(
-      `window.__plotpointReceive(${JSON.stringify(JSON.stringify(message))});true;`,
-    );
-  };
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState !== "active") return;
+      const controller = sharedPlayController.current;
+      if (controller === null) return;
+      void controller.foreground().catch((error: unknown) => {
+        setStatus(error instanceof Error ? error.message : "Shared synchronization failed");
+      });
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    const subscription = Network.addNetworkStateListener((state) => {
+      const reachable = state.isInternetReachable ?? state.isConnected ?? false;
+      void sharedPlayController.current
+        ?.connectivityChanged(reachable)
+        .catch((error: unknown) =>
+          setStatus(error instanceof Error ? error.message : "Shared synchronization failed"),
+        );
+    });
+    return () => subscription.remove();
+  }, []);
 
   const onBridgeMessage = async (event: WebViewMessageEvent) => {
     if (database === null || runtime === null) return;
+    let decodedType: unknown;
+    try {
+      decodedType = (JSON.parse(event.nativeEvent.data) as { readonly type?: unknown }).type;
+    } catch {
+      decodedType = undefined;
+    }
+    if (typeof decodedType === "string" && decodedType.startsWith("shared.")) {
+      const handlers =
+        sharedState.status !== "bound"
+          ? {
+              getView: async (): Promise<SharedPlayView> => {
+                throw new Error("shared-session-missing");
+              },
+              enqueue: async (): Promise<never> => {
+                throw new Error("shared-session-missing");
+              },
+            }
+          : createCompositionSharedBridgeHandlers({
+              composition: runtime.composition,
+              expectedReleaseId: runtime.recovery.releaseId,
+              projectionContract:
+                runtime.projectionContract ??
+                (() => {
+                  throw new Error("shared-projection-contract-missing");
+                })(),
+              getView: async () => sharedState.view,
+              enqueue: (command) => {
+                const controller = sharedPlayController.current;
+                if (controller === null) throw new Error("shared-controller-missing");
+                return controller.enqueue(command);
+              },
+            });
+      const response = await routeSharedBridgeMessage(event.nativeEvent.data, handlers);
+      reply(response);
+      return;
+    }
     const response = await routeHostBridgeMessage(
       event.nativeEvent.data,
       createProductionHostBridgeHandlers({
@@ -264,20 +577,27 @@ export default function App() {
             releaseId: runtime.recovery.releaseId,
             aggregate: runtime.recovery.aggregate,
           },
+          composition: runtime.composition,
           aggregateSchemaId: runtime.aggregateSchemaId,
-          aggregateSchemaVersion: runtime.aggregateSchemaVersion,
-          validateAggregate: runtime.validateAggregate,
+          validateSchema: runtime.validateSchema,
+          validateProgression: runtime.validateProgression,
         },
         location: {
           database,
           runId: runtime.recovery.runId,
           startedAt: runtime.recovery.startedAt,
+          adapter: nativeForegroundLocationAdapter,
         },
         onDurableResult: async () => {
           const recovered = await recoverRun(database, runtime.recovery, {
             readArtifact: readArtifactBytes,
           });
-          if (recovered !== null) setRuntime({ ...runtime, recovery: recovered });
+          if (recovered !== null && recovered.aggregate !== null) {
+            setRuntime({
+              ...runtime,
+              recovery: { ...recovered, aggregate: recovered.aggregate },
+            });
+          }
         },
       }),
     );
@@ -287,11 +607,8 @@ export default function App() {
   const exportReport = async () => {
     if (database === null || runtime === null || FileSystem.cacheDirectory === null) return;
     try {
-      const report = await createPlayReport(
-        database,
-        runtime.recovery.runId,
-        Platform.OS === "android" ? "android" : "ios",
-      );
+      const platform = Platform.OS === "android" ? "android" : "ios";
+      const report = await createGamePlayReport(database, runtime.recovery.runId, platform);
       const uri = `${FileSystem.cacheDirectory}plotpoint-${runtime.recovery.runId}.report.json`;
       await FileSystem.writeAsStringAsync(uri, `${JSON.stringify(report, null, 2)}\n`);
       await Sharing.shareAsync(uri, {
@@ -303,11 +620,45 @@ export default function App() {
     }
   };
 
+  const joinSharedSession = async () => {
+    if (database === null || runtime === null || sharedState.status !== "join-required") return;
+    setStatus("Joining shared play…");
+    try {
+      const controller = sharedPlayController.current;
+      if (controller === null) throw new Error("shared-session-controller-missing");
+      await controller.join({
+        serviceUrl,
+        sessionId: sessionCode,
+        invitation,
+      });
+      setInvitation("");
+      setStatus("Verified shared-session binding opened.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Shared join failed");
+    }
+  };
+
+  const retrySharedSynchronization = async () => {
+    const controller = sharedPlayController.current;
+    if (controller === null) return;
+    try {
+      await controller.retry();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Shared synchronization failed");
+    }
+  };
+
   const beginScan = async () => {
     setInstallFailure(null);
     const result = permission?.granted ? permission : await requestPermission();
-    if (result.granted) setScanning(true);
-    else setStatus("Camera permission is required to scan an installation code.");
+    if (result.granted) {
+      try {
+        await disposeMountedRuntime();
+        setScanning(true);
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Runtime disposal failed");
+      }
+    } else setStatus("Camera permission is required to scan an installation code.");
   };
 
   return (
@@ -334,6 +685,61 @@ export default function App() {
           <Text style={styles.failureAction}>{installFailure.action}</Text>
         </View>
       )}
+      {runtime !== null && sharedState.status === "join-required" ? (
+        <View style={styles.joinPanel}>
+          <Text style={styles.detailLabel}>JOIN SHARED PLAY</Text>
+          <TextInput
+            value={serviceUrl}
+            onChangeText={setServiceUrl}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="https://service.example"
+            style={styles.input}
+          />
+          <TextInput
+            value={sessionCode}
+            onChangeText={setSessionCode}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Session ID"
+            style={styles.input}
+          />
+          <TextInput
+            value={invitation}
+            onChangeText={setInvitation}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+            placeholder="One-use invitation"
+            style={styles.input}
+          />
+          <Button
+            title="Join session"
+            disabled={
+              serviceUrl.length === 0 || sessionCode.length === 0 || invitation.length === 0
+            }
+            onPress={() => void joinSharedSession()}
+          />
+        </View>
+      ) : null}
+      {runtime !== null &&
+      (sharedState.status === "recovery-required" || sharedState.status === "revoked") ? (
+        <View style={styles.failurePanel}>
+          <Text style={styles.detailLabel}>SHARED PLAY RECOVERY</Text>
+          <Text selectable style={styles.failureCode}>
+            {sharedState.status === "revoked" ? "shared-membership-revoked" : sharedState.code}
+          </Text>
+          <Text style={styles.failureAction}>
+            Retry synchronization or reinstall the matching immutable release before continuing.
+          </Text>
+          {sharedState.status === "recovery-required" && sharedState.retryable ? (
+            <Button
+              title="Retry synchronization"
+              onPress={() => void retrySharedSynchronization()}
+            />
+          ) : null}
+        </View>
+      ) : null}
       {releaseDetails === null ? null : (
         <View style={styles.releasePanel}>
           <Text style={styles.detailLabel}>VERIFIED LOCAL RELEASE</Text>
@@ -373,19 +779,27 @@ export default function App() {
           <Text style={styles.emptyTitle}>Player ready, release-free.</Text>
           <Text>Serve a verified puzzle on your private network and scan its QR code.</Text>
         </View>
+      ) : sharedState.status === "join-required" ||
+        sharedState.status === "joining" ||
+        sharedState.status === "synchronizing" ||
+        sharedState.status === "recovery-required" ||
+        sharedState.status === "revoked" ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>
+            {sharedState.status === "join-required"
+              ? "Shared session required."
+              : "Shared binding unavailable."}
+          </Text>
+          <Text>The verified application mounts after the native shared boundary is ready.</Text>
+        </View>
       ) : (
-        <WebView
-          ref={webView}
-          source={{ html: runtime.html, baseUrl: "about:blank" }}
-          originWhitelist={["about:blank", "blob:*"]}
+        <ManagedRuntimeWebView
+          key={`${runtime.recovery.runId}:${runtime.recovery.releaseId}:${runtimeMountGeneration}`}
+          ref={managedRuntimeView}
+          html={runtime.html}
+          mountIdentity={`${runtime.recovery.runId}:${runtime.recovery.releaseId}:${runtimeMountGeneration}`}
           onMessage={(event) => void onBridgeMessage(event)}
-          onShouldStartLoadWithRequest={({ url }) => allowRuntimeNavigation(url)}
-          javaScriptEnabled
-          domStorageEnabled={false}
-          sharedCookiesEnabled={false}
-          thirdPartyCookiesEnabled={false}
-          setSupportMultipleWindows={false}
-          allowFileAccess={false}
+          onDisposalFailure={setStatus}
           style={styles.webview}
         />
       )}
@@ -423,6 +837,22 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 18,
     paddingVertical: 12,
+  },
+  joinPanel: {
+    gap: 8,
+    padding: 14,
+    backgroundColor: "#e8f1ed",
+    borderBottomWidth: 1,
+    borderBottomColor: "#183f3920",
+  },
+  input: {
+    backgroundColor: "#fffdf8",
+    borderWidth: 1,
+    borderColor: "#35635d55",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: "#183f39",
   },
   failureCode: { color: "#7b2f18", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
   failureAction: { color: "#542619" },

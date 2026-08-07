@@ -1,0 +1,119 @@
+{
+  "releaseId": "sha256:6b3a9adb1e9a9549a6a791f049fd6d9bdd3660b8e9a84d90d2023d9e265d58f2",
+  "manifest": {
+    "aggregateSchemas": [
+      {
+        "id": "co-op.player-state",
+        "kind": "player",
+        "path": "schemas/aggregate/636f2d6f702e706c617965722d7374617465.json"
+      },
+      {
+        "id": "plotpoint.location.team-state",
+        "kind": "team",
+        "path": "schemas/aggregate/706c6f74706f696e742e6c6f636174696f6e2e7465616d2d7374617465.json"
+      }
+    ],
+    "capabilities": [
+      {
+        "id": "plotpoint.location.foreground",
+        "major": 1,
+        "minimumMinor": 0
+      }
+    ],
+    "entrypoints": {
+      "logic": "bundles/logic.js",
+      "presentation": "bundles/presentation.js"
+    },
+    "hostApi": {
+      "major": 1,
+      "minimumMinor": 1
+    },
+    "inventory": [
+      {
+        "byteLength": 387,
+        "digest": "sha256:a1f6fb5bab7a9996a17c6938e7be3edf748927a109fec9b8a7fc3fdb63279e9e",
+        "kind": "asset",
+        "path": "assets/city-map.svg"
+      },
+      {
+        "byteLength": 58055,
+        "digest": "sha256:b5c9b7f91d082291dc67f68a46ee6427224431ebaff8f8f6656130b5c9d732ba",
+        "kind": "logic-bundle",
+        "path": "bundles/logic.js"
+      },
+      {
+        "byteLength": 4741,
+        "digest": "sha256:dc4a879a2ea2d7b1534fbcf109fde7cc559af71d5e949614301b003a3b6b309d",
+        "kind": "presentation-bundle",
+        "path": "bundles/presentation.js"
+      },
+      {
+        "byteLength": 273,
+        "digest": "sha256:c27d7176a7f09100aa895bee4197234b95eac7e066963cb55fe0966d091464de",
+        "kind": "component-data",
+        "path": "components/636f2d6f702e636c75652d626f617264.json"
+      },
+      {
+        "byteLength": 150,
+        "digest": "sha256:936f1dfef2aefbe00124308ae40b3020df28502f418b506f7ad84aa20d504329",
+        "kind": "component-data",
+        "path": "components/636f2d6f702e73657373696f6e2d636f6e736f6c65.json"
+      },
+      {
+        "byteLength": 3112,
+        "digest": "sha256:c5823701255ad7cab8fc73a7dc80ca525656f677e1d28fcb92316cdb4274d28b",
+        "kind": "content",
+        "path": "composition/game.json"
+      },
+      {
+        "byteLength": 661,
+        "digest": "sha256:9df86977775f7b7055f6a319d140ff467ae0270cb0b4545e697a23760a975024",
+        "kind": "content",
+        "path": "content/636f2d6f702e74617267657473.json"
+      },
+      {
+        "byteLength": 146,
+        "digest": "sha256:02bf2fa53ba0547d62b36b0156ff5591c17f4a9cc4a65ae3aef76ce1ae0527a7",
+        "kind": "aggregate-schema",
+        "path": "schemas/aggregate/636f2d6f702e706c617965722d7374617465.json"
+      },
+      {
+        "byteLength": 507,
+        "digest": "sha256:78efad0abca11dfcfefcf875c06255e9e072583ae640eab1f842257ca9531a00",
+        "kind": "aggregate-schema",
+        "path": "schemas/aggregate/706c6f74706f696e742e6c6f636174696f6e2e7465616d2d7374617465.json"
+      },
+      {
+        "byteLength": 148,
+        "digest": "sha256:f9a0ed05b9919b1081be878dbad2c466c989305937807cde6a9cb8ee1cb900de",
+        "kind": "command-schema",
+        "path": "schemas/general/636f2d6f702e696e697469616c697a6174696f6e.json"
+      },
+      {
+        "byteLength": 801,
+        "digest": "sha256:b546973744aecad4c2bcc7c3579235e8403630a622700c3e8e4e83f076e28f6e",
+        "kind": "command-schema",
+        "path": "schemas/general/706c6f74706f696e742e6c6f636174696f6e2e7461726765742d636f6e666967.json"
+      },
+      {
+        "byteLength": 433,
+        "digest": "sha256:e9e572d33bbd6cc80bceb97058ce8363f323a5736a8cdc414577e7d0a281343f",
+        "kind": "command-schema",
+        "path": "schemas/general/706c6f74706f696e742e6c6f636174696f6e2e7461726765742d646973636f766572792d6f7574636f6d65.json"
+      },
+      {
+        "byteLength": 237,
+        "digest": "sha256:cdb6e7d4466a8f0145421bebfd7e49b73a2d4ba6804076ee4552559972b9c523",
+        "kind": "command-schema",
+        "path": "schemas/general/706c6f74706f696e742e6c6f636174696f6e2e7461726765742d646973636f766572792d7061796c6f6164.json"
+      },
+      {
+        "byteLength": 512,
+        "digest": "sha256:89f5280dd509d8b0a5f9a098a78a02f74c10d0476c340ca2fd06ac7bd8876739",
+        "kind": "command-schema",
+        "path": "schemas/general/706c6f74706f696e742e6c6f636174696f6e2e7465616d2d70726f6a656374696f6e.json"
+      }
+    ],
+    "releaseFormatVersion": 1
+  }
+}

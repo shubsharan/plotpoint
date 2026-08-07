@@ -2,57 +2,64 @@
   "projectFormatVersion": 1,
   "environment": "web",
   "hostApi": { "major": 1, "minimumMinor": 0 },
-  "entries": {
-    "logic": { "source": "src/logic.ts", "export": "logic" },
-    "presentation": { "source": "src/presentation.ts", "export": "presentation" }
+  "application": {
+    "definition": { "source": "src/application.ts", "export": "fieldApplication" },
+    "components": ["field.puzzle"]
   },
-  "commands": [
+  "aggregateModels": [
     {
-      "id": "field.advance.v1",
-      "type": "advance",
-      "definition": { "source": "src/commands/advance.ts", "export": "advanceCommand" },
-      "aggregateSchema": "field.player-state.v1",
-      "payloadSchema": "field.advance-payload.v1",
-      "outcomeSchema": "field.advance-outcome.v1"
+      "id": "field.player",
+      "authority": "local",
+      "kind": "player",
+      "stateSchema": "field.player-state",
+      "initializationSchema": "field.initialization",
+      "initializer": { "source": "src/initial-state.ts", "export": "initializeField" },
+      "initializationContent": "field.game",
+      "events": [{ "type": "field.advanced", "schema": "field.advanced-event" }],
+      "effects": []
     }
   ],
-  "aggregateSchemas": [
+  "commands": [
     {
-      "id": "field.player-state.v1",
-      "kind": "player",
-      "version": 1,
-      "path": "schemas/player-state.schema.json"
+      "id": "field.advance",
+      "type": "advance",
+      "execution": "local",
+      "definition": { "source": "src/commands/advance.ts", "export": "advanceCommand" },
+      "aggregateModel": "field.player",
+      "payloadSchema": "field.advance-payload",
+      "outcomeSchema": "field.advance-outcome"
     }
   ],
   "schemas": [
-    { "id": "field.advance-outcome.v1", "path": "schemas/advance-outcome.schema.json" },
-    { "id": "field.advance-payload.v1", "path": "schemas/advance-payload.schema.json" },
-    { "id": "field.game-content.v1", "path": "schemas/game-content.schema.json" }
+    { "id": "field.player-state", "path": "schemas/player-state.schema.json" },
+    { "id": "field.initialization", "path": "schemas/game-content.schema.json" },
+    { "id": "field.advance-payload", "path": "schemas/advance-payload.schema.json" },
+    { "id": "field.advance-outcome", "path": "schemas/advance-outcome.schema.json" },
+    { "id": "field.advanced-event", "path": "schemas/advanced-event.schema.json" }
   ],
   "progressions": [
     {
-      "id": "field.route.v1",
-      "version": 1,
-      "kind": "player",
-      "definition": { "source": "src/progression/route.ts", "export": "fieldProgression" },
-      "aggregateSchema": "field.player-state.v1",
-      "commands": ["field.advance.v1"],
-      "content": ["field.game.v1"],
-      "components": ["field.puzzle.v1"]
+      "id": "field.route",
+      "aggregateModel": "field.player",
+      "definition": { "source": "src/progression/route.ts", "export": "fieldProgression" }
     }
   ],
   "components": [
     {
-      "id": "field.puzzle.v1",
-      "implementation": { "source": "src/presentation.ts", "export": "FieldPuzzle" },
-      "commands": ["field.advance.v1"],
-      "content": ["field.game.v1"],
+      "id": "field.puzzle",
+      "implementation": { "source": "src/components/puzzle.ts", "export": "FieldPuzzle" },
+      "commands": ["field.advance"],
+      "content": ["field.game"],
       "assets": [],
       "capabilities": [{ "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 0 }]
     }
   ],
   "content": [
-    { "id": "field.game.v1", "path": "content/game.json", "schema": "field.game-content.v1" }
+    {
+      "id": "field.game",
+      "path": "content/game.json",
+      "schema": { "id": "field.initialization" }
+    }
   ],
   "assets": []
 }

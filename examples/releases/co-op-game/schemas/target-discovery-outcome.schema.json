@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plotpoint.location.target-discovery-outcome",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code"],
+  "properties": {
+    "code": {
+      "enum": [
+        "location-denied",
+        "location-expired",
+        "location-future",
+        "location-inaccurate",
+        "location-missing",
+        "location-outside-zone",
+        "location-stale",
+        "location-unavailable",
+        "target-already-discovered",
+        "target-discovered",
+        "target-unknown"
+      ]
+    }
+  }
+}

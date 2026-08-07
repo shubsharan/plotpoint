@@ -1,28 +1,32 @@
 {
+  "application": { "keys": ["mount"], "mountType": "function" },
+  "aggregateModels": [{ "registrationId": "player", "initializerType": "function" }],
   "commands": [],
   "progressions": [
     {
-      "registrationId": "main.v1",
-      "graphId": "main.v1",
-      "graphVersion": 1,
+      "registrationId": "main",
+      "graphId": "main",
       "aggregateKind": "player",
       "nodes": [{ "nodeId": "stage", "initialStatus": "available" }],
-      "automaticRules": [
+      "transitions": [
         {
-          "ruleId": "activate",
+          "transitionId": "activate",
           "targetNodeId": "stage",
           "from": ["available"],
           "to": "active",
-          "priority": 0
+          "priority": 0,
+          "trigger": "automatic"
         },
         {
-          "ruleId": "release",
+          "transitionId": "release",
           "targetNodeId": "stage",
           "from": ["active"],
           "to": "available",
-          "priority": 1
+          "priority": 1,
+          "trigger": "automatic"
         }
       ]
     }
-  ]
+  ],
+  "components": []
 }

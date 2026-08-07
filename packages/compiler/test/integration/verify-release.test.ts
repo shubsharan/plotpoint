@@ -4,15 +4,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { compileProject } from "@plotpoint/compiler";
-import { verifyRelease, type ReleaseManifestV1 } from "@plotpoint/protocol";
+import { verifyRelease, type ReleaseManifest } from "@plotpoint/protocol";
 
-import { createExternalProject } from "../helpers/external-project.js";
-
-const goldenProjects = [
-  "minimal-local-puzzle",
-  "branching-media-tour",
-  "team-session-hunt",
-] as const;
+import { createExternalProject, releaseExampleProjects } from "../helpers/external-project.js";
 
 function mutateStoredEntry(bytes: Uint8Array, targetPath: string): Uint8Array {
   const mutated = new Uint8Array(bytes);
@@ -36,7 +30,7 @@ function mutateStoredEntry(bytes: Uint8Array, targetPath: string): Uint8Array {
 }
 
 describe("golden release verification acceptance", () => {
-  it.each(goldenProjects)(
+  it.each(releaseExampleProjects)(
     "rejects every mutated entry in %s against structural and known-identity verification",
     async (project) => {
       const external = await createExternalProject(project);
@@ -62,7 +56,7 @@ describe("golden release verification acceptance", () => {
 
         const paths = [
           "manifest.json",
-          ...(compiled.manifest as ReleaseManifestV1).inventory.map(({ path }) => path),
+          ...(compiled.manifest as ReleaseManifest).inventory.map(({ path }) => path),
         ];
         for (const path of paths) {
           const mutated = mutateStoredEntry(bytes, path);

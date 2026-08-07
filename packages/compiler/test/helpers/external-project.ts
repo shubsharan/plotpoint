@@ -5,19 +5,31 @@ import { fileURLToPath } from "node:url";
 
 const examplesRoot = new URL("../../../../examples/releases/", import.meta.url);
 
+export const releaseExampleProjects = [
+  "field-puzzle",
+  "minimal-local-puzzle",
+  "branching-media-tour",
+  "co-op-game",
+] as const;
+
+export type ReleaseExampleProject = (typeof releaseExampleProjects)[number];
+
 export interface ExternalProject {
   readonly root: string;
   readonly sandbox: string;
   cleanup(): Promise<void>;
 }
 
-export async function createExternalProject(fixture: string): Promise<ExternalProject> {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(fixture)) {
-    throw new TypeError("External project fixture name must be canonical");
-  }
+export function releaseExampleRoot(fixture: ReleaseExampleProject): URL {
+  return new URL(`${fixture}/`, examplesRoot);
+}
+
+export async function createExternalProject(
+  fixture: ReleaseExampleProject,
+): Promise<ExternalProject> {
   const sandbox = await mkdtemp(join(tmpdir(), `plotpoint-${fixture}-`));
   const root = join(sandbox, "project");
-  await cp(new URL(`${fixture}/`, examplesRoot), root, { recursive: true });
+  await cp(releaseExampleRoot(fixture), root, { recursive: true });
   return Object.freeze({
     root,
     sandbox,

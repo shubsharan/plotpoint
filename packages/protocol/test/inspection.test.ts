@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { computeReleaseId, inspectRelease, type ReleaseManifestV1 } from "@plotpoint/protocol";
+import { computeReleaseId, inspectRelease, type ReleaseManifest } from "@plotpoint/protocol";
+import * as protocol from "@plotpoint/protocol";
 
 import { encodeCanonicalJson } from "../src/release/canonical-json.js";
 import { sha256Digest } from "../src/release/identity.js";
@@ -14,13 +15,62 @@ const payloads: Readonly<Record<string, Uint8Array>> = {
   "schemas/player.json": utf8.encode("{}"),
 };
 
-function manifest(): ReleaseManifestV1 {
+const gameComposition = {
+  application: { components: ["field-view"] },
+  aggregateModels: [
+    {
+      id: "puzzle.player",
+      authority: "local",
+      kind: "player",
+      stateSchema: { id: "puzzle.player" },
+      initializationSchema: { id: "puzzle.player" },
+      events: [],
+      effects: [],
+    },
+  ],
+  commands: [],
+  progressions: [],
+  components: [
+    {
+      id: "field-view",
+      commands: [],
+      content: [],
+      assets: ["field-map"],
+      capabilities: [{ id: "plotpoint.media.playback", major: 1, minimumMinor: 0 }],
+    },
+  ],
+  resources: [
+    { id: "field-map", role: "asset", path: "assets/map.webp" },
+    {
+      id: "field-view",
+      role: "component-descriptor",
+      path: "composition/components/field-view.json",
+    },
+    { id: "puzzle.player", role: "schema", path: "schemas/player.json" },
+  ],
+} as const;
+
+function jsonBytes(value: unknown): Uint8Array {
+  const encoded = encodeCanonicalJson(value);
+  if (encoded.kind === "invalid") throw new Error("fixture JSON must encode");
+  return encoded.document.bytes;
+}
+
+function gamePayloads(
+  composition: unknown = gameComposition,
+): Readonly<Record<string, Uint8Array>> {
+  return {
+    ...payloads,
+    "composition/components/field-view.json": jsonBytes({ id: "field-view" }),
+    "composition/game.json": jsonBytes(composition),
+  };
+}
+
+function manifest(): ReleaseManifest {
   return {
     releaseFormatVersion: 1,
     hostApi: { major: 1, minimumMinor: 2 },
-    aggregateSchemas: [
-      { id: "puzzle.player", kind: "player", version: 3, path: "schemas/player.json" },
-    ],
+    aggregateSchemas: [{ id: "puzzle.player", kind: "player", path: "schemas/player.json" }],
     capabilities: [{ id: "plotpoint.media.playback", major: 1, minimumMinor: 0 }],
     entrypoints: { logic: "bundles/logic.js", presentation: "bundles/presentation.js" },
     inventory: Object.entries(payloads).map(([path, bytes]) => ({
@@ -36,6 +86,32 @@ function manifest(): ReleaseManifestV1 {
       byteLength: bytes.byteLength,
       digest: sha256Digest(bytes),
     })),
+  };
+}
+
+function gameManifest(entries = gamePayloads()): ReleaseManifest {
+  return {
+    ...manifest(),
+    hostApi: { major: 1, minimumMinor: 1 },
+    inventory: Object.entries(entries)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([path, bytes]) => ({
+        path,
+        kind:
+          path === "bundles/logic.js"
+            ? ("logic-bundle" as const)
+            : path === "bundles/presentation.js"
+              ? ("presentation-bundle" as const)
+              : path === "schemas/player.json"
+                ? ("aggregate-schema" as const)
+                : path === "composition/components/field-view.json"
+                  ? ("component-data" as const)
+                  : path === "composition/game.json"
+                    ? ("content" as const)
+                    : ("asset" as const),
+        byteLength: bytes.byteLength,
+        digest: sha256Digest(bytes),
+      })),
   };
 }
 
@@ -61,6 +137,7 @@ describe("bounded non-executing release inspection", () => {
       releaseId: computeReleaseId(bytes),
       manifest: manifest(),
     });
+    await expect(inspectRelease(bytes)).resolves.not.toHaveProperty("gameComposition");
     expect((globalThis as { __inspectionExecuted?: boolean }).__inspectionExecuted).toBeUndefined();
   });
 
@@ -131,5 +208,52 @@ describe("bounded non-executing release inspection", () => {
       kind: "invalid",
       diagnostics: [{ code: "zip-limit-exceeded" }],
     });
+  });
+});
+
+describe("mandatory composition-aware game inspection", () => {
+  function inspectGame(bytes: Uint8Array): Promise<unknown> {
+    const inspector = (
+      protocol as unknown as {
+        readonly inspectGameRelease?: (artifact: Uint8Array) => Promise<unknown>;
+      }
+    ).inspectGameRelease;
+    expect(inspector, "composition-aware inspector export").toBeTypeOf("function");
+    if (inspector === undefined) throw new Error("game-composition-inspector-missing");
+    return inspector(bytes);
+  }
+
+  it("returns one mandatory plain Game Composition beside low-level release inspection", async () => {
+    const entries = gamePayloads();
+    const value = gameManifest(entries);
+    const bytes = archive(value, entries);
+
+    await expect(inspectGame(bytes)).resolves.toEqual({
+      release: {
+        kind: "inspected",
+        releaseId: computeReleaseId(bytes),
+        manifest: value,
+      },
+      gameComposition,
+    });
+  });
+
+  it("rejects missing, superseded versioned, and inventory-inconsistent catalogs", async () => {
+    const versionedEntries = gamePayloads({ version: 1, ...gameComposition });
+    const inconsistentEntries = gamePayloads({
+      ...gameComposition,
+      resources: [
+        ...gameComposition.resources,
+        { id: "missing", role: "content", path: "content/missing.json" },
+      ],
+    });
+
+    for (const bytes of [
+      archive(),
+      archive(gameManifest(versionedEntries), versionedEntries),
+      archive(gameManifest(inconsistentEntries), inconsistentEntries),
+    ]) {
+      await expect(inspectGame(bytes)).resolves.toMatchObject({ kind: "invalid" });
+    }
   });
 });

@@ -3,44 +3,51 @@ import { describe, expect, it } from "vitest";
 import { generateDefinitionInspectionEntry } from "../../src/composition/generated-entries.js";
 import { inspectDefinitionBundle } from "../../src/composition/inspect-definitions.js";
 import { buildCanonicalRegistries } from "../../src/composition/registries.js";
-import type { ProjectConfigurationV1 } from "../../src/project/config.js";
+import type { ProjectConfiguration } from "../../src/project/config.js";
 
 function registries() {
-  const config: ProjectConfigurationV1 = {
+  const config: ProjectConfiguration = {
     projectFormatVersion: 1,
     environment: "web",
     hostApi: { major: 1, minimumMinor: 0 },
-    entries: {
-      logic: { source: "src/logic.ts", export: "logic" },
-      presentation: { source: "src/presentation.ts", export: "presentation" },
+    application: {
+      definition: { source: "src/presentation.ts", export: "application" },
+      components: [],
     },
-    commands: [
+    aggregateModels: [
       {
-        id: "solve.v1",
-        type: "solve",
-        definition: { source: "src/solve.ts", export: "solveCommand" },
-        aggregateSchema: "player.v1",
-        payloadSchema: "payload.v1",
-        outcomeSchema: "outcome.v1",
+        id: "player",
+        authority: "local",
+        kind: "player",
+        stateSchema: "player-state",
+        initializationSchema: "initialization",
+        initializer: { source: "src/logic.ts", export: "initialize" },
+        events: [],
+        effects: [],
       },
     ],
-    aggregateSchemas: [
-      { id: "player.v1", kind: "player", version: 1, path: "schemas/player.json" },
+    commands: [
+      {
+        id: "solve",
+        type: "solve",
+        execution: "local",
+        definition: { source: "src/solve.ts", export: "solveCommand" },
+        aggregateModel: "player",
+        payloadSchema: "payload",
+        outcomeSchema: "outcome",
+      },
     ],
     schemas: [
-      { id: "payload.v1", path: "schemas/payload.json" },
-      { id: "outcome.v1", path: "schemas/outcome.json" },
+      { id: "player-state", path: "schemas/player.json" },
+      { id: "initialization", path: "schemas/initialization.json" },
+      { id: "payload", path: "schemas/payload.json" },
+      { id: "outcome", path: "schemas/outcome.json" },
     ],
     progressions: [
       {
-        id: "puzzle.v1",
-        version: 1,
-        kind: "player",
+        id: "puzzle",
         definition: { source: "src/progression.ts", export: "puzzleProgression" },
-        aggregateSchema: "player.v1",
-        commands: ["solve.v1"],
-        content: [],
-        components: [],
+        aggregateModel: "player",
       },
     ],
     components: [],
@@ -58,30 +65,34 @@ describe("definition inspection", () => {
 
     expect(source).toContain('commandModule0["solveCommand"]');
     expect(source).toContain('progressionModule0["puzzleProgression"]');
+    expect(source).toContain('initializerModule0["initialize"]');
+    expect(source).toContain('applicationModule["application"]');
     expect(source).not.toMatch(/\.handle\s*\(/);
     expect(source).not.toMatch(/\.when\s*\(/);
   });
 
   it("returns canonical metadata from a bounded subprocess", async () => {
     const metadata = {
+      application: { keys: ["mount"], mountType: "function" },
+      aggregateModels: [{ registrationId: "player", initializerType: "function" }],
       commands: [
         {
-          registrationId: "solve.v1",
-          definitionId: "solve.v1",
+          registrationId: "solve",
+          definitionId: "solve",
           commandType: "solve",
           aggregateKind: "player",
         },
       ],
       progressions: [
         {
-          registrationId: "puzzle.v1",
-          graphId: "puzzle.v1",
-          graphVersion: 1,
+          registrationId: "puzzle",
+          graphId: "puzzle",
           aggregateKind: "player",
           nodes: [{ nodeId: "solve", initialStatus: "active" }],
-          automaticRules: [],
+          transitions: [],
         },
       ],
+      components: [],
     };
     const result = await inspectDefinitionBundle(
       `console.log(${JSON.stringify(JSON.stringify(metadata))});`,

@@ -1,11 +1,9 @@
-import * as Location from "expo-location";
-
 import {
   FOREGROUND_LOCATION_CAPABILITY,
-  isLocationObservationV1,
-  isLocationRequestInputV1,
+  isLocationObservation,
+  isLocationRequestInput,
   type CanonicalJsonObject,
-  type LocationObservationV1,
+  type LocationObservation,
 } from "@plotpoint/protocol";
 
 import type { CapabilityRegistration } from "../bridge/host-bridge";
@@ -24,25 +22,6 @@ export interface ForegroundLocationNativeAdapter {
 export interface ForegroundLocationPersistence {
   recordObservation(input: Parameters<PlayerDatabase["recordObservation"]>[0]): Promise<void>;
 }
-
-const expoLocationAdapter: ForegroundLocationNativeAdapter = {
-  async requestPermission() {
-    const permission = await Location.requestForegroundPermissionsAsync();
-    return permission.granted ? "granted" : "denied";
-  },
-  async capture() {
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-      mayShowUserSettingsDialog: true,
-    });
-    return {
-      timestamp: location.timestamp,
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      horizontalAccuracy: location.coords.accuracy,
-    };
-  },
-};
 
 function identifier(): string {
   const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -73,8 +52,8 @@ async function persistBeforeDelivery(
   persistence: ForegroundLocationPersistence,
   runId: string,
   startedAt: string,
-  observation: LocationObservationV1,
-): Promise<LocationObservationV1> {
+  observation: LocationObservation,
+): Promise<LocationObservation> {
   await persistence.recordObservation({
     runId,
     observationId: observation.observationId,
@@ -96,23 +75,22 @@ export interface CaptureForegroundLocationInput {
   readonly database: ForegroundLocationPersistence;
   readonly runId: string;
   readonly startedAt: string;
-  readonly adapter?: ForegroundLocationNativeAdapter;
+  readonly adapter: ForegroundLocationNativeAdapter;
   readonly now?: () => Date;
   readonly createObservationId?: () => string;
 }
 
 export async function captureForegroundLocation(
   input: CaptureForegroundLocationInput,
-): Promise<LocationObservationV1> {
-  const adapter = input.adapter ?? expoLocationAdapter;
+): Promise<LocationObservation> {
+  const adapter = input.adapter;
   const observationId = (input.createObservationId ?? identifier)();
   const recordedAt = () => (input.now ?? (() => new Date()))().toISOString();
-  let observation: LocationObservationV1;
+  let observation: LocationObservation;
 
   try {
     if ((await adapter.requestPermission()) === "denied") {
       observation = {
-        version: 1,
         observationId,
         recordedAt: recordedAt(),
         availability: "permission-denied",
@@ -122,14 +100,12 @@ export async function captureForegroundLocation(
       const hostRecordedAt = recordedAt();
       if (location === null) {
         observation = {
-          version: 1,
           observationId,
           recordedAt: hostRecordedAt,
           availability: "unavailable",
         };
       } else if (!availableValuesAreValid(location)) {
         observation = {
-          version: 1,
           observationId,
           recordedAt: hostRecordedAt,
           availability: "failed",
@@ -137,7 +113,6 @@ export async function captureForegroundLocation(
         };
       } else {
         observation = {
-          version: 1,
           observationId,
           recordedAt: hostRecordedAt,
           availability: "available",
@@ -151,7 +126,6 @@ export async function captureForegroundLocation(
     }
   } catch {
     observation = {
-      version: 1,
       observationId,
       recordedAt: recordedAt(),
       availability: "failed",
@@ -159,15 +133,14 @@ export async function captureForegroundLocation(
     };
   }
 
-  if (!isLocationObservationV1(observation)) {
+  if (!isLocationObservation(observation)) {
     throw new Error("location-observation-invalid");
   }
   return persistBeforeDelivery(input.database, input.runId, input.startedAt, observation);
 }
 
-function canonicalObservation(observation: LocationObservationV1): CanonicalJsonObject {
+function canonicalObservation(observation: LocationObservation): CanonicalJsonObject {
   const base = {
-    version: observation.version,
     observationId: observation.observationId,
     recordedAt: observation.recordedAt,
     availability: observation.availability,
@@ -193,8 +166,8 @@ export function foregroundLocationCapabilityRegistration(
 ): CapabilityRegistration {
   return {
     capability: FOREGROUND_LOCATION_CAPABILITY,
-    validateInput: isLocationRequestInputV1,
+    validateInput: isLocationRequestInput,
     invoke: async () => canonicalObservation(await captureForegroundLocation(input)),
-    validateOutput: isLocationObservationV1,
+    validateOutput: isLocationObservation,
   };
 }

@@ -1,32 +1,22 @@
 import {
   canonicalizeValue,
-  executeCommand,
   type Aggregate,
   type AggregateKind,
-  type Command,
-  type CommandDefinition,
-  type DefinedProgression,
+  type ExecutableAggregateModel,
   type ExecutionResult,
   type JsonObject,
   type Observation,
-  type RuntimePolicy,
+  type RuntimeCommand,
 } from "@plotpoint/runtime";
 
 import { firstDifference } from "./assertions.js";
 
-export interface RuntimeScenario<
-  State extends JsonObject,
-  Payload extends JsonObject,
-  Outcome extends JsonObject,
-  Kind extends AggregateKind = AggregateKind,
-> {
+export interface RuntimeScenario<Kind extends AggregateKind = AggregateKind> {
   readonly name: string;
-  readonly definition: CommandDefinition<State, Payload, Outcome, Kind>;
-  readonly aggregate: Aggregate<State, Kind>;
-  readonly command: Command<Payload, Kind>;
+  readonly model: ExecutableAggregateModel<Kind>;
+  readonly aggregate: Aggregate<JsonObject, Kind>;
+  readonly command: RuntimeCommand<JsonObject, Kind>;
   readonly observations: readonly Observation[];
-  readonly progression?: DefinedProgression<State, Payload, Outcome, Kind>;
-  readonly policy?: Partial<RuntimePolicy>;
   readonly nonTargetAggregates?: readonly Aggregate[];
 }
 
@@ -37,22 +27,17 @@ export interface HarnessOptions {
 }
 
 export interface RuntimeHarness {
-  run<
-    State extends JsonObject,
-    Payload extends JsonObject,
-    Outcome extends JsonObject,
-    Kind extends AggregateKind,
-  >(
-    scenario: RuntimeScenario<State, Payload, Outcome, Kind>,
-  ): ExecutionResult<State, Outcome, Payload, Kind>;
+  run<Kind extends AggregateKind>(
+    scenario: RuntimeScenario<Kind>,
+  ): ExecutionResult<JsonObject, JsonObject, JsonObject, Kind>;
 }
 
-export type ScenarioResult<
-  State extends JsonObject,
-  Outcome extends JsonObject,
-  Payload extends JsonObject = JsonObject,
-  Kind extends AggregateKind = AggregateKind,
-> = ExecutionResult<State, Outcome, Payload, Kind>;
+export type ScenarioResult<Kind extends AggregateKind = AggregateKind> = ExecutionResult<
+  JsonObject,
+  JsonObject,
+  JsonObject,
+  Kind
+>;
 
 export class RuntimeHarnessError extends Error {
   readonly code:
@@ -122,7 +107,7 @@ function withKnownAmbientAudit<Value>(run: () => Value): {
   }
 }
 
-function snapshotScenario(scenario: RuntimeScenario<JsonObject, JsonObject, JsonObject>) {
+function snapshotScenario(scenario: RuntimeScenario) {
   const snapshot = canonicalizeValue({
     aggregate: scenario.aggregate,
     command: scenario.command,
@@ -142,30 +127,17 @@ export function createRuntimeHarness(options: HarnessOptions = {}): RuntimeHarne
     throw new TypeError("Harness repeat must be a positive integer");
 
   return Object.freeze({
-    run<
-      State extends JsonObject,
-      Payload extends JsonObject,
-      Outcome extends JsonObject,
-      Kind extends AggregateKind,
-    >(
-      scenario: RuntimeScenario<State, Payload, Outcome, Kind>,
-    ): ExecutionResult<State, Outcome, Payload, Kind> {
-      const comparableScenario = scenario as unknown as RuntimeScenario<
-        JsonObject,
-        JsonObject,
-        JsonObject
-      >;
-      const before = snapshotScenario(comparableScenario);
-      let first: ExecutionResult<State, Outcome, Payload, Kind> | undefined;
+    run<Kind extends AggregateKind>(
+      scenario: RuntimeScenario<Kind>,
+    ): ExecutionResult<JsonObject, JsonObject, JsonObject, Kind> {
+      const before = snapshotScenario(scenario);
+      let first: ExecutionResult<JsonObject, JsonObject, JsonObject, Kind> | undefined;
       for (let index = 0; index < repeat; index += 1) {
         const execute = () =>
-          executeCommand({
-            definition: scenario.definition,
+          scenario.model.execute({
             aggregate: scenario.aggregate,
             command: scenario.command,
             observations: scenario.observations,
-            ...(scenario.progression === undefined ? {} : { progression: scenario.progression }),
-            ...(scenario.policy === undefined ? {} : { policy: scenario.policy }),
           });
         const audited = auditKnownAmbientApis
           ? withKnownAmbientAudit(execute)
@@ -174,13 +146,13 @@ export function createRuntimeHarness(options: HarnessOptions = {}): RuntimeHarne
           throw new RuntimeHarnessError("ambient-authority-used", audited.violation);
         }
         const current = audited.value;
-        const after = snapshotScenario(comparableScenario);
+        const after = snapshotScenario(scenario);
         const inputDifference = firstDifference(before, after);
         if (inputDifference !== null)
           throw new RuntimeHarnessError("input-mutated", inputDifference);
         if (
           failOnUnusedObservations &&
-          "record" in current &&
+          current.kind === "recorded" &&
           current.record.observationTrace.length !== scenario.observations.length
         ) {
           throw new RuntimeHarnessError(
@@ -200,19 +172,15 @@ export function createRuntimeHarness(options: HarnessOptions = {}): RuntimeHarne
           if (difference !== null) throw new RuntimeHarnessError("record-mismatch", difference);
         }
       }
-      return first as ExecutionResult<State, Outcome, Payload, Kind>;
+      if (first === undefined) throw new TypeError("Harness produced no execution result");
+      return first;
     },
   });
 }
 
-export function runScenario<
-  State extends JsonObject,
-  Payload extends JsonObject,
-  Outcome extends JsonObject,
-  Kind extends AggregateKind,
->(
-  scenario: RuntimeScenario<State, Payload, Outcome, Kind>,
+export function runScenario<Kind extends AggregateKind>(
+  scenario: RuntimeScenario<Kind>,
   options?: HarnessOptions,
-): ScenarioResult<State, Outcome, Payload, Kind> {
+): ScenarioResult<Kind> {
   return createRuntimeHarness(options).run(scenario);
 }

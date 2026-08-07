@@ -32,7 +32,7 @@
 
 **CRITICAL**: No user-story implementation begins until this phase passes its unit tests and public-export checks.
 
-- [x] T005 Define release-format v1, manifest, inventory, compatibility, capability, identity, result, and diagnostic types in `packages/protocol/src/release/types.ts`
+- [x] T005 Define release-format, manifest, inventory, compatibility, capability, identity, result, and diagnostic types in `packages/protocol/src/release/types.ts`
 - [x] T006 [P] Implement RFC 8785 canonical JSON encoding and strict decoding in `packages/protocol/src/release/canonical-json.ts`
 - [x] T007 [P] Implement canonical archive path validation and ordinal comparison in `packages/protocol/src/release/paths.ts`
 - [x] T008 [P] Implement CRC-32 and algorithm-qualified SHA-256 byte identities in `packages/protocol/src/release/identity.ts`
@@ -61,7 +61,7 @@
 
 ### Implementation for User Story 1
 
-- [x] T018 [P] [US1] Implement closed ReleaseManifestV1 validation, canonical ordering, and entry-role checks in `packages/protocol/src/release/manifest.ts`
+- [x] T018 [P] [US1] Implement closed ReleaseManifest validation, canonical ordering, and entry-role checks in `packages/protocol/src/release/manifest.ts`
 - [x] T019 [P] [US1] Implement the strict stored-entry ZIP writer with fixed headers, ordinal entries, CRCs, and no optional metadata in `packages/protocol/src/release/zip-profile.ts`
 - [x] T020 [US1] Implement bounded container parsing and non-executing artifact inspection sufficient for compiler self-verification in `packages/protocol/src/release/inspect.ts`
 - [x] T021 [P] [US1] Implement strict `plotpoint.project.json` loading, duplicate-key/unknown-field rejection, and canonical registries in `packages/compiler/src/project/load-project.ts`
@@ -121,7 +121,7 @@
 ### Tests for User Story 3
 
 - [x] T048 [P] [US3] Add non-executing inspection, closed manifest, inventory-role, and compatibility matrix tests in `packages/protocol/test/inspection.test.ts` and `packages/protocol/test/compatibility.test.ts`
-- [x] T049 [P] [US3] Create branching media tour and team/session hunt golden projects with multiple schemas, content, components, assets, and capability requirements in `examples/releases/branching-media-tour/` and `examples/releases/team-session-hunt/`
+- [x] T049 [P] [US3] Create branching media tour and co-op game golden projects with multiple schemas, content, components, assets, and capability requirements in `examples/releases/branching-media-tour/` and `examples/releases/co-op-game/`
 - [x] T050 [US3] Add source-free three-project inspection and registry-label/channel/project/timestamp invariance tests in `packages/compiler/test/integration/inspect-release.test.ts`
 
 ### Implementation for User Story 3
@@ -204,7 +204,7 @@ US1 + US2 + US3 + US4 -> Cross-cutting Gate 2 evidence
 
 - **US1** has no story dependency after foundations and is independently demonstrable.
 - **US2** consumes the US1 validation pipeline but is independently accepted through invalid fixtures and absence of output.
-- **US3** consumes the v1 manifest/container but is independently accepted from prebuilt golden bytes without compiler execution.
+- **US3** consumes the manifest/container but is independently accepted from prebuilt golden bytes without compiler execution.
 - **US4** consumes strict parsing and identity primitives but is independently accepted from mutated prebuilt golden bytes.
 
 ### Within Each Story
@@ -299,7 +299,7 @@ review.
 - [x] T084 Run formatting, lint, type checks, builds, compiler/protocol tests, complete workspace tests, Spec Kit sync/check, and `pnpm verify`; record exact evidence in `docs/features/0002-immutable-release-pipeline/checklists/implementation.md`
 
 **Checkpoint**: The compiler makes only provable import-graph claims, the protocol exclusively owns
-release bytes and verified entry access, captured builds never reread live source, and all existing v1
+release bytes and verified entry access, captured builds never reread live source, and all existing
 artifact identities remain unchanged.
 
 ---

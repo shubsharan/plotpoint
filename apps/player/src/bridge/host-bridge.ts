@@ -1,18 +1,19 @@
 import {
+  HOST_BRIDGE_VERSION,
   parseHostBridgeEnvelope,
   type CanonicalJsonObject,
-  type CapabilityRequestV1,
-  type CapabilityResultV1,
-  type CapabilityVersionV1,
-  type HostErrorEnvelopeV1,
+  type CapabilityRequest,
+  type CapabilityResult,
+  type CapabilityVersion,
+  type HostErrorEnvelope,
   type HostToWebBridgeEnvelope,
-  type RuntimeBootstrapV1,
-  type TransitionCommitEnvelopeV1,
-  type TransitionResultV1,
+  type RuntimeBootstrap,
+  type TransitionCommitEnvelope,
+  type TransitionResult,
 } from "@plotpoint/protocol";
 
 export interface CapabilityRegistration {
-  readonly capability: CapabilityVersionV1;
+  readonly capability: CapabilityVersion;
   validateInput(value: CanonicalJsonObject): boolean;
   invoke(input: CanonicalJsonObject): Promise<CanonicalJsonObject>;
   validateOutput(value: CanonicalJsonObject): boolean;
@@ -20,7 +21,7 @@ export interface CapabilityRegistration {
 
 export function createCapabilityDispatcher(
   registrations: readonly CapabilityRegistration[],
-): (payload: CapabilityRequestV1) => Promise<CapabilityResultV1> {
+): (payload: CapabilityRequest) => Promise<CapabilityResult> {
   const identities = new Set<string>();
   for (const registration of registrations) {
     const identity = `${registration.capability.id}@${registration.capability.major}`;
@@ -44,9 +45,9 @@ export function createCapabilityDispatcher(
 }
 
 export interface HostBridgeHandlers {
-  runtimeReady(): Promise<RuntimeBootstrapV1>;
-  commitTransition(payload: TransitionCommitEnvelopeV1["payload"]): Promise<TransitionResultV1>;
-  requestCapability(payload: CapabilityRequestV1): Promise<CapabilityResultV1>;
+  runtimeReady(): Promise<RuntimeBootstrap>;
+  commitTransition(payload: TransitionCommitEnvelope["payload"]): Promise<TransitionResult>;
+  requestCapability(payload: CapabilityRequest): Promise<CapabilityResult>;
 }
 
 export async function routeHostBridgeMessage(
@@ -59,20 +60,43 @@ export async function routeHostBridgeMessage(
   } catch {
     return errorEnvelope("host-invalid-json", "unknown");
   }
+  const requestId =
+    decoded !== null &&
+    typeof decoded === "object" &&
+    !Array.isArray(decoded) &&
+    typeof (decoded as { readonly requestId?: unknown }).requestId === "string" &&
+    (decoded as { readonly requestId: string }).requestId.length > 0
+      ? (decoded as { readonly requestId: string }).requestId
+      : "unknown";
   const parsed = parseHostBridgeEnvelope(decoded, "web-to-host");
-  if (parsed.kind === "invalid") return errorEnvelope(parsed.code, "unknown");
+  if (parsed.kind === "invalid") return errorEnvelope(parsed.code, requestId);
   const request = parsed.envelope;
   try {
     if (request.type === "runtime.ready") {
       const payload = await handlers.runtimeReady();
-      return { version: 1, requestId: request.requestId, type: "runtime.bootstrap", payload };
+      return {
+        version: HOST_BRIDGE_VERSION,
+        requestId: request.requestId,
+        type: "runtime.bootstrap",
+        payload,
+      };
     }
     if (request.type === "transition.commit") {
       const payload = await handlers.commitTransition(request.payload);
-      return { version: 1, requestId: request.requestId, type: "transition.result", payload };
+      return {
+        version: HOST_BRIDGE_VERSION,
+        requestId: request.requestId,
+        type: "transition.result",
+        payload,
+      };
     }
     const payload = await handlers.requestCapability(request.payload);
-    return { version: 1, requestId: request.requestId, type: "capability.result", payload };
+    return {
+      version: HOST_BRIDGE_VERSION,
+      requestId: request.requestId,
+      type: "capability.result",
+      payload,
+    };
   } catch (error) {
     return errorEnvelope(
       error instanceof Error ? error.message : "host-operation-failed",
@@ -81,6 +105,11 @@ export async function routeHostBridgeMessage(
   }
 }
 
-function errorEnvelope(code: string, requestId: string): HostErrorEnvelopeV1 {
-  return { version: 1, requestId, type: "host.error", payload: { code } };
+function errorEnvelope(code: string, requestId: string): HostErrorEnvelope {
+  return {
+    version: HOST_BRIDGE_VERSION,
+    requestId,
+    type: "host.error",
+    payload: { code },
+  };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computeReleaseId, type ReleaseManifestV1 } from "@plotpoint/protocol";
+import { computeReleaseId, type ReleaseManifest } from "@plotpoint/protocol";
 
 import { encodeCanonicalJson } from "../src/release/canonical-json.js";
 import { sha256Digest } from "../src/release/identity.js";
@@ -11,7 +11,7 @@ const encoder = new TextEncoder();
 
 interface ReleaseFixture {
   readonly bytes: Uint8Array;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
 }
 
 function createRelease(content: Uint8Array): ReleaseFixture {
@@ -28,7 +28,7 @@ function createRelease(content: Uint8Array): ReleaseFixture {
     },
     { path: "content/puzzle.json", kind: "content" as const, bytes: content },
   ];
-  const manifest: ReleaseManifestV1 = {
+  const manifest: ReleaseManifest = {
     releaseFormatVersion: 1,
     hostApi: { major: 1, minimumMinor: 0 },
     aggregateSchemas: [],

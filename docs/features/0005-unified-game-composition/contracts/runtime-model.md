@@ -1,0 +1,240 @@
+# Contract: Aggregate Runtime
+
+## Schema Authority Amendment
+
+Runtime aggregates carry `stateVersion` for optimistic concurrency and exact state transitions. They do
+not carry an aggregate schema generation. The executable model is resolved from one verified release
+schema contract `{ releaseId, schemaId, schemaDigest }` and validation uses those exact inventoried
+bytes. Old aggregate shapes containing `schemaVersion` or `schema_version` fail cleanly.
+
+Aggregate Runtime documents the corrected pre-release runtime contract. Repository-owned TypeScript
+APIs, schema IDs, and persisted record interfaces use plain names and are edited in place. Exact schema
+bytes are bound by immutable release inventory and digest rather than by generation suffixes.
+
+## Schemas and Aggregates
+
+```ts
+type AggregateKind = "player" | "team" | "session";
+type AggregateAuthority = "local" | "server";
+type JsonObject = Readonly<Record<string, JsonValue>>;
+
+type SchemaValidationResult<Value> =
+  | { readonly valid: true; readonly value: Value }
+  | { readonly valid: false; readonly diagnostics: readonly Diagnostic[] };
+
+interface RuntimeSchema<Value> {
+  readonly id: string;
+  readonly schemaDigest: `sha256:${string}`;
+  validate(value: unknown): SchemaValidationResult<Value>;
+}
+
+interface Aggregate<State extends JsonObject, Kind extends AggregateKind> {
+  readonly aggregateId: string;
+  readonly modelId: string;
+  readonly aggregateKind: Kind;
+  readonly schemaId: string;
+  readonly stateVersion: number;
+  readonly state: State;
+  readonly progression?: ProgressionInstance;
+}
+```
+
+`stateVersion` is the only aggregate concurrency and commit counter. Runtime, Host API, Sync, SQLite,
+PostgreSQL, and reports use that name directly; no `revision` alias exists. Persisted aggregates retain
+the stable schema ID, while the release-pinned model and exact inventory digest identify its schema
+bytes. Resolved models derive that identity from `stateSchema` and do not copy it into parallel fields.
+
+Every runtime validator names the digest of the exact inventoried schema bytes it implements. Logical
+identity without digest agreement is insufficient at release or trusted-mechanic registration.
+
+## Typed Models and Commands
+
+```ts
+interface ResolvedCommandBinding<State extends JsonObject, Kind extends AggregateKind> {
+  readonly registrationId: string;
+  readonly commandType: string;
+  readonly payloadSchema: RuntimeSchema<JsonObject>;
+  readonly outcomeSchema: RuntimeSchema<JsonObject>;
+  evaluate(input: {
+    readonly aggregate: Aggregate<State, Kind>;
+    readonly command: RuntimeCommand<JsonObject, Kind>;
+    readonly observations: readonly Observation[];
+  }):
+    | { readonly kind: "decision"; readonly decision: HandlerDecision<State, JsonObject> }
+    | { readonly kind: "invalid-payload"; readonly diagnostics: readonly Diagnostic[] };
+}
+
+declare function resolveCommandBinding<
+  State extends JsonObject,
+  Payload extends JsonObject,
+  Outcome extends JsonObject,
+  Kind extends AggregateKind,
+>(input: {
+  readonly registrationId: string;
+  readonly definition: CommandDefinition<State, Payload, Outcome, Kind>;
+  readonly payloadSchema: RuntimeSchema<Payload>;
+  readonly outcomeSchema: RuntimeSchema<Outcome>;
+}): ResolvedCommandBinding<State, Kind>;
+
+interface ResolvedAggregateModel<Kind extends AggregateKind, State extends JsonObject> {
+  readonly modelId: string;
+  readonly aggregateKind: Kind;
+  readonly authority: AggregateAuthority;
+  readonly stateSchema: RuntimeSchema<State>;
+  readonly initializationSchema: RuntimeSchema<JsonObject>;
+  initializeState(input: JsonObject): State;
+  readonly commandsByType: Readonly<Record<string, ResolvedCommandBinding<State, Kind>>>;
+  readonly eventSchemas: Readonly<Record<string, RuntimeSchema<JsonObject>>>;
+  readonly effectSchemas: Readonly<Record<string, RuntimeSchema<JsonObject>>>;
+  readonly progression?: ProgressionDefinition<State, Kind>;
+}
+
+type InitializationResult<Kind extends AggregateKind> =
+  | { readonly kind: "initialized"; readonly aggregate: Aggregate<JsonObject, Kind> }
+  | { readonly kind: "invalid"; readonly diagnostics: readonly Diagnostic[] };
+
+interface ExecutableAggregateModel<Kind extends AggregateKind> {
+  readonly modelId: string;
+  readonly aggregateKind: Kind;
+  readonly authority: AggregateAuthority;
+  readonly stateSchema: RuntimeSchema<JsonObject>;
+  readonly initializationSchema: RuntimeSchema<JsonObject>;
+  readonly commandContracts: Readonly<
+    Record<
+      string,
+      {
+        readonly registrationId: string;
+        readonly payloadSchema: RuntimeSchema<JsonObject>;
+        readonly outcomeSchema: RuntimeSchema<JsonObject>;
+      }
+    >
+  >;
+  readonly eventSchemas: Readonly<Record<string, RuntimeSchema<JsonObject>>>;
+  readonly effectSchemas: Readonly<Record<string, RuntimeSchema<JsonObject>>>;
+  readonly progression?: { readonly graphId: string };
+  initialize(input: JsonObject): InitializationResult<Kind>;
+  execute(input: {
+    readonly aggregate: Aggregate<JsonObject, Kind>;
+    readonly command: RuntimeCommand<JsonObject, Kind>;
+    readonly observations: readonly Observation[];
+  }): ExecutionResult<JsonObject, JsonObject, JsonObject, Kind>;
+}
+
+declare function bindExecutableAggregateModel<Kind extends AggregateKind, State extends JsonObject>(
+  model: ResolvedAggregateModel<Kind, State>,
+): ExecutableAggregateModel<Kind>;
+```
+
+`ResolvedAggregateModel` is the typed author/platform unit. Command definitions remain payload- and
+outcome-specific. `resolveCommandBinding` closes over each typed definition and its validators, then
+exposes an erased evaluator only after payload narrowing. `bindExecutableAggregateModel` constructs the
+only erased model-registry wrapper; it first validates aggregate identity and state, then delegates to
+that command binding. Neither boundary casts or widens a state- or payload-specific function.
+
+Initialization validates canonical input through `initializationSchema`, calls `initializeState`,
+validates the returned state, constructs `stateVersion: 0`, and attaches the sole canonical initial
+progression instance. Invalid input uses `initialization-input-invalid`; an initializer exception uses
+`initializer-threw`; an invalid returned state uses `initialized-state-invalid`; and an invalid initial
+progression uses `initial-progression-invalid`. Each failure returns `kind: "invalid"` with stable
+diagnostics. `ExecutableAggregateModel.initialize` never throws a raw initializer exception, returns a
+partially initialized aggregate, or permits persistence before the complete result is valid.
+
+Project Configuration permits only local/player and server/team-or-session combinations. Generated
+local registries contain local/player models. The platform mechanic registry contains server/team or
+server/session models.
+
+## Decisions and Execution Results
+
+```ts
+type HandlerDecision<State extends JsonObject, Outcome extends JsonObject> =
+  | {
+      readonly kind: "accepted";
+      readonly nextState?: State;
+      readonly outcome: Outcome;
+      readonly domainEvents: readonly TypedRecord[];
+      readonly effectIntents: readonly TypedRecord[];
+      readonly progressionIntents: readonly ProgressionIntent[];
+    }
+  | { readonly kind: "no-op"; readonly outcome: Outcome }
+  | { readonly kind: "rejected"; readonly outcome: Outcome };
+
+type ExecutionResult<
+  State extends JsonObject,
+  Outcome extends JsonObject,
+  Payload extends JsonObject,
+  Kind extends AggregateKind,
+> =
+  | {
+      readonly kind: "preflight-invalid";
+      readonly diagnostics: readonly Diagnostic[];
+    }
+  | {
+      readonly kind: "recorded";
+      readonly aggregate: Aggregate<State, Kind>;
+      readonly record: ExecutionRecord<State, Outcome, Payload, Kind>;
+    };
+```
+
+The public generic order is exactly `ExecutionResult<State, Outcome, Payload, Kind>`, matching the
+existing runtime. The execution record is the authority for its terminal, outcome or diagnostics,
+events, effects, progression trace, input command, and prior/resulting state versions. Callers do not
+reconstruct a second result from optional fields.
+
+- Preflight invalidity has no aggregate or record and cannot be committed.
+- Accepted requires at least one state change, progression change, domain event, or effect intent and
+  advances `stateVersion` exactly once.
+- No-op, rejected, and recorded execution-invalid preserve `stateVersion`.
+- No-op contains no state replacement, event, effect, progression intent, or progression trace.
+- Event/effect schemas and the outcome schema are validated before the recorded result is returned.
+- Effect intents are durable post-commit evidence only; this feature adds no delivery worker.
+
+Replay consumes the recorded command and observations, re-executes through the same model, and compares
+the complete canonical record. It does not infer model, schema, or progression from caller-supplied
+parallel arguments.
+
+## Progression
+
+```ts
+interface ProgressionTransition<State extends JsonObject, Kind extends AggregateKind> {
+  readonly transitionId: string;
+  readonly targetNodeId: string;
+  readonly from: readonly ProgressionStatus[];
+  readonly to: ProgressionStatus;
+  readonly priority: number;
+  readonly trigger: "automatic" | "intent";
+  readonly when?: (facts: {
+    readonly aggregateState: State;
+    readonly domainEvents: readonly TypedRecord[];
+    readonly progression: ProgressionInstance;
+  }) => boolean;
+}
+
+interface ProgressionDefinition<State extends JsonObject, Kind extends AggregateKind> {
+  readonly aggregateKind: Kind;
+  readonly graphId: string;
+  readonly nodes: readonly ProgressionNode[];
+  readonly transitions: readonly ProgressionTransition<State, Kind>[];
+}
+
+declare function initialProgression<State extends JsonObject, Kind extends AggregateKind>(
+  definition: ProgressionDefinition<State, Kind>,
+): ProgressionInstance;
+```
+
+Each legal edge has one stable transition identity and owns `from`, `to`, target, priority, and trigger.
+Automatic predicates see aggregate state, typed domain events, and current progression only. They are
+not generic over one command payload or outcome, so heterogeneous commands can advance the same graph.
+
+`initialProgression` is the sole constructor for the canonical initial instance. Initializers and host
+adapters do not accept or duplicate progression state. Existing deterministic simultaneous rounds,
+equal-priority conflict detection, cycle detection, transition limits, freezing, and ordinal ordering
+remain.
+
+## Clean-Break Validation
+
+The implementation edits the existing runtime and progression APIs in place. It removes superseded
+private assembly helpers and version-suffixed experimental types. There are no adapters between old and
+corrected shapes. Type fixtures must reject duplicated schema identity, authority/kind mismatches,
+unsafe erased registries, payload/outcome generic inversion, caller-supplied initial progression, and
+parallel `revision` fields. Behavior fixtures must prove initializer exceptions become
+`initializer-threw` without an aggregate, receipt, session, or persistence mutation.

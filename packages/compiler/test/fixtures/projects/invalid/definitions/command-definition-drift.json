@@ -1,11 +1,14 @@
 {
+  "application": { "keys": ["mount"], "mountType": "function" },
+  "aggregateModels": [{ "registrationId": "player", "initializerType": "function" }],
   "commands": [
     {
-      "registrationId": "solve.v1",
-      "definitionId": "solve.v2",
+      "registrationId": "solve",
+      "definitionId": "solve.drifted",
       "commandType": "solve",
       "aggregateKind": "player"
     }
   ],
-  "progressions": []
+  "progressions": [],
+  "components": []
 }

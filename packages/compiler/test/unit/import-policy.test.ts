@@ -38,22 +38,51 @@ function snapshot(name: string, text: string): CompilationSnapshot {
       projectFormatVersion: 1,
       environment: "web",
       hostApi: { major: 1, minimumMinor: 0 },
-      entries: {
-        logic: { source: path, export: "logic" },
-        presentation: { source: path, export: "logic" },
+      application: {
+        definition: { source: path, export: "logic" },
+        components: [],
       },
+      aggregateModels: [
+        {
+          id: "player",
+          authority: "local",
+          kind: "player",
+          stateSchema: "player-state",
+          initializationSchema: "player-initialization",
+          initializer: { source: path, export: "logic" },
+          events: [],
+          effects: [],
+        },
+      ],
       commands: [],
-      aggregateSchemas: [],
-      schemas: [],
+      schemas: [
+        { id: "player-state", path: "schemas/player-state.json" },
+        { id: "player-initialization", path: "schemas/player-initialization.json" },
+      ],
       progressions: [],
       components: [],
       content: [],
       assets: [],
     },
     registries: {
+      application: { definition: { source: path, export: "logic" }, components: [] },
+      aggregateModels: [
+        {
+          id: "player",
+          authority: "local",
+          kind: "player",
+          stateSchema: "player-state",
+          initializationSchema: "player-initialization",
+          initializer: { source: path, export: "logic" },
+          events: [],
+          effects: [],
+        },
+      ],
       commands: [],
-      aggregateSchemas: [],
-      schemas: [],
+      schemas: [
+        { id: "player-state", path: "schemas/player-state.json" },
+        { id: "player-initialization", path: "schemas/player-initialization.json" },
+      ],
       progressions: [],
       components: [],
       content: [],
@@ -85,7 +114,9 @@ describe("invalid import-boundary fixtures", () => {
     async (name, column) => {
       const text = await source(name);
       const captured = snapshot(name, text);
-      const result = resolveImportGraph(captured, captured.config.entries.logic, "logic");
+      const localModel = captured.config.aggregateModels[0];
+      if (localModel?.authority !== "local") throw new Error("expected local model");
+      const result = resolveImportGraph(captured, localModel.initializer, "logic");
 
       expect(result).toMatchObject({
         kind: "invalid",

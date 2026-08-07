@@ -1,3 +1,5 @@
+export const RELEASE_FORMAT_VERSION = 1 as const;
+
 export type Sha256Digest = `sha256:${string}`;
 export type ReleaseId = Sha256Digest;
 
@@ -11,7 +13,6 @@ export interface HostApiRequirement {
 export interface AggregateSchemaRequirement {
   readonly id: string;
   readonly kind: AggregateKind;
-  readonly version: number;
   readonly path: string;
 }
 
@@ -38,8 +39,8 @@ export interface ReleaseInventoryEntry {
   readonly digest: Sha256Digest;
 }
 
-export interface ReleaseManifestV1 {
-  readonly releaseFormatVersion: 1;
+export interface ReleaseManifest {
+  readonly releaseFormatVersion: typeof RELEASE_FORMAT_VERSION;
   readonly hostApi: HostApiRequirement;
   readonly aggregateSchemas: readonly AggregateSchemaRequirement[];
   readonly capabilities: readonly CapabilityRequirement[];
@@ -74,13 +75,13 @@ export interface ReleaseConstructionInput {
   readonly hostApi: HostApiRequirement;
   readonly aggregateSchemas: readonly AggregateSchemaRequirement[];
   readonly capabilities: readonly CapabilityRequirement[];
-  readonly entrypoints: ReleaseManifestV1["entrypoints"];
+  readonly entrypoints: ReleaseManifest["entrypoints"];
   readonly entries: readonly ReleaseMaterialEntry[];
 }
 
 export interface ReleaseArtifact {
   readonly bytes: Uint8Array;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
   readonly releaseId: ReleaseId;
 }
 
@@ -95,6 +96,7 @@ export type ReleaseDiagnosticCategory =
   | "format"
   | "manifest"
   | "inventory"
+  | "composition"
   | "integrity"
   | "identity"
   | "compatibility";
@@ -110,13 +112,13 @@ export interface ReleaseDiagnostic {
 export interface InspectedRelease {
   readonly kind: "inspected";
   readonly releaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
 }
 
 export interface OpenedRelease {
   readonly kind: "opened";
   readonly releaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
   readonly entries: readonly ReleaseEntry[];
 }
 
@@ -129,7 +131,7 @@ export interface StructurallyVerifiedRelease {
   readonly kind: "verified";
   readonly trust: "structurally-valid";
   readonly releaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
   readonly expectedReleaseId?: never;
 }
 
@@ -138,7 +140,7 @@ export interface KnownReleaseMatch {
   readonly trust: "known-release-match";
   readonly releaseId: ReleaseId;
   readonly expectedReleaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
 }
 
 export type VerifiedRelease = StructurallyVerifiedRelease | KnownReleaseMatch;
@@ -154,7 +156,7 @@ export interface HostReleaseSupport {
   readonly aggregateSchemas: readonly {
     readonly id: string;
     readonly kind: AggregateKind;
-    readonly versions: readonly number[];
+    readonly digest: Sha256Digest;
   }[];
   readonly capabilities: readonly {
     readonly id: string;

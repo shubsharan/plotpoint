@@ -3,18 +3,17 @@ import { describe, expect, it } from "vitest";
 import {
   accuracyBand,
   isEligibleInstallUrl,
-  isLocationObservationV1,
-  isLocationReportProjectionV1,
-  isLocationRequestInputV1,
-  isPlayReportV1,
-  LOCATION_REPORT_PROJECTION_VALIDATOR_V1,
+  isLocationObservation,
+  isLocationRequestInput,
   parseHostBridgeEnvelope,
   parseInstallDescriptor,
-  projectLocationObservationV1,
+  parseReportSafeDiagnosticCode,
+  projectLocationObservation,
   recencyBand,
-  type CapabilityRequestEnvelopeV1,
-  type CapabilityResultEnvelopeV1,
+  type CapabilityRequestEnvelope,
+  type CapabilityResultEnvelope,
 } from "../src/index.js";
+import * as protocol from "../src/index.js";
 
 const releaseId = `sha256:${"a".repeat(64)}`;
 
@@ -22,7 +21,6 @@ describe("install descriptor", () => {
   it("accepts only closed private-network HTTP descriptors", () => {
     expect(
       parseInstallDescriptor({
-        version: 1,
         releaseUrl: "http://192.168.1.4:4100/release.pprelease",
         expectedReleaseId: releaseId,
       }).kind,
@@ -32,7 +30,6 @@ describe("install descriptor", () => {
     expect(isEligibleInstallUrl("http://user:pass@127.0.0.1/release.pprelease")).toBe(false);
     expect(
       parseInstallDescriptor({
-        version: 1,
         releaseUrl: "http://127.0.0.1/release.pprelease",
         expectedReleaseId: releaseId,
         label: "unexpected",
@@ -46,14 +43,16 @@ describe("host bridge", () => {
     aggregateId: "player-1",
     aggregateKind: "player",
     schemaId: "plotpoint.player",
-    schemaVersion: 1,
   } as const;
 
   function transition(terminal: "accepted" | "no-op" | "rejected" | "invalid") {
     const base = {
       commandId: `command-${terminal}`,
+      modelId: "field-player",
+      commandType: "complete-checkpoint",
+      payload: { checkpoint: 2 },
       target,
-      expectedVersion: 2,
+      expectedStateVersion: 2,
       observationIds: ["observation-1"],
       terminal,
     };
@@ -63,11 +62,19 @@ describe("host bridge", () => {
         terminal,
         nextState: { checkpoint: 2 },
         outcome: { code: "advanced" },
-        progressionChanges: ["checkpoint-2"],
+        domainEvents: [{ type: "checkpoint-reached", payload: { checkpointId: "checkpoint-2" } }],
+        effectIntents: [],
+        progressionTrace: [],
       };
     }
     if (terminal === "invalid") {
-      return { ...base, terminal, diagnosticCodes: ["runtime-result-invalid"] };
+      return {
+        ...base,
+        terminal,
+        phase: "execution",
+        diagnosticCodes: ["runtime-result-invalid"],
+        attemptedProgressionTrace: [],
+      };
     }
     return { ...base, terminal, outcome: { code: terminal } };
   }
@@ -110,6 +117,7 @@ describe("host bridge", () => {
             releaseId,
             aggregate: {
               ...target,
+              modelId: "field-player",
               stateVersion: 2,
               state: { checkpoint: 1 },
             },
@@ -125,7 +133,7 @@ describe("host bridge", () => {
       for (const terminal of ["accepted", "no-op", "rejected", "invalid"] as const) {
         const terminalPayload =
           terminal === "invalid"
-            ? { diagnosticCodes: ["runtime-result-invalid"] }
+            ? { phase: "execution", diagnosticCodes: ["runtime-result-invalid"] }
             : { outcome: { code: terminal } };
         expect(
           parseHostBridgeEnvelope(
@@ -137,7 +145,7 @@ describe("host bridge", () => {
                 commandId: `command-${terminal}`,
                 disposition,
                 terminal,
-                resultingVersion: terminal === "accepted" ? 3 : 2,
+                resultingStateVersion: terminal === "accepted" ? 3 : 2,
                 ...terminalPayload,
               },
             },
@@ -151,20 +159,29 @@ describe("host bridge", () => {
   it("rejects malformed terminal shapes and noncanonical values", () => {
     const acceptedWithoutState = {
       commandId: "command-accepted",
+      modelId: "field-player",
+      commandType: "complete-checkpoint",
+      payload: { checkpoint: 2 },
       target,
-      expectedVersion: 2,
+      expectedStateVersion: 2,
       observationIds: ["observation-1"],
       terminal: "accepted",
       outcome: { code: "advanced" },
-      progressionChanges: ["checkpoint-2"],
+      domainEvents: [],
+      effectIntents: [],
+      progressionTrace: [],
     };
     const malformed = [
       { ...transition("no-op"), nextState: {} },
       acceptedWithoutState,
       { ...transition("invalid"), outcome: {} },
+      { ...transition("invalid"), phase: "preflight" },
       { ...transition("rejected"), diagnosticCodes: ["unexpected"] },
       { ...transition("accepted"), observationIds: ["duplicate", "duplicate"] },
       { ...transition("accepted"), outcome: { invalid: Number.NaN } },
+      { ...transition("accepted"), expectedVersion: 2 },
+      { ...transition("accepted"), schemaVersion: 1 },
+      { ...transition("accepted"), progressionChanges: ["checkpoint-2"] },
     ];
     for (const [index, candidate] of malformed.entries()) {
       expect(
@@ -209,7 +226,16 @@ describe("host bridge", () => {
           version: 1,
           requestId: "request-wrong-direction",
           type: "runtime.bootstrap",
-          payload: { runId: "run-1", releaseId, aggregate: null },
+          payload: {
+            runId: "run-1",
+            releaseId,
+            aggregate: {
+              ...target,
+              modelId: "field-player",
+              stateVersion: 2,
+              state: {},
+            },
+          },
         },
         "web-to-host",
       ),
@@ -228,10 +254,35 @@ describe("host bridge", () => {
     ).toEqual({ kind: "invalid", code: "bridge-direction-invalid" });
   });
 
-  it("keeps capability dispatch generic, closed, and versioned", () => {
+  it("rejects repeated version fields inside corrected bootstrap and transition payloads", () => {
+    const bootstrap = {
+      runId: "run-1",
+      releaseId,
+      aggregate: {
+        ...target,
+        modelId: "field-player",
+        stateVersion: 2,
+        state: { checkpoint: 1 },
+      },
+    };
+
+    for (const payload of [
+      { ...bootstrap, version: 1 },
+      { ...bootstrap, aggregate: { ...bootstrap.aggregate, schemaVersion: 1 } },
+    ]) {
+      expect(
+        parseHostBridgeEnvelope(
+          { version: 1, requestId: "versioned-bootstrap", type: "runtime.bootstrap", payload },
+          "host-to-web",
+        ).kind,
+      ).toBe("invalid");
+    }
+  });
+
+  it("keeps capability dispatch generic, closed, and compatibility-checked", () => {
     type GeocodeInput = { readonly query: string };
     type GeocodeOutput = { readonly matchCount: number };
-    const request: CapabilityRequestEnvelopeV1<GeocodeInput> = {
+    const request: CapabilityRequestEnvelope<GeocodeInput> = {
       version: 1,
       requestId: "capability-request",
       type: "capability.request",
@@ -240,7 +291,7 @@ describe("host bridge", () => {
         input: { query: "checkpoint" },
       },
     };
-    const result: CapabilityResultEnvelopeV1<GeocodeOutput> = {
+    const result: CapabilityResultEnvelope<GeocodeOutput> = {
       version: 1,
       requestId: request.requestId,
       type: "capability.result",
@@ -310,139 +361,146 @@ describe("report policy", () => {
   });
 });
 
-describe("PlayReportV1", () => {
+describe("GamePlayReport", () => {
   const report = {
-    version: 1,
     releaseId,
-    runId: "run-1",
     platform: "ios",
-    durationMs: 400,
+    durationMs: 500,
+    shared: { membership: "revoked" },
     events: [
+      {
+        kind: "lifecycle",
+        elapsedMs: 0,
+        disposition: "mounted",
+      },
       {
         kind: "command",
         elapsedMs: 100,
-        commandId: "command-1",
+        scope: "local",
+        commandAlias: "command-1",
         terminal: "accepted",
-        expectedVersion: 0,
-        resultingVersion: 1,
-        outcomeCode: "checkpoint-advanced",
-        progressionChanges: ["puzzle"],
+        expectedStateVersion: 0,
+        resultingStateVersion: 1,
       },
       {
         kind: "capability",
         elapsedMs: 200,
-        capability: { id: "plotpoint.location.foreground", major: 1 },
-        recordId: "location-1",
-        outcomeCode: "available",
-        projection: {
-          availability: "available",
-          recencyBand: "fresh",
-          accuracyBand: "excellent",
-        },
+        capabilityId: "plotpoint.location.foreground",
+        disposition: "consumed",
       },
       {
-        kind: "lifecycle",
-        elapsedMs: 200,
-        phase: "view-created",
-        disposition: "restored",
-        commandId: "command-1",
-      },
-      {
-        kind: "diagnostic",
+        kind: "synchronization",
         elapsedMs: 300,
-        code: "delivery-interrupted",
-        commandId: "command-1",
+        phase: "revoked",
+        disposition: "membership-revoked",
+      },
+      {
+        kind: "recovery",
+        elapsedMs: 400,
+        disposition: "snapshot-replaced",
       },
     ],
   } as const;
 
-  it("accepts one non-decreasing ordered timeline with exact event fields", () => {
-    expect(isPlayReportV1(report, [LOCATION_REPORT_PROJECTION_VALIDATOR_V1])).toBe(true);
-    expect(isPlayReportV1(report)).toBe(false);
+  function validate(value: unknown): boolean {
+    const validator = (
+      protocol as unknown as {
+        readonly isGamePlayReport?: (candidate: unknown) => boolean;
+      }
+    ).isGamePlayReport;
+    expect(validator, "plain Game Play Report validator export").toBeTypeOf("function");
+    return validator?.(value) ?? false;
+  }
 
-    const withEqualTie = {
-      ...report,
-      events: report.events.map((event) => ({ ...event, elapsedMs: 200 })),
-    };
-    expect(isPlayReportV1(withEqualTie, [LOCATION_REPORT_PROJECTION_VALIDATOR_V1])).toBe(true);
+  it("accepts the plain generic report with local and shared evidence", () => {
+    expect(validate(report)).toBe(true);
   });
 
-  it("rejects decreasing, excessive, negative, and non-integer relative times", () => {
+  it("rejects the superseded versioned and run-identified report shapes", () => {
     for (const invalid of [
-      { ...report, events: [report.events[1], report.events[0]] },
-      { ...report, events: [{ ...report.events[0], elapsedMs: 401 }] },
-      { ...report, events: [{ ...report.events[0], elapsedMs: -1 }] },
-      { ...report, events: [{ ...report.events[0], elapsedMs: 1.5 }] },
-      { ...report, durationMs: -1 },
-    ]) {
-      expect(isPlayReportV1(invalid, [LOCATION_REPORT_PROJECTION_VALIDATOR_V1])).toBe(false);
-    }
-  });
-
-  it("keeps each command terminal, versions, outcome code, and progression together", () => {
-    const command = report.events[0];
-    for (const invalid of [
-      { ...command, progressionChanges: undefined },
-      { ...command, expectedVersion: undefined },
-      { ...command, resultingVersion: undefined },
-      { ...command, terminal: "partially-accepted" },
-      { ...command, outcome: { raw: "secret" } },
-      { ...command, outcomeCode: "raw provider detail!" },
-    ]) {
-      expect(
-        isPlayReportV1({ ...report, events: [invalid] }, [LOCATION_REPORT_PROJECTION_VALIDATOR_V1]),
-      ).toBe(false);
-    }
-  });
-
-  it("validates the location-owned projection and excludes forbidden sensor values", () => {
-    const projection = report.events[1].projection;
-    expect(isLocationReportProjectionV1(projection)).toBe(true);
-    for (const forbidden of [
-      { ...projection, latitude: 37.7 },
-      { ...projection, longitude: -122.4 },
-      { ...projection, capturedAt: "2026-08-03T12:00:00.000Z" },
-      { ...projection, horizontalAccuracy: 8 },
-      { ...projection, diagnosticCode: "raw-provider-detail" },
-    ]) {
-      expect(isLocationReportProjectionV1(forbidden)).toBe(false);
-      expect(
-        isPlayReportV1(
+      { ...report, version: 1 },
+      { ...report, runId: "run-1" },
+      { ...report, gameId: "co-op-game" },
+      {
+        ...report,
+        events: [
           {
-            ...report,
-            events: [{ ...report.events[1], projection: forbidden }],
+            kind: "command",
+            elapsedMs: 100,
+            commandId: "command-1",
+            terminal: "accepted",
+            expectedVersion: 0,
+            resultingVersion: 1,
+            progressionChanges: [],
           },
-          [LOCATION_REPORT_PROJECTION_VALIDATOR_V1],
-        ),
-      ).toBe(false);
+        ],
+      },
+    ]) {
+      expect(validate(invalid)).toBe(false);
     }
   });
 
-  it("rejects raw state, command payloads, credentials, host paths, and stack traces", () => {
+  it("rejects game-specific, identity-bearing, and raw evidence fields", () => {
     const forbiddenReports = [
       { ...report, rawState: { phase: "complete" } },
-      { ...report, events: [{ ...report.events[0], commandPayload: { answer: "map" } }] },
-      { ...report, events: [{ ...report.events[2], hostPath: "/private/run.db" }] },
-      { ...report, events: [{ ...report.events[3], stack: "Error at native.ts:1" }] },
       {
         ...report,
         events: [
           {
             ...report.events[1],
-            projection: { ...report.events[1].projection, credential: "secret" },
+            commandPayload: { answer: "map" },
           },
         ],
       },
+      { ...report, shared: { membership: "revoked", sessionId: "session-1" } },
+      { ...report, events: [{ ...report.events[2], latitude: 37.7 }] },
+      { ...report, events: [{ ...report.events[3], serviceOrigin: "https://example.invalid" }] },
+      { ...report, events: [{ ...report.events[4], hostPath: "/private/run.db" }] },
     ];
     for (const invalid of forbiddenReports) {
-      expect(isPlayReportV1(invalid, [LOCATION_REPORT_PROJECTION_VALIDATOR_V1])).toBe(false);
+      expect(validate(invalid)).toBe(false);
+    }
+  });
+
+  it("allows only closed host-owned diagnostic codes", () => {
+    expect(parseReportSafeDiagnosticCode("runtime-mount-failed")).toBe("runtime-mount-failed");
+    expect(parseReportSafeDiagnosticCode("shared-sync-failed")).toBe("shared-sync-failed");
+    expect(parseReportSafeDiagnosticCode("provider said credential=secret")).toBeNull();
+    expect(parseReportSafeDiagnosticCode("/private/run.db")).toBeNull();
+  });
+
+  it("rejects adversarial aliases, outcomes, configuration, and durable evidence", () => {
+    const command = report.events[1];
+    if (command?.kind !== "command") throw new Error("command-fixture-missing");
+    for (const extra of [
+      { commandId: "sensitive-command" },
+      { outcomeCode: "target-discovered" },
+      { payload: { targetId: "target-secret" } },
+      { configuration: { maximumAgeMs: 15_000 } },
+      { projection: { complete: true } },
+      { credentialKey: "secure-store-key" },
+    ]) {
+      expect(
+        validate({
+          ...report,
+          events: [{ ...command, ...extra }],
+        }),
+      ).toBe(false);
+    }
+    for (const extra of [
+      { version: 1 },
+      { runAlias: "run" },
+      { sessionAlias: "session" },
+      { participantAlias: "self" },
+      { teamAlias: "team" },
+    ]) {
+      expect(validate({ ...report, ...extra })).toBe(false);
     }
   });
 });
 
 describe("foreground location capability", () => {
   const base = {
-    version: 1,
     observationId: "location-1",
     recordedAt: "2026-08-03T12:00:01.000Z",
   } as const;
@@ -457,8 +515,8 @@ describe("foreground location capability", () => {
   } as const;
 
   it("accepts only the exact empty request and closed terminal outputs", () => {
-    expect(isLocationRequestInputV1({})).toBe(true);
-    expect(isLocationRequestInputV1({ continuous: true })).toBe(false);
+    expect(isLocationRequestInput({})).toBe(true);
+    expect(isLocationRequestInput({ continuous: true })).toBe(false);
 
     for (const observation of [
       available,
@@ -466,18 +524,18 @@ describe("foreground location capability", () => {
       { ...base, availability: "unavailable" },
       { ...base, availability: "failed", diagnosticCode: "location-provider-failed" },
     ]) {
-      expect(isLocationObservationV1(observation)).toBe(true);
+      expect(isLocationObservation(observation)).toBe(true);
     }
-    expect(isLocationObservationV1({ ...available, speed: 4 })).toBe(false);
+    expect(isLocationObservation({ ...available, speed: 4 })).toBe(false);
     expect(
-      isLocationObservationV1({
+      isLocationObservation({
         ...base,
         availability: "unavailable",
         latitude: 0,
       }),
     ).toBe(false);
     expect(
-      isLocationObservationV1({
+      isLocationObservation({
         ...base,
         availability: "failed",
         diagnosticCode: "raw provider detail!",
@@ -486,8 +544,8 @@ describe("foreground location capability", () => {
   });
 
   it("validates signed age, geographic range, and horizontal accuracy", () => {
-    expect(isLocationObservationV1({ ...available, ageMs: -500 })).toBe(true);
-    expect(isLocationObservationV1({ ...available, ageMs: Number.MAX_SAFE_INTEGER })).toBe(true);
+    expect(isLocationObservation({ ...available, ageMs: -500 })).toBe(true);
+    expect(isLocationObservation({ ...available, ageMs: Number.MAX_SAFE_INTEGER })).toBe(true);
     for (const invalid of [
       { ...available, ageMs: Number.MAX_SAFE_INTEGER + 1 },
       { ...available, ageMs: 1.5 },
@@ -498,7 +556,7 @@ describe("foreground location capability", () => {
       { ...available, horizontalAccuracy: -0.01 },
       { ...available, horizontalAccuracy: Number.POSITIVE_INFINITY },
     ]) {
-      expect(isLocationObservationV1(invalid)).toBe(false);
+      expect(isLocationObservation(invalid)).toBe(false);
     }
   });
 
@@ -506,13 +564,13 @@ describe("foreground location capability", () => {
     expect(recencyBand(-1, 15_000)).toBe("future");
     expect(recencyBand(15_000, 15_000)).toBe("fresh");
     expect(recencyBand(15_001, 15_000)).toBe("stale");
-    expect(projectLocationObservationV1(available, 15_000)).toEqual({
+    expect(projectLocationObservation(available, 15_000)).toEqual({
       availability: "available",
       recencyBand: "fresh",
       accuracyBand: "excellent",
     });
     expect(
-      projectLocationObservationV1(
+      projectLocationObservation(
         { ...base, availability: "failed", diagnosticCode: "location-provider-failed" },
         15_000,
       ),
@@ -521,7 +579,7 @@ describe("foreground location capability", () => {
       recencyBand: "unknown",
       accuracyBand: "unknown",
     });
-    expect(JSON.stringify(projectLocationObservationV1(available, 15_000))).not.toMatch(
+    expect(JSON.stringify(projectLocationObservation(available, 15_000))).not.toMatch(
       /latitude|longitude|capturedAt|recordedAt|ageMs|horizontalAccuracy|diagnosticCode/,
     );
   });

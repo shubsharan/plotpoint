@@ -11,7 +11,7 @@ once, enforces separate closed deterministic-logic and browser-presentation impo
 definitions and cross-references, generates two self-contained browser ESM bundles through pinned
 Rolldown's stable `rolldown()` and `bundle.generate()` APIs, and atomically publishes one deterministic
 `.pprelease` artifact. The portable protocol package owns high-level release construction, the strict
-release-format v1 container, canonical manifest, exact-byte SHA-256 identity, immutable verified entry
+release-format container, canonical manifest, exact-byte SHA-256 identity, immutable verified entry
 access, non-executing inspection, integrity verification, and compatibility assessment. Ambient
 authority is enforced by the future runtime host rather than overclaimed through syntax matching.
 
@@ -52,7 +52,7 @@ ADR therefore provide the planning gates.
 
 ### Post-Design Gate
 
-- **PASS - Exact byte identity**: The whole strict v1 container is hashed, and the identity is external to avoid self-reference.
+- **PASS - Exact byte identity**: The whole strict container is hashed, and the identity is external to avoid self-reference.
 - **PASS - Non-executing inspection**: Manifest, inventory, compatibility, capabilities, and integrity can be assessed without executing game bundles or extracting them to the filesystem.
 - **PASS - Complete integrity boundary**: Canonical manifest inventory plus an expected outer identity covers missing, extra, reordered, and altered bytes honestly.
 - **PASS - Atomic publication**: Invalid or interrupted builds cannot leave a success-shaped release at the requested output path.
@@ -66,7 +66,8 @@ No gate violation requires a complexity exception.
 **Impact**: Major
 
 - [Deterministic Runtime Contract](../../adrs/0001-deterministic-runtime-contract.md) - **Accepted**. Governs the command, aggregate, progression, canonical-value, and ambient-authority definitions that compilation validates and bundles.
-- [Immutable Release Format](../../adrs/0002-immutable-release-format.md) - **Accepted**. Governs project composition, closed-import enforcement, future runtime authority isolation, release-format v1 bytes, high-level construction and entry access, manifest and identity semantics, compatibility, verification, package ownership, and atomic publication.
+- [Immutable Release Format](../../adrs/0002-immutable-release-format.md) - **Accepted**. Governs project composition, closed-import enforcement, future runtime authority isolation, release-format bytes, high-level construction and entry access, manifest and identity semantics, compatibility, verification, package ownership, and atomic publication.
+- [Centralized Contract Evolution](../../adrs/0006-centralized-contract-evolution.md) - **Accepted**. Governs plain public symbols, semantic identifiers, and centralized serialized compatibility metadata.
 
 <!-- Use `Impact: Major` and link every governing ADR here and in spec.md. -->
 
@@ -84,7 +85,7 @@ docs/features/0002-immutable-release-pipeline/
 ├── contracts/
 │   ├── project-configuration.md
 │   ├── compiler-api.md
-│   └── release-format-v1.md
+│   └── release-format.md
 ├── checklists/
 │   └── requirements.md
 └── tasks.md                 # Created by /speckit-tasks after ADR acceptance
@@ -142,7 +143,7 @@ packages/compiler/
 examples/releases/
 ├── minimal-local-puzzle/
 ├── branching-media-tour/
-└── team-session-hunt/
+└── co-op-game/
 
 vitest.config.ts
 package.json
@@ -169,7 +170,7 @@ snapshot semantics, package ownership, and golden evidence without remaining cla
 - [data-model.md](data-model.md) defines project, snapshot, registries, entries, manifest, artifact, identity, diagnostics, and compilation lifecycles.
 - [project-configuration.md](contracts/project-configuration.md) fixes the strict declarative authoring and environment-boundary contract.
 - [compiler-api.md](contracts/compiler-api.md) fixes validation, compilation, diagnostics, CLI, subprocess, and atomic-output behavior.
-- [release-format-v1.md](contracts/release-format-v1.md) fixes canonical bytes, manifest, identity, inspection, verification, and compatibility semantics.
+- [release-format.md](contracts/release-format.md) fixes canonical bytes, manifest, identity, inspection, verification, and compatibility semantics.
 - [quickstart.md](quickstart.md) demonstrates validation, compilation, source-free inspection, byte reproducibility, and tamper rejection as an external consumer.
 - The Spec Kit block in `AGENTS.md` points to this plan so subsequent task generation and implementation load the Gate 2 decisions.
 

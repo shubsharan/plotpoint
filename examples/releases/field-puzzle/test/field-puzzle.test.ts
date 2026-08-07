@@ -1,88 +1,349 @@
+import {
+  bindExecutableAggregateModel,
+  resolveCommandBinding,
+  type Aggregate,
+  type JsonObject,
+  type Observation,
+  type ResolvedAggregateModel,
+  type RuntimeSchema,
+} from "@plotpoint/runtime";
 import { describe, expect, it } from "vitest";
 
-import { advanceCommand } from "../src/commands/advance.js";
+import {
+  advanceCommand,
+  type AdvanceOutcome,
+  type AdvancePayload,
+} from "../src/commands/advance.js";
 import { fieldGame } from "../src/config.js";
-import { logic } from "../src/logic.js";
+import {
+  initializeField,
+  type FieldCheckpoint,
+  type FieldGameContent,
+  type FieldState,
+} from "../src/initial-state.js";
+import { fieldProgression } from "../src/progression/route.js";
 
-const target = {
-  kind: "player" as const,
-  id: "field-player",
-  schemaVersion: 1,
-  stateVersion: 0,
-  authority: "local" as const,
-  state: { attempts: 0, phase: "first-checkpoint" as const },
-};
+const TEST_DIGEST =
+  "sha256:0000000000000000000000000000000000000000000000000000000000000000" as const;
 
-describe("field puzzle", () => {
-  const checkIn = {
-    id: "check-in",
-    type: "advance",
-    target: { kind: "player" as const, id: "field-player" },
-    expectedStateVersion: 0,
-    payload: { action: "check-in" as const },
+function isObject(value: unknown): value is JsonObject {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function schema<Value extends JsonObject>(
+  id: string,
+  validate: (value: unknown) => value is Value,
+): RuntimeSchema<Value> {
+  return Object.freeze({
+    id,
+    schemaDigest: TEST_DIGEST,
+    validate(value: unknown) {
+      return validate(value)
+        ? { valid: true as const, value }
+        : { valid: false as const, diagnostics: [] };
+    },
+  });
+}
+
+function isCheckpoint(value: unknown): value is FieldCheckpoint {
+  return (
+    isObject(value) &&
+    typeof value.name === "string" &&
+    typeof value.latitude === "number" &&
+    typeof value.longitude === "number" &&
+    typeof value.radiusMeters === "number" &&
+    typeof value.maximumAccuracyMeters === "number"
+  );
+}
+
+function isFieldGameContent(value: unknown): value is FieldGameContent {
+  return (
+    isObject(value) &&
+    typeof value.title === "string" &&
+    isCheckpoint(value.firstCheckpoint) &&
+    isObject(value.puzzle) &&
+    typeof value.puzzle.prompt === "string" &&
+    typeof value.puzzle.answer === "string" &&
+    isCheckpoint(value.secondCheckpoint) &&
+    typeof value.maximumObservationAgeMs === "number"
+  );
+}
+
+function isFieldState(value: unknown): value is FieldState {
+  return (
+    isObject(value) &&
+    Number.isSafeInteger(value.attempts) &&
+    Array.isArray(value.visitedCheckpoints) &&
+    value.visitedCheckpoints.every(
+      (checkpoint) => checkpoint === "first-checkpoint" || checkpoint === "second-checkpoint",
+    ) &&
+    typeof value.puzzleSolved === "boolean" &&
+    isCheckpoint(value.firstCheckpoint) &&
+    typeof value.puzzleAnswer === "string" &&
+    isCheckpoint(value.secondCheckpoint) &&
+    typeof value.maximumObservationAgeMs === "number" &&
+    !("phase" in value)
+  );
+}
+
+function isAdvancePayload(value: unknown): value is AdvancePayload {
+  return (
+    isObject(value) &&
+    (value.action === "check-in" || value.action === "solve") &&
+    (value.answer === undefined || typeof value.answer === "string")
+  );
+}
+
+const RESULTS = new Set<AdvanceOutcome["result"]>([
+  "advanced",
+  "already-complete",
+  "incorrect",
+  "permission-denied",
+  "unavailable",
+  "failed",
+  "future",
+  "stale",
+  "inaccurate",
+  "outside",
+  "wrong-phase",
+]);
+
+function isAdvanceOutcome(value: unknown): value is AdvanceOutcome {
+  return isObject(value) && typeof value.result === "string" && RESULTS.has(value.result as never);
+}
+
+function createModel() {
+  const binding = resolveCommandBinding({
+    registrationId: "field.advance",
+    definition: advanceCommand,
+    payloadSchema: schema("field.advance-payload", isAdvancePayload),
+    outcomeSchema: schema("field.advance-outcome", isAdvanceOutcome),
+  });
+  const model: ResolvedAggregateModel<"player", FieldState> = {
+    modelId: "field.player",
+    aggregateKind: "player",
+    authority: "local",
+    stateSchema: schema("field.player-state", isFieldState),
+    initializationSchema: schema("field.initialization", isFieldGameContent),
+    initializeState(input) {
+      if (!isFieldGameContent(input)) throw new TypeError("field-initialization-invalid");
+      return initializeField(input);
+    },
+    commandsByType: { advance: binding },
+    eventSchemas: { "field.advanced": schema("field.advanced-event", isObject) },
+    effectSchemas: {},
+    progression: fieldProgression,
   };
-  const atCheckpoint = (checkpoint: typeof fieldGame.firstCheckpoint) => ({
+  return bindExecutableAggregateModel(model);
+}
+
+function initialized() {
+  const result = createModel().initialize(fieldGame);
+  if (result.kind !== "initialized") throw new Error(result.diagnostics[0]?.code);
+  return result.aggregate;
+}
+
+function command(aggregate: Aggregate<JsonObject, "player">, id: string, payload: AdvancePayload) {
+  return {
+    id,
+    type: "advance",
+    target: { kind: "player" as const, id: aggregate.aggregateId },
+    expectedStateVersion: aggregate.stateVersion,
+    payload,
+  };
+}
+
+const atCheckpoint = (checkpoint: typeof fieldGame.firstCheckpoint): Observation => ({
+  kind: "location.foreground",
+  key: "current",
+  value: {
     availability: "available",
     ageMs: 0,
     latitude: checkpoint.latitude,
     longitude: checkpoint.longitude,
     horizontalAccuracy: 5,
+  },
+});
+
+describe("field puzzle", () => {
+  it("initializes canonical progression without duplicating phase in authored state", () => {
+    const aggregate = initialized();
+
+    expect(aggregate.state).toMatchObject({
+      attempts: 0,
+      visitedCheckpoints: [],
+      puzzleSolved: false,
+    });
+    expect(aggregate.state).not.toHaveProperty("phase");
+    expect(aggregate.progression).toEqual({
+      graphId: "field.route",
+      nodes: [
+        { nodeId: "complete", status: "locked" },
+        { nodeId: "first-checkpoint", status: "active" },
+        { nodeId: "puzzle", status: "locked" },
+        { nodeId: "second-checkpoint", status: "locked" },
+      ],
+    });
   });
 
-  it("advances at the first checkpoint and rejects inaccurate observations", () => {
-    const command = {
-      id: "one",
-      type: "advance",
-      target: { kind: "player" as const, id: "field-player" },
-      expectedStateVersion: 0,
-      payload: { action: "check-in" as const },
-    };
-    const accepted = advanceCommand.handle(target, command, {
-      take: () => ({
-        availability: "available",
-        ageMs: 0,
-        latitude: 37.76942,
-        longitude: -122.48621,
-        horizontalAccuracy: 5,
-      }),
+  it("derives the complete route from durable facts and empty command progression intents", () => {
+    const model = createModel();
+    const initial = initialized();
+    const first = model.execute({
+      aggregate: initial,
+      command: command(initial, "first", { action: "check-in" }),
+      observations: [atCheckpoint(fieldGame.firstCheckpoint)],
     });
-    expect(accepted).toMatchObject({ kind: "accepted", nextState: { phase: "puzzle" } });
-    const inaccurate = advanceCommand.handle(target, command, {
-      take: () => ({
-        availability: "available",
-        ageMs: 0,
-        latitude: 37.76942,
-        longitude: -122.48621,
-        horizontalAccuracy: 100,
-      }),
+    expect(first).toMatchObject({
+      kind: "recorded",
+      aggregate: {
+        stateVersion: 1,
+        state: { visitedCheckpoints: ["first-checkpoint"], puzzleSolved: false },
+        progression: {
+          nodes: [
+            { nodeId: "complete", status: "locked" },
+            { nodeId: "first-checkpoint", status: "completed" },
+            { nodeId: "puzzle", status: "available" },
+            { nodeId: "second-checkpoint", status: "locked" },
+          ],
+        },
+      },
+      record: { terminal: "accepted", progressionTrace: expect.any(Array) },
     });
-    expect(inaccurate).toEqual({ kind: "rejected", outcome: { result: "inaccurate" } });
+    if (first.kind !== "recorded") throw new Error("first-checkpoint-not-recorded");
+
+    const solved = model.execute({
+      aggregate: first.aggregate,
+      command: command(first.aggregate, "solve", {
+        action: "solve",
+        answer: fieldGame.puzzle.answer,
+      }),
+      observations: [],
+    });
+    expect(solved).toMatchObject({
+      kind: "recorded",
+      aggregate: {
+        stateVersion: 2,
+        state: { attempts: 1, puzzleSolved: true },
+        progression: {
+          nodes: [
+            { nodeId: "complete", status: "locked" },
+            { nodeId: "first-checkpoint", status: "completed" },
+            { nodeId: "puzzle", status: "completed" },
+            { nodeId: "second-checkpoint", status: "available" },
+          ],
+        },
+      },
+    });
+    if (solved.kind !== "recorded") throw new Error("puzzle-not-recorded");
+
+    const complete = model.execute({
+      aggregate: solved.aggregate,
+      command: command(solved.aggregate, "second", { action: "check-in" }),
+      observations: [atCheckpoint(fieldGame.secondCheckpoint)],
+    });
+    expect(complete).toMatchObject({
+      kind: "recorded",
+      aggregate: {
+        stateVersion: 3,
+        state: { visitedCheckpoints: ["first-checkpoint", "second-checkpoint"] },
+        progression: {
+          nodes: [
+            { nodeId: "complete", status: "available" },
+            { nodeId: "first-checkpoint", status: "completed" },
+            { nodeId: "puzzle", status: "completed" },
+            { nodeId: "second-checkpoint", status: "completed" },
+          ],
+        },
+      },
+    });
+    for (const result of [first, solved, complete]) {
+      if (result.kind !== "recorded") throw new Error("field-action-not-recorded");
+      expect(result.record.progressionTrace.length).toBeGreaterThan(0);
+    }
   });
 
-  it("reports denied, unavailable, stale, and distant observations without advancing", () => {
-    const command = {
-      id: "one",
-      type: "advance",
-      target: { kind: "player" as const, id: "field-player" },
-      expectedStateVersion: 0,
-      payload: { action: "check-in" as const },
-    };
+  it("covers explicit rejection, no-op, preflight-invalid, and recorded invalid terminals", () => {
+    const model = createModel();
+    const initial = initialized();
+    const inaccurate = model.execute({
+      aggregate: initial,
+      command: command(initial, "inaccurate", { action: "check-in" }),
+      observations: [
+        {
+          ...atCheckpoint(fieldGame.firstCheckpoint),
+          value: {
+            ...atCheckpoint(fieldGame.firstCheckpoint).value,
+            horizontalAccuracy: 100,
+          },
+        },
+      ],
+    });
+    expect(inaccurate).toMatchObject({
+      kind: "recorded",
+      record: { terminal: "rejected", outcome: { result: "inaccurate" } },
+    });
+
+    const preflight = model.execute({
+      aggregate: initial,
+      command: {
+        ...command(initial, "preflight", { action: "check-in" }),
+        expectedStateVersion: -1,
+      },
+      observations: [],
+    });
+    expect(preflight).toMatchObject({ kind: "preflight-invalid" });
+
+    const executionInvalid = model.execute({
+      aggregate: initial,
+      command: command(initial, "execution-invalid", { action: "check-in" }),
+      observations: [],
+    });
+    expect(executionInvalid).toMatchObject({
+      kind: "recorded",
+      record: { terminal: "invalid", diagnostics: [{ code: "observation-exhausted" }] },
+    });
+
+    const first = model.execute({
+      aggregate: initial,
+      command: command(initial, "first", { action: "check-in" }),
+      observations: [atCheckpoint(fieldGame.firstCheckpoint)],
+    });
+    if (first.kind !== "recorded") throw new Error("first-checkpoint-not-recorded");
+    const solved = model.execute({
+      aggregate: first.aggregate,
+      command: command(first.aggregate, "solve", {
+        action: "solve",
+        answer: fieldGame.puzzle.answer,
+      }),
+      observations: [],
+    });
+    if (solved.kind !== "recorded") throw new Error("puzzle-not-recorded");
+    const repeated = model.execute({
+      aggregate: solved.aggregate,
+      command: command(solved.aggregate, "solve-again", {
+        action: "solve",
+        answer: fieldGame.puzzle.answer,
+      }),
+      observations: [],
+    });
+    expect(repeated).toMatchObject({
+      kind: "recorded",
+      aggregate: { stateVersion: 2 },
+      record: { terminal: "no-op", outcome: { result: "already-complete" } },
+    });
+  });
+
+  it("preserves safe observation failures without advancing durable facts", () => {
+    const model = createModel();
+    const initial = initialized();
     const outcomes = [
       { value: { availability: "permission-denied" }, result: "permission-denied" },
       { value: { availability: "unavailable" }, result: "unavailable" },
       { value: { availability: "failed" }, result: "failed" },
+      { value: { ...atCheckpoint(fieldGame.firstCheckpoint).value, ageMs: -1 }, result: "future" },
       {
-        value: { ...atCheckpoint(fieldGame.firstCheckpoint), ageMs: -1 },
-        result: "future",
-      },
-      {
-        value: {
-          availability: "available",
-          ageMs: 120_000,
-          latitude: 37.76942,
-          longitude: -122.48621,
-          horizontalAccuracy: 5,
-        },
+        value: { ...atCheckpoint(fieldGame.firstCheckpoint).value, ageMs: 120_000 },
         result: "stale",
       },
       {
@@ -96,167 +357,18 @@ describe("field puzzle", () => {
         result: "outside",
       },
     ];
-    for (const outcome of outcomes) {
-      expect(advanceCommand.handle(target, command, { take: () => outcome.value })).toEqual({
-        kind: "rejected",
-        outcome: { result: outcome.result },
+    for (const [index, outcome] of outcomes.entries()) {
+      expect(
+        model.execute({
+          aggregate: initial,
+          command: command(initial, `rejected-${index}`, { action: "check-in" }),
+          observations: [{ kind: "location.foreground", key: "current", value: outcome.value }],
+        }),
+      ).toMatchObject({
+        kind: "recorded",
+        aggregate: { stateVersion: 0, state: { visitedCheckpoints: [] } },
+        record: { terminal: "rejected", outcome: { result: outcome.result } },
       });
     }
-  });
-
-  it("completes both checkpoints with the release-owned puzzle between them", () => {
-    const first = advanceCommand.handle(target, checkIn, {
-      take: () => atCheckpoint(fieldGame.firstCheckpoint),
-    });
-    expect(first).toMatchObject({ kind: "accepted", nextState: { phase: "puzzle" } });
-    if (first.kind !== "accepted") throw new Error("first-checkpoint-not-accepted");
-
-    const solved = advanceCommand.handle(
-      { ...target, stateVersion: 1, state: first.nextState },
-      {
-        ...checkIn,
-        id: "solve",
-        expectedStateVersion: 1,
-        payload: { action: "solve", answer: fieldGame.puzzle.answer } as const,
-      },
-      { take: () => ({}) },
-    );
-    expect(solved).toMatchObject({ kind: "accepted", nextState: { phase: "second-checkpoint" } });
-    if (solved.kind !== "accepted") throw new Error("puzzle-not-accepted");
-
-    const complete = advanceCommand.handle(
-      { ...target, stateVersion: 2, state: solved.nextState },
-      { ...checkIn, id: "second-checkpoint", expectedStateVersion: 2 },
-      { take: () => atCheckpoint(fieldGame.secondCheckpoint) },
-    );
-    expect(complete).toMatchObject({ kind: "accepted", nextState: { phase: "complete" } });
-  });
-
-  it("requires the puzzle between the two checkpoints", () => {
-    const puzzleTarget = {
-      ...target,
-      state: { attempts: 0, phase: "puzzle" as const },
-      stateVersion: 1,
-    };
-    const incorrect = advanceCommand.handle(
-      puzzleTarget,
-      {
-        id: "two",
-        type: "advance",
-        target: { kind: "player" as const, id: "field-player" },
-        expectedStateVersion: 1,
-        payload: { action: "solve" as const, answer: "wrong" },
-      },
-      { take: () => ({}) },
-    );
-    expect(incorrect).toMatchObject({
-      kind: "accepted",
-      nextState: { attempts: 1, phase: "puzzle" },
-    });
-    const solved = advanceCommand.handle(
-      puzzleTarget,
-      {
-        id: "three",
-        type: "advance",
-        target: { kind: "player" as const, id: "field-player" },
-        expectedStateVersion: 1,
-        payload: { action: "solve" as const, answer: "map" },
-      },
-      { take: () => ({}) },
-    );
-    expect(solved).toMatchObject({ kind: "accepted", nextState: { phase: "second-checkpoint" } });
-  });
-
-  it("maps accepted and rejected execution terminals to exact Host API candidates", () => {
-    const accepted = logic.run({
-      commandId: "candidate-accepted",
-      state: target.state,
-      stateVersion: 0,
-      payload: { action: "check-in" },
-      observation: {
-        version: 1,
-        observationId: "location-accepted",
-        recordedAt: "2030-01-01T00:00:00.000Z",
-        capturedAt: "2030-01-01T00:00:00.000Z",
-        availability: "available",
-        ageMs: 0,
-        latitude: fieldGame.firstCheckpoint.latitude,
-        longitude: fieldGame.firstCheckpoint.longitude,
-        horizontalAccuracy: 5,
-      },
-    });
-    expect(accepted).toMatchObject({
-      kind: "candidate",
-      candidate: {
-        commandId: "candidate-accepted",
-        target: {
-          aggregateId: "field-player",
-          aggregateKind: "player",
-          schemaId: "field.player-state.v1",
-          schemaVersion: 1,
-        },
-        expectedVersion: 0,
-        terminal: "accepted",
-        nextState: { attempts: 0, phase: "puzzle" },
-        outcome: { result: "advanced" },
-        observationIds: ["location-accepted"],
-      },
-    });
-
-    const rejected = logic.run({
-      commandId: "candidate-rejected",
-      state: target.state,
-      stateVersion: 0,
-      payload: { action: "check-in" },
-      observation: {
-        version: 1,
-        observationId: "location-denied",
-        recordedAt: "2030-01-01T00:00:00.000Z",
-        availability: "permission-denied",
-      },
-    });
-    expect(rejected).toEqual({
-      kind: "candidate",
-      candidate: {
-        commandId: "candidate-rejected",
-        target: {
-          aggregateId: "field-player",
-          aggregateKind: "player",
-          schemaId: "field.player-state.v1",
-          schemaVersion: 1,
-        },
-        expectedVersion: 0,
-        terminal: "rejected",
-        outcome: { result: "permission-denied" },
-        observationIds: ["location-denied"],
-      },
-    });
-  });
-
-  it("keeps preflight failures local and maps recorded execution failures to invalid candidates", () => {
-    expect(
-      logic.run({
-        commandId: "preflight-invalid",
-        state: target.state,
-        stateVersion: -1,
-        payload: { action: "solve", answer: "map" },
-      }),
-    ).toMatchObject({ kind: "preflight-invalid", diagnosticCodes: expect.any(Array) });
-
-    expect(
-      logic.run({
-        commandId: "execution-invalid",
-        state: target.state,
-        stateVersion: 0,
-        payload: { action: "check-in" },
-      }),
-    ).toMatchObject({
-      kind: "candidate",
-      candidate: {
-        commandId: "execution-invalid",
-        terminal: "invalid",
-        diagnosticCodes: expect.any(Array),
-      },
-    });
   });
 });

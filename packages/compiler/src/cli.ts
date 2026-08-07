@@ -5,10 +5,10 @@ import { pathToFileURL } from "node:url";
 import QRCode from "qrcode";
 
 import {
-  inspectRelease,
+  inspectGameRelease,
   isReleaseId,
   verifyRelease,
-  type InspectedRelease,
+  type GameReleaseInspection,
   type InvalidRelease,
   type ReleaseId,
   type VerifiedRelease,
@@ -178,12 +178,15 @@ function writeVerificationResult(result: VerifiedRelease | InvalidRelease, json:
   process.stdout.write(`${result.releaseId} ${label}\n`);
 }
 
-function writeInspectionResult(result: InspectedRelease | InvalidRelease, json: boolean): void {
+function writeInspectionResult(
+  result: GameReleaseInspection | InvalidRelease,
+  json: boolean,
+): void {
   if (json) {
     process.stdout.write(`${JSON.stringify(result)}\n`);
     return;
   }
-  if (result.kind === "invalid") {
+  if ("kind" in result) {
     for (const diagnostic of result.diagnostics) {
       const location = diagnostic.path === undefined ? "release" : diagnostic.path;
       process.stderr.write(
@@ -193,7 +196,7 @@ function writeInspectionResult(result: InspectedRelease | InvalidRelease, json: 
     return;
   }
   process.stdout.write(
-    `${result.releaseId} format=${result.manifest.releaseFormatVersion} entries=${result.manifest.inventory.length}\n`,
+    `${result.release.releaseId} format=${result.release.manifest.releaseFormatVersion} entries=${result.release.manifest.inventory.length} models=${result.gameComposition.aggregateModels.length} components=${result.gameComposition.components.length}\n`,
   );
 }
 
@@ -225,9 +228,9 @@ export async function runCli(argv: readonly string[]): Promise<number> {
     return 2;
   }
   if (parsed.command === "inspect") {
-    const result = await inspectRelease(new Uint8Array(await readFile(parsed.release)));
+    const result = await inspectGameRelease(new Uint8Array(await readFile(parsed.release)));
     writeInspectionResult(result, parsed.json);
-    return result.kind === "invalid" ? 2 : 0;
+    return "kind" in result ? 2 : 0;
   }
   if (parsed.command === "verify") {
     const result = await verifyRelease({

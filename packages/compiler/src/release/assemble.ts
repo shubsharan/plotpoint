@@ -1,5 +1,6 @@
 import {
   createReleaseArtifact,
+  GAME_COMPOSITION_PATH,
   type CapabilityRequirement,
   type ReleaseArtifact,
   type ReleaseEntryKind,
@@ -7,6 +8,7 @@ import {
 } from "@plotpoint/protocol";
 
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
+import { buildGameComposition, capabilitiesEqual } from "../composition/game-composition.js";
 import type { CompilationSnapshot, CompilerDiagnostic } from "../project/config.js";
 import type { ValidatedAsset } from "../validation/assets.js";
 import type { ValidatedContent } from "../validation/content.js";
@@ -21,7 +23,6 @@ export interface CompiledBundles {
 export interface AssembleReleaseInput {
   readonly snapshot: CompilationSnapshot;
   readonly bundles: CompiledBundles;
-  readonly aggregateSchemas: ReadonlyMap<string, ValidatedSchema>;
   readonly schemas: ReadonlyMap<string, ValidatedSchema>;
   readonly content: readonly ValidatedContent[];
   readonly assets: readonly ValidatedAsset[];
@@ -32,13 +33,13 @@ export type AssembleReleaseResult =
   | { readonly kind: "assembled"; readonly artifact: ReleaseArtifact }
   | { readonly kind: "invalid"; readonly diagnostics: readonly CompilerDiagnostic[] };
 
-function invalid(reason: string): AssembleReleaseResult {
+function invalid(reason: string, path = "manifest.json"): AssembleReleaseResult {
   return {
     kind: "invalid",
     diagnostics: Object.freeze([
       createCompilerDiagnostic({
         code: "release-assembly-failed",
-        location: { kind: "artifact", path: "manifest.json" },
+        location: { kind: "artifact", path },
         details: { reason },
       }),
     ]),
@@ -54,7 +55,18 @@ function pushDataEntry(
   entries.push(Object.freeze({ path, kind, value }));
 }
 
-function buildEntries(input: AssembleReleaseInput): readonly ReleaseMaterialEntry[] | null {
+function compareOrdinal(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function schemaReference(id: string) {
+  return Object.freeze({ id });
+}
+
+function buildEntries(
+  input: AssembleReleaseInput,
+  composition: ReturnType<typeof buildGameComposition>,
+): readonly ReleaseMaterialEntry[] | null {
   const entries: ReleaseMaterialEntry[] = [
     Object.freeze({ path: "bundles/logic.js", kind: "logic-bundle", bytes: input.bundles.logic }),
     Object.freeze({
@@ -63,25 +75,17 @@ function buildEntries(input: AssembleReleaseInput): readonly ReleaseMaterialEntr
       bytes: input.bundles.presentation,
     }),
   ];
-
-  for (const registration of input.snapshot.registries.aggregateSchemas) {
-    const schema = input.aggregateSchemas.get(registration.id);
-    if (schema === undefined) return null;
-    entries.push(
-      Object.freeze({
-        path: generatedReleaseEntryPath("aggregate-schema", registration.id),
-        kind: "aggregate-schema",
-        bytes: schema.canonicalBytes,
-      }),
-    );
-  }
+  const stateSchemas = new Set(
+    input.snapshot.registries.aggregateModels.map(({ stateSchema }) => stateSchema),
+  );
   for (const registration of input.snapshot.registries.schemas) {
     const schema = input.schemas.get(registration.id);
     if (schema === undefined) return null;
+    const aggregate = stateSchemas.has(registration.id);
     entries.push(
       Object.freeze({
-        path: generatedReleaseEntryPath("schema", registration.id),
-        kind: "command-schema",
+        path: generatedReleaseEntryPath(aggregate ? "aggregate-schema" : "schema", registration.id),
+        kind: aggregate ? "aggregate-schema" : "command-schema",
         bytes: schema.canonicalBytes,
       }),
     );
@@ -91,32 +95,20 @@ function buildEntries(input: AssembleReleaseInput): readonly ReleaseMaterialEntr
       entries,
       generatedReleaseEntryPath("progression", progression.id),
       "progression",
-      {
-        id: progression.id,
-        version: progression.version,
-        kind: progression.kind,
-        aggregateSchema: progression.aggregateSchema,
-        commands: progression.commands,
-        content: progression.content,
-        components: progression.components,
-      },
+      { id: progression.id, aggregateModel: progression.aggregateModel },
     );
   }
   for (const component of input.snapshot.registries.components) {
-    const descriptor = {
+    pushDataEntry(entries, generatedReleaseEntryPath("component", component.id), "component-data", {
       id: component.id,
-      export: component.implementation.export,
       commands: component.commands,
       content: component.content,
       assets: component.assets,
       capabilities: component.capabilities,
-    };
-    pushDataEntry(
-      entries,
-      generatedReleaseEntryPath("component", component.id),
-      "component-data",
-      descriptor,
-    );
+      ...(component.sharedProjection === undefined
+        ? {}
+        : { sharedProjection: schemaReference(component.sharedProjection.id) }),
+    });
   }
   for (const content of input.content) {
     entries.push(
@@ -130,24 +122,41 @@ function buildEntries(input: AssembleReleaseInput): readonly ReleaseMaterialEntr
   for (const asset of input.assets) {
     entries.push(Object.freeze({ path: asset.releasePath, kind: "asset", bytes: asset.bytes }));
   }
-  entries.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+  pushDataEntry(entries, GAME_COMPOSITION_PATH, "content", composition);
+  entries.sort((left, right) => compareOrdinal(left.path, right.path));
   return Object.freeze(entries);
 }
 
 export async function assembleRelease(input: AssembleReleaseInput): Promise<AssembleReleaseResult> {
-  const entries = buildEntries(input);
+  const composition = buildGameComposition(input.snapshot.registries);
+  if (!capabilitiesEqual(composition, input.capabilities)) {
+    return invalid("manifest-capability-mismatch");
+  }
+  const entries = buildEntries(input, composition);
   if (entries === null) return invalid("material-encoding-failed");
+  const modelSchemas = new Map<
+    string,
+    { readonly id: string; readonly kind: "player" | "team" | "session" }
+  >();
+  for (const model of input.snapshot.registries.aggregateModels) {
+    const prior = modelSchemas.get(model.stateSchema);
+    if (prior !== undefined && prior.kind !== model.kind) {
+      return invalid("aggregate-schema-kind-conflict", GAME_COMPOSITION_PATH);
+    }
+    modelSchemas.set(model.stateSchema, { id: model.stateSchema, kind: model.kind });
+  }
   const artifact = await createReleaseArtifact({
     hostApi: input.snapshot.config.hostApi,
     aggregateSchemas: Object.freeze(
-      input.snapshot.registries.aggregateSchemas.map((registration) =>
-        Object.freeze({
-          id: registration.id,
-          kind: registration.kind,
-          version: registration.version,
-          path: generatedReleaseEntryPath("aggregate-schema", registration.id),
-        }),
-      ),
+      [...modelSchemas.values()]
+        .sort((left, right) => compareOrdinal(left.id, right.id))
+        .map((registration) =>
+          Object.freeze({
+            id: registration.id,
+            kind: registration.kind,
+            path: generatedReleaseEntryPath("aggregate-schema", registration.id),
+          }),
+        ),
     ),
     capabilities: input.capabilities,
     entrypoints: Object.freeze({
@@ -168,8 +177,5 @@ export async function assembleRelease(input: AssembleReleaseInput): Promise<Asse
       ]),
     };
   }
-  return {
-    kind: "assembled",
-    artifact,
-  };
+  return { kind: "assembled", artifact };
 }

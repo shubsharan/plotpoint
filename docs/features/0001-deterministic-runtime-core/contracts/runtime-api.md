@@ -106,7 +106,6 @@ Generic parameters are constrained to canonical objects. Definitions and handler
 
 ```ts
 export interface RuntimePolicy {
-  readonly contractVersion: 1;
   readonly maxCanonicalDepth: number;
   readonly maxCanonicalNodes: number;
   readonly maxAutomaticTransitions: number;

@@ -5,7 +5,8 @@ import type { ReleaseArtifact } from "@plotpoint/protocol";
 import { bundleDefinitionInspection, bundleRelease } from "./bundle/bundle-release.js";
 import { inspectDefinitionBundle } from "./composition/inspect-definitions.js";
 import {
-  validateLogicDefinitionExports,
+  validateDefinitionMetadata,
+  validateDefinitionExports,
   validateReferences,
 } from "./composition/validate-references.js";
 import { createCompilerDiagnostic } from "./diagnostics/create.js";
@@ -35,9 +36,9 @@ import {
 } from "./validation/capabilities.js";
 import { validateCommands } from "./validation/commands.js";
 import { validateComponents } from "./validation/components.js";
-import { validateContent } from "./validation/content.js";
+import { validateContent, validateDefaultInitializationInputs } from "./validation/content.js";
 import { validateProgressions } from "./validation/progression.js";
-import { validateSchemas } from "./validation/schemas.js";
+import { validateRuntimeSchemaRoots, validateSchemas } from "./validation/schemas.js";
 
 interface PreparedProject {
   readonly kind: "prepared";
@@ -69,12 +70,20 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
   if (captured.kind === "invalid") return captured;
   const { snapshot } = captured;
 
+  const capabilities = validateCapabilities(snapshot);
+  if (capabilities.kind === "invalid") return capabilities;
   const references = validateReferences(snapshot.registries);
   if (references.length > 0) return invalid(references);
-  const logic = resolveImportGraph(snapshot, snapshot.config.entries.logic, "logic");
+  const localModel = snapshot.registries.aggregateModels.find(
+    (model) => model.authority === "local",
+  );
+  if (localModel === undefined) {
+    throw new Error("Reference validation did not require one local model");
+  }
+  const logic = resolveImportGraph(snapshot, localModel.initializer, "logic");
   const presentation = resolveImportGraph(
     snapshot,
-    snapshot.config.entries.presentation,
+    snapshot.registries.application.definition,
     "presentation",
   );
   if (logic.kind === "invalid" || presentation.kind === "invalid") {
@@ -84,32 +93,73 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
     ]);
   }
 
-  const logicDefinitions = validateLogicDefinitionExports(snapshot.registries, logic.graph);
-  if (logicDefinitions.length > 0) return invalid(logicDefinitions);
+  const definitionExports = validateDefinitionExports([
+    {
+      registration: "application",
+      id: "application",
+      selected: snapshot.registries.application.definition,
+      graph: presentation.graph,
+    },
+    ...snapshot.registries.aggregateModels.flatMap((model) =>
+      model.authority === "local"
+        ? [
+            {
+              registration: "aggregateModels",
+              id: model.id,
+              selected: model.initializer,
+              graph: logic.graph,
+            },
+          ]
+        : [],
+    ),
+    ...snapshot.registries.commands.flatMap((command) =>
+      command.execution === "local"
+        ? [
+            {
+              registration: "commands",
+              id: command.id,
+              selected: command.definition,
+              graph: logic.graph,
+            },
+          ]
+        : [],
+    ),
+    ...snapshot.registries.progressions.map((progression) => ({
+      registration: "progressions",
+      id: progression.id,
+      selected: progression.definition,
+      graph: logic.graph,
+    })),
+    ...snapshot.registries.components.map((component) => ({
+      registration: "components",
+      id: component.id,
+      selected: component.implementation,
+      graph: presentation.graph,
+    })),
+  ]);
+  if (definitionExports.length > 0) return invalid(definitionExports);
 
   const components = validateComponents(snapshot, presentation.graph);
-  const capabilities = validateCapabilities(snapshot);
   const compatibility = validateCompatibilityRequirements(snapshot);
-  if (
-    components.kind === "invalid" ||
-    capabilities.kind === "invalid" ||
-    compatibility.length > 0
-  ) {
+  if (components.kind === "invalid" || compatibility.length > 0) {
     return invalid([
       ...(components.kind === "invalid" ? components.diagnostics : []),
-      ...(capabilities.kind === "invalid" ? capabilities.diagnostics : []),
       ...compatibility,
     ]);
   }
 
   const schemas = validateSchemas(snapshot);
   if (schemas.kind === "invalid") return schemas;
+  const runtimeSchemaRoots = validateRuntimeSchemaRoots(snapshot.registries, schemas.schemas);
+  if (runtimeSchemaRoots.length > 0) return invalid(runtimeSchemaRoots);
   const content = validateContent(snapshot, schemas.schemas);
+  const initializationInputs = validateDefaultInitializationInputs(snapshot, schemas.schemas);
   const assets = validateAssets(snapshot);
-  if (content.kind === "invalid" || assets.kind === "invalid") {
+  if (content.kind === "invalid" || assets.kind === "invalid" || initializationInputs.length > 0) {
     return invalid([
       ...(content.kind === "invalid" ? content.diagnostics : []),
       ...(assets.kind === "invalid" ? assets.diagnostics : []),
+      ...initializationInputs,
     ]);
   }
 
@@ -118,6 +168,7 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
   const definitions = await inspectDefinitionBundle(inspectionBundle.bytes);
   if (definitions.kind === "invalid") return invalid([definitions.diagnostic]);
   const definitionDiagnostics = [
+    ...validateDefinitionMetadata(snapshot.registries, definitions.metadata),
     ...validateCommands(snapshot.registries, definitions.metadata),
     ...validateProgressions(snapshot.registries, definitions.metadata),
   ];
@@ -127,13 +178,13 @@ async function prepareProject(input: ValidateProjectInput): Promise<PrepareProje
     logic: logic.graph,
     presentation: presentation.graph,
     registries: snapshot.registries,
+    schemas: schemas.schemas,
   });
   if (bundled.kind === "invalid") return bundled;
 
   const assembled = await assembleRelease({
     snapshot,
     bundles: { logic: bundled.logic, presentation: bundled.presentation },
-    aggregateSchemas: schemas.aggregateSchemas,
     schemas: schemas.schemas,
     content: content.content,
     assets: assets.assets,
@@ -188,8 +239,10 @@ export async function compileProject(input: CompileProjectInput): Promise<Compil
 }
 
 export type {
+  AggregateAuthority,
   AggregateKind,
-  AggregateSchemaRegistration,
+  AggregateModelRegistration,
+  ApplicationRegistration,
   ArtifactDiagnosticLocation,
   AssetRegistration,
   CapabilityRequirement,
@@ -205,17 +258,25 @@ export type {
   DiagnosticLocation,
   HostApiRequirement,
   InvalidProject,
+  LocalAggregateModelRegistration,
+  LocalCommandRegistration,
+  ModelSchemaRegistration,
   ProgressionRegistration,
-  ProjectConfigurationV1,
+  ProjectConfiguration,
   ProjectEnvironment,
   RegistrationDiagnosticLocation,
   SchemaRegistration,
+  SchemaReference,
+  ServerAggregateModelContract,
   SourceDiagnosticLocation,
   SourceExport,
+  TrustedCommandContract,
+  TrustedMechanicRegistration,
   ValidateProjectInput,
   ValidateProjectResult,
   ValidatedProject,
 } from "./project/config.js";
+export { PROJECT_FORMAT_VERSION } from "./project/config.js";
 export type { CompilerDiagnosticCode } from "./diagnostics/codes.js";
 export { privateIpv4Addresses, serveRelease } from "./serve/serve-release.js";
 export type { RunningReleaseServer, ServeReleaseInput } from "./serve/serve-release.js";

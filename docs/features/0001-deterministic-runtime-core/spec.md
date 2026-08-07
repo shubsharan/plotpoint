@@ -31,7 +31,7 @@ A game author defines a command that changes durable game state. The author can 
 
 ### User Story 2 - Protect Aggregate Boundaries (Priority: P2)
 
-A game author models durable player, team, and session state as separately identified and versioned aggregates. Each command targets one aggregate, rejects stale or invalid input explicitly, and cannot mutate another aggregate through a hidden shared reference.
+A game author models durable player, team, and session state as separately identified and revisioned aggregates. Each command targets one aggregate, rejects stale or invalid input explicitly, and cannot mutate another aggregate through a hidden shared reference.
 
 **Why this priority**: Clear aggregate boundaries make offline and authoritative execution safe to add later. They also prevent invisible cross-player or cross-session state corruption.
 

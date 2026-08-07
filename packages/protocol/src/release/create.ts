@@ -8,8 +8,9 @@ import type {
   ReleaseArtifact,
   ReleaseConstructionInput,
   ReleaseEntryKind,
-  ReleaseManifestV1,
+  ReleaseManifest,
 } from "./types.js";
+import { RELEASE_FORMAT_VERSION } from "./types.js";
 
 interface PreparedMaterialEntry {
   readonly path: string;
@@ -18,7 +19,7 @@ interface PreparedMaterialEntry {
 }
 
 function aggregateKey(schema: ReleaseConstructionInput["aggregateSchemas"][number]): string {
-  return `${schema.id}\0${schema.kind}\0${String(schema.version).padStart(16, "0")}\0${schema.path}`;
+  return `${schema.id}\0${schema.kind}\0${schema.path}`;
 }
 
 function invalid(code: string, reason: string, path?: string): InvalidRelease {
@@ -54,8 +55,8 @@ export async function createReleaseArtifact(
   }
   entries.sort((left, right) => compareOrdinal(left.path, right.path));
 
-  const manifest: ReleaseManifestV1 = {
-    releaseFormatVersion: 1,
+  const manifest: ReleaseManifest = {
+    releaseFormatVersion: RELEASE_FORMAT_VERSION,
     hostApi: input.hostApi,
     aggregateSchemas: Object.freeze(
       [...input.aggregateSchemas].sort((left, right) =>

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plotpoint.location.team-projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["complete", "completedTargets", "targets"],
+  "properties": {
+    "complete": { "type": "boolean" },
+    "completedTargets": { "type": "integer", "minimum": 0 },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "targetId"],
+        "properties": {
+          "status": { "enum": ["available", "discovered"] },
+          "targetId": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

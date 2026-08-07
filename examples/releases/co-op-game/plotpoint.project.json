@@ -1,0 +1,104 @@
+{
+  "projectFormatVersion": 1,
+  "environment": "web",
+  "hostApi": { "major": 1, "minimumMinor": 1 },
+  "application": {
+    "definition": { "source": "src/application.ts", "export": "coOpApplication" },
+    "components": ["co-op.clue-board", "co-op.session-console"]
+  },
+  "aggregateModels": [
+    {
+      "id": "co-op.player",
+      "authority": "local",
+      "kind": "player",
+      "stateSchema": "co-op.player-state",
+      "initializationSchema": "co-op.initialization",
+      "initializer": { "source": "src/initial-state.ts", "export": "initializeCoOpPlayer" },
+      "events": [],
+      "effects": []
+    },
+    {
+      "id": "plotpoint.location.team",
+      "authority": "server",
+      "kind": "team",
+      "stateSchema": "plotpoint.location.team-state",
+      "initializationSchema": "plotpoint.location.target-config",
+      "events": [],
+      "effects": []
+    }
+  ],
+  "commands": [
+    {
+      "id": "plotpoint.location.target-discovery",
+      "type": "plotpoint.location.target-discovery",
+      "aggregateModel": "plotpoint.location.team",
+      "payloadSchema": "plotpoint.location.target-discovery-payload",
+      "outcomeSchema": "plotpoint.location.target-discovery-outcome",
+      "execution": "trusted-mechanic"
+    }
+  ],
+  "schemas": [
+    { "id": "co-op.player-state", "path": "schemas/player-shell.schema.json" },
+    { "id": "co-op.initialization", "path": "schemas/initialization.schema.json" },
+    {
+      "id": "plotpoint.location.target-config",
+      "path": "schemas/target-config.schema.json"
+    },
+    {
+      "id": "plotpoint.location.target-discovery-outcome",
+      "path": "schemas/target-discovery-outcome.schema.json"
+    },
+    {
+      "id": "plotpoint.location.target-discovery-payload",
+      "path": "schemas/target-discovery-payload.schema.json"
+    },
+    { "id": "plotpoint.location.team-projection", "path": "schemas/team-projection.schema.json" },
+    { "id": "plotpoint.location.team-state", "path": "schemas/team-state.schema.json" }
+  ],
+  "progressions": [],
+  "components": [
+    {
+      "id": "co-op.clue-board",
+      "implementation": { "source": "src/components/clue-board.ts", "export": "ClueBoard" },
+      "commands": ["plotpoint.location.target-discovery"],
+      "content": ["co-op.targets"],
+      "assets": ["co-op.map"],
+      "capabilities": [{ "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 0 }],
+      "sharedProjection": { "id": "plotpoint.location.team-projection" }
+    },
+    {
+      "id": "co-op.session-console",
+      "implementation": {
+        "source": "src/components/session-console.ts",
+        "export": "SessionConsole"
+      },
+      "commands": [],
+      "content": [],
+      "assets": [],
+      "capabilities": [],
+      "sharedProjection": { "id": "plotpoint.location.team-projection" }
+    }
+  ],
+  "content": [
+    {
+      "id": "co-op.targets",
+      "path": "content/targets.json",
+      "schema": { "id": "plotpoint.location.target-config" }
+    }
+  ],
+  "assets": [
+    {
+      "id": "co-op.map",
+      "path": "assets/city-map.svg",
+      "releasePath": "assets/city-map.svg"
+    }
+  ],
+  "trustedMechanic": {
+    "id": "plotpoint.location.target-discovery",
+    "aggregateModel": "plotpoint.location.team",
+    "commands": ["plotpoint.location.target-discovery"],
+    "configuration": "co-op.targets",
+    "projectionSchema": { "id": "plotpoint.location.team-projection" },
+    "capabilities": [{ "id": "plotpoint.location.foreground", "major": 1, "minimumMinor": 0 }]
+  }
+}

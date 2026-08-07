@@ -1,0 +1,96 @@
+{
+  "releaseId": "sha256:65bf7468b7e2166f620af6200da8844e844cb0d64760fa04e3cc18862ae6a2dd",
+  "manifest": {
+    "aggregateSchemas": [
+      {
+        "id": "field.player-state",
+        "kind": "player",
+        "path": "schemas/aggregate/6669656c642e706c617965722d7374617465.json"
+      }
+    ],
+    "capabilities": [
+      {
+        "id": "plotpoint.location.foreground",
+        "major": 1,
+        "minimumMinor": 0
+      }
+    ],
+    "entrypoints": {
+      "logic": "bundles/logic.js",
+      "presentation": "bundles/presentation.js"
+    },
+    "hostApi": {
+      "major": 1,
+      "minimumMinor": 0
+    },
+    "inventory": [
+      {
+        "byteLength": 130356,
+        "digest": "sha256:8c611c77bd66f8929e6321b961ba017e0b4c12bc8cf0ad1ad7a81cad8b68c3c7",
+        "kind": "logic-bundle",
+        "path": "bundles/logic.js"
+      },
+      {
+        "byteLength": 5020,
+        "digest": "sha256:8d05c4b8bfcbb95bee6b3130476bd320a8d46ea18adefef7561d7feeec8b455d",
+        "kind": "presentation-bundle",
+        "path": "bundles/presentation.js"
+      },
+      {
+        "byteLength": 170,
+        "digest": "sha256:5f6ae525fef7fd34cc9fdb9116f669d5584c1d8d1c78e98e8d7f40d3ebda5a57",
+        "kind": "component-data",
+        "path": "components/6669656c642e70757a7a6c65.json"
+      },
+      {
+        "byteLength": 1726,
+        "digest": "sha256:882370ef57e96b59efdd7a1178a60fed018434fc5a7f3c5724d61415181bc40a",
+        "kind": "content",
+        "path": "composition/game.json"
+      },
+      {
+        "byteLength": 449,
+        "digest": "sha256:adc3793c9363e05d35987c2ef19c1125df79a147dc96cea6bb5388752f118e5d",
+        "kind": "content",
+        "path": "content/6669656c642e67616d65.json"
+      },
+      {
+        "byteLength": 52,
+        "digest": "sha256:db7d4ac13b676717c2df5653ea354b0f459a38b41a4f21a2cb6fdc1c0cfbe1b5",
+        "kind": "progression",
+        "path": "progressions/6669656c642e726f757465.json"
+      },
+      {
+        "byteLength": 1113,
+        "digest": "sha256:d40078412319fbb8bad725e3e965eb942bd74a57b6b92c8379cc2b8921f125db",
+        "kind": "aggregate-schema",
+        "path": "schemas/aggregate/6669656c642e706c617965722d7374617465.json"
+      },
+      {
+        "byteLength": 329,
+        "digest": "sha256:44ac3d6b175e6855b9a37ec5c6e34f52f23bd505b9a638b2e3fa8a3572bcab7c",
+        "kind": "command-schema",
+        "path": "schemas/general/6669656c642e616476616e63652d6f7574636f6d65.json"
+      },
+      {
+        "byteLength": 236,
+        "digest": "sha256:52dd705a2e4a82399ac9ed297829c8ad58dca4c35fe494048803774efae69dd3",
+        "kind": "command-schema",
+        "path": "schemas/general/6669656c642e616476616e63652d7061796c6f6164.json"
+      },
+      {
+        "byteLength": 284,
+        "digest": "sha256:08867d2e09bdcf3a9193208ab78f6e55802a442d831c9f48560a57668ea2a1c4",
+        "kind": "command-schema",
+        "path": "schemas/general/6669656c642e616476616e6365642d6576656e74.json"
+      },
+      {
+        "byteLength": 1000,
+        "digest": "sha256:0ca512ca0491c7bd76bd145f486b1d91cd13c29ce273570cf1f62ccfbb1040d1",
+        "kind": "command-schema",
+        "path": "schemas/general/6669656c642e696e697469616c697a6174696f6e.json"
+      }
+    ],
+    "releaseFormatVersion": 1
+  }
+}

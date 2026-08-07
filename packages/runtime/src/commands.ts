@@ -19,16 +19,26 @@ export interface Command<
   readonly payload: Payload;
 }
 
+export type RuntimeCommand<
+  Payload extends JsonObject = JsonObject,
+  Kind extends AggregateKind = AggregateKind,
+> = Command<Payload, Kind>;
+
 export type DomainEvent = JsonObject;
 export type EffectIntent = JsonObject;
 
 export interface AcceptedDecision<State extends JsonObject, Outcome extends JsonObject> {
   readonly kind: "accepted";
-  readonly nextState: State;
+  readonly nextState?: State;
   readonly outcome: Outcome;
   readonly domainEvents: readonly DomainEvent[];
   readonly effectIntents: readonly EffectIntent[];
   readonly progressionIntents: readonly ProgressionIntent[];
+}
+
+export interface NoOpDecision<Outcome extends JsonObject> {
+  readonly kind: "no-op";
+  readonly outcome: Outcome;
 }
 
 export interface RejectedDecision<Outcome extends JsonObject> {
@@ -38,6 +48,7 @@ export interface RejectedDecision<Outcome extends JsonObject> {
 
 export type HandlerDecision<State extends JsonObject, Outcome extends JsonObject> =
   | AcceptedDecision<State, Outcome>
+  | NoOpDecision<Outcome>
   | RejectedDecision<Outcome>;
 
 function canonicalNonEmptyString(value: unknown): string | null {

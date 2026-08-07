@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ReleaseId } from "@plotpoint/protocol";
+import type { LocalAggregateView, ReleaseId } from "@plotpoint/protocol";
 
 import type { RunRecord } from "../src/model";
 import { selectReleaseRun, type RunLifecycleStore } from "../src/runtime/run-lifecycle";
@@ -10,8 +10,12 @@ const revisedRelease = `sha256:${"b".repeat(64)}` as ReleaseId;
 
 class MemoryRunStore implements RunLifecycleStore {
   readonly runs: RunRecord[] = [];
+  readonly initialAggregates = new Map<string, LocalAggregateView>();
 
-  async selectOrCreateActiveRun(candidate: RunRecord): Promise<{
+  async selectOrCreateActiveRun(
+    candidate: RunRecord,
+    initialAggregate: LocalAggregateView,
+  ): Promise<{
     readonly created: boolean;
     readonly run: RunRecord;
   }> {
@@ -21,9 +25,19 @@ class MemoryRunStore implements RunLifecycleStore {
         .find((run) => run.releaseId === candidate.releaseId && run.status === "active") ?? null;
     if (active !== null) return { created: false, run: active };
     this.runs.push(candidate);
+    this.initialAggregates.set(candidate.runId, initialAggregate);
     return { created: true, run: candidate };
   }
 }
+
+const initialAggregate = {
+  modelId: "field.player",
+  aggregateId: "field-player",
+  aggregateKind: "player",
+  schemaId: "field.player-state",
+  stateVersion: 0,
+  state: { phase: "puzzle", attempts: 0 },
+} satisfies LocalAggregateView;
 
 describe("release run lifecycle", () => {
   it("resumes the active run when identical release bytes are installed again", async () => {
@@ -36,7 +50,7 @@ describe("release run lifecycle", () => {
     };
     store.runs.push(original);
 
-    await expect(selectReleaseRun(store, originalRelease)).resolves.toEqual({
+    await expect(selectReleaseRun(store, originalRelease, initialAggregate)).resolves.toEqual({
       kind: "resumed",
       run: original,
     });
@@ -54,7 +68,7 @@ describe("release run lifecycle", () => {
     store.runs.push(original);
 
     await expect(
-      selectReleaseRun(store, revisedRelease, {
+      selectReleaseRun(store, revisedRelease, initialAggregate, {
         createRunId: () => "run-revised",
         now: () => "2026-08-03T01:00:00.000Z",
       }),
@@ -69,6 +83,7 @@ describe("release run lifecycle", () => {
     });
     expect(store.runs).toHaveLength(2);
     expect(store.runs[0]).toEqual(original);
+    expect(store.initialAggregates.get("run-revised")).toEqual(initialAggregate);
   });
 
   it("starts a new run when the same release has no active run", async () => {
@@ -80,7 +95,7 @@ describe("release run lifecycle", () => {
       status: "completed",
     });
 
-    const selected = await selectReleaseRun(store, originalRelease, {
+    const selected = await selectReleaseRun(store, originalRelease, initialAggregate, {
       createRunId: () => "run-next",
       now: () => "2026-08-03T02:00:00.000Z",
     });
@@ -92,11 +107,11 @@ describe("release run lifecycle", () => {
     const store = new MemoryRunStore();
 
     const selections = await Promise.all([
-      selectReleaseRun(store, originalRelease, {
+      selectReleaseRun(store, originalRelease, initialAggregate, {
         createRunId: () => "run-race-a",
         now: () => "2026-08-03T03:00:00.000Z",
       }),
-      selectReleaseRun(store, originalRelease, {
+      selectReleaseRun(store, originalRelease, initialAggregate, {
         createRunId: () => "run-race-b",
         now: () => "2026-08-03T03:00:00.001Z",
       }),
@@ -112,5 +127,15 @@ describe("release run lifecycle", () => {
         status: "active",
       },
     ]);
+    expect(store.initialAggregates).toEqual(new Map([["run-race-a", initialAggregate]]));
+  });
+
+  it("rejects a noninitial aggregate before creating a run", async () => {
+    const store = new MemoryRunStore();
+
+    await expect(
+      selectReleaseRun(store, originalRelease, { ...initialAggregate, stateVersion: 1 }),
+    ).rejects.toThrow("release-run-initial-aggregate-invalid");
+    expect(store.runs).toHaveLength(0);
   });
 });

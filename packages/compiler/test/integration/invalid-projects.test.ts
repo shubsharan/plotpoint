@@ -10,10 +10,20 @@ import { compileProject } from "@plotpoint/compiler";
 const fixtureRoot = fileURLToPath(
   new URL("../../../../examples/releases/minimal-local-puzzle/", import.meta.url),
 );
+const configurationFixtureRoot = fileURLToPath(
+  new URL("../fixtures/projects/invalid/configuration/", import.meta.url),
+);
 const expectations = JSON.parse(
   await readFile(new URL("../fixtures/expected/invalid-diagnostics.json", import.meta.url), "utf8"),
 ) as Readonly<Record<string, readonly string[]>>;
 const temporaryRoots: string[] = [];
+const repositoryRoot = fileURLToPath(new URL("../../../../", import.meta.url));
+const validExampleNames = [
+  "branching-media-tour",
+  "co-op-game",
+  "field-puzzle",
+  "minimal-local-puzzle",
+] as const;
 
 afterEach(async () => {
   await Promise.all(
@@ -25,6 +35,79 @@ async function project(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "plotpoint-invalid-project-"));
   temporaryRoots.push(root);
   await cp(fixtureRoot, root, { recursive: true });
+  await writeFile(
+    join(root, "src/logic.ts"),
+    "export const initializePlayer = () => ({ attempts: 0, solved: false });\n",
+  );
+  await writeFile(
+    join(root, "src/presentation.ts"),
+    "export const application = Object.freeze({ mount() { return Object.freeze({ unmount() {} }); } });\n",
+  );
+  await writeFile(
+    join(root, "schemas/initialization.schema.json"),
+    JSON.stringify({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "minimal.initialization",
+      type: "object",
+      additionalProperties: false,
+      properties: {},
+    }),
+  );
+  await writeFile(
+    join(root, "plotpoint.project.json"),
+    JSON.stringify({
+      projectFormatVersion: 1,
+      environment: "web",
+      hostApi: { major: 1, minimumMinor: 0 },
+      application: {
+        definition: { source: "src/presentation.ts", export: "application" },
+        components: [],
+      },
+      aggregateModels: [
+        {
+          id: "minimal.player",
+          authority: "local",
+          kind: "player",
+          stateSchema: "minimal.player-state",
+          initializationSchema: "minimal.initialization",
+          initializer: { source: "src/logic.ts", export: "initializePlayer" },
+          events: [],
+          effects: [],
+        },
+      ],
+      commands: [
+        {
+          id: "minimal.solve",
+          type: "solve",
+          execution: "local",
+          definition: { source: "src/commands/solve.ts", export: "solveCommand" },
+          aggregateModel: "minimal.player",
+          payloadSchema: "minimal.solve-payload",
+          outcomeSchema: "minimal.solve-outcome",
+        },
+      ],
+      schemas: [
+        { id: "minimal.initialization", path: "schemas/initialization.schema.json" },
+        { id: "minimal.player-state", path: "schemas/player-state.schema.json" },
+        { id: "minimal.solve-outcome", path: "schemas/solve-outcome.schema.json" },
+        { id: "minimal.solve-payload", path: "schemas/solve-payload.schema.json" },
+      ],
+      progressions: [],
+      components: [],
+      content: [],
+      assets: [],
+    }),
+  );
+  return root;
+}
+
+async function configurationProject(caseName: string): Promise<string> {
+  const root = await project();
+  const fixture = await readFile(
+    join(configurationFixtureRoot, caseName, "plotpoint.project.json"),
+    "utf8",
+  );
+  await writeFile(join(root, "plotpoint.project.json"), fixture);
   return root;
 }
 
@@ -100,5 +183,273 @@ describe("invalid project publication boundary", () => {
     if (result.kind !== "invalid") throw new Error("collision unexpectedly compiled");
     expect(result.diagnostics.map(({ code }) => code)).toEqual(expectations["output-collision"]);
     await expect(readFile(outputFile, "utf8")).resolves.toBe("unrelated");
+  });
+});
+
+describe("corrected project configuration boundary", () => {
+  it("keeps one author registry and selects every server contract in valid examples", async () => {
+    for (const exampleName of validExampleNames) {
+      const config = JSON.parse(
+        await readFile(
+          join(repositoryRoot, "examples/releases", exampleName, "plotpoint.project.json"),
+          "utf8",
+        ),
+      ) as {
+        readonly entries?: unknown;
+        readonly aggregateSchemas?: unknown;
+        readonly aggregateModels: readonly {
+          readonly id: string;
+          readonly authority: "local" | "server";
+        }[];
+        readonly commands: readonly {
+          readonly id: string;
+          readonly execution: "local" | "trusted-mechanic";
+          readonly aggregateModel: string;
+        }[];
+        readonly progressions: readonly { readonly aggregateModel: string }[];
+        readonly trustedMechanic?: {
+          readonly aggregateModel: string;
+          readonly commands: readonly string[];
+        };
+      };
+      expect(config).not.toHaveProperty("entries");
+      expect(config).not.toHaveProperty("aggregateSchemas");
+      expect(config.aggregateModels.filter(({ authority }) => authority === "local")).toHaveLength(
+        1,
+      );
+
+      const serverModels = config.aggregateModels
+        .filter(({ authority }) => authority === "server")
+        .map(({ id }) => id)
+        .sort();
+      expect(serverModels).toEqual(
+        config.trustedMechanic === undefined ? [] : [config.trustedMechanic.aggregateModel],
+      );
+      const trustedCommands = config.commands
+        .filter(({ execution }) => execution === "trusted-mechanic")
+        .map(({ id }) => id)
+        .sort();
+      expect(trustedCommands).toEqual([...(config.trustedMechanic?.commands ?? [])].sort());
+      expect(
+        config.commands
+          .filter(({ execution }) => execution === "trusted-mechanic")
+          .every(({ aggregateModel }) => aggregateModel === config.trustedMechanic?.aggregateModel),
+      ).toBe(true);
+      expect(
+        config.progressions.every(({ aggregateModel }) => !serverModels.includes(aggregateModel)),
+      ).toBe(true);
+    }
+  });
+
+  it("rejects duplicate author registries alongside corrected configuration", async () => {
+    const root = await project();
+    const configPath = join(root, "plotpoint.project.json");
+    const config = JSON.parse(await readFile(configPath, "utf8")) as Record<string, unknown>;
+    config.aggregateSchemas = [];
+    config.entries = {
+      logic: { source: "src/logic.ts", export: "logic" },
+      presentation: { source: "src/presentation.ts", export: "presentation" },
+    };
+    await writeFile(configPath, JSON.stringify(config));
+
+    const result = await compileProject({
+      projectRoot: root,
+      outputFile: join(root, "output.pprelease"),
+    });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid")
+      throw new Error("duplicate author registries unexpectedly compiled");
+    expect(
+      result.diagnostics
+        .filter(({ code }) => code === "configuration-unknown-field")
+        .map(({ location }) => (location.kind === "configuration" ? location.pointer : undefined)),
+    ).toEqual(["/aggregateSchemas", "/entries"]);
+  });
+
+  it.each([
+    [
+      "per-entry-generations",
+      [
+        "/aggregateModels/0/version",
+        "/progressions/0/version",
+        "/schemas/0/version",
+        "/trustedMechanic/version",
+      ],
+    ],
+    [
+      "reverse-model-relationships",
+      [
+        "/aggregateModels/0/commands",
+        "/aggregateModels/0/progression",
+        "/aggregateModels/0/trustedMechanic",
+      ],
+    ],
+  ] as const)("rejects %s at deterministic strict-shape pointers", async (caseName, pointers) => {
+    const root = await configurationProject(caseName);
+    const outputFile = join(root, "output.pprelease");
+
+    const result = await compileProject({ projectRoot: root, outputFile });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") throw new Error(`${caseName} unexpectedly compiled`);
+    expect(
+      result.diagnostics.map(({ code, location }) => ({
+        code,
+        pointer: location.kind === "configuration" ? location.pointer : undefined,
+      })),
+    ).toEqual(pointers.map((pointer) => ({ code: "configuration-unknown-field", pointer })));
+    await expect(readFile(outputFile)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("requires local authority to use the player aggregate kind", async () => {
+    const root = await configurationProject("authority-kind-mismatch");
+    const outputFile = join(root, "output.pprelease");
+
+    const result = await compileProject({ projectRoot: root, outputFile });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") throw new Error("authority-kind mismatch unexpectedly compiled");
+    expect(result.diagnostics.map(({ code, location }) => ({ code, location }))).toEqual([
+      {
+        code: "configuration-value-invalid",
+        location: expect.objectContaining({
+          kind: "configuration",
+          pointer: "/aggregateModels/0/kind",
+        }),
+      },
+    ]);
+    await expect(readFile(outputFile)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("requires initialization content to declare the model initialization schema", async () => {
+    const root = await configurationProject("initialization-schema-mismatch");
+    const outputFile = join(root, "output.pprelease");
+
+    const result = await compileProject({ projectRoot: root, outputFile });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") {
+      throw new Error("initialization schema mismatch unexpectedly compiled");
+    }
+    expect(result.diagnostics.map(({ code, location }) => ({ code, location }))).toEqual([
+      {
+        code: "content-schema-invalid",
+        location: {
+          kind: "registration",
+          registration: "aggregateModels",
+          id: "minimal.player",
+          field: "initializationContent",
+        },
+      },
+    ]);
+    await expect(readFile(outputFile)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rejects duplicate command types within a model-derived command set", async () => {
+    const root = await configurationProject("duplicate-derived-command-type");
+    const outputFile = join(root, "output.pprelease");
+
+    const result = await compileProject({ projectRoot: root, outputFile });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") throw new Error("duplicate command type unexpectedly compiled");
+    expect(result.diagnostics.map(({ code, location }) => ({ code, location }))).toEqual([
+      {
+        code: "command-type-duplicate",
+        location: {
+          kind: "registration",
+          registration: "commands",
+          id: "minimal.solve-again",
+          field: "type",
+        },
+      },
+    ]);
+    await expect(readFile(outputFile)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rejects the superseded entries and aggregateSchemas project shape", async () => {
+    const root = await configurationProject("superseded-shape");
+    const outputFile = join(root, "output.pprelease");
+
+    const result = await compileProject({ projectRoot: root, outputFile });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid")
+      throw new Error("superseded configuration unexpectedly compiled");
+    expect(
+      result.diagnostics
+        .filter(({ code }) => code === "configuration-unknown-field")
+        .map(({ location }) => (location.kind === "configuration" ? location.pointer : undefined)),
+    ).toEqual(["/aggregateSchemas", "/entries"]);
+    await expect(readFile(outputFile)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("rejects discarded author-selected logic and presentation roots", async () => {
+    const root = await configurationProject("discarded-author-roots");
+    const outputFile = join(root, "output.pprelease");
+
+    const result = await compileProject({ projectRoot: root, outputFile });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") throw new Error("discarded roots unexpectedly compiled");
+    expect(
+      result.diagnostics
+        .filter(({ code }) => code === "configuration-unknown-field")
+        .map(({ location }) => (location.kind === "configuration" ? location.pointer : undefined)),
+    ).toEqual(["/aggregateSchemas", "/entries"]);
+    await expect(readFile(outputFile)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it.each([
+    [
+      "unselected-server-model",
+      {
+        code: "composition-reference-missing",
+        location: {
+          kind: "registration",
+          registration: "aggregateModels",
+          id: "shared.unselected",
+          field: "authority",
+        },
+        details: { target: "trustedMechanic" },
+      },
+    ],
+    [
+      "unselected-trusted-command",
+      {
+        code: "composition-reference-missing",
+        location: {
+          kind: "registration",
+          registration: "commands",
+          id: "shared.unselected",
+          field: "execution",
+        },
+        details: { target: "trustedMechanic.commands" },
+      },
+    ],
+    [
+      "server-progression",
+      {
+        code: "progression-invalid",
+        location: {
+          kind: "registration",
+          registration: "progressions",
+          id: "shared.route",
+          field: "aggregateModel",
+        },
+        details: { reason: "server-progression-unsupported" },
+      },
+    ],
+  ] as const)("rejects the %s clean-break contract", async (caseName, expected) => {
+    const root = await configurationProject(caseName);
+    const outputFile = join(root, "output.pprelease");
+
+    const result = await compileProject({ projectRoot: root, outputFile });
+
+    expect(result.kind).toBe("invalid");
+    if (result.kind !== "invalid") throw new Error(`${caseName} unexpectedly compiled`);
+    expect(result.diagnostics).toEqual([expect.objectContaining(expected)]);
+    await expect(readFile(outputFile)).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

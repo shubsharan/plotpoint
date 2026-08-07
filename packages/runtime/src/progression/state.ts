@@ -14,19 +14,19 @@ export interface ProgressionNodeState {
 
 export interface ProgressionInstance {
   readonly graphId: string;
-  readonly graphVersion: number;
   readonly nodes: readonly ProgressionNodeState[];
 }
 
 export interface ProgressionIntent {
-  readonly nodeId: string;
-  readonly from: ProgressionStatus;
-  readonly to: ProgressionStatus;
+  readonly transitionId: string;
 }
 
-export interface ProgressionTransition extends ProgressionIntent {
+export interface ProgressionTraceEntry {
   readonly sequence: number;
   readonly round: number;
   readonly source: "command" | "automatic";
-  readonly ruleId?: string;
+  readonly transitionId: string;
+  readonly nodeId: string;
+  readonly from: ProgressionStatus;
+  readonly to: ProgressionStatus;
 }

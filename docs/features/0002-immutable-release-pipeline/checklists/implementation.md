@@ -19,7 +19,7 @@
 
 ## Roadmap Gate 2 Exit Evidence
 
-- [x] Releases are deterministic store-only v1 containers with canonical manifests, exact inventories, fixed entry roles, SHA-256 entry digests, and whole-artifact identities.
+- [x] Releases are deterministic store-only containers with canonical manifests, exact inventories, fixed entry roles, SHA-256 entry digests, and whole-artifact identities.
 - [x] The compiler snapshots selected inputs once, enforces the closed logic/presentation import graph it can prove, validates static composition, and emits no source paths or operational metadata.
 - [x] Validation and compilation expose stable programmatic and CLI results; publication is atomic, non-overwriting, and failure-safe.
 - [x] Inspection, compatibility assessment, and verification are public protocol operations that do not execute release entries.

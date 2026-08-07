@@ -1,8 +1,8 @@
-# Contract: Install Descriptor V1
+# Contract: Install Descriptor
 
 ```ts
-interface InstallDescriptorV1 {
-  readonly version: 1;
+interface InstallDescriptor {
+  readonly version: typeof CONTRACT_VERSIONS.installDescriptor;
   readonly releaseUrl: string;
   readonly expectedReleaseId: `sha256:${string}`;
 }

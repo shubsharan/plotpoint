@@ -1,8 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "hunt.advance-round-payload.v1",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["expectedRound"],
-  "properties": { "expectedRound": { "type": "integer", "minimum": 0 } }
-}

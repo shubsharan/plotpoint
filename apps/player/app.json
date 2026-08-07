@@ -28,6 +28,14 @@
     },
     "plugins": [
       [
+        "expo-build-properties",
+        {
+          "ios": {
+            "usePrecompiledModules": false
+          }
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Scan a local Plotpoint release installation code.",
@@ -48,6 +56,7 @@
           "isAndroidMotionActivityEnabled": false
         }
       ],
+      "expo-secure-store",
       "expo-sqlite",
       "expo-sharing",
       "expo-status-bar"

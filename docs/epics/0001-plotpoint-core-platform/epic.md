@@ -21,7 +21,7 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 1. **Ship and revise a field puzzle** — The core team edits a location-aware puzzle, compiles and QR
    installs it, plays offline on iOS and Android, recovers after interruption, exports a redacted
    report, and installs a revised release without rebuilding the player.
-2. **Add shared play when demanded** — A cooperative hunt introduces authoritative sessions and
+2. **Add shared play when demanded** — A co-op game introduces authoritative sessions and
    synchronization only after the local field loop is proven.
 3. **Validate external creation** — An external creator completes the loop without undocumented help,
    and a secret-role game tests authorized player-specific views.
@@ -30,7 +30,7 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 
 - **EDC-001**: The field-puzzle loop closes twice on physical iOS and Android devices, including a
   report-driven revision and fresh release installation.
-- **EDC-002**: A cooperative hunt and a secret or role-based experience later close their required
+- **EDC-002**: A co-op game and a secret or role-based experience later close their required
   local, authoritative, synchronization, and projection loops without game-specific host or backend
   code.
 - **EDC-003**: At least one external creator completes the supported authoring and iteration loop
@@ -38,11 +38,12 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 
 ## Boundaries
 
-- **Active scope**: The internally authored Loop 1 field puzzle, private-LAN installation, trusted
-  mobile runtime, offline durability, foreground location, recovery, redacted report export, and
-  provider-free Host API conformance with one second materially different release.
-- **Later loops**: Authoritative multiplayer, synchronization, player-specific projections, external
-  creator usability, and stronger release-code isolation.
+- **Active scope**: The internally authored Loop 1 field puzzle and Loop 2 co-op game, private-LAN
+  installation, trusted mobile runtime, offline durability, foreground location, authoritative shared
+  sessions, foreground synchronization and recovery, authorized shared projections, generic redacted
+  report export, and provider-free Host API conformance across materially different releases.
+- **Later loops**: Secret-role or other player-specific projection models, external creator usability,
+  and stronger release-code isolation.
 - **Out of scope**: Marketplace, commerce, hosted telemetry, active-run migration, unrestricted
   background execution, arbitrary server code, and unproven distributed infrastructure.
 
@@ -51,8 +52,10 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 1. **Deterministic Runtime Core** _(Done)_ — deterministic command and progression contracts.
 2. **Immutable Release Pipeline** _(Done)_ — complete inspectable content-addressed releases.
 3. **Durable Offline Player** _(Active)_ — the complete Loop 1 field-puzzle product loop.
-4. **Cooperative Hunt Loop** _(Planned)_ — authoritative shared play and recovery-driven sync.
-5. **Creator and Multi-Game Proof** _(Planned)_ — external authoring and secret-role projections.
+4. **Co-op Game Loop** _(Planned)_ — authoritative shared play and recovery-driven sync.
+5. **Unified Game Composition** _(Planned)_ — one runnable composition and recovery path across the
+   field puzzle and co-op game.
+6. **Creator and Multi-Game Proof** _(Planned)_ — external authoring and secret-role projections.
 
 ## Risks and Open Questions
 
@@ -70,5 +73,8 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 - [Deterministic Runtime Core](../../features/0001-deterministic-runtime-core/spec.md) — Done
 - [Immutable Release Pipeline](../../features/0002-immutable-release-pipeline/spec.md) — Done
 - [Durable Offline Field Puzzle](../../features/0003-durable-offline-player/spec.md) — Pending
+- [Co-op Game Loop](../../features/0004-cooperative-hunt-loop/spec.md) — Pending
+- [Unified Game Composition](../../features/0005-unified-game-composition/spec.md) — Active
+- [Platform Architecture Guide](../../features/0006-platform-architecture-guide/spec.md) — Pending
 
 <!-- speckit:generated:epic-features END -->

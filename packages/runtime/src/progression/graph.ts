@@ -1,7 +1,6 @@
-import type { JsonObject } from "../canonical-json.js";
 import { isAggregateKind, type AggregateKind } from "../aggregates.js";
-import type { Command, DomainEvent } from "../commands.js";
-import type { ObservationConsumption } from "../observations.js";
+import { canonicalizeValue, type JsonObject } from "../canonical-json.js";
+import type { DomainEvent } from "../commands.js";
 import { PROGRESSION_STATUSES, type ProgressionInstance, type ProgressionStatus } from "./state.js";
 
 const LEGAL_TRANSITIONS: Readonly<Record<ProgressionStatus, readonly ProgressionStatus[]>> = {
@@ -29,75 +28,52 @@ export interface ProgressionNodeDefinition {
   readonly initialStatus: ProgressionStatus;
 }
 
-export interface ProgressionRuleInput<
-  State extends JsonObject,
-  Payload extends JsonObject,
-  Outcome extends JsonObject,
-  Kind extends AggregateKind = AggregateKind,
-> {
+export interface ProgressionFacts<State extends JsonObject> {
   readonly aggregateState: State;
-  readonly progression: ProgressionInstance;
-  readonly command: Command<Payload, Kind>;
-  readonly outcome: Outcome;
   readonly domainEvents: readonly DomainEvent[];
-  readonly observationTrace: readonly ObservationConsumption[];
+  readonly progression: ProgressionInstance;
 }
 
-export interface AutomaticRule<
-  State extends JsonObject,
-  Payload extends JsonObject,
-  Outcome extends JsonObject,
-  Kind extends AggregateKind = AggregateKind,
+export interface ProgressionTransition<
+  State extends JsonObject = JsonObject,
+  _Kind extends AggregateKind = AggregateKind,
 > {
-  readonly ruleId: string;
+  readonly transitionId: string;
   readonly targetNodeId: string;
   readonly from: readonly ProgressionStatus[];
   readonly to: ProgressionStatus;
   readonly priority: number;
-  readonly when: (input: ProgressionRuleInput<State, Payload, Outcome, Kind>) => boolean;
+  readonly trigger: "automatic" | "intent";
+  readonly when?: (facts: ProgressionFacts<State>) => boolean;
 }
 
 export interface ProgressionDefinition<
   State extends JsonObject = JsonObject,
-  Payload extends JsonObject = JsonObject,
-  Outcome extends JsonObject = JsonObject,
   Kind extends AggregateKind = AggregateKind,
 > {
   readonly aggregateKind: Kind;
   readonly graphId: string;
-  readonly graphVersion: number;
   readonly nodes: readonly ProgressionNodeDefinition[];
-  readonly automaticRules: readonly AutomaticRule<State, Payload, Outcome, Kind>[];
+  readonly transitions: readonly ProgressionTransition<State, Kind>[];
 }
 
-declare const definedProgressionBrand: unique symbol;
-
-export interface DefinedProgression<
-  State extends JsonObject = JsonObject,
-  Payload extends JsonObject = JsonObject,
-  Outcome extends JsonObject = JsonObject,
-  Kind extends AggregateKind = AggregateKind,
-> extends ProgressionDefinition<State, Payload, Outcome, Kind> {
-  readonly [definedProgressionBrand]: true;
-}
-
-export function defineProgression<
-  Kind extends AggregateKind,
-  State extends JsonObject,
-  Payload extends JsonObject,
-  Outcome extends JsonObject,
->(
-  definition: ProgressionDefinition<State, Payload, Outcome, Kind>,
-): DefinedProgression<State, Payload, Outcome, Kind> {
+export function defineProgression<Kind extends AggregateKind, State extends JsonObject>(
+  definition: ProgressionDefinition<State, Kind>,
+): ProgressionDefinition<State, Kind> {
   if (
     definition === null ||
     typeof definition !== "object" ||
     !Array.isArray(definition.nodes) ||
-    !Array.isArray(definition.automaticRules) ||
+    !Array.isArray(definition.transitions) ||
     !isAggregateKind(definition.aggregateKind) ||
     !validIdentity(definition.graphId) ||
-    !Number.isSafeInteger(definition.graphVersion) ||
-    definition.graphVersion < 1
+    Object.keys(definition).some(
+      (field) =>
+        field !== "aggregateKind" &&
+        field !== "graphId" &&
+        field !== "nodes" &&
+        field !== "transitions",
+    )
   ) {
     throw new TypeError("Invalid progression definition");
   }
@@ -110,7 +86,8 @@ export function defineProgression<
       Array.isArray(node) ||
       !validIdentity(node.nodeId) ||
       !isStatus(node.initialStatus) ||
-      nodeIds.has(node.nodeId)
+      nodeIds.has(node.nodeId) ||
+      Object.keys(node).some((field) => field !== "nodeId" && field !== "initialStatus")
     ) {
       throw new TypeError("Invalid or duplicate progression node");
     }
@@ -119,51 +96,82 @@ export function defineProgression<
   });
   nodes.sort((left, right) => compareOrdinal(left.nodeId, right.nodeId));
 
-  const ruleIds = new Set<string>();
-  const automaticRules = definition.automaticRules.map((rule) => {
+  const transitionIds = new Set<string>();
+  const transitions = definition.transitions.map((transition) => {
     if (
-      rule === null ||
-      typeof rule !== "object" ||
-      Array.isArray(rule) ||
-      !Array.isArray(rule.from) ||
-      !validIdentity(rule.ruleId) ||
-      ruleIds.has(rule.ruleId) ||
-      !nodeIds.has(rule.targetNodeId) ||
-      !Number.isSafeInteger(rule.priority) ||
-      typeof rule.when !== "function" ||
-      rule.from.length === 0 ||
-      !isStatus(rule.to) ||
-      new Set(rule.from).size !== rule.from.length
+      transition === null ||
+      typeof transition !== "object" ||
+      Array.isArray(transition) ||
+      !Array.isArray(transition.from) ||
+      !validIdentity(transition.transitionId) ||
+      transitionIds.has(transition.transitionId) ||
+      !nodeIds.has(transition.targetNodeId) ||
+      !Number.isSafeInteger(transition.priority) ||
+      (transition.trigger !== "automatic" && transition.trigger !== "intent") ||
+      transition.from.length === 0 ||
+      !isStatus(transition.to) ||
+      new Set(transition.from).size !== transition.from.length ||
+      (transition.trigger === "automatic" && typeof transition.when !== "function") ||
+      (transition.trigger === "intent" && transition.when !== undefined) ||
+      Object.keys(transition).some(
+        (field) =>
+          field !== "transitionId" &&
+          field !== "targetNodeId" &&
+          field !== "from" &&
+          field !== "to" &&
+          field !== "priority" &&
+          field !== "trigger" &&
+          field !== "when",
+      )
     ) {
-      throw new TypeError("Invalid progression rule");
+      throw new TypeError("Invalid progression transition");
     }
-    for (const from of rule.from) {
-      if (!isStatus(from) || !LEGAL_TRANSITIONS[from].includes(rule.to)) {
-        throw new TypeError("Illegal progression rule transition");
+    for (const from of transition.from) {
+      if (!isStatus(from) || !LEGAL_TRANSITIONS[from].includes(transition.to)) {
+        throw new TypeError("Illegal progression transition");
       }
     }
-    ruleIds.add(rule.ruleId);
+    transitionIds.add(transition.transitionId);
     return Object.freeze({
-      ruleId: rule.ruleId,
-      targetNodeId: rule.targetNodeId,
-      from: Object.freeze([...rule.from].sort(compareOrdinal)),
-      to: rule.to,
-      priority: rule.priority,
-      when: rule.when,
+      transitionId: transition.transitionId,
+      targetNodeId: transition.targetNodeId,
+      from: Object.freeze([...transition.from].sort(compareOrdinal)),
+      to: transition.to,
+      priority: transition.priority,
+      trigger: transition.trigger,
+      ...(transition.when === undefined ? {} : { when: transition.when }),
     });
   });
-  automaticRules.sort(
+  transitions.sort(
     (left, right) =>
       compareOrdinal(left.targetNodeId, right.targetNodeId) ||
       left.priority - right.priority ||
-      compareOrdinal(left.ruleId, right.ruleId),
+      compareOrdinal(left.transitionId, right.transitionId),
   );
 
   return Object.freeze({
     aggregateKind: definition.aggregateKind,
     graphId: definition.graphId,
-    graphVersion: definition.graphVersion,
     nodes: Object.freeze(nodes),
-    automaticRules: Object.freeze(automaticRules),
-  }) as DefinedProgression<State, Payload, Outcome, Kind>;
+    transitions: Object.freeze(transitions),
+  });
+}
+
+export function initialProgression<State extends JsonObject, Kind extends AggregateKind>(
+  definition: ProgressionDefinition<State, Kind>,
+): ProgressionInstance {
+  const validatedDefinition = defineProgression(definition);
+  const progression = Object.freeze({
+    graphId: validatedDefinition.graphId,
+    nodes: Object.freeze(
+      [...validatedDefinition.nodes]
+        .sort((left, right) => compareOrdinal(left.nodeId, right.nodeId))
+        .map((node) => Object.freeze({ nodeId: node.nodeId, status: node.initialStatus })),
+    ),
+  });
+  const result = canonicalizeValue(progression);
+  if (result.kind === "invalid") {
+    throw new TypeError("Runtime constructed invalid initial progression");
+  }
+  return progression;
 }

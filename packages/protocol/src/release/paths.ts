@@ -1,5 +1,7 @@
 const ARCHIVE_PATH_PATTERN = /^[a-z0-9._/-]+$/;
 
+export const GAME_COMPOSITION_PATH = "composition/game.json" as const;
+
 export type ArchivePathResult =
   | { readonly kind: "valid"; readonly path: string }
   | { readonly kind: "invalid"; readonly reason: string };

@@ -2,12 +2,15 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   defineCommand,
-  executeCommand,
   type Aggregate,
   type AggregateKind,
   type Command,
+  type CommandDefinition,
+  type ExecutionResult,
   type JsonObject,
+  type Observation,
 } from "@plotpoint/runtime";
+import { executeCommandWithEvaluator } from "../src/execute-command.js";
 
 type State = JsonObject & { readonly nested: { readonly value: number } };
 type Outcome = JsonObject & { readonly result: string };
@@ -17,11 +20,11 @@ function aggregateFor<Kind extends AggregateKind>(
   stateVersion = 2,
 ): Aggregate<State, Kind> {
   return {
-    kind,
-    id: `${kind}-1`,
-    schemaVersion: 1,
+    aggregateId: `${kind}-1`,
+    modelId: `${kind}.model`,
+    aggregateKind: kind,
+    schemaId: `${kind}.state`,
     stateVersion,
-    authority: "local",
     state: { nested: { value: 1 } },
   };
 }
@@ -39,13 +42,40 @@ function commandFor<Kind extends AggregateKind>(
   };
 }
 
+function executeCommand<
+  Kind extends AggregateKind,
+  StateValue extends JsonObject,
+  PayloadValue extends JsonObject,
+  OutcomeValue extends JsonObject,
+>(input: {
+  readonly definition: CommandDefinition<StateValue, PayloadValue, OutcomeValue, Kind>;
+  readonly aggregate: Aggregate<StateValue, Kind>;
+  readonly command: Command<PayloadValue, Kind>;
+  readonly observations: readonly Observation[];
+}): ExecutionResult<StateValue, OutcomeValue, PayloadValue, Kind> {
+  return executeCommandWithEvaluator({
+    definitionId: input.definition.definitionId,
+    commandType: input.definition.commandType,
+    aggregateKind: input.definition.aggregateKind,
+    aggregate: input.aggregate,
+    command: input.command,
+    observations: input.observations,
+    evaluate(target, runtimeCommand, context) {
+      return {
+        kind: "decision",
+        decision: input.definition.handle(target, runtimeCommand, context),
+      };
+    },
+  });
+}
+
 describe("aggregate isolation", () => {
   it.each(["player", "team", "session"] as const)(
     "advances only an accepted %s target once",
     (kind) => {
       const source = aggregateFor(kind);
       const definition = defineCommand<typeof kind, State, JsonObject, Outcome>({
-        definitionId: `change-${kind}.v1`,
+        definitionId: `change-${kind}`,
         commandType: "change",
         aggregateKind: kind,
         handle() {
@@ -67,8 +97,8 @@ describe("aggregate isolation", () => {
         observations: [],
       });
 
-      expect(result.kind).toBe("accepted");
-      if (result.kind !== "accepted") throw new Error("expected accepted");
+      expect(result).toMatchObject({ kind: "recorded", record: { terminal: "accepted" } });
+      if (result.kind !== "recorded") throw new Error("expected recorded acceptance");
       expect(result.aggregate.stateVersion).toBe(3);
       expect(source.stateVersion).toBe(2);
       expect(source.state.nested.value).toBe(1);
@@ -78,7 +108,7 @@ describe("aggregate isolation", () => {
   it("short-circuits stale versions before the handler or observations", () => {
     const handler = vi.fn();
     const definition = defineCommand<"player", State, JsonObject, Outcome>({
-      definitionId: "stale.v1",
+      definitionId: "stale",
       commandType: "change",
       aggregateKind: "player",
       handle: handler,
@@ -90,9 +120,9 @@ describe("aggregate isolation", () => {
       observations: [{ kind: "clock", key: "now", value: 1 }],
     });
 
-    expect(result.kind).toBe("invalid");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
     expect(handler).not.toHaveBeenCalled();
-    if (result.kind !== "invalid" || result.phase !== "execution") {
+    if (result.kind !== "recorded") {
       throw new Error("expected recorded invalid result");
     }
     expect(result.record.observationTrace).toEqual([]);
@@ -100,7 +130,7 @@ describe("aggregate isolation", () => {
 
   it("rejects an exact target mismatch", () => {
     const definition = defineCommand<"player", State, JsonObject, Outcome>({
-      definitionId: "target.v1",
+      definitionId: "target",
       commandType: "change",
       aggregateKind: "player",
       handle: vi.fn(),
@@ -117,15 +147,15 @@ describe("aggregate isolation", () => {
       observations: [],
     });
 
-    expect(result.kind).toBe("invalid");
-    if (result.kind === "invalid")
-      expect(result.diagnostics[0]?.code).toBe("command-target-mismatch");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
+    if (result.kind === "recorded")
+      expect(result.record.diagnostics[0]?.code).toBe("command-target-mismatch");
   });
 
   it("rejects version overflow without changing the target", () => {
     const source = aggregateFor("team", Number.MAX_SAFE_INTEGER);
     const definition = defineCommand<"team", State, JsonObject, Outcome>({
-      definitionId: "overflow.v1",
+      definitionId: "overflow",
       commandType: "change",
       aggregateKind: "team",
       handle() {
@@ -147,8 +177,8 @@ describe("aggregate isolation", () => {
       observations: [],
     });
 
-    expect(result.kind).toBe("invalid");
-    if (result.kind !== "invalid" || result.phase !== "execution") {
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "invalid" } });
+    if (result.kind !== "recorded") {
       throw new Error("expected recorded invalid result");
     }
     expect(result.aggregate).toEqual(source);
@@ -159,7 +189,7 @@ describe("aggregate isolation", () => {
     const source = { ...aggregateFor("session"), state: { nested: shared } };
     const nonTarget = { ...aggregateFor("team"), state: { nested: shared } };
     const definition = defineCommand<"session", State, JsonObject, Outcome>({
-      definitionId: "alias.v1",
+      definitionId: "alias",
       commandType: "change",
       aggregateKind: "session",
       handle(target) {

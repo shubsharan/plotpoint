@@ -3,13 +3,19 @@ import { describe, expect, it, vi } from "vitest";
 import {
   FOREGROUND_LOCATION_CAPABILITY,
   type CanonicalJsonObject,
-  type RuntimeBootstrapV1,
-  type TransitionCandidateV1,
+  type GameComposition,
+  type RuntimeBootstrap,
+  type TransitionCandidate,
 } from "@plotpoint/protocol";
 
 import { routeHostBridgeMessage } from "../src/bridge/host-bridge";
 import type { ForegroundLocationPersistence } from "../src/location/foreground-location";
-import type { CandidateTransition, DurableTransitionResult, SnapshotRecord } from "../src/model";
+import type {
+  CandidateTransition,
+  DurableCommandRecord,
+  DurableTransitionResult,
+  SnapshotRecord,
+} from "../src/model";
 import type { TransitionStore, TransitionTransaction } from "../src/persistence/commit-transition";
 import { createProductionHostBridgeHandlers } from "../src/runtime/production-handlers";
 
@@ -22,26 +28,70 @@ vi.mock("expo-location", () => ({
 const runId = "production-handler-run";
 const releaseId = `sha256:${"a".repeat(64)}` as const;
 const target = {
-  aggregateId: "field-player",
+  aggregateId: "player-1",
   aggregateKind: "player" as const,
-  schemaId: "field.player-state.v1",
-  schemaVersion: 1,
+  schemaId: "local-state",
 };
-const bootstrap: RuntimeBootstrapV1 = {
+const bootstrap: RuntimeBootstrap = {
   runId,
   releaseId,
-  aggregate: null,
+  aggregate: {
+    modelId: "local-model",
+    ...target,
+    stateVersion: 0,
+    state: { count: 0 },
+  },
 };
 
+function composition(locationCapability: boolean): GameComposition {
+  return {
+    application: { components: ["panel"] },
+    aggregateModels: [
+      {
+        id: "local-model",
+        authority: "local",
+        kind: "player",
+        stateSchema: { id: "local-state" },
+        initializationSchema: { id: "local-initialization" },
+        events: [],
+        effects: [],
+      },
+    ],
+    commands: [
+      {
+        id: "local-action",
+        type: "local.action",
+        aggregateModel: "local-model",
+        payloadSchema: { id: "local-action-payload" },
+        outcomeSchema: { id: "local-action-outcome" },
+        execution: "local",
+      },
+    ],
+    progressions: [],
+    components: [
+      {
+        id: "panel",
+        commands: ["local-action"],
+        content: [],
+        assets: [],
+        capabilities: locationCapability
+          ? [{ id: FOREGROUND_LOCATION_CAPABILITY.id, major: 1, minimumMinor: 0 }]
+          : [],
+      },
+    ],
+    resources: [],
+  };
+}
+
 class MemoryTransitionStore implements TransitionStore, TransitionTransaction {
-  readonly receipts = new Map<string, DurableTransitionResult>();
+  readonly receipts = new Map<string, DurableCommandRecord>();
   snapshot: SnapshotRecord | null = null;
 
   async transaction<T>(operation: (transaction: TransitionTransaction) => Promise<T>): Promise<T> {
     return operation(this);
   }
 
-  async getReceipt(_runId: string, commandId: string): Promise<DurableTransitionResult | null> {
+  async getReceipt(_runId: string, commandId: string): Promise<DurableCommandRecord | null> {
     return this.receipts.get(commandId) ?? null;
   }
 
@@ -53,37 +103,39 @@ class MemoryTransitionStore implements TransitionStore, TransitionTransaction {
     return true;
   }
 
-  async record(_runId: string, candidate: CandidateTransition): Promise<DurableTransitionResult> {
-    const resultingVersion =
-      candidate.commandOutcome === "accepted"
-        ? candidate.expectedVersion + 1
-        : candidate.expectedVersion;
-    const result: DurableTransitionResult = {
-      kind: "accepted",
-      commandId: candidate.commandId,
-      commandOutcome: candidate.commandOutcome,
-      aggregateId: candidate.aggregateId,
-      aggregateKind: candidate.aggregateKind,
-      schemaId: candidate.schemaId,
-      schemaVersion: candidate.schemaVersion,
-      expectedVersion: candidate.expectedVersion,
-      resultingVersion,
-      ...(candidate.commandOutcome === "invalid"
-        ? { diagnosticCodes: candidate.diagnosticCodes }
-        : { outcome: candidate.outcome }),
-      observationIds: candidate.observationIds,
-    };
-    this.receipts.set(candidate.commandId, result);
-    if (candidate.commandOutcome === "accepted") {
+  async record(run: string, candidate: CandidateTransition): Promise<DurableTransitionResult> {
+    const resultingStateVersion =
+      candidate.terminal === "accepted"
+        ? candidate.expectedStateVersion + 1
+        : candidate.expectedStateVersion;
+    const result: DurableTransitionResult =
+      candidate.terminal === "invalid"
+        ? {
+            commandId: candidate.commandId,
+            disposition: "committed",
+            terminal: "invalid",
+            phase: "execution",
+            resultingStateVersion,
+            diagnosticCodes: candidate.diagnosticCodes,
+          }
+        : {
+            commandId: candidate.commandId,
+            disposition: "committed",
+            terminal: candidate.terminal,
+            resultingStateVersion,
+            outcome: candidate.outcome,
+          };
+    this.receipts.set(candidate.commandId, { candidate, result });
+    if (candidate.terminal === "accepted") {
       this.snapshot = {
-        runId,
-        aggregateId: candidate.aggregateId,
-        aggregateKind: candidate.aggregateKind,
-        schemaId: candidate.schemaId,
-        schemaVersion: candidate.schemaVersion,
-        stateVersion: resultingVersion,
-        state: candidate.nextState,
-        journalPosition: resultingVersion,
+        runId: run,
+        modelId: candidate.modelId,
+        aggregateId: candidate.target.aggregateId,
+        aggregateKind: "player",
+        schemaId: candidate.target.schemaId,
+        stateVersion: resultingStateVersion,
+        state: candidate.nextState ?? { count: 0 },
+        journalPosition: 1,
       };
     }
     return result;
@@ -100,7 +152,7 @@ class MemoryObservationStore implements ForegroundLocationPersistence {
   }
 }
 
-function request(candidate: TransitionCandidateV1): string {
+function request(candidate: TransitionCandidate): string {
   return JSON.stringify({
     version: 1,
     requestId: `${candidate.commandId}-request`,
@@ -111,25 +163,36 @@ function request(candidate: TransitionCandidateV1): string {
 
 function candidate(
   commandId: string,
-  terminal: TransitionCandidateV1["terminal"],
-): TransitionCandidateV1 {
+  terminal: TransitionCandidate["terminal"],
+): TransitionCandidate {
   const base = {
     commandId,
+    modelId: "local-model",
+    commandType: "local.action",
+    payload: { amount: 1 },
     target,
-    expectedVersion: commandId === "accepted-command" ? 0 : 1,
+    expectedStateVersion: commandId === "accepted-command" ? 0 : 1,
     observationIds: [],
   };
   if (terminal === "accepted") {
     return {
       ...base,
       terminal,
-      nextState: { phase: "started" },
+      nextState: { count: 1 },
       outcome: { result: "advanced" },
-      progressionChanges: ["started"],
+      domainEvents: [],
+      effectIntents: [],
+      progressionTrace: [],
     };
   }
   if (terminal === "invalid") {
-    return { ...base, terminal, diagnosticCodes: ["command-input-invalid"] };
+    return {
+      ...base,
+      terminal,
+      phase: "execution",
+      diagnosticCodes: ["command-input-invalid"],
+      attemptedProgressionTrace: [],
+    };
   }
   return { ...base, terminal, outcome: { result: terminal } };
 }
@@ -137,14 +200,21 @@ function candidate(
 function productionHandlers(
   store: TransitionStore,
   observations: ForegroundLocationPersistence = new MemoryObservationStore(),
+  gameComposition: GameComposition = composition(true),
 ) {
   return createProductionHostBridgeHandlers({
     store,
     runtime: {
       bootstrap,
+      composition: gameComposition,
       aggregateSchemaId: target.schemaId,
-      aggregateSchemaVersion: target.schemaVersion,
-      validateAggregate: () => true,
+      validateSchema: (schemaId, value) => {
+        if (schemaId === "local-state") return typeof value.count === "number";
+        if (schemaId === "local-action-payload") return typeof value.amount === "number";
+        if (schemaId === "local-action-outcome") return typeof value.result === "string";
+        return false;
+      },
+      validateProgression: () => false,
     },
     location: {
       database: observations,
@@ -161,7 +231,7 @@ function productionHandlers(
 }
 
 describe("production host bridge handlers", () => {
-  it("durably commits every terminal and returns the original terminal result", async () => {
+  it("durably commits each declared local terminal and rejects undeclared authority", async () => {
     const store = new MemoryTransitionStore();
     const handlers = productionHandlers(store);
 
@@ -180,14 +250,7 @@ describe("production host bridge handlers", () => {
         payload: { commandId, disposition: "committed", terminal },
       });
     }
-
-    expect(store.receipts.size).toBe(4);
-    expect([...store.receipts.values()].map(({ commandOutcome }) => commandOutcome)).toEqual([
-      "accepted",
-      "no-op",
-      "rejected",
-      "invalid",
-    ]);
+    expect(store.receipts).toHaveLength(4);
 
     const duplicate = await routeHostBridgeMessage(
       request(candidate("no-op-command", "no-op")),
@@ -195,18 +258,57 @@ describe("production host bridge handlers", () => {
     );
     expect(duplicate).toMatchObject({
       type: "transition.result",
-      payload: {
-        commandId: "no-op-command",
-        disposition: "duplicate",
-        terminal: "no-op",
-        outcome: { result: "no-op" },
-      },
+      payload: { commandId: "no-op-command", disposition: "duplicate", terminal: "no-op" },
     });
+
+    const undeclared = {
+      ...candidate("undeclared-command", "no-op"),
+      commandType: "author.selected.type",
+    } satisfies TransitionCandidate;
+    await expect(routeHostBridgeMessage(request(undeclared), handlers)).resolves.toMatchObject({
+      type: "host.error",
+      payload: { code: "transition-command-mismatch" },
+    });
+    expect(store.receipts).toHaveLength(4);
   });
 
-  it("uses the generic capability dispatcher for validation and invocation", async () => {
+  it("rejects payloads and outputs outside the verified composition contracts", async () => {
+    const store = new MemoryTransitionStore();
+    store.snapshot = {
+      runId,
+      modelId: bootstrap.aggregate.modelId,
+      ...target,
+      stateVersion: 1,
+      state: { count: 1 },
+      journalPosition: 1,
+    };
+    const handlers = productionHandlers(store);
+    const valid = candidate("schema-probe", "accepted");
+    const probes = [
+      [{ ...valid, payload: { amount: "one" } }, "transition-payload-schema-invalid"],
+      [{ ...valid, outcome: { result: 7 } }, "transition-outcome-schema-invalid"],
+      [{ ...valid, nextState: { count: "one" } }, "transition-state-schema-invalid"],
+      [
+        { ...valid, domainEvents: [{ type: "counter.undeclared", count: 1 }] },
+        "transition-event-schema-invalid",
+      ],
+      [
+        { ...valid, effectIntents: [{ type: "counter.undeclared", count: 1 }] },
+        "transition-effect-schema-invalid",
+      ],
+      [{ ...valid, nextState: undefined }, "bridge-payload-fields-invalid"],
+    ] as const;
+
+    for (const [probe, code] of probes) {
+      await expect(
+        routeHostBridgeMessage(request(probe as unknown as TransitionCandidate), handlers),
+      ).resolves.toMatchObject({ type: "host.error", payload: { code } });
+    }
+    expect(store.receipts).toHaveLength(0);
+  });
+
+  it("registers native capabilities only when Game Composition declares them", async () => {
     const observations = new MemoryObservationStore();
-    const handlers = productionHandlers(new MemoryTransitionStore(), observations);
     const capabilityRequest = (
       requestId: string,
       capability: CanonicalJsonObject,
@@ -219,11 +321,13 @@ describe("production host bridge handlers", () => {
         payload: { capability, input },
       });
 
-    const valid = await routeHostBridgeMessage(
-      capabilityRequest("valid", FOREGROUND_LOCATION_CAPABILITY, {}),
-      handlers,
-    );
-    expect(valid).toMatchObject({
+    const declared = productionHandlers(new MemoryTransitionStore(), observations);
+    await expect(
+      routeHostBridgeMessage(
+        capabilityRequest("declared", FOREGROUND_LOCATION_CAPABILITY, {}),
+        declared,
+      ),
+    ).resolves.toMatchObject({
       type: "capability.result",
       payload: {
         capability: FOREGROUND_LOCATION_CAPABILITY,
@@ -232,20 +336,18 @@ describe("production host bridge handlers", () => {
     });
     expect(observations.records).toHaveLength(1);
 
-    const invalidInput = await routeHostBridgeMessage(
-      capabilityRequest("invalid-input", FOREGROUND_LOCATION_CAPABILITY, { unexpected: true }),
-      handlers,
+    const localOnly = productionHandlers(
+      new MemoryTransitionStore(),
+      observations,
+      composition(false),
     );
-    expect(invalidInput).toMatchObject({
-      type: "host.error",
-      payload: { code: "capability-input-invalid" },
-    });
-
-    const unsupported = await routeHostBridgeMessage(
-      capabilityRequest("unsupported", { ...FOREGROUND_LOCATION_CAPABILITY, major: 2 }, {}),
-      handlers,
-    );
-    expect(unsupported).toMatchObject({
+    await expect(
+      routeHostBridgeMessage(
+        capabilityRequest("undeclared", FOREGROUND_LOCATION_CAPABILITY, {}),
+        localOnly,
+      ),
+    ).resolves.toMatchObject({
+      requestId: "undeclared",
       type: "host.error",
       payload: { code: "capability-unsupported" },
     });

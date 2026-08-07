@@ -1,24 +1,30 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, relative } from "node:path";
 
+import { buildCanonicalRegistries } from "../composition/registries.js";
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
 import { orderCompilerDiagnostics } from "../diagnostics/order.js";
 import type {
-  AggregateKind,
-  AggregateSchemaRegistration,
+  AggregateModelRegistration,
+  ApplicationRegistration,
   AssetRegistration,
   CanonicalProjectRegistries,
+  CapabilityRequirement,
   CommandRegistration,
   CompilerDiagnostic,
   ComponentRegistration,
   ContentRegistration,
   InvalidProject,
+  ModelSchemaRegistration,
   ProgressionRegistration,
-  ProjectConfigurationV1,
+  ProjectConfiguration,
+  SchemaReference,
   SchemaRegistration,
   SourceExport,
+  TrustedMechanicRegistration,
   ValidateProjectInput,
 } from "./config.js";
+import { PROJECT_FORMAT_VERSION } from "./config.js";
 import {
   ProjectPathPolicyError,
   type ResolvedProjectRoot,
@@ -32,7 +38,7 @@ export interface LoadedProject {
   readonly kind: "loaded";
   readonly root: ResolvedProjectRoot;
   readonly configPath: string;
-  readonly config: ProjectConfigurationV1;
+  readonly config: ProjectConfiguration;
   readonly registries: CanonicalProjectRegistries;
 }
 
@@ -312,11 +318,96 @@ function stringArray(
   );
 }
 
+function optionalString(
+  record: JsonRecord,
+  key: string,
+  configPath: string,
+  pointer: string,
+  diagnostics: CompilerDiagnostic[],
+): string | undefined {
+  return record[key] === undefined
+    ? undefined
+    : string(record, key, configPath, pointer, diagnostics);
+}
+
+function schemaReference(
+  value: unknown,
+  configPath: string,
+  pointer: string,
+  diagnostics: CompilerDiagnostic[],
+): SchemaReference {
+  const record = object(value, configPath, pointer, ["id"], diagnostics) ?? {};
+  return Object.freeze({ id: string(record, "id", configPath, pointer, diagnostics) });
+}
+
+function capabilities(
+  value: unknown,
+  configPath: string,
+  pointer: string,
+  diagnostics: CompilerDiagnostic[],
+): readonly CapabilityRequirement[] {
+  if (!Array.isArray(value)) {
+    valueDiagnostic(diagnostics, configPath, pointer, "array");
+    return Object.freeze([]);
+  }
+  return Object.freeze(
+    value.map((item, index) => {
+      const itemPointer = `${pointer}/${index}`;
+      const record =
+        object(item, configPath, itemPointer, ["id", "major", "minimumMinor"], diagnostics) ?? {};
+      return Object.freeze({
+        id: string(record, "id", configPath, itemPointer, diagnostics),
+        major: integer(record, "major", 1, configPath, itemPointer, diagnostics),
+        minimumMinor: integer(record, "minimumMinor", 0, configPath, itemPointer, diagnostics),
+      });
+    }),
+  );
+}
+
+function modelSchemas(
+  value: unknown,
+  configPath: string,
+  pointer: string,
+  diagnostics: CompilerDiagnostic[],
+): readonly ModelSchemaRegistration[] {
+  if (!Array.isArray(value)) {
+    valueDiagnostic(diagnostics, configPath, pointer, "array");
+    return Object.freeze([]);
+  }
+  return Object.freeze(
+    value.map((item, index) => {
+      const itemPointer = `${pointer}/${index}`;
+      const record = object(item, configPath, itemPointer, ["type", "schema"], diagnostics) ?? {};
+      return Object.freeze({
+        type: string(record, "type", configPath, itemPointer, diagnostics),
+        schema: string(record, "schema", configPath, itemPointer, diagnostics),
+      });
+    }),
+  );
+}
+
+function projectPath(
+  record: JsonRecord,
+  key: string,
+  configPath: string,
+  pointer: string,
+  diagnostics: CompilerDiagnostic[],
+): string {
+  const path = string(record, key, configPath, pointer, diagnostics);
+  try {
+    validateProjectPath(path);
+  } catch (error) {
+    if (!(error instanceof ProjectPathPolicyError)) throw error;
+    diagnostics.push(projectPathDiagnostic(configPath, `${pointer}/${key}`, path, error));
+  }
+  return path;
+}
+
 function parseConfiguration(
   value: unknown,
   configPath: string,
   diagnostics: CompilerDiagnostic[],
-): ProjectConfigurationV1 {
+): ProjectConfiguration {
   const root =
     object(
       value,
@@ -326,23 +417,24 @@ function parseConfiguration(
         "projectFormatVersion",
         "environment",
         "hostApi",
-        "entries",
+        "application",
+        "aggregateModels",
         "commands",
-        "aggregateSchemas",
         "schemas",
         "progressions",
         "components",
         "content",
         "assets",
+        "trustedMechanic",
       ],
       diagnostics,
     ) ?? {};
-  if (root.projectFormatVersion !== 1) {
+  if (root.projectFormatVersion !== PROJECT_FORMAT_VERSION) {
     diagnostics.push(
       createCompilerDiagnostic({
         code: "configuration-version-unsupported",
         location: location(configPath, "/projectFormatVersion"),
-        details: { supported: 1 },
+        details: { supported: PROJECT_FORMAT_VERSION },
       }),
     );
   }
@@ -352,77 +444,176 @@ function parseConfiguration(
 
   const host =
     object(root.hostApi, configPath, "/hostApi", ["major", "minimumMinor"], diagnostics) ?? {};
-  const entries =
-    object(root.entries, configPath, "/entries", ["logic", "presentation"], diagnostics) ?? {};
+  const hostMajor = integer(host, "major", 1, configPath, "/hostApi", diagnostics);
+  const hostMinimumMinor = integer(host, "minimumMinor", 0, configPath, "/hostApi", diagnostics);
+  if (hostMajor !== 1) valueDiagnostic(diagnostics, configPath, "/hostApi/major", "literal 1");
+  if (hostMinimumMinor !== 0 && hostMinimumMinor !== 1) {
+    valueDiagnostic(diagnostics, configPath, "/hostApi/minimumMinor", "literal 0 or 1");
+  }
+
+  const applicationRecord =
+    object(
+      root.application,
+      configPath,
+      "/application",
+      ["definition", "components"],
+      diagnostics,
+    ) ?? {};
+  const application: ApplicationRegistration = Object.freeze({
+    definition: sourceExport(
+      applicationRecord.definition,
+      configPath,
+      "/application/definition",
+      diagnostics,
+    ),
+    components: stringArray(
+      applicationRecord.components,
+      configPath,
+      "/application/components",
+      diagnostics,
+    ),
+  });
+
+  const aggregateModels: AggregateModelRegistration[] = array(
+    root,
+    "aggregateModels",
+    configPath,
+    "",
+    diagnostics,
+  ).map((item, index) => {
+    const pointer = `/aggregateModels/${index}`;
+    const raw = item !== null && typeof item === "object" && !Array.isArray(item) ? item : {};
+    const authority = (raw as JsonRecord).authority;
+    const allowed = [
+      "id",
+      "authority",
+      "kind",
+      "stateSchema",
+      "initializationSchema",
+      "events",
+      "effects",
+      ...(authority === "server" ? [] : ["initializer", "initializationContent"]),
+    ];
+    const record = object(item, configPath, pointer, allowed, diagnostics) ?? {};
+    const parsedAuthority = string(record, "authority", configPath, pointer, diagnostics);
+    const kind = string(record, "kind", configPath, pointer, diagnostics);
+    if (parsedAuthority === "local") {
+      if (kind !== "player") {
+        valueDiagnostic(diagnostics, configPath, `${pointer}/kind`, 'literal "player"');
+      }
+    } else if (parsedAuthority === "server") {
+      if (kind !== "team" && kind !== "session") {
+        valueDiagnostic(diagnostics, configPath, `${pointer}/kind`, 'literal "team" or "session"');
+      }
+    } else {
+      valueDiagnostic(
+        diagnostics,
+        configPath,
+        `${pointer}/authority`,
+        'literal "local" or "server"',
+      );
+    }
+    const common = {
+      id: string(record, "id", configPath, pointer, diagnostics),
+      stateSchema: string(record, "stateSchema", configPath, pointer, diagnostics),
+      initializationSchema: string(
+        record,
+        "initializationSchema",
+        configPath,
+        pointer,
+        diagnostics,
+      ),
+      events: modelSchemas(record.events, configPath, `${pointer}/events`, diagnostics),
+      effects: modelSchemas(record.effects, configPath, `${pointer}/effects`, diagnostics),
+    } as const;
+    if (parsedAuthority === "server") {
+      return Object.freeze({
+        ...common,
+        authority: "server" as const,
+        kind: (kind === "session" ? "session" : "team") as "team" | "session",
+      });
+    }
+    const initializationContent = optionalString(
+      record,
+      "initializationContent",
+      configPath,
+      pointer,
+      diagnostics,
+    );
+    return Object.freeze({
+      ...common,
+      authority: "local" as const,
+      kind: "player" as const,
+      initializer: sourceExport(
+        record.initializer,
+        configPath,
+        `${pointer}/initializer`,
+        diagnostics,
+      ),
+      ...(initializationContent === undefined ? {} : { initializationContent }),
+    });
+  });
 
   const commands: CommandRegistration[] = array(root, "commands", configPath, "", diagnostics).map(
     (item, index) => {
       const pointer = `/commands/${index}`;
+      const raw = item !== null && typeof item === "object" && !Array.isArray(item) ? item : {};
+      const execution = (raw as JsonRecord).execution;
       const record =
         object(
           item,
           configPath,
           pointer,
-          ["id", "type", "definition", "aggregateSchema", "payloadSchema", "outcomeSchema"],
+          [
+            "id",
+            "type",
+            "execution",
+            "aggregateModel",
+            "payloadSchema",
+            "outcomeSchema",
+            ...(execution === "trusted-mechanic" ? [] : ["definition"]),
+          ],
           diagnostics,
         ) ?? {};
-      return Object.freeze({
+      const parsedExecution = string(record, "execution", configPath, pointer, diagnostics);
+      if (parsedExecution !== "local" && parsedExecution !== "trusted-mechanic") {
+        valueDiagnostic(
+          diagnostics,
+          configPath,
+          `${pointer}/execution`,
+          'literal "local" or "trusted-mechanic"',
+        );
+      }
+      const common = {
         id: string(record, "id", configPath, pointer, diagnostics),
         type: string(record, "type", configPath, pointer, diagnostics),
-        definition: sourceExport(
-          record.definition,
-          configPath,
-          `${pointer}/definition`,
-          diagnostics,
-        ),
-        aggregateSchema: string(record, "aggregateSchema", configPath, pointer, diagnostics),
+        aggregateModel: string(record, "aggregateModel", configPath, pointer, diagnostics),
         payloadSchema: string(record, "payloadSchema", configPath, pointer, diagnostics),
         outcomeSchema: string(record, "outcomeSchema", configPath, pointer, diagnostics),
-      });
+      } as const;
+      return parsedExecution === "trusted-mechanic"
+        ? Object.freeze({ ...common, execution: "trusted-mechanic" as const })
+        : Object.freeze({
+            ...common,
+            execution: "local" as const,
+            definition: sourceExport(
+              record.definition,
+              configPath,
+              `${pointer}/definition`,
+              diagnostics,
+            ),
+          });
     },
   );
-
-  const aggregateSchemas: AggregateSchemaRegistration[] = array(
-    root,
-    "aggregateSchemas",
-    configPath,
-    "",
-    diagnostics,
-  ).map((item, index) => {
-    const pointer = `/aggregateSchemas/${index}`;
-    const record =
-      object(item, configPath, pointer, ["id", "kind", "version", "path"], diagnostics) ?? {};
-    const kind = string(record, "kind", configPath, pointer, diagnostics);
-    if (!(["player", "team", "session"] as const).includes(kind as AggregateKind)) {
-      valueDiagnostic(diagnostics, configPath, `${pointer}/kind`, "aggregate kind");
-    }
-    const path = string(record, "path", configPath, pointer, diagnostics);
-    try {
-      validateProjectPath(path);
-    } catch (error) {
-      if (!(error instanceof ProjectPathPolicyError)) throw error;
-      diagnostics.push(projectPathDiagnostic(configPath, `${pointer}/path`, path, error));
-    }
-    return Object.freeze({
-      id: string(record, "id", configPath, pointer, diagnostics),
-      kind: kind as AggregateKind,
-      version: integer(record, "version", 1, configPath, pointer, diagnostics),
-      path,
-    });
-  });
 
   const schemas: SchemaRegistration[] = array(root, "schemas", configPath, "", diagnostics).map(
     (item, index) => {
       const pointer = `/schemas/${index}`;
       const record = object(item, configPath, pointer, ["id", "path"], diagnostics) ?? {};
-      const path = string(record, "path", configPath, pointer, diagnostics);
-      try {
-        validateProjectPath(path);
-      } catch (error) {
-        if (!(error instanceof ProjectPathPolicyError)) throw error;
-        diagnostics.push(projectPathDiagnostic(configPath, `${pointer}/path`, path, error));
-      }
-      return Object.freeze({ id: string(record, "id", configPath, pointer, diagnostics), path });
+      return Object.freeze({
+        id: string(record, "id", configPath, pointer, diagnostics),
+        path: projectPath(record, "path", configPath, pointer, diagnostics),
+      });
     },
   );
 
@@ -435,35 +626,11 @@ function parseConfiguration(
   ).map((item, index) => {
     const pointer = `/progressions/${index}`;
     const record =
-      object(
-        item,
-        configPath,
-        pointer,
-        [
-          "id",
-          "version",
-          "kind",
-          "definition",
-          "aggregateSchema",
-          "commands",
-          "content",
-          "components",
-        ],
-        diagnostics,
-      ) ?? {};
-    const kind = string(record, "kind", configPath, pointer, diagnostics);
-    if (!(["player", "team", "session"] as const).includes(kind as AggregateKind)) {
-      valueDiagnostic(diagnostics, configPath, `${pointer}/kind`, "aggregate kind");
-    }
+      object(item, configPath, pointer, ["id", "aggregateModel", "definition"], diagnostics) ?? {};
     return Object.freeze({
       id: string(record, "id", configPath, pointer, diagnostics),
-      version: integer(record, "version", 1, configPath, pointer, diagnostics),
-      kind: kind as AggregateKind,
+      aggregateModel: string(record, "aggregateModel", configPath, pointer, diagnostics),
       definition: sourceExport(record.definition, configPath, `${pointer}/definition`, diagnostics),
-      aggregateSchema: string(record, "aggregateSchema", configPath, pointer, diagnostics),
-      commands: stringArray(record.commands, configPath, `${pointer}/commands`, diagnostics),
-      content: stringArray(record.content, configPath, `${pointer}/content`, diagnostics),
-      components: stringArray(record.components, configPath, `${pointer}/components`, diagnostics),
     });
   });
 
@@ -480,34 +647,17 @@ function parseConfiguration(
         item,
         configPath,
         pointer,
-        ["id", "implementation", "commands", "content", "assets", "capabilities"],
+        [
+          "id",
+          "implementation",
+          "commands",
+          "content",
+          "assets",
+          "capabilities",
+          "sharedProjection",
+        ],
         diagnostics,
       ) ?? {};
-    const capabilities = Array.isArray(record.capabilities)
-      ? record.capabilities.map((item, capabilityIndex) => {
-          const capabilityPointer = `${pointer}/capabilities/${capabilityIndex}`;
-          const capability =
-            object(
-              item,
-              configPath,
-              capabilityPointer,
-              ["id", "major", "minimumMinor"],
-              diagnostics,
-            ) ?? {};
-          return Object.freeze({
-            id: string(capability, "id", configPath, capabilityPointer, diagnostics),
-            major: integer(capability, "major", 1, configPath, capabilityPointer, diagnostics),
-            minimumMinor: integer(
-              capability,
-              "minimumMinor",
-              0,
-              configPath,
-              capabilityPointer,
-              diagnostics,
-            ),
-          });
-        })
-      : (valueDiagnostic(diagnostics, configPath, `${pointer}/capabilities`, "array"), []);
     return Object.freeze({
       id: string(record, "id", configPath, pointer, diagnostics),
       implementation: sourceExport(
@@ -519,7 +669,22 @@ function parseConfiguration(
       commands: stringArray(record.commands, configPath, `${pointer}/commands`, diagnostics),
       content: stringArray(record.content, configPath, `${pointer}/content`, diagnostics),
       assets: stringArray(record.assets, configPath, `${pointer}/assets`, diagnostics),
-      capabilities: Object.freeze(capabilities),
+      capabilities: capabilities(
+        record.capabilities,
+        configPath,
+        `${pointer}/capabilities`,
+        diagnostics,
+      ),
+      ...(record.sharedProjection === undefined
+        ? {}
+        : {
+            sharedProjection: schemaReference(
+              record.sharedProjection,
+              configPath,
+              `${pointer}/sharedProjection`,
+              diagnostics,
+            ),
+          }),
     });
   });
 
@@ -527,21 +692,14 @@ function parseConfiguration(
     (item, index) => {
       const pointer = `/content/${index}`;
       const record = object(item, configPath, pointer, ["id", "path", "schema"], diagnostics) ?? {};
-      const path = string(record, "path", configPath, pointer, diagnostics);
-      try {
-        validateProjectPath(path);
-      } catch (error) {
-        if (!(error instanceof ProjectPathPolicyError)) throw error;
-        diagnostics.push(projectPathDiagnostic(configPath, `${pointer}/path`, path, error));
-      }
-      const schema =
-        record.schema === undefined
-          ? undefined
-          : string(record, "schema", configPath, pointer, diagnostics);
       return Object.freeze({
         id: string(record, "id", configPath, pointer, diagnostics),
-        path,
-        ...(schema === undefined ? {} : { schema }),
+        path: projectPath(record, "path", configPath, pointer, diagnostics),
+        ...(record.schema === undefined
+          ? {}
+          : {
+              schema: schemaReference(record.schema, configPath, `${pointer}/schema`, diagnostics),
+            }),
       });
     },
   );
@@ -551,14 +709,7 @@ function parseConfiguration(
       const pointer = `/assets/${index}`;
       const record =
         object(item, configPath, pointer, ["id", "path", "releasePath"], diagnostics) ?? {};
-      const path = string(record, "path", configPath, pointer, diagnostics);
       const releasePath = string(record, "releasePath", configPath, pointer, diagnostics);
-      try {
-        validateProjectPath(path);
-      } catch (error) {
-        if (!(error instanceof ProjectPathPolicyError)) throw error;
-        diagnostics.push(projectPathDiagnostic(configPath, `${pointer}/path`, path, error));
-      }
       try {
         validateReleaseDestinationPath(releasePath);
       } catch (error) {
@@ -573,82 +724,56 @@ function parseConfiguration(
       }
       return Object.freeze({
         id: string(record, "id", configPath, pointer, diagnostics),
-        path,
+        path: projectPath(record, "path", configPath, pointer, diagnostics),
         releasePath,
       });
     },
   );
 
-  return Object.freeze({
-    projectFormatVersion: 1,
-    environment: "web",
-    hostApi: Object.freeze({
-      major: integer(host, "major", 1, configPath, "/hostApi", diagnostics),
-      minimumMinor: integer(host, "minimumMinor", 0, configPath, "/hostApi", diagnostics),
-    }),
-    entries: Object.freeze({
-      logic: sourceExport(entries.logic, configPath, "/entries/logic", diagnostics),
-      presentation: sourceExport(
-        entries.presentation,
+  let trustedMechanic: TrustedMechanicRegistration | undefined;
+  if (root.trustedMechanic !== undefined) {
+    const pointer = "/trustedMechanic";
+    const record =
+      object(
+        root.trustedMechanic,
         configPath,
-        "/entries/presentation",
+        pointer,
+        ["id", "aggregateModel", "commands", "configuration", "projectionSchema", "capabilities"],
+        diagnostics,
+      ) ?? {};
+    trustedMechanic = Object.freeze({
+      id: string(record, "id", configPath, pointer, diagnostics),
+      aggregateModel: string(record, "aggregateModel", configPath, pointer, diagnostics),
+      commands: stringArray(record.commands, configPath, `${pointer}/commands`, diagnostics),
+      configuration: string(record, "configuration", configPath, pointer, diagnostics),
+      projectionSchema: schemaReference(
+        record.projectionSchema,
+        configPath,
+        `${pointer}/projectionSchema`,
         diagnostics,
       ),
-    }),
+      capabilities: capabilities(
+        record.capabilities,
+        configPath,
+        `${pointer}/capabilities`,
+        diagnostics,
+      ),
+    });
+  }
+
+  return Object.freeze({
+    projectFormatVersion: PROJECT_FORMAT_VERSION,
+    environment: "web",
+    hostApi: Object.freeze({ major: hostMajor, minimumMinor: hostMinimumMinor }),
+    application,
+    aggregateModels: Object.freeze(aggregateModels),
     commands: Object.freeze(commands),
-    aggregateSchemas: Object.freeze(aggregateSchemas),
     schemas: Object.freeze(schemas),
     progressions: Object.freeze(progressions),
     components: Object.freeze(components),
     content: Object.freeze(content),
     assets: Object.freeze(assets),
-  });
-}
-
-function ordinal<T extends { readonly id: string }>(values: readonly T[]): readonly T[] {
-  return Object.freeze(
-    [...values].sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)),
-  );
-}
-
-function buildRegistries(
-  config: ProjectConfigurationV1,
-  configPath: string,
-  diagnostics: CompilerDiagnostic[],
-): CanonicalProjectRegistries {
-  const registrations = [
-    ["commands", config.commands],
-    ["aggregateSchemas", config.aggregateSchemas],
-    ["schemas", config.schemas],
-    ["progressions", config.progressions],
-    ["components", config.components],
-    ["content", config.content],
-    ["assets", config.assets],
-  ] as const;
-  for (const [kind, values] of registrations) {
-    const seen = new Set<string>();
-    for (const value of values) {
-      if (seen.has(value.id)) {
-        diagnostics.push(
-          createCompilerDiagnostic({
-            code: "configuration-identity-duplicate",
-            location: { kind: "registration", registration: kind, id: value.id },
-            details: { id: value.id, registry: kind },
-            related: [location(configPath, `/${kind}`)],
-          }),
-        );
-      }
-      seen.add(value.id);
-    }
-  }
-  return Object.freeze({
-    commands: ordinal(config.commands),
-    aggregateSchemas: ordinal(config.aggregateSchemas),
-    schemas: ordinal(config.schemas),
-    progressions: ordinal(config.progressions),
-    components: ordinal(config.components),
-    content: ordinal(config.content),
-    assets: ordinal(config.assets),
+    ...(trustedMechanic === undefined ? {} : { trustedMechanic }),
   });
 }
 
@@ -706,9 +831,18 @@ export async function loadProject(input: ValidateProjectInput): Promise<LoadProj
     return Object.freeze({ kind: "invalid", diagnostics: orderCompilerDiagnostics(diagnostics) });
   }
   const config = parseConfiguration(value, projectConfigPath, diagnostics);
-  const registries = buildRegistries(config, projectConfigPath, diagnostics);
   if (diagnostics.length > 0) {
     return Object.freeze({ kind: "invalid", diagnostics: orderCompilerDiagnostics(diagnostics) });
   }
-  return Object.freeze({ kind: "loaded", root, configPath: projectConfigPath, config, registries });
+  const built = buildCanonicalRegistries(config);
+  if (built.kind === "invalid") {
+    return Object.freeze({ kind: "invalid", diagnostics: built.diagnostics });
+  }
+  return Object.freeze({
+    kind: "loaded",
+    root,
+    configPath: projectConfigPath,
+    config,
+    registries: built.registries,
+  });
 }

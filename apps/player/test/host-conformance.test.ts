@@ -2,14 +2,13 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   assessCompatibility,
-  type CapabilityResultV1,
+  type CapabilityResult,
   type HostToWebBridgeEnvelope,
 } from "@plotpoint/protocol";
 
 import { routeHostBridgeMessage, type HostBridgeHandlers } from "../src/bridge/host-bridge";
 import { installReleaseFromDescriptor } from "../src/install/install-release";
-import type { DurableTransitionResult } from "../src/model";
-import { buildPlayReport } from "../src/reports/create-play-report";
+import { buildGamePlayReport } from "../src/reports/create-game-play-report";
 import { deriveHostSupportFromManifest } from "../src/runtime/host-support";
 import { validateRecoveryRecords } from "../src/runtime/recovery";
 import {
@@ -26,7 +25,7 @@ function handlersFor(fixture: HostConformanceFixture): HostBridgeHandlers {
       return fixture.transitionResult;
     },
     requestCapability: async () => {
-      throw new Error("unexpected-capability-request") as never as CapabilityResultV1;
+      throw new Error("unexpected-capability-request") as never as CapabilityResult;
     },
   };
 }
@@ -61,7 +60,7 @@ async function exerciseHostApi(fixture: HostConformanceFixture) {
   });
 }
 
-describe("Host API V1 release conformance", () => {
+describe("Host API  release conformance", () => {
   let fixtures: readonly HostConformanceFixture[];
 
   beforeAll(async () => {
@@ -91,7 +90,6 @@ describe("Host API V1 release conformance", () => {
             fetchJson: async () => ({
               finalUrl: descriptorUrl,
               value: {
-                version: 1,
                 releaseUrl,
                 expectedReleaseId: fixture.release.releaseId,
               },
@@ -108,76 +106,84 @@ describe("Host API V1 release conformance", () => {
 
       const candidate = fixture.transitionRequest.payload.candidate;
       if (candidate.terminal !== "accepted") throw new Error("fixture-terminal-invalid");
-      const durableResult = {
-        kind: "accepted",
-        commandId: candidate.commandId,
-        commandOutcome: "accepted",
-        aggregateId: candidate.target.aggregateId,
-        aggregateKind: candidate.target.aggregateKind,
-        schemaId: candidate.target.schemaId,
-        schemaVersion: candidate.target.schemaVersion,
-        expectedVersion: candidate.expectedVersion,
-        resultingVersion: candidate.expectedVersion + 1,
-        outcome: candidate.outcome,
-        observationIds: candidate.observationIds,
-      } satisfies DurableTransitionResult;
+      if (candidate.nextState === undefined) throw new Error("fixture-next-state-missing");
+      const durableResult = fixture.transitionResult;
       expect(
         validateRecoveryRecords(
           fixture.release.manifest,
+          fixture.composition,
           {
             snapshot: {
+              model_id: candidate.modelId,
               aggregate_id: candidate.target.aggregateId,
               aggregate_kind: candidate.target.aggregateKind,
               schema_id: candidate.target.schemaId,
-              schema_version: candidate.target.schemaVersion,
               state_version: 1,
               state_json: JSON.stringify(candidate.nextState),
+              progression_json: null,
+              initial_state_json: JSON.stringify(fixture.bootstrap.aggregate.state),
+              initial_progression_json: null,
               journal_position: 1,
             },
             journals: [
               {
                 sequence: 1,
                 command_id: candidate.commandId,
-                outcome_json: JSON.stringify(candidate.outcome),
-                progression_json: JSON.stringify(candidate.progressionChanges),
+                record_json: JSON.stringify({ candidate, result: durableResult }),
               },
             ],
             receipts: [
               {
                 command_id: candidate.commandId,
-                expected_version: 0,
-                resulting_version: 1,
+                expected_state_version: candidate.expectedStateVersion,
+                candidate_json: JSON.stringify(candidate),
                 result_json: JSON.stringify(durableResult),
+                resulting_state_version: durableResult.resultingStateVersion,
               },
             ],
             observationLinks: [],
           },
-          () => true,
+          {
+            validateState: ({ schemaId }) => schemaId === candidate.target.schemaId,
+            validateSchema: (schemaId) =>
+              fixture.composition.resources.some(
+                (resource) => resource.role === "schema" && resource.id === schemaId,
+              ),
+            validateProgression: () => false,
+          },
         ),
       ).toMatchObject({ kind: "valid", aggregate: { stateVersion: 1 } });
 
       expect(
-        buildPlayReport({
+        buildGamePlayReport({
           releaseId: fixture.release.releaseId,
-          runId: `${fixture.name}-run`,
           platform: "ios",
-          startedAtMs: 1_000,
-          endedAtMs: 2_000,
-          commands: [{ result: durableResult, elapsedMs: 1_500 }],
-          journals: [
+          lifecycle: [{ elapsedMs: 0, sourceSequence: 0, disposition: "mounted" }],
+          commands: [
             {
-              sequence: 1,
+              elapsedMs: 500,
+              sourceSequence: 1,
+              scope: "local",
               commandId: candidate.commandId,
-              progressionChanges: candidate.progressionChanges,
+              terminal: durableResult.terminal,
+              expectedStateVersion: candidate.expectedStateVersion,
+              resultingStateVersion: durableResult.resultingStateVersion,
             },
           ],
           capabilities: [],
-          observationLinks: [],
-          runEvents: [],
+          synchronization: [],
+          recovery: [],
+          diagnostics: [],
         }),
       ).toMatchObject({
         releaseId: fixture.release.releaseId,
-        events: [{ kind: "command", terminal: "accepted", resultingVersion: 1 }],
+        events: expect.arrayContaining([
+          expect.objectContaining({
+            kind: "command",
+            terminal: "accepted",
+            resultingStateVersion: 1,
+          }),
+        ]),
       });
     }
   });
@@ -196,11 +202,25 @@ describe("Host API V1 release conformance", () => {
     });
   });
 
-  it.each(hostFaultFixtures)("returns the declared error for $name", async ({ raw, code }) => {
+  it("advertises the game-neutral Host API shared-play extension", () => {
     const fixture = fixtures[0];
     if (fixture === undefined) throw new Error("field-conformance-fixture-missing");
-    const result: HostToWebBridgeEnvelope = await routeHostBridgeMessage(raw, handlersFor(fixture));
-    expect(result.type).toBe("host.error");
-    expect(result.payload).toMatchObject({ code });
+    const manifest = { ...fixture.release.manifest, hostApi: { major: 1, minimumMinor: 1 } };
+    expect(assessCompatibility(manifest, deriveHostSupportFromManifest(manifest))).toEqual({
+      kind: "compatible",
+    });
   });
+
+  it.each(hostFaultFixtures)(
+    "returns the declared correlated error for $name",
+    async ({ raw, code, requestId }) => {
+      const fixture = fixtures[0];
+      if (fixture === undefined) throw new Error("field-conformance-fixture-missing");
+      const result: HostToWebBridgeEnvelope = await routeHostBridgeMessage(
+        raw,
+        handlersFor(fixture),
+      );
+      expect(result).toMatchObject({ requestId, type: "host.error", payload: { code } });
+    },
+  );
 });

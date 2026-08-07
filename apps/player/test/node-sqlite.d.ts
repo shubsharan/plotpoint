@@ -14,3 +14,8 @@ declare module "node:sqlite" {
     close(): void;
   }
 }
+
+declare module "node:fs/promises" {
+  export function access(path: URL): Promise<void>;
+  export function readFile(path: URL, encoding: "utf8"): Promise<string>;
+}

@@ -1,5 +1,6 @@
 import type { CanonicalJsonObject } from "../release/types.js";
 
+export const HOST_API_VERSION = Object.freeze({ major: 1, minor: 1 } as const);
 export const HOST_BRIDGE_VERSION = 1 as const;
 
 export type HostBridgeDirection = "web-to-host" | "host-to-web";
@@ -11,152 +12,163 @@ export type HostToWebMessageType =
   | "host.error";
 export type HostBridgeMessageType = WebToHostMessageType | HostToWebMessageType;
 
-export interface HostBridgeEnvelopeV1<Type extends string, Payload> {
-  readonly version: 1;
+export interface HostBridgeEnvelope<Type extends string, Payload> {
+  readonly version: typeof HOST_BRIDGE_VERSION;
   readonly requestId: string;
   readonly type: Type;
-  readonly payload: Payload & CanonicalJsonObject;
+  readonly payload: Payload;
 }
 
-/** @deprecated Prefer the closed direction-specific envelope unions for parsed messages. */
-export interface HostBridgeEnvelope<Type extends HostBridgeMessageType = HostBridgeMessageType> {
-  readonly version: 1;
-  readonly requestId: string;
-  readonly type: Type;
-  readonly payload: CanonicalJsonObject;
-}
-
-export type AggregateTargetV1 = CanonicalJsonObject & {
+export interface AggregateTarget {
   readonly aggregateId: string;
   readonly aggregateKind: "player";
   readonly schemaId: string;
-  readonly schemaVersion: number;
-};
+}
 
-type TransitionCandidateBaseV1 = CanonicalJsonObject & {
+export type ProgressionStatus = "locked" | "available" | "active" | "completed" | "skipped";
+
+export interface ProgressionNodeState {
+  readonly nodeId: string;
+  readonly status: ProgressionStatus;
+}
+
+export interface ProgressionInstance {
+  readonly graphId: string;
+  readonly nodes: readonly ProgressionNodeState[];
+}
+
+export type TypedRecord = CanonicalJsonObject & { readonly type: string };
+export type ProgressionTransitionRecord = CanonicalJsonObject;
+
+interface TransitionCandidateBase {
   readonly commandId: string;
-  readonly target: AggregateTargetV1;
-  readonly expectedVersion: number;
+  readonly modelId: string;
+  readonly commandType: string;
+  readonly payload: CanonicalJsonObject;
+  readonly target: AggregateTarget;
+  readonly expectedStateVersion: number;
   readonly observationIds: readonly string[];
-};
+  readonly consumedObservationIds?: readonly string[];
+}
 
-export type TransitionCandidateV1 =
-  | (TransitionCandidateBaseV1 & {
+export type TransitionCandidate =
+  | (TransitionCandidateBase & {
       readonly terminal: "accepted";
-      readonly nextState: CanonicalJsonObject;
+      readonly nextState?: CanonicalJsonObject;
+      readonly nextProgression?: ProgressionInstance;
       readonly outcome: CanonicalJsonObject;
-      readonly progressionChanges: readonly string[];
+      readonly domainEvents: readonly TypedRecord[];
+      readonly effectIntents: readonly TypedRecord[];
+      readonly progressionTrace: readonly ProgressionTransitionRecord[];
     })
-  | (TransitionCandidateBaseV1 & {
+  | (TransitionCandidateBase & {
       readonly terminal: "no-op" | "rejected";
       readonly outcome: CanonicalJsonObject;
     })
-  | (TransitionCandidateBaseV1 & {
+  | (TransitionCandidateBase & {
       readonly terminal: "invalid";
+      readonly phase: "execution";
       readonly diagnosticCodes: readonly string[];
+      readonly attemptedProgressionTrace: readonly ProgressionTransitionRecord[];
     });
 
-export type RuntimeBootstrapV1 = CanonicalJsonObject & {
+export interface LocalAggregateView {
+  readonly modelId: string;
+  readonly aggregateId: string;
+  readonly aggregateKind: "player";
+  readonly schemaId: string;
+  readonly stateVersion: number;
+  readonly state: CanonicalJsonObject;
+  readonly progression?: ProgressionInstance;
+}
+
+export interface RuntimeBootstrap {
   readonly runId: string;
   readonly releaseId: `sha256:${string}`;
-  readonly aggregate:
-    | null
-    | (CanonicalJsonObject & {
-        readonly aggregateId: string;
-        readonly aggregateKind: "player";
-        readonly schemaId: string;
-        readonly schemaVersion: number;
-        readonly stateVersion: number;
-        readonly state: CanonicalJsonObject;
-      });
-};
+  readonly aggregate: LocalAggregateView;
+}
 
-export type TransitionResultV1 =
+export type TransitionResult =
   | {
       readonly commandId: string;
       readonly disposition: "committed" | "duplicate";
       readonly terminal: "accepted" | "no-op" | "rejected";
-      readonly resultingVersion: number;
+      readonly resultingStateVersion: number;
       readonly outcome: CanonicalJsonObject;
     }
   | {
       readonly commandId: string;
       readonly disposition: "committed" | "duplicate";
       readonly terminal: "invalid";
-      readonly resultingVersion: number;
+      readonly phase: "execution";
+      readonly resultingStateVersion: number;
       readonly diagnosticCodes: readonly string[];
     };
 
-export type CapabilityVersionV1 = CanonicalJsonObject & {
+export type CapabilityVersion = CanonicalJsonObject & {
   readonly id: string;
   readonly major: number;
   readonly minor: number;
 };
 
-export type CapabilityRequestV1<Input extends CanonicalJsonObject = CanonicalJsonObject> =
+export type CapabilityRequest<Input extends CanonicalJsonObject = CanonicalJsonObject> =
   CanonicalJsonObject & {
-    readonly capability: CapabilityVersionV1;
+    readonly capability: CapabilityVersion;
     readonly input: Input;
   };
 
-export type CapabilityResultV1<Output extends CanonicalJsonObject = CanonicalJsonObject> =
+export type CapabilityResult<Output extends CanonicalJsonObject = CanonicalJsonObject> =
   CanonicalJsonObject & {
-    readonly capability: CapabilityVersionV1;
+    readonly capability: CapabilityVersion;
     readonly output: Output;
   };
 
-export type HostErrorV1 = CanonicalJsonObject & {
+export type HostError = CanonicalJsonObject & {
   readonly code: string;
   readonly commandId?: string;
   readonly currentVersion?: number;
 };
 
-export type RuntimeReadyEnvelopeV1 = HostBridgeEnvelopeV1<"runtime.ready", Record<string, never>>;
-export type TransitionCommitEnvelopeV1 = HostBridgeEnvelopeV1<
+export type RuntimeReadyEnvelope = HostBridgeEnvelope<"runtime.ready", Record<string, never>>;
+export type TransitionCommitEnvelope = HostBridgeEnvelope<
   "transition.commit",
-  { readonly candidate: TransitionCandidateV1 }
+  { readonly candidate: TransitionCandidate }
 >;
-export type CapabilityRequestEnvelopeV1<Input extends CanonicalJsonObject = CanonicalJsonObject> =
-  HostBridgeEnvelopeV1<"capability.request", CapabilityRequestV1<Input>>;
-export type RuntimeBootstrapEnvelopeV1 = HostBridgeEnvelopeV1<
-  "runtime.bootstrap",
-  RuntimeBootstrapV1
->;
-export type TransitionResultEnvelopeV1 = HostBridgeEnvelopeV1<
-  "transition.result",
-  TransitionResultV1
->;
-export type CapabilityResultEnvelopeV1<Output extends CanonicalJsonObject = CanonicalJsonObject> =
-  HostBridgeEnvelopeV1<"capability.result", CapabilityResultV1<Output>>;
-export type HostErrorEnvelopeV1 = HostBridgeEnvelopeV1<"host.error", HostErrorV1>;
+export type CapabilityRequestEnvelope<Input extends CanonicalJsonObject = CanonicalJsonObject> =
+  HostBridgeEnvelope<"capability.request", CapabilityRequest<Input>>;
+export type RuntimeBootstrapEnvelope = HostBridgeEnvelope<"runtime.bootstrap", RuntimeBootstrap>;
+export type TransitionResultEnvelope = HostBridgeEnvelope<"transition.result", TransitionResult>;
+export type CapabilityResultEnvelope<Output extends CanonicalJsonObject = CanonicalJsonObject> =
+  HostBridgeEnvelope<"capability.result", CapabilityResult<Output>>;
+export type HostErrorEnvelope = HostBridgeEnvelope<"host.error", HostError>;
 
 export type WebToHostBridgeEnvelope =
-  | RuntimeReadyEnvelopeV1
-  | TransitionCommitEnvelopeV1
-  | CapabilityRequestEnvelopeV1;
+  | RuntimeReadyEnvelope
+  | TransitionCommitEnvelope
+  | CapabilityRequestEnvelope;
 export type HostToWebBridgeEnvelope =
-  | RuntimeBootstrapEnvelopeV1
-  | TransitionResultEnvelopeV1
-  | CapabilityResultEnvelopeV1
-  | HostErrorEnvelopeV1;
+  | RuntimeBootstrapEnvelope
+  | TransitionResultEnvelope
+  | CapabilityResultEnvelope
+  | HostErrorEnvelope;
 export type AnyHostBridgeEnvelope = WebToHostBridgeEnvelope | HostToWebBridgeEnvelope;
 
 export type HostBridgeParseResult<Envelope extends AnyHostBridgeEnvelope = AnyHostBridgeEnvelope> =
   | { readonly kind: "valid"; readonly envelope: Envelope }
   | { readonly kind: "invalid"; readonly code: string };
 
-export interface HostBridgeTransportV1 {
-  send(type: WebToHostMessageType, payload: CanonicalJsonObject): Promise<unknown>;
+export interface HostBridgeTransport {
+  send(type: WebToHostMessageType, payload: object): Promise<unknown>;
 }
 
 export type HostCapabilityOutputValidator<Output extends object> = (
   value: unknown,
 ) => value is Output;
 
-export interface HostRuntimeClientV1 {
-  commitTransition(candidate: TransitionCandidateV1): Promise<TransitionResultV1>;
+export interface HostRuntimeClient {
+  commitTransition(candidate: TransitionCandidate): Promise<TransitionResult>;
   requestCapability<Input extends CanonicalJsonObject, Output extends object>(
-    capability: CapabilityVersionV1,
+    capability: CapabilityVersion,
     input: Input,
     validateOutput: HostCapabilityOutputValidator<Output>,
   ): Promise<Output>;
@@ -195,6 +207,18 @@ function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): 
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
 
+function hasOnlyOptionalKeys(
+  value: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[],
+): boolean {
+  const keys = Object.keys(value);
+  return (
+    required.every((key) => Object.hasOwn(value, key)) &&
+    keys.every((key) => required.includes(key) || optional.includes(key))
+  );
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
@@ -212,65 +236,153 @@ function isStringArray(value: unknown, unique = false): value is readonly string
   return !unique || new Set(value).size === value.length;
 }
 
-function isAggregateTarget(value: unknown): value is AggregateTargetV1 {
+function isAggregateTarget(value: unknown): value is AggregateTarget {
   if (!isCanonicalObject(value)) return false;
   return (
-    hasExactKeys(value, ["aggregateId", "aggregateKind", "schemaId", "schemaVersion"]) &&
+    hasExactKeys(value, ["aggregateId", "aggregateKind", "schemaId"]) &&
     isNonEmptyString(value.aggregateId) &&
     value.aggregateKind === "player" &&
-    isNonEmptyString(value.schemaId) &&
-    isPositiveInteger(value.schemaVersion)
+    isNonEmptyString(value.schemaId)
   );
 }
 
-function isTransitionCandidate(value: unknown): value is TransitionCandidateV1 {
+const PROGRESSION_STATUSES: ReadonlySet<string> = new Set([
+  "locked",
+  "available",
+  "active",
+  "completed",
+  "skipped",
+]);
+
+function isProgressionInstance(value: unknown): value is ProgressionInstance {
+  if (!isCanonicalObject(value) || !hasExactKeys(value, ["graphId", "nodes"])) return false;
+  if (!isNonEmptyString(value.graphId) || !Array.isArray(value.nodes)) return false;
+  let previousNodeId: string | undefined;
+  for (const node of value.nodes) {
+    if (
+      !isCanonicalObject(node) ||
+      !hasExactKeys(node, ["nodeId", "status"]) ||
+      !isNonEmptyString(node.nodeId) ||
+      typeof node.status !== "string" ||
+      !PROGRESSION_STATUSES.has(node.status) ||
+      (previousNodeId !== undefined && previousNodeId >= node.nodeId)
+    ) {
+      return false;
+    }
+    previousNodeId = node.nodeId;
+  }
+  return true;
+}
+
+function isTypedRecord(value: unknown): value is TypedRecord {
+  return isCanonicalObject(value) && isNonEmptyString(value.type);
+}
+
+function isCanonicalObjectArray(value: unknown): value is readonly CanonicalJsonObject[] {
+  return Array.isArray(value) && value.every(isCanonicalObject);
+}
+
+function isTransitionCandidate(value: unknown): value is TransitionCandidate {
   if (!isCanonicalObject(value)) return false;
+  const observationIds = value.observationIds;
+  const consumedObservationIds = value.consumedObservationIds ?? [];
   const baseIsValid =
     isNonEmptyString(value.commandId) &&
+    isNonEmptyString(value.modelId) &&
+    isNonEmptyString(value.commandType) &&
+    isCanonicalObject(value.payload) &&
     isAggregateTarget(value.target) &&
-    isNonNegativeInteger(value.expectedVersion) &&
-    isStringArray(value.observationIds, true);
+    isNonNegativeInteger(value.expectedStateVersion) &&
+    isStringArray(observationIds, true) &&
+    isStringArray(consumedObservationIds, true) &&
+    consumedObservationIds.every((id) => observationIds.includes(id));
   if (!baseIsValid) return false;
 
   if (value.terminal === "accepted") {
+    const required = [
+      "commandId",
+      "commandType",
+      "domainEvents",
+      "effectIntents",
+      "expectedStateVersion",
+      "modelId",
+      "observationIds",
+      "outcome",
+      "payload",
+      "progressionTrace",
+      "target",
+      "terminal",
+    ];
+    const keys = Object.keys(value);
+    if (
+      !required.every((key) => Object.hasOwn(value, key)) ||
+      keys.some(
+        (key) =>
+          !required.includes(key) &&
+          key !== "nextState" &&
+          key !== "nextProgression" &&
+          key !== "consumedObservationIds",
+      ) ||
+      (Object.hasOwn(value, "nextState") && !isCanonicalObject(value.nextState)) ||
+      (Object.hasOwn(value, "nextProgression") && !isProgressionInstance(value.nextProgression)) ||
+      !isCanonicalObject(value.outcome) ||
+      !Array.isArray(value.domainEvents) ||
+      !value.domainEvents.every(isTypedRecord) ||
+      !Array.isArray(value.effectIntents) ||
+      !value.effectIntents.every(isTypedRecord) ||
+      !isCanonicalObjectArray(value.progressionTrace)
+    ) {
+      return false;
+    }
     return (
-      hasExactKeys(value, [
-        "commandId",
-        "expectedVersion",
-        "nextState",
-        "observationIds",
-        "outcome",
-        "progressionChanges",
-        "target",
-        "terminal",
-      ]) &&
-      isCanonicalObject(value.nextState) &&
-      isCanonicalObject(value.outcome) &&
-      isStringArray(value.progressionChanges)
+      Object.hasOwn(value, "nextState") ||
+      Object.hasOwn(value, "nextProgression") ||
+      value.domainEvents.length > 0 ||
+      value.effectIntents.length > 0 ||
+      value.progressionTrace.length > 0
     );
   }
   if (value.terminal === "no-op" || value.terminal === "rejected") {
     return (
-      hasExactKeys(value, [
-        "commandId",
-        "expectedVersion",
-        "observationIds",
-        "outcome",
-        "target",
-        "terminal",
-      ]) && isCanonicalObject(value.outcome)
+      hasOnlyOptionalKeys(
+        value,
+        [
+          "commandId",
+          "commandType",
+          "expectedStateVersion",
+          "modelId",
+          "observationIds",
+          "outcome",
+          "payload",
+          "target",
+          "terminal",
+        ],
+        ["consumedObservationIds"],
+      ) && isCanonicalObject(value.outcome)
     );
   }
   if (value.terminal === "invalid") {
     return (
-      hasExactKeys(value, [
-        "commandId",
-        "diagnosticCodes",
-        "expectedVersion",
-        "observationIds",
-        "target",
-        "terminal",
-      ]) && isStringArray(value.diagnosticCodes)
+      hasOnlyOptionalKeys(
+        value,
+        [
+          "commandId",
+          "commandType",
+          "diagnosticCodes",
+          "expectedStateVersion",
+          "attemptedProgressionTrace",
+          "modelId",
+          "observationIds",
+          "payload",
+          "phase",
+          "target",
+          "terminal",
+        ],
+        ["consumedObservationIds"],
+      ) &&
+      value.phase === "execution" &&
+      isStringArray(value.diagnosticCodes) &&
+      isCanonicalObjectArray(value.attemptedProgressionTrace)
     );
   }
   return false;
@@ -285,31 +397,28 @@ function isRuntimeBootstrap(value: CanonicalJsonObject): boolean {
   ) {
     return false;
   }
-  if (value.aggregate === null) return true;
   if (!isCanonicalObject(value.aggregate)) return false;
+  const required = ["aggregateId", "aggregateKind", "modelId", "schemaId", "state", "stateVersion"];
+  const keys = Object.keys(value.aggregate);
   return (
-    hasExactKeys(value.aggregate, [
-      "aggregateId",
-      "aggregateKind",
-      "schemaId",
-      "schemaVersion",
-      "state",
-      "stateVersion",
-    ]) &&
+    required.every((key) => Object.hasOwn(value.aggregate as CanonicalJsonObject, key)) &&
+    keys.every((key) => required.includes(key) || key === "progression") &&
+    isNonEmptyString(value.aggregate.modelId) &&
     isNonEmptyString(value.aggregate.aggregateId) &&
     value.aggregate.aggregateKind === "player" &&
     isNonEmptyString(value.aggregate.schemaId) &&
-    isPositiveInteger(value.aggregate.schemaVersion) &&
     isNonNegativeInteger(value.aggregate.stateVersion) &&
-    isCanonicalObject(value.aggregate.state)
+    isCanonicalObject(value.aggregate.state) &&
+    (!Object.hasOwn(value.aggregate, "progression") ||
+      isProgressionInstance(value.aggregate.progression))
   );
 }
 
-function isTransitionResult(value: CanonicalJsonObject): value is TransitionResultV1 {
+function isTransitionResult(value: CanonicalJsonObject): value is TransitionResult {
   const baseIsValid =
     isNonEmptyString(value.commandId) &&
     (value.disposition === "committed" || value.disposition === "duplicate") &&
-    isNonNegativeInteger(value.resultingVersion);
+    isNonNegativeInteger(value.resultingStateVersion);
   if (!baseIsValid) return false;
   if (
     value.terminal === "accepted" ||
@@ -321,7 +430,7 @@ function isTransitionResult(value: CanonicalJsonObject): value is TransitionResu
         "commandId",
         "disposition",
         "outcome",
-        "resultingVersion",
+        "resultingStateVersion",
         "terminal",
       ]) && isCanonicalObject(value.outcome)
     );
@@ -332,15 +441,18 @@ function isTransitionResult(value: CanonicalJsonObject): value is TransitionResu
         "commandId",
         "diagnosticCodes",
         "disposition",
-        "resultingVersion",
+        "phase",
+        "resultingStateVersion",
         "terminal",
-      ]) && isStringArray(value.diagnosticCodes)
+      ]) &&
+      value.phase === "execution" &&
+      isStringArray(value.diagnosticCodes)
     );
   }
   return false;
 }
 
-function isCapabilityVersion(value: unknown): value is CapabilityVersionV1 {
+function isCapabilityVersion(value: unknown): value is CapabilityVersion {
   if (!isCanonicalObject(value)) return false;
   return (
     hasExactKeys(value, ["id", "major", "minor"]) &&
@@ -358,7 +470,7 @@ function isCapabilityRequest(value: CanonicalJsonObject): boolean {
   );
 }
 
-function isCapabilityResult(value: CanonicalJsonObject): value is CapabilityResultV1 {
+function isCapabilityResult(value: CanonicalJsonObject): value is CapabilityResult {
   return (
     hasExactKeys(value, ["capability", "output"]) &&
     isCapabilityVersion(value.capability) &&
@@ -366,13 +478,13 @@ function isCapabilityResult(value: CanonicalJsonObject): value is CapabilityResu
   );
 }
 
-function sameCapability(left: CapabilityVersionV1, right: CapabilityVersionV1): boolean {
+function sameCapability(left: CapabilityVersion, right: CapabilityVersion): boolean {
   return left.id === right.id && left.major === right.major && left.minor === right.minor;
 }
 
-export function createHostRuntimeClientV1(transport: HostBridgeTransportV1): HostRuntimeClientV1 {
-  const client: HostRuntimeClientV1 = {
-    async commitTransition(candidate: TransitionCandidateV1) {
+export function createHostRuntimeClient(transport: HostBridgeTransport): HostRuntimeClient {
+  const client: HostRuntimeClient = {
+    async commitTransition(candidate: TransitionCandidate) {
       const raw = await transport.send("transition.commit", { candidate });
       if (!isCanonicalObject(raw) || !isTransitionResult(raw)) {
         throw new Error("host-transition-result-invalid");
@@ -386,7 +498,7 @@ export function createHostRuntimeClientV1(transport: HostBridgeTransportV1): Hos
       return raw;
     },
     async requestCapability<Input extends CanonicalJsonObject, Output extends object>(
-      capability: CapabilityVersionV1,
+      capability: CapabilityVersion,
       input: Input,
       validateOutput: HostCapabilityOutputValidator<Output>,
     ): Promise<Output> {

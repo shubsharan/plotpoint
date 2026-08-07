@@ -1,14 +1,11 @@
 {
-  "releaseId": "sha256:505d9e2435660c23301bf9ab935b27c8a8db3cfd5812f326e5cc1aa7bc8359ba",
+  "releaseId": "sha256:ad2a33ec8f88a67a45f7cdcdac82d68a24f533925267232434f598e8c31697ba",
   "manifest": {
-    "releaseFormatVersion": 1,
-    "hostApi": { "major": 1, "minimumMinor": 0 },
     "aggregateSchemas": [
       {
-        "id": "minimal.player-state.v1",
+        "id": "minimal.player-state",
         "kind": "player",
-        "version": 1,
-        "path": "schemas/aggregate/6d696e696d616c2e706c617965722d73746174652e7631.json"
+        "path": "schemas/aggregate/6d696e696d616c2e706c617965722d7374617465.json"
       }
     ],
     "capabilities": [],
@@ -16,67 +13,78 @@
       "logic": "bundles/logic.js",
       "presentation": "bundles/presentation.js"
     },
+    "hostApi": {
+      "major": 1,
+      "minimumMinor": 0
+    },
     "inventory": [
       {
-        "path": "assets/clue.svg",
-        "kind": "asset",
         "byteLength": 475,
-        "digest": "sha256:f925b765dfcd660f45af93b852e1586714a0abb1440beb81a692f15d7f1a474a"
+        "digest": "sha256:f925b765dfcd660f45af93b852e1586714a0abb1440beb81a692f15d7f1a474a",
+        "kind": "asset",
+        "path": "assets/clue.svg"
       },
       {
-        "path": "bundles/logic.js",
+        "byteLength": 77517,
+        "digest": "sha256:3ea1b1353217eb6c89c65e0052bfe4db385c8d2a22b3a9e3ebe0cd2921722cca",
         "kind": "logic-bundle",
-        "byteLength": 14090,
-        "digest": "sha256:d9eabd5776cbd3faa3bf4b6f5509ce154c5a278af29f3dbebc8abc49f8c72d62"
+        "path": "bundles/logic.js"
       },
       {
-        "path": "bundles/presentation.js",
+        "byteLength": 1151,
+        "digest": "sha256:1c7f1454ff45033abf1e5aaf1aa656931abe3b897c58d0da83a1d92964b3be1c",
         "kind": "presentation-bundle",
-        "byteLength": 1032,
-        "digest": "sha256:ee36b38f58315b93b6b6ce1ab1f635a7ef016fa625c1e3f3e0d96e2510c5950d"
+        "path": "bundles/presentation.js"
       },
       {
-        "path": "components/6d696e696d616c2e70757a7a6c652d636172642e7631.json",
+        "byteLength": 141,
+        "digest": "sha256:fc0b9ce1d11f05850c997e701e5d2cb61bf4e04972f08ed063bde14c55de5fd1",
         "kind": "component-data",
-        "byteLength": 178,
-        "digest": "sha256:2661eb5a71701cea0105b9ce13d3cf6bc380e192e5de28b5565201b62acc7996"
+        "path": "components/6d696e696d616c2e70757a7a6c652d63617264.json"
       },
       {
-        "path": "content/6d696e696d616c2e70757a7a6c652d636f6e74656e742e7631.json",
+        "byteLength": 1682,
+        "digest": "sha256:f0b48d33e26a2acbafffa84475e4625c3a9e4c8a8f6316de3680fad67c136018",
         "kind": "content",
-        "byteLength": 217,
-        "digest": "sha256:46c6b1415289e4751b95aea904efc887cff2825f9ad80dcffd7272ec70d2f228"
+        "path": "composition/game.json"
       },
       {
-        "path": "progressions/6d696e696d616c2e70757a7a6c652e7631.json",
+        "byteLength": 214,
+        "digest": "sha256:01e03e7d6ec337c49c83bf63be01d5fb54e2812b3ced6392b54f7b4af9c9d4a9",
+        "kind": "content",
+        "path": "content/6d696e696d616c2e70757a7a6c652d64617461.json"
+      },
+      {
+        "byteLength": 57,
+        "digest": "sha256:8813a0898606e97543e976376dbaaa2610a42cefd82714838afa890313e405d1",
         "kind": "progression",
-        "byteLength": 210,
-        "digest": "sha256:0b519ad9dd9d7c7b0d64b1fe088cba7a29847749f0aaf35b4b0b93993487dec3"
+        "path": "progressions/6d696e696d616c2e70757a7a6c65.json"
       },
       {
-        "path": "schemas/aggregate/6d696e696d616c2e706c617965722d73746174652e7631.json",
+        "byteLength": 250,
+        "digest": "sha256:16c8ae2e2f7288d24269fee74452d456f730fd1e1492d79a0fb4c43c3358439b",
         "kind": "aggregate-schema",
-        "byteLength": 253,
-        "digest": "sha256:917253edd2833c5660bad3809870b23e20159422d5d6bbee8fa6eb3841708746"
+        "path": "schemas/aggregate/6d696e696d616c2e706c617965722d7374617465.json"
       },
       {
-        "path": "schemas/general/6d696e696d616c2e70757a7a6c652d636f6e74656e742e7631.json",
+        "byteLength": 421,
+        "digest": "sha256:3d1bb39a9e59b7f90588f120cf8704a7edf825e817c5236efae66167b24cc91a",
         "kind": "command-schema",
-        "byteLength": 427,
-        "digest": "sha256:15b4bec7b34fbcc6aafb8f2e9b32a51bae03f8cdd6fdc9084cd654fc31886228"
+        "path": "schemas/general/6d696e696d616c2e70757a7a6c652d636f6e74656e74.json"
       },
       {
-        "path": "schemas/general/6d696e696d616c2e736f6c76652d6f7574636f6d652e7631.json",
+        "byteLength": 211,
+        "digest": "sha256:b5c3370d8320ff3cc64336d3f7ad473af942a27f03d03b26cef0677577f6e4ed",
         "kind": "command-schema",
-        "byteLength": 214,
-        "digest": "sha256:d79fccde33157113e272820889b7a8e87c18c878eed39b07535a02dd61f3d51f"
+        "path": "schemas/general/6d696e696d616c2e736f6c76652d6f7574636f6d65.json"
       },
       {
-        "path": "schemas/general/6d696e696d616c2e736f6c76652d7061796c6f61642e7631.json",
+        "byteLength": 211,
+        "digest": "sha256:9d619d816ae745e7edcceb9d82ab8de7bc44f923a3755fd7a3f6e8085600dffe",
         "kind": "command-schema",
-        "byteLength": 214,
-        "digest": "sha256:edd8790f365ec04bd8a40ed01b3586b885c2bb64b5fefcaf3495a7244604dc16"
+        "path": "schemas/general/6d696e696d616c2e736f6c76652d7061796c6f6164.json"
       }
-    ]
+    ],
+    "releaseFormatVersion": 1
   }
 }

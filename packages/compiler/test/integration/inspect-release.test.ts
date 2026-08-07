@@ -8,15 +8,20 @@ import { describe, expect, it } from "vitest";
 import { compileProject } from "@plotpoint/compiler";
 import {
   assessCompatibility,
-  inspectRelease,
+  inspectGameRelease,
   type HostReleaseSupport,
-  type ReleaseManifestV1,
+  type ReleaseManifest,
 } from "@plotpoint/protocol";
 
-const goldenProjects = [
-  "minimal-local-puzzle",
-  "branching-media-tour",
-  "team-session-hunt",
+import { releaseExampleProjects, type ReleaseExampleProject } from "../helpers/external-project.js";
+
+const requiredInventoryKinds = [
+  "logic-bundle",
+  "presentation-bundle",
+  "aggregate-schema",
+  "command-schema",
+  "component-data",
+  "content",
 ] as const;
 
 interface RegistryMetadata {
@@ -26,22 +31,22 @@ interface RegistryMetadata {
   readonly createdAt: string;
 }
 
-function fixtureRoot(project: (typeof goldenProjects)[number]): string {
+function fixtureRoot(project: ReleaseExampleProject): string {
   return fileURLToPath(new URL(`../../../../examples/releases/${project}/`, import.meta.url));
 }
 
-function supportedHost(manifest: ReleaseManifestV1): HostReleaseSupport {
+function supportedHost(manifest: ReleaseManifest): HostReleaseSupport {
   return {
     releaseFormatVersions: [manifest.releaseFormatVersion],
     hostApi: {
       major: manifest.hostApi.major,
       minor: manifest.hostApi.minimumMinor,
     },
-    aggregateSchemas: manifest.aggregateSchemas.map((schema) => ({
-      id: schema.id,
-      kind: schema.kind,
-      versions: [schema.version],
-    })),
+    aggregateSchemas: manifest.aggregateSchemas.map((schema) => {
+      const inventory = manifest.inventory.find(({ path }) => path === schema.path);
+      if (inventory === undefined) throw new Error("aggregate-schema-inventory-missing");
+      return { id: schema.id, kind: schema.kind, digest: inventory.digest };
+    }),
     capabilities: manifest.capabilities.map((capability) => ({
       id: capability.id,
       major: capability.major,
@@ -60,7 +65,7 @@ function expectIncompatibleCode(
   }
 }
 
-function expectCompatibilityMatrix(manifest: ReleaseManifestV1): void {
+function expectCompatibilityMatrix(manifest: ReleaseManifest): void {
   const supported = supportedHost(manifest);
   expect(assessCompatibility(manifest, supported)).toEqual({ kind: "compatible" });
 
@@ -92,7 +97,7 @@ async function writeRegistryMetadata(path: string, metadata: RegistryMetadata): 
 }
 
 describe("source-free release inspection acceptance", () => {
-  it.each(goldenProjects)(
+  it.each(releaseExampleProjects)(
     "compiles, removes, and inspects %s with operational metadata invariance",
     async (project) => {
       const sandbox = await mkdtemp(join(tmpdir(), `plotpoint-inspect-${project}-`));
@@ -138,36 +143,33 @@ describe("source-free release inspection acceptance", () => {
 
         // From here on the project and all author modules are unavailable.
         await rm(projectRoot, { recursive: true });
-        const firstInspected = await inspectRelease(firstBytes);
-        const secondInspected = await inspectRelease(secondBytes);
+        const firstInspected = await inspectGameRelease(firstBytes);
+        const secondInspected = await inspectGameRelease(secondBytes);
         expect(firstInspected).toEqual({
-          kind: "inspected",
-          releaseId: first.releaseId,
-          manifest: first.manifest,
+          release: {
+            kind: "inspected",
+            releaseId: first.releaseId,
+            manifest: first.manifest,
+          },
+          gameComposition: expect.any(Object),
         });
         expect(secondInspected).toEqual(firstInspected);
-        if (firstInspected.kind !== "inspected") {
+        if ("kind" in firstInspected) {
           throw new Error(`source-free inspection failed: ${JSON.stringify(firstInspected)}`);
         }
 
-        const inventoryKinds = new Set(firstInspected.manifest.inventory.map(({ kind }) => kind));
-        expect(inventoryKinds).toEqual(
-          new Set([
-            "logic-bundle",
-            "presentation-bundle",
-            "aggregate-schema",
-            "command-schema",
-            "progression",
-            "component-data",
-            "content",
-            "asset",
-          ]),
+        const inventoryKinds = new Set(
+          firstInspected.release.manifest.inventory.map(({ kind }) => kind),
         );
-        expect(firstInspected.manifest.entrypoints).toEqual({
+        expect(requiredInventoryKinds.every((kind) => inventoryKinds.has(kind))).toBe(true);
+        expect(firstInspected.release.manifest.entrypoints).toEqual({
           logic: "bundles/logic.js",
           presentation: "bundles/presentation.js",
         });
-        expectCompatibilityMatrix(firstInspected.manifest);
+        expect(firstInspected.gameComposition.application.components).toEqual(
+          firstInspected.gameComposition.components.map(({ id }) => id),
+        );
+        expectCompatibilityMatrix(firstInspected.release.manifest);
       } finally {
         await rm(sandbox, { recursive: true, force: true });
       }

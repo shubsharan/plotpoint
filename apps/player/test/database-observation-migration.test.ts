@@ -1,70 +1,249 @@
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+
 import { describe, expect, it, vi } from "vitest";
 
-import { migrateObservationColumns } from "../src/persistence/database";
+import {
+  assertHostStorageSchemaDigest,
+  HOST_STORAGE_SCHEMA_DIGEST,
+  hostStorageSchemaDigest,
+  migratePlayerDatabase,
+} from "../src/persistence/database";
+import { migrateSharedDatabase } from "../src/shared/database";
 
 vi.mock("expo-sqlite", () => ({}));
 
-function migrationDatabase(existing: readonly string[]) {
-  const execAsync = vi.fn(async (_query: string) => undefined);
-  const runAsync = vi.fn(async (_query: string) => undefined);
-  return {
-    database: {
-      getAllAsync: async <T>() => existing.map((name) => ({ name })) as T[],
-      execAsync,
-      runAsync,
-    },
-    execAsync,
-    runAsync,
-  };
+function sqlValues(parameters: readonly unknown[]): SQLInputValue[] {
+  return parameters.map((value) => {
+    if (
+      value === null ||
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "bigint"
+    ) {
+      return value;
+    }
+    throw new Error("test-sql-parameter-invalid");
+  });
 }
 
-describe("observation schema migration", () => {
-  it("adds Location V1 evidence columns to an existing observations table and backfills recordedAt", async () => {
-    const fixture = migrationDatabase([
+class RealMigrationDatabase {
+  constructor(readonly database = new DatabaseSync(":memory:")) {}
+
+  async execAsync(query: string): Promise<void> {
+    this.database.exec(query);
+  }
+
+  async runAsync(query: string, ...parameters: unknown[]): Promise<{ readonly changes: number }> {
+    const result = this.database.prepare(query).run(...sqlValues(parameters)) as {
+      readonly changes: number | bigint;
+    };
+    return { changes: Number(result.changes) };
+  }
+
+  async getAllAsync<T>(query: string, ...parameters: unknown[]): Promise<T[]> {
+    return this.database.prepare(query).all(...sqlValues(parameters)) as T[];
+  }
+
+  async getFirstAsync<T>(query: string, ...parameters: unknown[]): Promise<T | null> {
+    return (this.database.prepare(query).get(...sqlValues(parameters)) as T | undefined) ?? null;
+  }
+
+  async withExclusiveTransactionAsync(
+    operation: (database: RealMigrationDatabase) => Promise<void>,
+  ): Promise<void> {
+    await operation(this);
+  }
+
+  close(): void {
+    this.database.close();
+  }
+}
+
+describe("corrected player database schema", () => {
+  it("creates the corrected snapshot, journal, and observation columns without legacy counters", async () => {
+    const database = new RealMigrationDatabase();
+
+    await migratePlayerDatabase(database);
+    await migratePlayerDatabase(database);
+    await migrateSharedDatabase(database);
+    await migrateSharedDatabase(database);
+
+    const columns = async (table: string) =>
+      (await database.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)).map(
+        ({ name }) => name,
+      );
+    await expect(columns("snapshots")).resolves.toEqual([
+      "run_id",
+      "model_id",
+      "aggregate_id",
+      "aggregate_kind",
+      "schema_id",
+      "state_version",
+      "state_json",
+      "progression_json",
+      "initial_state_json",
+      "initial_progression_json",
+      "journal_position",
+    ]);
+    await expect(columns("journal")).resolves.toEqual([
+      "run_id",
+      "sequence",
+      "command_id",
+      "record_json",
+    ]);
+    await expect(columns("command_receipts")).resolves.toEqual([
+      "run_id",
+      "command_id",
+      "expected_state_version",
+      "candidate_json",
+      "result_json",
+      "resulting_state_version",
+      "elapsed_ms",
+    ]);
+    await expect(columns("observations")).resolves.toEqual([
       "run_id",
       "observation_id",
+      "recorded_at",
       "captured_at",
+      "sensor_captured_at",
+      "age_ms",
       "availability",
       "latitude",
       "longitude",
       "horizontal_accuracy",
+      "diagnostic_code",
       "elapsed_ms",
     ]);
-
-    await migrateObservationColumns(fixture.database);
-
-    expect(fixture.execAsync).toHaveBeenNthCalledWith(
-      1,
-      "ALTER TABLE observations ADD COLUMN recorded_at TEXT",
+    await expect(columns("shared_projections")).resolves.toEqual([
+      "session_id",
+      "aggregate_kind",
+      "aggregate_id",
+      "schema_id",
+      "state_version",
+      "value_json",
+    ]);
+    await expect(columns("pending_shared_joins")).resolves.toEqual([
+      "session_id",
+      "run_id",
+      "expected_release_id",
+      "service_origin",
+      "join_request_id",
+      "invitation_digest",
+      "envelope_key",
+      "request_digest",
+      "status",
+    ]);
+    await expect(columns("shared_sessions")).resolves.toEqual([
+      "session_id",
+      "run_id",
+      "release_id",
+      "participant_id",
+      "team_id",
+      "service_origin",
+      "envelope_key",
+      "membership_status",
+      "transport_status",
+      "sync_status",
+      "cursor",
+      "confirmed_at",
+      "last_pull_digest",
+    ]);
+    await expect(columns("game_play_events")).resolves.toEqual([
+      "sequence",
+      "run_id",
+      "committed_at",
+      "elapsed_ms",
+      "kind",
+      "command_id",
+      "evidence_json",
+    ]);
+    await expect(hostStorageSchemaDigest(database)).resolves.toBe(HOST_STORAGE_SCHEMA_DIGEST);
+    await expect(assertHostStorageSchemaDigest(database)).resolves.toBeUndefined();
+    await database.runAsync(
+      "INSERT INTO installed_releases VALUES (?,?,?,?)",
+      `sha256:${"a".repeat(64)}`,
+      "file:///release",
+      "{}",
+      "2030-01-01T00:00:00.000Z",
     );
-    expect(fixture.execAsync).toHaveBeenNthCalledWith(
-      2,
-      "ALTER TABLE observations ADD COLUMN sensor_captured_at TEXT",
+    await database.runAsync(
+      "INSERT INTO runs VALUES (?,?,?,'active')",
+      "run-1",
+      `sha256:${"a".repeat(64)}`,
+      "2030-01-01T00:00:00.000Z",
     );
-    expect(fixture.execAsync).toHaveBeenNthCalledWith(
-      3,
-      "ALTER TABLE observations ADD COLUMN age_ms INTEGER",
+    await database.runAsync(
+      "INSERT INTO game_play_events(run_id,committed_at,elapsed_ms,kind,evidence_json) VALUES (?,?,?,?,?)",
+      "run-1",
+      "2030-01-01T00:00:00.000Z",
+      0,
+      "lifecycle",
+      '{"disposition":"mounted"}',
     );
-    expect(fixture.execAsync).toHaveBeenNthCalledWith(
-      4,
-      "ALTER TABLE observations ADD COLUMN diagnostic_code TEXT",
-    );
-    expect(fixture.runAsync).toHaveBeenCalledWith(
-      "UPDATE observations SET recorded_at = captured_at WHERE recorded_at IS NULL",
-    );
+    await expect(
+      database.runAsync("DELETE FROM game_play_events WHERE run_id=?", "run-1"),
+    ).rejects.toThrow("game-play-evidence-immutable");
+    await expect(
+      database.getAllAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name",
+      ),
+    ).resolves.toEqual([
+      { name: "game_play_events_no_delete" },
+      { name: "game_play_events_no_update" },
+      { name: "pending_shared_join_immutable" },
+      { name: "pending_shared_join_no_bound_insert" },
+      { name: "shared_session_binding_immutable" },
+      { name: "shared_session_membership_monotonic" },
+      { name: "shared_session_no_pending_insert" },
+    ]);
+    database.close();
   });
 
-  it("is idempotent once every Location V1 evidence column exists", async () => {
-    const fixture = migrationDatabase([
-      "recorded_at",
-      "sensor_captured_at",
-      "age_ms",
-      "diagnostic_code",
-    ]);
+  it("rejects an index-definition mismatch even when every table and column name matches", async () => {
+    const database = new RealMigrationDatabase();
+    await migratePlayerDatabase(database);
+    await migrateSharedDatabase(database);
+    database.database.exec(
+      "DROP INDEX shared_outbox_status; CREATE INDEX shared_outbox_status ON shared_outbox(status,session_id,enqueued_at);",
+    );
+    await expect(assertHostStorageSchemaDigest(database)).rejects.toThrow(
+      "player-database-incompatible-reset-or-reinstall",
+    );
+    database.close();
+  });
 
-    await migrateObservationColumns(fixture.database);
+  it("rejects an incompatible shared schema without adding or backfilling columns", async () => {
+    const database = new RealMigrationDatabase();
+    database.database.exec(`
+      CREATE TABLE shared_results (
+        session_id TEXT NOT NULL,
+        command_id TEXT NOT NULL,
+        terminal TEXT NOT NULL,
+        outcome_code TEXT NOT NULL,
+        resulting_state_version INTEGER NOT NULL,
+        decision_position TEXT NOT NULL,
+        decided_at TEXT NOT NULL,
+        PRIMARY KEY(session_id, command_id)
+      );
+    `);
+    const tablesBefore = database.database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+      .all();
+    const columnsBefore = await database.getAllAsync<{ name: string }>(
+      "PRAGMA table_info(shared_results)",
+    );
 
-    expect(fixture.execAsync).not.toHaveBeenCalled();
-    expect(fixture.runAsync).toHaveBeenCalledOnce();
+    await expect(migrateSharedDatabase(database)).rejects.toThrow(
+      "player-database-incompatible-reset-or-reinstall",
+    );
+    expect(
+      database.database
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+        .all(),
+    ).toEqual(tablesBefore);
+    expect(
+      await database.getAllAsync<{ name: string }>("PRAGMA table_info(shared_results)"),
+    ).toEqual(columnsBefore);
+    database.close();
   });
 });

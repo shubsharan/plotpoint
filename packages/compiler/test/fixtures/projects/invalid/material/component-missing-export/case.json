@@ -1,5 +1,5 @@
 {
-  "componentId": "card.v1",
+  "componentId": "card",
   "source": "src/card.ts",
   "export": "MissingCard"
 }

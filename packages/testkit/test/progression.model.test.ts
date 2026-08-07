@@ -1,16 +1,8 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 
-import { defineProgression, type Command, type JsonObject } from "@plotpoint/runtime";
+import { defineProgression, initialProgression, type JsonObject } from "@plotpoint/runtime";
 import { evaluateProgression } from "../../runtime/src/progression/evaluate-progression.js";
-
-const command: Command<JsonObject, "player"> = {
-  id: "c1",
-  type: "unlock",
-  target: { kind: "player", id: "p1" },
-  expectedStateVersion: 0,
-  payload: {},
-};
 
 function reference(enabled: readonly boolean[]): readonly string[] {
   return enabled.map((value) => (value ? "available" : "locked"));
@@ -19,31 +11,25 @@ function reference(enabled: readonly boolean[]): readonly string[] {
 function implementation(enabled: readonly boolean[]): readonly string[] {
   const definition = defineProgression({
     aggregateKind: "player",
-    graphId: "model.v1",
-    graphVersion: 1,
+    graphId: "model",
     nodes: enabled.map((_value, index) => ({ nodeId: `n${index}`, initialStatus: "locked" })),
-    automaticRules: enabled.map((value, index) => ({
-      ruleId: `r${index}`,
+    transitions: enabled.map((value, index) => ({
+      transitionId: `r${index}`,
       targetNodeId: `n${index}`,
       from: ["locked"],
       to: "available",
       priority: 0,
+      trigger: "automatic",
       when: () => value,
     })),
   });
   const result = evaluateProgression({
     definition,
-    progression: {
-      graphId: "model.v1",
-      graphVersion: 1,
-      nodes: enabled.map((_value, index) => ({ nodeId: `n${index}`, status: "locked" })),
-    },
+    progression: initialProgression(definition),
     intents: [],
     aggregateState: {} as JsonObject,
-    command,
-    outcome: {},
+    commandId: "c1",
     domainEvents: [],
-    observationTrace: [],
     maxAutomaticTransitions: 4,
   });
   expect(result.kind).toBe("stable");

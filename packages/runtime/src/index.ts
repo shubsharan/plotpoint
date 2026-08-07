@@ -9,7 +9,23 @@ export type {
 } from "./canonical-json.js";
 
 export { AGGREGATE_AUTHORITIES, AGGREGATE_KINDS } from "./aggregates.js";
-export type { Aggregate, AggregateAuthority, AggregateKind } from "./aggregates.js";
+export type {
+  Aggregate,
+  AggregateAuthority,
+  AggregateAuthorityForKind,
+  AggregateKind,
+} from "./aggregates.js";
+
+export type {
+  CommandBindingEvaluation,
+  ExecutableAggregateModel,
+  InitializationResult,
+  ResolvedAggregateModel,
+  ResolvedCommandBinding,
+  RuntimeSchema,
+  SchemaValidationResult,
+} from "./aggregate-model.js";
+export { bindExecutableAggregateModel, resolveCommandBinding } from "./model-wrappers.js";
 
 export { defineCommand } from "./commands.js";
 export type {
@@ -20,7 +36,9 @@ export type {
   DomainEvent,
   EffectIntent,
   HandlerDecision,
+  NoOpDecision,
   RejectedDecision,
+  RuntimeCommand,
 } from "./commands.js";
 
 export { DIAGNOSTIC_CODES } from "./diagnostics.js";
@@ -30,14 +48,10 @@ export type { Observation, ObservationConsumption, TransitionContext } from "./o
 export { DEFAULT_RUNTIME_POLICY, executeCommand } from "./execute-command.js";
 export type { ExecuteCommandInput } from "./execute-command.js";
 export type {
-  AcceptedExecution,
   ExecutionRecord,
   ExecutionResult,
-  InvalidExecution,
-  NoOpExecution,
   PreflightInvalidExecution,
-  RecordedExecutionResult,
-  RejectedExecution,
+  RecordedExecution,
   RuntimePolicy,
 } from "./execution-record.js";
 
@@ -47,13 +61,12 @@ export type {
   ProgressionIntent,
   ProgressionNodeState,
   ProgressionStatus,
-  ProgressionTransition,
+  ProgressionTraceEntry,
 } from "./progression/state.js";
 export type {
-  AutomaticRule,
-  DefinedProgression,
   ProgressionDefinition,
+  ProgressionFacts,
   ProgressionNodeDefinition,
-  ProgressionRuleInput,
+  ProgressionTransition,
 } from "./progression/graph.js";
-export { defineProgression } from "./progression/graph.js";
+export { defineProgression, initialProgression } from "./progression/graph.js";

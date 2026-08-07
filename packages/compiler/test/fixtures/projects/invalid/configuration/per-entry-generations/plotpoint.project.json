@@ -1,0 +1,64 @@
+{
+  "projectFormatVersion": 1,
+  "environment": "web",
+  "hostApi": {
+    "major": 1,
+    "minimumMinor": 1
+  },
+  "application": {
+    "definition": {
+      "source": "src/presentation.ts",
+      "export": "presentation"
+    },
+    "components": []
+  },
+  "aggregateModels": [
+    {
+      "id": "minimal.player",
+      "authority": "local",
+      "kind": "player",
+      "stateSchema": "minimal.player-state",
+      "initializationSchema": "minimal.puzzle-content",
+      "initializer": {
+        "source": "src/logic.ts",
+        "export": "logic"
+      },
+      "events": [],
+      "effects": [],
+      "version": 1
+    }
+  ],
+  "commands": [],
+  "schemas": [
+    {
+      "id": "minimal.player-state",
+      "path": "schemas/player-state.schema.json",
+      "version": 1
+    }
+  ],
+  "progressions": [
+    {
+      "id": "minimal.route",
+      "aggregateModel": "minimal.player",
+      "definition": {
+        "source": "src/progression/main.ts",
+        "export": "puzzleProgression"
+      },
+      "version": 1
+    }
+  ],
+  "components": [],
+  "content": [],
+  "assets": [],
+  "trustedMechanic": {
+    "id": "target-discovery",
+    "aggregateModel": "shared.targets",
+    "commands": [],
+    "configuration": "shared.configuration",
+    "projectionSchema": {
+      "id": "shared.projection"
+    },
+    "capabilities": [],
+    "version": 1
+  }
+}

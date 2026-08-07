@@ -1,0 +1,15 @@
+{
+  "name": "@plotpoint-example/co-op-game",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@plotpoint/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@plotpoint/typescript-config": "workspace:*"
+  }
+}

@@ -7,16 +7,19 @@ export type AggregateKind = (typeof AGGREGATE_KINDS)[number];
 
 export const AGGREGATE_AUTHORITIES = ["local", "server"] as const;
 export type AggregateAuthority = (typeof AGGREGATE_AUTHORITIES)[number];
+export type AggregateAuthorityForKind<Kind extends AggregateKind> = Kind extends "player"
+  ? "local"
+  : "server";
 
 export interface Aggregate<
   State extends JsonObject = JsonObject,
   Kind extends AggregateKind = AggregateKind,
 > {
-  readonly kind: Kind;
-  readonly id: string;
-  readonly schemaVersion: number;
+  readonly aggregateId: string;
+  readonly modelId: string;
+  readonly aggregateKind: Kind;
+  readonly schemaId: string;
   readonly stateVersion: number;
-  readonly authority: AggregateAuthority;
   readonly state: State;
   readonly progression?: ProgressionInstance;
 }
@@ -29,6 +32,10 @@ export function isAggregateAuthority(value: unknown): value is AggregateAuthorit
   return typeof value === "string" && AGGREGATE_AUTHORITIES.includes(value as AggregateAuthority);
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
 export function validateAggregate(value: unknown): Diagnostic | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return createDiagnostic("aggregate-invalid", {
@@ -37,34 +44,24 @@ export function validateAggregate(value: unknown): Diagnostic | null {
     });
   }
   const aggregate = value as Record<string, unknown>;
-  if (!isAggregateKind(aggregate.kind)) {
+  for (const field of ["aggregateId", "modelId", "schemaId"] as const) {
+    if (!isNonEmptyString(aggregate[field])) {
+      return createDiagnostic("aggregate-invalid", {
+        field,
+        reason: "empty-identity",
+      });
+    }
+  }
+  if (!isAggregateKind(aggregate.aggregateKind)) {
     return createDiagnostic("aggregate-invalid", {
-      field: "kind",
+      field: "aggregateKind",
       reason: "invalid-kind",
-    });
-  }
-  if (typeof aggregate.id !== "string" || aggregate.id.length === 0) {
-    return createDiagnostic("aggregate-invalid", {
-      field: "id",
-      reason: "empty-identity",
-    });
-  }
-  if (!Number.isSafeInteger(aggregate.schemaVersion) || (aggregate.schemaVersion as number) < 1) {
-    return createDiagnostic("aggregate-invalid", {
-      field: "schemaVersion",
-      reason: "invalid-version",
     });
   }
   if (!Number.isSafeInteger(aggregate.stateVersion) || (aggregate.stateVersion as number) < 0) {
     return createDiagnostic("aggregate-invalid", {
       field: "stateVersion",
       reason: "invalid-version",
-    });
-  }
-  if (!isAggregateAuthority(aggregate.authority)) {
-    return createDiagnostic("aggregate-invalid", {
-      field: "authority",
-      reason: "invalid-authority",
     });
   }
   if (
@@ -75,6 +72,22 @@ export function validateAggregate(value: unknown): Diagnostic | null {
     return createDiagnostic("aggregate-invalid", {
       field: "state",
       reason: "not-object",
+    });
+  }
+  const allowed = new Set([
+    "aggregateId",
+    "modelId",
+    "aggregateKind",
+    "schemaId",
+    "stateVersion",
+    "state",
+    "progression",
+  ]);
+  const unexpected = Object.keys(aggregate).find((field) => !allowed.has(field));
+  if (unexpected !== undefined) {
+    return createDiagnostic("aggregate-invalid", {
+      field: unexpected,
+      reason: "unexpected-field",
     });
   }
   return null;

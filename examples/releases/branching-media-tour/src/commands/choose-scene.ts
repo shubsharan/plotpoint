@@ -17,7 +17,7 @@ export const chooseSceneCommand = defineCommand<
   ChooseScenePayload,
   ChooseSceneOutcome
 >({
-  definitionId: "tour.choose-scene.v1",
+  definitionId: "tour.choose-scene",
   commandType: "choose-scene",
   aggregateKind: "player",
   handle(target, command) {
@@ -28,7 +28,7 @@ export const chooseSceneCommand = defineCommand<
       kind: "accepted",
       nextState: { currentScene: command.payload.sceneId, visitedScenes },
       outcome: { sceneId: command.payload.sceneId, visitedCount: visitedScenes.length },
-      domainEvents: [{ type: "tour-scene-chosen", sceneId: command.payload.sceneId }],
+      domainEvents: [{ type: "tour.scene-chosen", sceneId: command.payload.sceneId }],
       effectIntents: [],
       progressionIntents: [],
     };

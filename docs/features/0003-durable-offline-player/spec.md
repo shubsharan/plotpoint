@@ -39,7 +39,7 @@ requirements, an oversized transfer, a timeout, and interruption at every instal
 3. **Given** a successfully installed release, **When** connectivity is removed before launch,
    **Then** the release starts without project source, author dependencies, or network access.
 4. **Given** two materially different compatible releases, **When** each is installed and launched,
-   **Then** both use the same Host API V1 without game-specific player changes.
+   **Then** both use the same Host API without game-specific player changes.
 
 ---
 
@@ -141,7 +141,7 @@ boundary, change one game input based on the report, install the new release, an
 
 - **FR-001**: The author MUST be able to validate, compile, and locally serve one complete immutable
   release without a hosted Plotpoint service.
-- **FR-002**: Local serving MUST expose a versioned installation description containing the release
+- **FR-002**: Local serving MUST expose an installation description containing the release
   location and expected content identity and MUST reject invalid release input before advertising it.
 - **FR-003**: The player MUST accept local installation descriptions only from eligible private-network
   sources and MUST bound transfer size and duration.
@@ -155,7 +155,7 @@ boundary, change one game input based on the report, install the new release, an
 - **FR-007**: The player MUST run trusted release logic and presentation inside a replaceable game
   view whose navigation, remote network access, storage, and native authority are controlled by the
   host.
-- **FR-008**: The game view and host MUST communicate through a closed, versioned, serializable
+- **FR-008**: The game view and host MUST communicate through a closed, compatibility-checked, serializable
   protocol with stable request identities and explicit error results.
 - **FR-009**: The host MUST own installed releases, runs, aggregate snapshots, command receipts,
   journals, observations, recovery records, and exported report material.
@@ -183,7 +183,7 @@ boundary, change one game input based on the report, install the new release, an
   out-of-radius input MUST produce explicit non-progressing outcomes.
 - **FR-021**: The flagship game MUST include two location checkpoints and one intervening puzzle and
   MUST be completable with connectivity disabled after installation.
-- **FR-022**: The player MUST export a versioned report containing release and run identities, relative
+- **FR-022**: The player MUST export a report containing release and run identities, relative
   timing, command outcomes, versions, progression changes, location quality bands, interruption and
   recovery events, and diagnostic codes.
 - **FR-023**: Exported reports MUST exclude raw coordinates, credentials, command payloads, raw
@@ -193,12 +193,12 @@ boundary, change one game input based on the report, install the new release, an
 - **FR-025**: The complete edit-to-revision loop MUST pass the provider-free conformance fixtures, and
   the same dependency-aligned native player MUST build, install, and launch on one iOS simulator and
   one Android emulator without platform-specific game or release-contract changes.
-- **FR-026**: Host API V1 MUST install, bootstrap, execute, recover, and report at least two materially
+- **FR-026**: Host API MUST install, bootstrap, execute, recover, and report at least two materially
   different releases without game-specific player code or persisted-contract changes.
 
 ### Key Entities
 
-- **Installation Description**: Versioned local-network directions for retrieving one release and the
+- **Installation Description**: Local-network directions for retrieving one release and the
   expected identity that must match it.
 - **Installed Release**: Atomically published verified release material keyed by content identity.
 - **Game Run**: One fresh playthrough pinned to one installed release.
@@ -210,8 +210,8 @@ boundary, change one game input based on the report, install the new release, an
   and semantic outcome.
 - **Location Observation**: Host-recorded foreground sensor result with identity, time, coordinates,
   accuracy, and availability state.
-- **Play Report**: Versioned redacted learning record derived from host-owned run evidence.
-- **Host API V1**: Versioned release-to-player contract for bootstrap, canonical transition results,
+- **Play Report**: Redacted learning record derived from host-owned run evidence.
+- **Host API**: Compatibility-checked release-to-player contract for bootstrap, canonical transition results,
   capability dispatch, and explicit host-policy errors.
 
 ## Success Criteria _(mandatory)_
@@ -257,7 +257,7 @@ boundary, change one game input based on the report, install the new release, an
 - Feature acceptance uses provider-free scripted location and lifecycle fixtures plus native
   build/install/launch checks on an iOS simulator and Android emulator. Physical device field evidence
   remains a deferred Loop 1 product-validation activity and is not inferred from simulated results.
-- Host API V1 is intended for later games, but Loop 1 does not generalize aggregate count, authority,
+- Host API is intended for later games, but Loop 1 does not generalize aggregate count, authority,
   synchronization, or native capabilities beyond evidence from the two conformance releases.
 
 ## Architecture Decisions
@@ -266,3 +266,4 @@ boundary, change one game input based on the report, install the new release, an
 - [Immutable Release Format](../../adrs/0002-immutable-release-format.md)
 - [Trusted Single-WebView Runtime](../../adrs/0003-trusted-webview-runtime.md)
 - [Host-Owned Atomic Player Persistence](../../adrs/0004-atomic-player-persistence.md)
+- [Centralized Contract Evolution](../../adrs/0006-centralized-contract-evolution.md)

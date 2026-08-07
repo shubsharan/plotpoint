@@ -6,11 +6,12 @@ import type {
   CanonicalJsonObject,
   ReleaseDiagnostic,
   ReleaseEntryKind,
-  ReleaseManifestV1,
+  ReleaseManifest,
 } from "./types.js";
+import { RELEASE_FORMAT_VERSION } from "./types.js";
 
 export type ManifestValidationResult =
-  | { readonly kind: "valid"; readonly manifest: ReleaseManifestV1 }
+  | { readonly kind: "valid"; readonly manifest: ReleaseManifest }
   | { readonly kind: "invalid"; readonly diagnostics: readonly ReleaseDiagnostic[] };
 
 const AGGREGATE_KINDS: ReadonlySet<string> = new Set(["player", "team", "session"]);
@@ -88,7 +89,7 @@ export function validateReleaseManifest(value: unknown): ManifestValidationResul
   if (!isObject(value) || !hasExactFields(value, ROOT_FIELDS)) {
     return invalid("invalid-root-shape", "");
   }
-  if (value.releaseFormatVersion !== 1)
+  if (value.releaseFormatVersion !== RELEASE_FORMAT_VERSION)
     return invalid("unsupported-release-format", "/releaseFormatVersion");
   if (!validateHostApi(value.hostApi)) return invalid("invalid-host-api", "/hostApi");
   if (!Array.isArray(value.aggregateSchemas)) return invalid("invalid-array", "/aggregateSchemas");
@@ -111,17 +112,16 @@ export function validateReleaseManifest(value: unknown): ManifestValidationResul
     const path = `/aggregateSchemas/${index}`;
     if (
       !isObject(schema) ||
-      !hasExactFields(schema, ["id", "kind", "path", "version"]) ||
+      !hasExactFields(schema, ["id", "kind", "path"]) ||
       !isCanonicalId(schema.id) ||
       typeof schema.kind !== "string" ||
       !AGGREGATE_KINDS.has(schema.kind) ||
-      !isPositiveInteger(schema.version) ||
       typeof schema.path !== "string" ||
       !isCanonicalArchivePath(schema.path)
     ) {
       return invalid("invalid-aggregate-schema", path);
     }
-    const key = `${schema.id}\0${schema.kind}\0${String(schema.version).padStart(16, "0")}\0${schema.path}`;
+    const key = `${schema.id}\0${schema.kind}\0${schema.path}`;
     if (previousAggregateKey !== undefined && compareOrdinal(previousAggregateKey, key) >= 0) {
       return invalid("aggregate-schemas-not-ordinal-or-unique", path);
     }
@@ -218,5 +218,5 @@ export function validateReleaseManifest(value: unknown): ManifestValidationResul
 
   const encoded = encodeCanonicalJson(value);
   if (encoded.kind === "invalid") return invalid("manifest-not-canonicalizable", "");
-  return { kind: "valid", manifest: encoded.document.value as unknown as ReleaseManifestV1 };
+  return { kind: "valid", manifest: encoded.document.value as unknown as ReleaseManifest };
 }

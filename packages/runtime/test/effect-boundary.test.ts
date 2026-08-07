@@ -2,21 +2,25 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   defineCommand,
-  executeCommand,
   type Aggregate,
+  type AggregateKind,
   type Command,
+  type CommandDefinition,
+  type ExecutionResult,
   type JsonObject,
+  type Observation,
 } from "@plotpoint/runtime";
+import { executeCommandWithEvaluator } from "../src/execute-command.js";
 
 type State = JsonObject & { readonly done: boolean };
 type Outcome = JsonObject & { readonly result: string };
 
 const aggregate: Aggregate<State, "session"> = {
-  kind: "session",
-  id: "s1",
-  schemaVersion: 1,
+  aggregateId: "s1",
+  modelId: "session.model",
+  aggregateKind: "session",
+  schemaId: "session.state",
   stateVersion: 0,
-  authority: "server",
   state: { done: false },
 };
 const command: Command<JsonObject, "session"> = {
@@ -27,11 +31,38 @@ const command: Command<JsonObject, "session"> = {
   payload: {},
 };
 
+function executeCommand<
+  Kind extends AggregateKind,
+  StateValue extends JsonObject,
+  PayloadValue extends JsonObject,
+  OutcomeValue extends JsonObject,
+>(input: {
+  readonly definition: CommandDefinition<StateValue, PayloadValue, OutcomeValue, Kind>;
+  readonly aggregate: Aggregate<StateValue, Kind>;
+  readonly command: Command<PayloadValue, Kind>;
+  readonly observations: readonly Observation[];
+}): ExecutionResult<StateValue, OutcomeValue, PayloadValue, Kind> {
+  return executeCommandWithEvaluator({
+    definitionId: input.definition.definitionId,
+    commandType: input.definition.commandType,
+    aggregateKind: input.definition.aggregateKind,
+    aggregate: input.aggregate,
+    command: input.command,
+    observations: input.observations,
+    evaluate(target, runtimeCommand, context) {
+      return {
+        kind: "decision",
+        decision: input.definition.handle(target, runtimeCommand, context),
+      };
+    },
+  });
+}
+
 describe("event and effect boundary", () => {
   it("preserves order and never invokes effect-shaped data", () => {
     const invoked = vi.fn();
     const definition = defineCommand<"session", State, JsonObject, Outcome>({
-      definitionId: "finish.v1",
+      definitionId: "finish",
       commandType: "finish",
       aggregateKind: "session",
       handle() {
@@ -48,17 +79,17 @@ describe("event and effect boundary", () => {
 
     const result = executeCommand({ definition, aggregate, command, observations: [] });
 
-    expect(result.kind).toBe("accepted");
-    if (result.kind === "accepted") {
-      expect(result.domainEvents).toEqual([{ order: 1 }, { order: 2 }]);
-      expect(result.effectIntents).toEqual([{ marker: "effect-handler", type: "callback" }]);
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "accepted" } });
+    if (result.kind === "recorded") {
+      expect(result.record.domainEvents).toEqual([{ order: 1 }, { order: 2 }]);
+      expect(result.record.effectIntents).toEqual([{ marker: "effect-handler", type: "callback" }]);
     }
     expect(invoked).not.toHaveBeenCalled();
   });
 
-  it("rejects commit-dependent outputs on a no-op", () => {
+  it("accepts an effect-only durable fact and advances the aggregate once", () => {
     const definition = defineCommand<"session", State, JsonObject, Outcome>({
-      definitionId: "noop-output.v1",
+      definitionId: "noop-output",
       commandType: "finish",
       aggregateKind: "session",
       handle(target) {
@@ -75,7 +106,45 @@ describe("event and effect boundary", () => {
 
     const result = executeCommand({ definition, aggregate, command, observations: [] });
 
-    expect(result.kind).toBe("invalid");
-    if (result.kind === "invalid") expect(result.diagnostics[0]?.code).toBe("no-op-output-invalid");
+    expect(result).toMatchObject({ kind: "recorded", record: { terminal: "accepted" } });
+    if (result.kind === "recorded") {
+      expect(result.record.effectIntents).toEqual([{ type: "forbidden" }]);
+      expect(result.aggregate.stateVersion).toBe(1);
+      expect(result.record).toMatchObject({
+        priorStateVersion: 0,
+        resultingStateVersion: 1,
+      });
+    }
+  });
+
+  it("accepts an event-only durable fact and advances the aggregate once", () => {
+    const definition = defineCommand<"session", State, JsonObject, Outcome>({
+      definitionId: "event-only",
+      commandType: "finish",
+      aggregateKind: "session",
+      handle() {
+        return {
+          kind: "accepted",
+          outcome: { result: "event-recorded" },
+          domainEvents: [{ type: "session.noted", note: "durable" }],
+          effectIntents: [],
+          progressionIntents: [],
+        };
+      },
+    });
+
+    const result = executeCommand({ definition, aggregate, command, observations: [] });
+
+    expect(result).toMatchObject({
+      kind: "recorded",
+      aggregate: { state: aggregate.state, stateVersion: 1 },
+      record: {
+        terminal: "accepted",
+        domainEvents: [{ type: "session.noted", note: "durable" }],
+        effectIntents: [],
+        priorStateVersion: 0,
+        resultingStateVersion: 1,
+      },
+    });
   });
 });

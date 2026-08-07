@@ -3,23 +3,34 @@ import { describe, expect, it } from "vitest";
 import {
   assessCompatibility,
   type HostReleaseSupport,
-  type ReleaseManifestV1,
+  type ReleaseManifest,
 } from "@plotpoint/protocol";
 
-function manifest(): ReleaseManifestV1 {
+const playerDigest = `sha256:${"a".repeat(64)}` as const;
+const teamDigest = `sha256:${"b".repeat(64)}` as const;
+
+function manifest(): ReleaseManifest {
   return {
     releaseFormatVersion: 1,
     hostApi: { major: 2, minimumMinor: 3 },
     aggregateSchemas: [
-      { id: "puzzle.player", kind: "player", version: 4, path: "schemas/player.json" },
-      { id: "puzzle.team", kind: "team", version: 2, path: "schemas/team.json" },
+      { id: "puzzle.player", kind: "player", path: "schemas/player.json" },
+      { id: "puzzle.team", kind: "team", path: "schemas/team.json" },
     ],
     capabilities: [
       { id: "plotpoint.media.playback", major: 1, minimumMinor: 2 },
       { id: "plotpoint.sensors.location", major: 3, minimumMinor: 1 },
     ],
     entrypoints: { logic: "bundles/logic.js", presentation: "bundles/presentation.js" },
-    inventory: [],
+    inventory: [
+      {
+        path: "schemas/player.json",
+        kind: "aggregate-schema",
+        byteLength: 1,
+        digest: playerDigest,
+      },
+      { path: "schemas/team.json", kind: "aggregate-schema", byteLength: 1, digest: teamDigest },
+    ],
   };
 }
 
@@ -28,8 +39,8 @@ function support(): HostReleaseSupport {
     releaseFormatVersions: [1],
     hostApi: { major: 2, minor: 3 },
     aggregateSchemas: [
-      { id: "puzzle.player", kind: "player", versions: [3, 4] },
-      { id: "puzzle.team", kind: "team", versions: [2] },
+      { id: "puzzle.player", kind: "player", digest: playerDigest },
+      { id: "puzzle.team", kind: "team", digest: teamDigest },
     ],
     capabilities: [
       { id: "plotpoint.media.playback", major: 1, minor: 2 },
@@ -39,7 +50,7 @@ function support(): HostReleaseSupport {
 }
 
 describe("release compatibility assessment", () => {
-  it("accepts exact format/schema versions and minimum host/capability minors", () => {
+  it("accepts exact format/schema digests and minimum host/capability minors", () => {
     expect(assessCompatibility(manifest(), support())).toEqual({ kind: "compatible" });
   });
 
@@ -49,7 +60,7 @@ describe("release compatibility assessment", () => {
       assessCompatibility(manifest(), {
         ...host,
         aggregateSchemas: [
-          { id: "puzzle.player", kind: "player", versions: [3] },
+          { id: "puzzle.player", kind: "player", digest: teamDigest },
           ...host.aggregateSchemas,
         ],
         capabilities: [
@@ -67,12 +78,12 @@ describe("release compatibility assessment", () => {
     ["aggregate identity", { aggregateSchemas: [] }, "aggregate-schema-unsupported"],
     [
       "aggregate kind",
-      { aggregateSchemas: [{ id: "puzzle.player", kind: "team", versions: [4] }] },
+      { aggregateSchemas: [{ id: "puzzle.player", kind: "team", digest: playerDigest }] },
       "aggregate-schema-unsupported",
     ],
     [
-      "aggregate version",
-      { aggregateSchemas: [{ id: "puzzle.player", kind: "player", versions: [5] }] },
+      "aggregate digest",
+      { aggregateSchemas: [{ id: "puzzle.player", kind: "player", digest: teamDigest }] },
       "aggregate-schema-unsupported",
     ],
     ["capability identity", { capabilities: [] }, "capability-unsupported"],

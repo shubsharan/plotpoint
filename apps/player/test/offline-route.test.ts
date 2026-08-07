@@ -1,21 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  FOREGROUND_LOCATION_CAPABILITY,
-  type CanonicalJsonObject,
-  type HostBridgeTransportV1,
-  type RuntimeBootstrapV1,
-} from "@plotpoint/protocol";
+import { FOREGROUND_LOCATION_CAPABILITY, openRelease } from "@plotpoint/protocol";
+import type { ExecutableAggregateModel } from "@plotpoint/runtime";
+
+import { compileProject } from "../../../packages/compiler/dist/index.js";
 
 import { fieldGame } from "../../../examples/releases/field-puzzle/src/config";
-import { logic } from "../../../examples/releases/field-puzzle/src/logic";
-import { createFieldPuzzleSession } from "../../../examples/releases/field-puzzle/src/presentation";
 
-import {
-  createCapabilityDispatcher,
-  routeHostBridgeMessage,
-  type HostBridgeHandlers,
-} from "../src/bridge/host-bridge";
+import { createCapabilityDispatcher } from "../src/bridge/host-bridge";
 import {
   captureForegroundLocation,
   foregroundLocationCapabilityRegistration,
@@ -31,9 +23,67 @@ vi.mock("expo-location", () => ({
 
 const runId = "offline-route-run";
 const startedAt = "2030-01-01T00:00:00.000Z";
-const releaseId = `sha256:${"a".repeat(64)}` as const;
 
 afterEach(() => vi.restoreAllMocks());
+
+interface TestFileSystem {
+  readFile(path: string): Promise<Uint8Array>;
+  rm(path: string, options: { readonly force: true }): Promise<void>;
+}
+
+function nodeFileSystem(): TestFileSystem {
+  const runtime = globalThis as typeof globalThis & {
+    readonly process?: {
+      getBuiltinModule(name: "fs"): { readonly promises: TestFileSystem };
+    };
+  };
+  const fileSystem = runtime.process?.getBuiltinModule("fs").promises;
+  if (fileSystem === undefined) throw new Error("node-filesystem-unavailable");
+  return fileSystem;
+}
+
+function isModule(value: unknown): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === "object";
+}
+
+async function importBundle(bytes: Uint8Array): Promise<Readonly<Record<string, unknown>>> {
+  const url = `data:text/javascript,${encodeURIComponent(new TextDecoder().decode(bytes))}`;
+  const imported: unknown = await import(url);
+  if (!isModule(imported)) throw new Error("compiled-logic-module-invalid");
+  return imported;
+}
+
+function requireGeneratedRuntimeAdapter(module: Readonly<Record<string, unknown>>) {
+  const aggregateModels = module.aggregateModels;
+  if (!isModule(aggregateModels)) throw new Error("generated-runtime-adapter-missing");
+  return aggregateModels;
+}
+
+function isExecutableFieldModel(value: unknown): value is ExecutableAggregateModel<"player"> {
+  return (
+    isModule(value) &&
+    value.aggregateKind === "player" &&
+    value.authority === "local" &&
+    typeof value.modelId === "string" &&
+    isModule(value.stateSchema) &&
+    typeof value.stateSchema.id === "string" &&
+    typeof value.stateSchema.schemaDigest === "string" &&
+    isModule(value.initializationSchema) &&
+    typeof value.initializationSchema.id === "string" &&
+    typeof value.initializationSchema.schemaDigest === "string" &&
+    isModule(value.commandContracts) &&
+    typeof value.initialize === "function" &&
+    typeof value.execute === "function"
+  );
+}
+
+function requireFieldModel(
+  module: Readonly<Record<string, unknown>>,
+): ExecutableAggregateModel<"player"> {
+  const model = requireGeneratedRuntimeAdapter(module)["field.player"];
+  if (!isExecutableFieldModel(model)) throw new Error("generated-field-model-invalid");
+  return model;
+}
 
 class ScriptedObservationStore implements ForegroundLocationPersistence {
   readonly observations = new Set<string>();
@@ -47,25 +97,6 @@ class ScriptedObservationStore implements ForegroundLocationPersistence {
     this.records.push(input);
     this.events.push(`persisted:${input.observationId}`);
   }
-}
-
-function transportFor(handlers: HostBridgeHandlers): HostBridgeTransportV1 {
-  let sequence = 0;
-  return {
-    async send(type, payload) {
-      const response = await routeHostBridgeMessage(
-        JSON.stringify({
-          version: 1,
-          requestId: `release-request-${++sequence}`,
-          type,
-          payload,
-        }),
-        handlers,
-      );
-      if (response.type === "host.error") throw response.payload;
-      return response.payload;
-    },
-  };
 }
 
 describe("foreground location capability", () => {
@@ -163,181 +194,92 @@ describe("foreground location capability", () => {
     expect(store.observations.size).toBe(0);
   });
 });
-
 describe("disconnected trusted-host route", () => {
-  it("boots, visits two checkpoints, solves the puzzle, and completes without network access", async () => {
-    const store = new ScriptedObservationStore();
+  it("executes an observed action from the compiled generated runtime adapter without network", async () => {
+    const fileSystem = nodeFileSystem();
+    const projectRoot = new URL("../../../examples/releases/field-puzzle/", import.meta.url)
+      .pathname;
+    const outputFile = `/tmp/plotpoint-field-offline-${globalThis.crypto.randomUUID()}.pprelease`;
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
-    const locations = [
-      { latitude: 37.76942, longitude: -122.48621 },
-      { latitude: 37.76815, longitude: -122.48372 },
-    ];
-    let locationIndex = 0;
-    let observationIndex = 0;
-    const adapter: ForegroundLocationNativeAdapter = {
-      requestPermission: async () => "granted",
-      capture: async () => {
-        const location = locations[locationIndex++];
-        if (location === undefined) throw new Error("scripted-location-exhausted");
-        return {
-          timestamp: Date.parse("2030-01-01T00:00:04.000Z") + locationIndex * 1_000,
-          ...location,
-          horizontalAccuracy: 8,
-        };
-      },
-    };
-    const dispatchCapability = createCapabilityDispatcher([
-      foregroundLocationCapabilityRegistration({
-        database: store,
-        runId,
-        startedAt,
-        adapter,
-        now: () => new Date("2030-01-01T00:00:10.000Z"),
-        createObservationId: () => `route-observation-${++observationIndex}`,
-      }),
-    ]);
 
-    let state: CanonicalJsonObject = { attempts: 0, phase: "first-checkpoint" };
-    let stateVersion = 0;
-    const bootstrap: RuntimeBootstrapV1 = {
-      runId,
-      releaseId,
-      aggregate: {
-        aggregateId: "field-player",
-        aggregateKind: "player",
-        schemaId: "field.player-state.v1",
-        schemaVersion: 1,
-        stateVersion,
-        state,
-      },
-    };
-    const handlers: HostBridgeHandlers = {
-      runtimeReady: async () => bootstrap,
-      requestCapability: dispatchCapability,
-      commitTransition: async (payload) => {
-        const candidate = payload.candidate;
-        expect(candidate.expectedVersion).toBe(stateVersion);
-        expect(candidate.observationIds.every((id) => store.observations.has(id))).toBe(true);
-        if (candidate.terminal !== "accepted") throw new Error("route-candidate-not-accepted");
-        state = candidate.nextState;
-        stateVersion += 1;
-        return {
-          commandId: candidate.commandId,
-          disposition: "committed",
-          terminal: "accepted",
-          resultingVersion: stateVersion,
-          outcome: candidate.outcome,
-        };
-      },
-    };
+    try {
+      const compilation = await compileProject({ projectRoot, outputFile });
+      expect(compilation.kind).toBe("compiled");
+      if (compilation.kind !== "compiled") {
+        throw new Error(`field-compilation-failed:${JSON.stringify(compilation.diagnostics)}`);
+      }
 
-    const commandIds = ["reach-first-checkpoint", "solve-puzzle", "reach-second-checkpoint"];
-    const session = createFieldPuzzleSession({
-      logic,
-      host: transportFor(handlers),
-      bootstrap,
-      createCommandId: () => {
-        const next = commandIds.shift();
-        if (next === undefined) throw new Error("route-command-id-exhausted");
-        return next;
-      },
-    });
+      const opened = await openRelease(await fileSystem.readFile(outputFile));
+      expect(opened.kind).toBe("opened");
+      if (opened.kind !== "opened") {
+        throw new Error(`field-release-open-failed:${JSON.stringify(opened.diagnostics)}`);
+      }
+      const logicEntry = opened.entries.find(
+        ({ path }) => path === opened.manifest.entrypoints.logic,
+      );
+      if (logicEntry === undefined) throw new Error("compiled-logic-entry-missing");
+      const logicModule = await importBundle(logicEntry.bytes);
+      expect(Object.keys(logicModule)).toEqual(["aggregateModels"]);
 
-    await session.checkIn();
-    expect(store.events.at(-1)).toBe("persisted:route-observation-1");
-    expect(session.snapshot()).toMatchObject({
-      state: { attempts: 0, phase: "puzzle" },
-      stateVersion: 1,
-      lastDisposition: "committed",
-    });
-    await session.solve(fieldGame.puzzle.answer);
-    expect(session.snapshot()).toMatchObject({
-      state: { attempts: 1, phase: "second-checkpoint" },
-      stateVersion: 2,
-    });
-    await session.checkIn();
-    expect(store.events.at(-1)).toBe("persisted:route-observation-2");
+      const aggregateModels = requireGeneratedRuntimeAdapter(logicModule);
+      expect(Object.keys(aggregateModels)).toEqual(["field.player"]);
+      const model = requireFieldModel(logicModule);
+      expect(Object.keys(model.commandContracts)).toEqual(["advance"]);
 
-    expect(state).toEqual({ attempts: 1, phase: "complete" });
-    expect(stateVersion).toBe(3);
-    expect(session.snapshot()).toMatchObject({
-      state: { attempts: 1, phase: "complete" },
-      stateVersion: 3,
-      message: "advanced",
-    });
-    expect(store.observations).toEqual(new Set(["route-observation-1", "route-observation-2"]));
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("keeps state unchanged for rejected terminals and surfaces host errors", async () => {
-    const bootstrap: RuntimeBootstrapV1 = {
-      runId,
-      releaseId,
-      aggregate: {
-        aggregateId: "field-player",
-        aggregateKind: "player",
-        schemaId: "field.player-state.v1",
-        schemaVersion: 1,
-        stateVersion: 0,
-        state: { attempts: 0, phase: "first-checkpoint" },
-      },
-    };
-    const rejectedHost: HostBridgeTransportV1 = {
-      async send(type, payload) {
-        if (type === "capability.request") {
-          return {
-            capability: FOREGROUND_LOCATION_CAPABILITY,
-            output: {
-              version: 1,
-              observationId: "denied-observation",
-              recordedAt: "2030-01-01T00:00:00.000Z",
-              availability: "permission-denied",
-            },
-          };
-        }
-        if (type !== "transition.commit") throw new Error("unexpected-request");
-        const candidate = payload.candidate;
-        if (candidate === null || typeof candidate !== "object" || !("commandId" in candidate)) {
-          throw new Error("candidate-missing");
-        }
-        return {
-          commandId: candidate.commandId,
-          disposition: "committed",
-          terminal: "rejected",
-          resultingVersion: 99,
-          outcome: { result: "permission-denied" },
-        };
-      },
-    };
-    const rejected = createFieldPuzzleSession({
-      logic,
-      host: rejectedHost,
-      bootstrap,
-      createCommandId: () => "denied-command",
-    });
-
-    await rejected.checkIn();
-    expect(rejected.snapshot()).toMatchObject({
-      state: { attempts: 0, phase: "first-checkpoint" },
-      stateVersion: 0,
-      message: "permission-denied",
-      lastDisposition: "committed",
-    });
-
-    const failed = createFieldPuzzleSession({
-      logic,
-      bootstrap,
-      host: {
-        async send() {
-          throw { code: "capability-unsupported" };
+      const store = new ScriptedObservationStore();
+      const dispatchCapability = createCapabilityDispatcher([
+        foregroundLocationCapabilityRegistration({
+          database: store,
+          runId,
+          startedAt,
+          adapter: {
+            requestPermission: async () => "granted",
+            capture: async () => ({
+              timestamp: Date.parse("2030-01-01T00:00:04.000Z"),
+              latitude: fieldGame.firstCheckpoint.latitude,
+              longitude: fieldGame.firstCheckpoint.longitude,
+              horizontalAccuracy: 8,
+            }),
+          },
+          now: () => new Date("2030-01-01T00:00:05.000Z"),
+          createObservationId: () => "offline-observation",
+        }),
+      ]);
+      const captured = await dispatchCapability({
+        capability: FOREGROUND_LOCATION_CAPABILITY,
+        input: {},
+      });
+      const initialized = model.initialize(fieldGame);
+      expect(initialized.kind).toBe("initialized");
+      if (initialized.kind !== "initialized") throw new Error("field-initialization-invalid");
+      const result = model.execute({
+        aggregate: initialized.aggregate,
+        command: {
+          id: "offline-check-in",
+          type: "advance",
+          target: { kind: "player", id: initialized.aggregate.aggregateId },
+          expectedStateVersion: 0,
+          payload: { action: "check-in" },
         },
-      },
-    });
-    await failed.checkIn();
-    expect(failed.snapshot()).toMatchObject({
-      state: { attempts: 0, phase: "first-checkpoint" },
-      stateVersion: 0,
-      message: "capability-unsupported",
-    });
+        observations: [{ kind: "location.foreground", key: "current", value: captured.output }],
+      });
+
+      expect(result).toMatchObject({
+        kind: "recorded",
+        aggregate: {
+          stateVersion: 1,
+          state: { visitedCheckpoints: ["first-checkpoint"], puzzleSolved: false },
+        },
+        record: {
+          definitionId: "field.advance",
+          terminal: "accepted",
+          observationTrace: [{ kind: "location.foreground", key: "current" }],
+        },
+      });
+      expect(store.events).toEqual(["persisted:offline-observation"]);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      await fileSystem.rm(outputFile, { force: true });
+    }
   });
 });

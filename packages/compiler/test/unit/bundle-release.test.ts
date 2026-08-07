@@ -1,16 +1,37 @@
+import { Ajv2020 } from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
 
 import { bundleDefinitionInspection, bundleRelease } from "../../src/bundle/bundle-release.js";
 import { inspectDefinitionBundle } from "../../src/composition/inspect-definitions.js";
 import { analyzeSource, type AnalyzedSource } from "../../src/imports/analyze-source.js";
 import type { ImportGraph, ImportGraphNode } from "../../src/imports/resolve-graph.js";
-import type { CanonicalProjectRegistries, CompilationSnapshot } from "../../src/project/config.js";
+import type {
+  CanonicalProjectRegistries,
+  CompilationSnapshot,
+  SnapshotFile,
+} from "../../src/project/config.js";
+import type { ValidatedSchema } from "../../src/validation/schemas.js";
 
 const encoder = new TextEncoder();
 
 const emptyRegistries: CanonicalProjectRegistries = Object.freeze({
+  application: Object.freeze({
+    definition: Object.freeze({ source: "src/presentation.ts", export: "presentation" }),
+    components: Object.freeze([]),
+  }),
+  aggregateModels: Object.freeze([
+    Object.freeze({
+      id: "player",
+      authority: "local",
+      kind: "player",
+      stateSchema: "player-state",
+      initializationSchema: "player-initialization",
+      initializer: Object.freeze({ source: "src/logic.ts", export: "logic" }),
+      events: Object.freeze([]),
+      effects: Object.freeze([]),
+    }),
+  ]),
   commands: Object.freeze([]),
-  aggregateSchemas: Object.freeze([]),
   schemas: Object.freeze([]),
   progressions: Object.freeze([]),
   components: Object.freeze([]),
@@ -28,6 +49,40 @@ function node(path: string, source: string): ImportGraphNode {
   });
 }
 
+function validatedSchema(id: string): ValidatedSchema {
+  const document = Object.freeze({
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: id,
+    type: "object",
+    additionalProperties: false,
+  });
+  const ajv = new Ajv2020({ allErrors: true, code: { esm: true, source: true }, strict: true });
+  const validate = ajv.compile(document);
+  const canonicalBytes = encoder.encode(JSON.stringify(document));
+  return Object.freeze({
+    id,
+    path: `schemas/${id}.json`,
+    document,
+    canonicalBytes,
+    digest: `sha256:${"0".repeat(64)}`,
+    validate,
+  });
+}
+
+const schemas = new Map(
+  ["outcome", "payload", "player-initialization", "player-state"].map(
+    (id) => [id, validatedSchema(id)] as const,
+  ),
+);
+const runtime = node(
+  "vendor/@plotpoint/runtime/index.js",
+  `export function resolveCommandBinding(input) { return input.definition; }
+export function canonicalizeValue(value) {
+  return { kind: "valid", canonical: { value, text: JSON.stringify(value) } };
+}
+export function bindExecutableAggregateModel(input) { return Object.freeze(input); }`,
+);
+
 function graph(
   environment: "logic" | "presentation",
   entryPath: string,
@@ -44,6 +99,28 @@ function graph(
 }
 
 describe("snapshot release bundling", () => {
+  it("returns a stable diagnostic when a generated runtime schema is unavailable", async () => {
+    const logic = node("src/logic.ts", "export const logic = () => ({});");
+    const presentation = node("src/presentation.ts", "export const presentation = {};");
+
+    await expect(
+      bundleRelease({
+        logic: graph("logic", "src/logic.ts", "logic", [logic, runtime]),
+        presentation: graph("presentation", "src/presentation.ts", "presentation", [presentation]),
+        registries: emptyRegistries,
+        schemas: new Map(),
+      }),
+    ).resolves.toMatchObject({
+      kind: "invalid",
+      diagnostics: [
+        {
+          code: "bundle-failed",
+          details: { reason: "schema-validator-generation-failed" },
+        },
+      ],
+    });
+  });
+
   it("emits deterministic self-contained logic and presentation ESM chunks", async () => {
     const answer = node("src/answer.ts", "export const answer: number = 42;");
     const logic = node(
@@ -59,7 +136,7 @@ describe("snapshot release bundling", () => {
         "logic",
         "src/logic.ts",
         "logic",
-        [answer, logic],
+        [answer, logic, runtime],
         [
           {
             from: "src/logic.ts",
@@ -72,6 +149,7 @@ describe("snapshot release bundling", () => {
       ),
       presentation: graph("presentation", "src/presentation.ts", "presentation", [presentation]),
       registries: emptyRegistries,
+      schemas,
     };
 
     const first = await bundleRelease(input);
@@ -96,9 +174,10 @@ describe("snapshot release bundling", () => {
     const presentation = node("src/presentation.ts", "export const presentation = {};");
 
     const result = await bundleRelease({
-      logic: graph("logic", "src/logic.ts", "logic", [logic]),
+      logic: graph("logic", "src/logic.ts", "logic", [logic, runtime]),
       presentation: graph("presentation", "src/presentation.ts", "presentation", [presentation]),
       registries: emptyRegistries,
+      schemas,
     });
 
     expect(result).toMatchObject({
@@ -132,22 +211,18 @@ describe("snapshot release bundling", () => {
         Object.freeze({
           id: "command/id",
           type: "command",
+          execution: "local",
           definition: Object.freeze({ source: "src/command.ts", export: "command" }),
-          aggregateSchema: "aggregate",
+          aggregateModel: "player",
           payloadSchema: "payload",
           outcomeSchema: "outcome",
         }),
       ]),
       progressions: Object.freeze([
         Object.freeze({
-          id: "Progression.V1",
-          version: 1,
-          kind: "player",
+          id: "Progression.",
           definition: Object.freeze({ source: "src/progression.ts", export: "progression" }),
-          aggregateSchema: "aggregate",
-          commands: Object.freeze([]),
-          content: Object.freeze([]),
-          components: Object.freeze([]),
+          aggregateModel: "player",
         }),
       ]),
       components: Object.freeze([
@@ -167,7 +242,7 @@ describe("snapshot release bundling", () => {
         "logic",
         "src/logic.ts",
         "logic",
-        [command, progression, logic],
+        [command, progression, logic, runtime],
         [
           {
             from: "src/logic.ts",
@@ -201,6 +276,7 @@ describe("snapshot release bundling", () => {
         ],
       ),
       registries,
+      schemas,
     });
 
     expect(bundled.kind).toBe("bundled");
@@ -211,18 +287,47 @@ describe("snapshot release bundling", () => {
     const presentationModule = await import(
       `data:text/javascript;base64,${Buffer.from(bundled.presentation).toString("base64")}`
     );
-    expect(logicModule.default).toEqual({});
-    expect(Object.keys(logicModule.commands)).toEqual(["command/id"]);
-    expect(Object.keys(logicModule.progressions)).toEqual(["Progression.V1"]);
-    expect(presentationModule.default).toEqual({});
+    expect(Object.keys(logicModule.aggregateModels)).toEqual(["player"]);
+    expect(Object.keys(logicModule.aggregateModels.player.commandsByType)).toEqual(["command"]);
+    expect(logicModule.aggregateModels.player.progression).toEqual({ id: "progression" });
+    expect(presentationModule.application).toEqual({});
     expect(Object.keys(presentationModule.components)).toEqual(["Component!?"]);
   });
 
   it("bundles definition inspection without executing it in the compiler process", async () => {
     const snapshot: CompilationSnapshot = Object.freeze({
-      config: {} as CompilationSnapshot["config"],
+      config: {
+        projectFormatVersion: 1 as const,
+        environment: "web" as const,
+        hostApi: { major: 1, minimumMinor: 0 },
+        application: emptyRegistries.application,
+        aggregateModels: emptyRegistries.aggregateModels,
+        commands: [],
+        schemas: [],
+        progressions: [],
+        components: [],
+        content: [],
+        assets: [],
+      },
       registries: emptyRegistries,
-      files: new Map(),
+      files: new Map<string, SnapshotFile>([
+        [
+          "src/logic.ts",
+          {
+            kind: "source",
+            projectPath: "src/logic.ts",
+            bytes: encoder.encode("export function logic() { return {}; }"),
+          },
+        ],
+        [
+          "src/presentation.ts",
+          {
+            kind: "source",
+            projectPath: "src/presentation.ts",
+            bytes: encoder.encode("export const presentation = { mount() {} };"),
+          },
+        ],
+      ]),
     });
 
     const bundled = await bundleDefinitionInspection(snapshot);
@@ -231,7 +336,13 @@ describe("snapshot release bundling", () => {
     if (bundled.kind === "bundled") {
       await expect(inspectDefinitionBundle(bundled.bytes)).resolves.toEqual({
         kind: "valid",
-        metadata: { commands: [], progressions: [] },
+        metadata: {
+          application: { keys: ["mount"], mountType: "function" },
+          aggregateModels: [{ registrationId: "player", initializerType: "function" }],
+          commands: [],
+          progressions: [],
+          components: [],
+        },
       });
     }
   });

@@ -14,7 +14,7 @@ Game project
   -> command-based local and server state
 ```
 
-The monorepo is organized around execution environments and versioned boundaries:
+The monorepo is organized around execution environments and centralized compatibility boundaries:
 
 - `apps/player` - native host and embedded web shell
 - `apps/api` - platform HTTP and synchronization APIs
@@ -26,7 +26,10 @@ The monorepo is organized around execution environments and versioned boundaries
 - `packages/modules` - first-party mechanics and adapters
 - `packages/testkit` - deterministic fakes, fixtures, and runtime harnesses
 
-See [the product and architecture direction](docs/product.md) for the full platform model, boundaries, and open decisions.
+Start with [the architecture guide](docs/architecture.md) to understand how Plotpoint works, how its
+data models and contracts fit together, and where each authority boundary lives. See
+[the product and architecture direction](docs/product.md) for the broader platform model, boundaries,
+and open decisions.
 
 ## Project Status
 

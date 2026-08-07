@@ -7,7 +7,7 @@ import {
   MAX_RELEASE_BYTES,
   isEligibleInstallUrl,
   verifyRelease,
-  type InstallDescriptorV1,
+  type InstallDescriptor,
   type ReleaseId,
 } from "@plotpoint/protocol";
 
@@ -125,8 +125,7 @@ export async function serveRelease(input: ServeReleaseInput): Promise<RunningRel
   });
   const port = await listen(server, host, input.port ?? 0);
   const releaseUrl = `http://${host}:${port}/release.pprelease`;
-  const descriptor: InstallDescriptorV1 = Object.freeze({
-    version: 1,
+  const descriptor: InstallDescriptor = Object.freeze({
     releaseUrl,
     expectedReleaseId: verified.releaseId,
   });

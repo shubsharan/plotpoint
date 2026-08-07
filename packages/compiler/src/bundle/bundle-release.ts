@@ -1,6 +1,15 @@
 import { rolldown, type OutputChunk, type RolldownBuild } from "rolldown";
 
-import { generateDefinitionInspectionEntry } from "../composition/generated-entries.js";
+import {
+  generateDefinitionInspectionEntry,
+  generateLogicEntry,
+  generatePresentationEntry,
+  generatedRootContract,
+} from "../composition/generated-entries.js";
+import {
+  buildGameComposition,
+  gameCompositionMatchesGeneratedRoots,
+} from "../composition/game-composition.js";
 import { createCompilerDiagnostic } from "../diagnostics/create.js";
 import type { ImportGraph } from "../imports/resolve-graph.js";
 import type {
@@ -8,8 +17,8 @@ import type {
   CompilationSnapshot,
   CompilerDiagnostic,
   InvalidProject,
-  SourceExport,
 } from "../project/config.js";
+import type { ValidatedSchema } from "../validation/schemas.js";
 import {
   compilationSnapshotModules,
   createSnapshotRolldownPlugin,
@@ -54,62 +63,13 @@ function invalid(
   });
 }
 
-function importSpecifier(source: string): string {
-  return source.startsWith("./") ? source : `./${source}`;
-}
-
-function registryMap(
-  name: "commands" | "progressions" | "components",
-  registrations: readonly { readonly id: string; readonly selected: SourceExport }[],
-  imports: string[],
-): string {
-  const entries = registrations.map(({ id, selected }, index) => {
-    const moduleName = `${name}Module${index}`;
-    imports.push(
-      `import * as ${moduleName} from ${JSON.stringify(importSpecifier(selected.source))};`,
-    );
-    return `${JSON.stringify(id)}: ${moduleName}[${JSON.stringify(selected.export)}]`;
-  });
-  return `const ${name} = Object.freeze({${entries.join(",")}});`;
-}
-
-function selectedRoot(graph: ImportGraph, registries: CanonicalProjectRegistries): string {
-  const imports = [
-    `import * as selected from ${JSON.stringify(importSpecifier(graph.entry.source))};`,
-  ];
-  const declarations: string[] = [];
-  const namedExports: string[] = [];
-  if (graph.environment === "logic") {
-    declarations.push(
-      registryMap(
-        "commands",
-        registries.commands.map(({ id, definition }) => ({ id, selected: definition })),
-        imports,
-      ),
-      registryMap(
-        "progressions",
-        registries.progressions.map(({ id, definition }) => ({ id, selected: definition })),
-        imports,
-      ),
-    );
-    namedExports.push("commands", "progressions");
-  } else {
-    declarations.push(
-      registryMap(
-        "components",
-        registries.components.map(({ id, implementation }) => ({
-          id,
-          selected: implementation,
-        })),
-        imports,
-      ),
-    );
-    namedExports.push("components");
-  }
-  return `${imports.join("\n")}\n${declarations.join("\n")}\nexport { ${namedExports.join(", ")} };\nexport default selected[${JSON.stringify(graph.entry.export)}];\n`;
-}
-
 function isExactChunk(output: unknown, name: BundleName): output is OutputChunk {
+  const expectedExports =
+    name === "logic"
+      ? ["aggregateModels"]
+      : name === "presentation"
+        ? ["application", "components"]
+        : [];
   return (
     output !== null &&
     typeof output === "object" &&
@@ -128,7 +88,10 @@ function isExactChunk(output: unknown, name: BundleName): output is OutputChunk 
     Array.isArray(output.dynamicImports) &&
     output.dynamicImports.length === 0 &&
     "map" in output &&
-    output.map === null
+    output.map === null &&
+    "exports" in output &&
+    Array.isArray(output.exports) &&
+    JSON.stringify([...output.exports].sort()) === JSON.stringify(expectedExports)
   );
 }
 
@@ -185,7 +148,14 @@ async function generateBundle(
       (candidate): candidate is SnapshotBundleResolutionError =>
         candidate instanceof SnapshotBundleResolutionError,
     );
-    failure = invalid("bundle-failed", name, resolutionError?.reason ?? "rolldown-failure");
+    failure = invalid(
+      "bundle-failed",
+      name,
+      resolutionError?.reason ?? "rolldown-failure",
+      resolutionError === undefined
+        ? {}
+        : { source: resolutionError.source, importer: resolutionError.importer },
+    );
   } finally {
     if (bundle !== undefined) {
       try {
@@ -202,14 +172,14 @@ async function generateBundle(
 
 async function bundleGraph(
   graph: ImportGraph,
-  registries: CanonicalProjectRegistries,
+  virtualSource: string,
 ): Promise<{ readonly kind: "bundled"; readonly bytes: Uint8Array } | InvalidProject> {
   const name = graph.environment;
   const virtualId = `\0plotpoint:${name}-entry.ts`;
   return generateBundle(
     name,
     "browser",
-    graphSnapshotPlugin(graph, virtualId, selectedRoot(graph, registries)),
+    graphSnapshotPlugin(graph, virtualId, virtualSource),
     virtualId,
   );
 }
@@ -230,10 +200,27 @@ export async function bundleRelease(input: {
   readonly logic: ImportGraph;
   readonly presentation: ImportGraph;
   readonly registries: CanonicalProjectRegistries;
+  readonly schemas: ReadonlyMap<string, ValidatedSchema>;
 }): Promise<BundleReleaseResult> {
+  const composition = buildGameComposition(input.registries);
+  if (!gameCompositionMatchesGeneratedRoots(composition, generatedRootContract(input.registries))) {
+    return invalid("bundle-output-invalid", "logic", "generated-registry-catalog-mismatch");
+  }
+  let logicEntry: string;
+  let presentationEntry: string;
+  try {
+    logicEntry = generateLogicEntry(input.registries, input.schemas);
+  } catch {
+    return invalid("bundle-failed", "logic", "schema-validator-generation-failed");
+  }
+  try {
+    presentationEntry = generatePresentationEntry(input.registries);
+  } catch {
+    return invalid("bundle-failed", "presentation", "generated-entry-invalid");
+  }
   const results = await Promise.all([
-    bundleGraph(input.logic, input.registries),
-    bundleGraph(input.presentation, input.registries),
+    bundleGraph(input.logic, logicEntry),
+    bundleGraph(input.presentation, presentationEntry),
   ]);
   const failure = firstInvalid(results);
   if (failure !== undefined) return failure;

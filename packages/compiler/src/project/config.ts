@@ -1,10 +1,13 @@
-import type { ReleaseId, ReleaseManifestV1 } from "@plotpoint/protocol";
+import type { ReleaseId, ReleaseManifest } from "@plotpoint/protocol";
 import type { JsonObject } from "@plotpoint/runtime";
 
 import type { CompilerDiagnosticCode } from "../diagnostics/codes.js";
 
 export type ProjectEnvironment = "web";
 export type AggregateKind = "player" | "team" | "session";
+export type AggregateAuthority = "local" | "server";
+
+export const PROJECT_FORMAT_VERSION = 1 as const;
 
 export interface HostApiRequirement {
   readonly major: number;
@@ -16,11 +19,8 @@ export interface SourceExport {
   readonly export: string;
 }
 
-export interface AggregateSchemaRegistration {
+export interface SchemaReference {
   readonly id: string;
-  readonly kind: AggregateKind;
-  readonly version: number;
-  readonly path: string;
 }
 
 export interface SchemaRegistration {
@@ -28,30 +28,69 @@ export interface SchemaRegistration {
   readonly path: string;
 }
 
-export interface CommandRegistration {
-  readonly id: string;
-  readonly type: string;
-  readonly definition: SourceExport;
-  readonly aggregateSchema: string;
-  readonly payloadSchema: string;
-  readonly outcomeSchema: string;
-}
-
-export interface ProgressionRegistration {
-  readonly id: string;
-  readonly version: number;
-  readonly kind: AggregateKind;
-  readonly definition: SourceExport;
-  readonly aggregateSchema: string;
-  readonly commands: readonly string[];
-  readonly content: readonly string[];
-  readonly components: readonly string[];
-}
-
 export interface CapabilityRequirement {
   readonly id: string;
   readonly major: number;
   readonly minimumMinor: number;
+}
+
+export interface ApplicationRegistration {
+  readonly definition: SourceExport;
+  readonly components: readonly string[];
+}
+
+export interface ModelSchemaRegistration {
+  readonly type: string;
+  readonly schema: string;
+}
+
+interface AggregateModelRegistrationBase {
+  readonly id: string;
+  readonly stateSchema: string;
+  readonly initializationSchema: string;
+  readonly events: readonly ModelSchemaRegistration[];
+  readonly effects: readonly ModelSchemaRegistration[];
+}
+
+export interface LocalAggregateModelRegistration extends AggregateModelRegistrationBase {
+  readonly authority: "local";
+  readonly kind: "player";
+  readonly initializer: SourceExport;
+  readonly initializationContent?: string;
+}
+
+export interface ServerAggregateModelContract extends AggregateModelRegistrationBase {
+  readonly authority: "server";
+  readonly kind: "team" | "session";
+}
+
+export type AggregateModelRegistration =
+  | LocalAggregateModelRegistration
+  | ServerAggregateModelContract;
+
+interface CommandRegistrationBase {
+  readonly id: string;
+  readonly type: string;
+  readonly aggregateModel: string;
+  readonly payloadSchema: string;
+  readonly outcomeSchema: string;
+}
+
+export interface LocalCommandRegistration extends CommandRegistrationBase {
+  readonly execution: "local";
+  readonly definition: SourceExport;
+}
+
+export interface TrustedCommandContract extends CommandRegistrationBase {
+  readonly execution: "trusted-mechanic";
+}
+
+export type CommandRegistration = LocalCommandRegistration | TrustedCommandContract;
+
+export interface ProgressionRegistration {
+  readonly id: string;
+  readonly aggregateModel: string;
+  readonly definition: SourceExport;
 }
 
 export interface ComponentRegistration {
@@ -61,12 +100,13 @@ export interface ComponentRegistration {
   readonly content: readonly string[];
   readonly assets: readonly string[];
   readonly capabilities: readonly CapabilityRequirement[];
+  readonly sharedProjection?: SchemaReference;
 }
 
 export interface ContentRegistration {
   readonly id: string;
   readonly path: string;
-  readonly schema?: string;
+  readonly schema?: SchemaReference;
 }
 
 export interface AssetRegistration {
@@ -75,31 +115,40 @@ export interface AssetRegistration {
   readonly releasePath: string;
 }
 
-export interface ProjectConfigurationV1 {
-  readonly projectFormatVersion: 1;
+export interface TrustedMechanicRegistration {
+  readonly id: string;
+  readonly aggregateModel: string;
+  readonly commands: readonly string[];
+  readonly configuration: string;
+  readonly projectionSchema: SchemaReference;
+  readonly capabilities: readonly CapabilityRequirement[];
+}
+
+export interface ProjectConfiguration {
+  readonly projectFormatVersion: typeof PROJECT_FORMAT_VERSION;
   readonly environment: ProjectEnvironment;
   readonly hostApi: HostApiRequirement;
-  readonly entries: {
-    readonly logic: SourceExport;
-    readonly presentation: SourceExport;
-  };
+  readonly application: ApplicationRegistration;
+  readonly aggregateModels: readonly AggregateModelRegistration[];
   readonly commands: readonly CommandRegistration[];
-  readonly aggregateSchemas: readonly AggregateSchemaRegistration[];
   readonly schemas: readonly SchemaRegistration[];
   readonly progressions: readonly ProgressionRegistration[];
   readonly components: readonly ComponentRegistration[];
   readonly content: readonly ContentRegistration[];
   readonly assets: readonly AssetRegistration[];
+  readonly trustedMechanic?: TrustedMechanicRegistration;
 }
 
 export interface CanonicalProjectRegistries {
+  readonly application: ApplicationRegistration;
+  readonly aggregateModels: readonly AggregateModelRegistration[];
   readonly commands: readonly CommandRegistration[];
-  readonly aggregateSchemas: readonly AggregateSchemaRegistration[];
   readonly schemas: readonly SchemaRegistration[];
   readonly progressions: readonly ProgressionRegistration[];
   readonly components: readonly ComponentRegistration[];
   readonly content: readonly ContentRegistration[];
   readonly assets: readonly AssetRegistration[];
+  readonly trustedMechanic?: TrustedMechanicRegistration;
 }
 
 export type SnapshotFileKind = "config" | "source" | "dependency" | "schema" | "content" | "asset";
@@ -111,7 +160,7 @@ export interface SnapshotFile {
 }
 
 export interface CompilationSnapshot {
-  readonly config: ProjectConfigurationV1;
+  readonly config: ProjectConfiguration;
   readonly registries: CanonicalProjectRegistries;
   readonly files: ReadonlyMap<string, SnapshotFile>;
 }
@@ -184,7 +233,7 @@ export interface CompilerDiagnostic {
 
 export interface ValidatedProject {
   readonly kind: "valid";
-  readonly manifestPreview: ReleaseManifestV1;
+  readonly manifestPreview: ReleaseManifest;
 }
 
 export interface InvalidProject {
@@ -196,7 +245,7 @@ export interface CompiledProject {
   readonly kind: "compiled";
   readonly outputFile: string;
   readonly releaseId: ReleaseId;
-  readonly manifest: ReleaseManifestV1;
+  readonly manifest: ReleaseManifest;
 }
 
 export type ValidateProjectResult = ValidatedProject | InvalidProject;

@@ -1,0 +1,38 @@
+{
+  "field-puzzle": {
+    "hostApi": { "major": 1, "minimumMinor": 0 },
+    "capabilityIds": ["plotpoint.location.foreground"],
+    "componentCount": 1,
+    "localModelCount": 1,
+    "serverModelCount": 0,
+    "progressionCount": 1,
+    "trustedMechanic": null
+  },
+  "minimal-local-puzzle": {
+    "hostApi": { "major": 1, "minimumMinor": 0 },
+    "capabilityIds": [],
+    "componentCount": 1,
+    "localModelCount": 1,
+    "serverModelCount": 0,
+    "progressionCount": 1,
+    "trustedMechanic": null
+  },
+  "branching-media-tour": {
+    "hostApi": { "major": 1, "minimumMinor": 1 },
+    "capabilityIds": ["plotpoint.location.foreground", "plotpoint.media.audio"],
+    "componentCount": 2,
+    "localModelCount": 1,
+    "serverModelCount": 0,
+    "progressionCount": 1,
+    "trustedMechanic": null
+  },
+  "co-op-game": {
+    "hostApi": { "major": 1, "minimumMinor": 1 },
+    "capabilityIds": ["plotpoint.location.foreground"],
+    "componentCount": 2,
+    "localModelCount": 1,
+    "serverModelCount": 1,
+    "progressionCount": 0,
+    "trustedMechanic": "plotpoint.location.target-discovery"
+  }
+}

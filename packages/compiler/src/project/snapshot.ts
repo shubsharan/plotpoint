@@ -217,14 +217,17 @@ async function existingSourceCandidates(
 function explicitFiles(project: LoadedProject): ReadonlyMap<string, SnapshotFileKind> {
   const files = new Map<string, SnapshotFileKind>([[project.configPath, "config"]]);
   const sources = [
-    project.config.entries.logic,
-    project.config.entries.presentation,
-    ...project.config.commands.map(({ definition }) => definition),
+    project.config.application.definition,
+    ...project.config.aggregateModels.flatMap((model) =>
+      model.authority === "local" ? [model.initializer] : [],
+    ),
+    ...project.config.commands.flatMap((command) =>
+      command.execution === "local" ? [command.definition] : [],
+    ),
     ...project.config.progressions.map(({ definition }) => definition),
     ...project.config.components.map(({ implementation }) => implementation),
   ];
   for (const { source } of sources) files.set(source, "source");
-  for (const { path } of project.config.aggregateSchemas) files.set(path, "schema");
   for (const { path } of project.config.schemas) files.set(path, "schema");
   for (const { path } of project.config.content) files.set(path, "content");
   for (const { path } of project.config.assets) files.set(path, "asset");
@@ -238,7 +241,7 @@ export async function captureProjectSnapshot(
   const files = new Map<string, SnapshotFile>();
   const diagnostics: CompilerDiagnostic[] = [];
   const packageEntries = new Map<string, string>();
-  const pendingPackages = new Set<string>();
+  const pendingPackages = new Set<string>(["@plotpoint/runtime"]);
 
   while (pending.size > 0) {
     const [projectPath, kind] = [...pending.entries()].sort(([left], [right]) =>

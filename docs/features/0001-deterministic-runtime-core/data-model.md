@@ -15,12 +15,11 @@ Invalid values include undefined, bigint, symbol, function, non-finite number, s
 
 ## Runtime Policy
 
-| Field                     | Type                      | Validation                 | Meaning                                          |
-| ------------------------- | ------------------------- | -------------------------- | ------------------------------------------------ |
-| `contractVersion`         | positive safe integer     | Gate 1 value is `1`        | Selects stable runtime semantics                 |
-| `maxCanonicalDepth`       | non-negative safe integer | Default v1 value: `128`    | Deepest accepted durable-value path              |
-| `maxCanonicalNodes`       | non-negative safe integer | Default v1 value: `100000` | Maximum values visited per canonicalization      |
-| `maxAutomaticTransitions` | non-negative safe integer | Default v1 value: `100`    | Maximum automatic node changes after one command |
+| Field                     | Type                      | Validation              | Meaning                                          |
+| ------------------------- | ------------------------- | ----------------------- | ------------------------------------------------ |
+| `maxCanonicalDepth`       | non-negative safe integer | Default value: `128`    | Deepest accepted durable-value path              |
+| `maxCanonicalNodes`       | non-negative safe integer | Default value: `100000` | Maximum values visited per canonicalization      |
+| `maxAutomaticTransitions` | non-negative safe integer | Default value: `100`    | Maximum automatic node changes after one command |
 
 The resolved policy is part of the execution record. Callers may lower or raise limits explicitly, but replay must use the same resolved values.
 

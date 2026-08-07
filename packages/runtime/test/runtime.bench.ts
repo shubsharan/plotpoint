@@ -3,24 +3,23 @@ import { bench, describe } from "vitest";
 import {
   defineCommand,
   defineProgression,
-  executeCommand,
   type Aggregate,
   type Command,
   type JsonObject,
 } from "@plotpoint/runtime";
+import { executeCommandWithEvaluator } from "../src/execute-command.js";
 
 type State = JsonObject & { readonly count: number };
 
 const aggregate: Aggregate<State, "player"> = {
-  kind: "player",
-  id: "player-1",
-  schemaVersion: 1,
+  aggregateId: "player-1",
+  modelId: "benchmark.player",
+  aggregateKind: "player",
+  schemaId: "benchmark.state",
   stateVersion: 0,
-  authority: "local",
   state: { count: 0 },
   progression: {
-    graphId: "benchmark.v1",
-    graphVersion: 1,
+    graphId: "benchmark",
     nodes: Array.from({ length: 20 }, (_value, index) => ({
       nodeId: `node-${index}`,
       status: "locked",
@@ -35,7 +34,7 @@ const command: Command<JsonObject, "player"> = {
   payload: {},
 };
 const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-  definitionId: "benchmark.increment.v1",
+  definitionId: "benchmark.increment",
   commandType: "increment",
   aggregateKind: "player",
   handle(target) {
@@ -49,33 +48,41 @@ const definition = defineCommand<"player", State, JsonObject, JsonObject>({
     };
   },
 });
-const progression = defineProgression<"player", State, JsonObject, JsonObject>({
+const progression = defineProgression<"player", State>({
   aggregateKind: "player",
-  graphId: "benchmark.v1",
-  graphVersion: 1,
+  graphId: "benchmark",
   nodes: Array.from({ length: 20 }, (_value, index) => ({
     nodeId: `node-${index}`,
     initialStatus: "locked",
   })),
-  automaticRules: Array.from({ length: 20 }, (_value, index) => ({
-    ruleId: `unlock-${index}`,
+  transitions: Array.from({ length: 20 }, (_value, index) => ({
+    transitionId: `unlock-${index}`,
     targetNodeId: `node-${index}`,
-    from: ["locked"],
-    to: "available",
+    from: ["locked" as const],
+    to: "available" as const,
     priority: 0,
+    trigger: "automatic" as const,
     when: () => true,
   })),
 });
 
 describe("representative Gate 1 baselines", () => {
   bench("command with a twenty-node parallel progression batch", () => {
-    executeCommand({
-      definition,
+    executeCommandWithEvaluator({
+      definitionId: definition.definitionId,
+      commandType: definition.commandType,
+      aggregateKind: definition.aggregateKind,
       aggregate,
       command,
       observations: [],
       progression,
       policy: { maxAutomaticTransitions: 20 },
+      evaluate(target, runtimeCommand, context) {
+        return {
+          kind: "decision",
+          decision: definition.handle(target, runtimeCommand, context),
+        };
+      },
     });
   });
 });

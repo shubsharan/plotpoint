@@ -9,52 +9,63 @@ import { validateReferences } from "../../src/composition/validate-references.js
 import type {
   CanonicalProjectRegistries,
   CompilationSnapshot,
-  ProjectConfigurationV1,
+  ProjectConfiguration,
   SnapshotFile,
 } from "../../src/project/config.js";
 import { validateCommands } from "../../src/validation/commands.js";
 import { validateProgressions } from "../../src/validation/progression.js";
-import { normalizeAjvErrors, validateSchemas } from "../../src/validation/schemas.js";
+import {
+  normalizeAjvErrors,
+  validateRuntimeSchemaRoots,
+  validateSchemas,
+} from "../../src/validation/schemas.js";
 
 const encoder = new TextEncoder();
 const fixtureRoot = new URL("../fixtures/projects/invalid/definitions/", import.meta.url);
 
-function configuration(): ProjectConfigurationV1 {
+function configuration(): ProjectConfiguration {
   return {
     projectFormatVersion: 1,
     environment: "web",
     hostApi: { major: 1, minimumMinor: 0 },
-    entries: {
-      logic: { source: "src/logic.ts", export: "logic" },
-      presentation: { source: "src/presentation.ts", export: "presentation" },
+    application: {
+      definition: { source: "src/presentation.ts", export: "application" },
+      components: [],
     },
-    commands: [
+    aggregateModels: [
       {
-        id: "solve.v1",
-        type: "solve",
-        definition: { source: "src/solve.ts", export: "solve" },
-        aggregateSchema: "player.v1",
-        payloadSchema: "payload.v1",
-        outcomeSchema: "outcome.v1",
+        id: "player",
+        authority: "local",
+        kind: "player",
+        stateSchema: "player-state",
+        initializationSchema: "player-initialization",
+        initializer: { source: "src/logic.ts", export: "initialize" },
+        events: [],
+        effects: [],
       },
     ],
-    aggregateSchemas: [
-      { id: "player.v1", kind: "player", version: 1, path: "schemas/player.json" },
+    commands: [
+      {
+        id: "solve",
+        type: "solve",
+        execution: "local",
+        definition: { source: "src/solve.ts", export: "solve" },
+        aggregateModel: "player",
+        payloadSchema: "payload",
+        outcomeSchema: "outcome",
+      },
     ],
     schemas: [
-      { id: "payload.v1", path: "schemas/payload.json" },
-      { id: "outcome.v1", path: "schemas/outcome.json" },
+      { id: "player-state", path: "schemas/player.json" },
+      { id: "player-initialization", path: "schemas/initialization.json" },
+      { id: "payload", path: "schemas/payload.json" },
+      { id: "outcome", path: "schemas/outcome.json" },
     ],
     progressions: [
       {
-        id: "main.v1",
-        version: 1,
-        kind: "player",
+        id: "main",
         definition: { source: "src/progression.ts", export: "main" },
-        aggregateSchema: "player.v1",
-        commands: ["solve.v1"],
-        content: [],
-        components: [],
+        aggregateModel: "player",
       },
     ],
     components: [],
@@ -71,24 +82,26 @@ function registries(config = configuration()): CanonicalProjectRegistries {
 
 function metadata(): DefinitionInspectionMetadata {
   return {
+    application: { keys: ["mount"], mountType: "function" },
+    aggregateModels: [{ registrationId: "player", initializerType: "function" }],
     commands: [
       {
-        registrationId: "solve.v1",
-        definitionId: "solve.v1",
+        registrationId: "solve",
+        definitionId: "solve",
         commandType: "solve",
         aggregateKind: "player",
       },
     ],
     progressions: [
       {
-        registrationId: "main.v1",
-        graphId: "main.v1",
-        graphVersion: 1,
+        registrationId: "main",
+        graphId: "main",
         aggregateKind: "player",
         nodes: [{ nodeId: "stage", initialStatus: "active" }],
-        automaticRules: [],
+        transitions: [],
       },
     ],
+    components: [],
   };
 }
 
@@ -104,6 +117,7 @@ function snapshot(schemaDocument: unknown): CompilationSnapshot {
     registries: registries(config),
     files: new Map([
       ["schemas/player.json", schema("schemas/player.json")],
+      ["schemas/initialization.json", schema("schemas/initialization.json")],
       ["schemas/payload.json", schema("schemas/payload.json")],
       ["schemas/outcome.json", schema("schemas/outcome.json")],
     ]),
@@ -126,7 +140,7 @@ describe("command definition validation", () => {
         ...config.commands,
         {
           ...config.commands[0]!,
-          id: "other.v1",
+          id: "other",
           definition: { source: "src/other.ts", export: "other" },
         },
       ],
@@ -135,13 +149,16 @@ describe("command definition validation", () => {
       commands: [
         ...metadata().commands,
         {
-          registrationId: "other.v1",
-          definitionId: "other.v1",
+          registrationId: "other",
+          definitionId: "other",
           commandType: "solve",
           aggregateKind: "player",
         },
       ],
+      application: metadata().application,
+      aggregateModels: metadata().aggregateModels,
       progressions: metadata().progressions,
+      components: metadata().components,
     };
 
     expect(validateCommands(registries(), drift).map(({ code }) => code)).toContain(
@@ -178,6 +195,40 @@ describe("closed durable schema subset", () => {
     expect(result.kind).toBe("valid");
   });
 
+  it("rejects scalar schemas selected by runtime model and command contracts", () => {
+    const result = validateSchemas(
+      snapshot({
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        type: "string",
+      }),
+    );
+    expect(result.kind).toBe("valid");
+    if (result.kind !== "valid") return;
+
+    expect(validateRuntimeSchemaRoots(registries(), result.schemas)).toMatchObject([
+      {
+        code: "schema-value-invalid",
+        location: { registration: "aggregateModels", field: "initializationSchema" },
+        details: { reason: "runtime-schema-root-must-be-object" },
+      },
+      {
+        code: "schema-value-invalid",
+        location: { registration: "aggregateModels", field: "stateSchema" },
+        details: { reason: "runtime-schema-root-must-be-object" },
+      },
+      {
+        code: "schema-value-invalid",
+        location: { registration: "commands", field: "outcomeSchema" },
+        details: { reason: "runtime-schema-root-must-be-object" },
+      },
+      {
+        code: "schema-value-invalid",
+        location: { registration: "commands", field: "payloadSchema" },
+        details: { reason: "runtime-schema-root-must-be-object" },
+      },
+    ]);
+  });
+
   it("rejects unsupported semantic formats at their stable schema pointer", async () => {
     const document = JSON.parse(
       await readFile(new URL("unsupported.schema.json", fixtureRoot), "utf8"),
@@ -185,7 +236,7 @@ describe("closed durable schema subset", () => {
     const result = validateSchemas(snapshot(document));
     expect(result.kind).toBe("invalid");
     if (result.kind === "invalid") {
-      expect(result.diagnostics).toHaveLength(3);
+      expect(result.diagnostics).toHaveLength(4);
       expect(result.diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -198,7 +249,7 @@ describe("closed durable schema subset", () => {
   });
 
   it("normalizes Ajv validation errors without raw messages or library objects", () => {
-    const normalized = normalizeAjvErrors("payload.v1", [
+    const normalized = normalizeAjvErrors("payload", [
       {
         instancePath: "/answer",
         schemaPath: "#/properties/answer/minLength",
@@ -209,7 +260,7 @@ describe("closed durable schema subset", () => {
     ]);
     expect(normalized).toEqual([
       {
-        schemaId: "payload.v1",
+        schemaId: "payload",
         instancePath: "/answer",
         schemaPath: "#/properties/answer/minLength",
         keyword: "minLength",
@@ -230,22 +281,26 @@ describe("progression definition validation", () => {
       await readFile(new URL("progression-cycle.json", fixtureRoot), "utf8"),
     ) as DefinitionInspectionMetadata;
     const unknownTarget: DefinitionInspectionMetadata = {
+      application: metadata().application,
+      aggregateModels: metadata().aggregateModels,
       commands: metadata().commands,
       progressions: [
         {
           ...metadata().progressions[0]!,
-          graphVersion: 2,
-          automaticRules: [
+          graphId: "drifted",
+          transitions: [
             {
-              ruleId: "missing",
+              transitionId: "missing",
               targetNodeId: "absent",
               from: ["locked"],
               to: "available",
               priority: 0,
+              trigger: "automatic",
             },
           ],
         },
       ],
+      components: metadata().components,
     };
 
     expect(validateProgressions(registries(), unknownTarget).map(({ code }) => code)).toEqual(
@@ -256,22 +311,18 @@ describe("progression definition validation", () => {
     );
   });
 
-  it("rejects unknown configured command/content/component references", () => {
+  it("rejects an unknown configured aggregate model reference", () => {
     const config = configuration();
     const broken = {
       ...config,
       progressions: [
         {
           ...config.progressions[0]!,
-          commands: ["missing-command"],
-          content: ["missing-content"],
-          components: ["missing-component"],
+          aggregateModel: "missing-model",
         },
       ],
     };
     expect(validateReferences(registries(broken)).map(({ code }) => code)).toEqual([
-      "composition-reference-missing",
-      "composition-reference-missing",
       "composition-reference-missing",
     ]);
   });

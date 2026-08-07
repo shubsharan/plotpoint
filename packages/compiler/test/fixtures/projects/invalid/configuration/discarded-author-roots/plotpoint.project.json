@@ -1,0 +1,16 @@
+{
+  "projectFormatVersion": 1,
+  "environment": "web",
+  "hostApi": { "major": 1, "minimumMinor": 0 },
+  "entries": {
+    "logic": { "source": "src/logic.ts", "export": "logic" },
+    "presentation": { "source": "src/presentation.ts", "export": "presentation" }
+  },
+  "commands": [],
+  "aggregateSchemas": [],
+  "schemas": [],
+  "progressions": [],
+  "components": [],
+  "content": [],
+  "assets": []
+}

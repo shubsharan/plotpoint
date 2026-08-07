@@ -1,27 +1,31 @@
 import { defineProgression } from "@plotpoint/runtime";
 
-import type { PlayerState, SolveOutcome, SolvePayload } from "../commands/solve.js";
+import type { PlayerState } from "../initial-state.js";
 
-export const puzzleProgression = defineProgression<
-  "player",
-  PlayerState,
-  SolvePayload,
-  SolveOutcome
->({
+export const puzzleProgression = defineProgression<"player", PlayerState>({
   aggregateKind: "player",
-  graphId: "minimal.puzzle.v1",
-  graphVersion: 1,
+  graphId: "minimal.puzzle",
   nodes: [
     { nodeId: "celebrate", initialStatus: "locked" },
     { nodeId: "solve-riddle", initialStatus: "active" },
   ],
-  automaticRules: [
+  transitions: [
     {
-      ruleId: "unlock-celebration",
+      transitionId: "complete-riddle",
+      targetNodeId: "solve-riddle",
+      from: ["active"],
+      to: "completed",
+      priority: 0,
+      trigger: "automatic",
+      when: ({ aggregateState }) => aggregateState.solved,
+    },
+    {
+      transitionId: "unlock-celebration",
       targetNodeId: "celebrate",
       from: ["locked"],
       to: "available",
       priority: 0,
+      trigger: "automatic",
       when: ({ aggregateState }) => aggregateState.solved,
     },
   ],

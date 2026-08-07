@@ -1,10 +1,11 @@
 <!--
 Sync Impact Report
-- Version change: template -> 1.0.0
-- Added principles: Complete Product Loops; Durable Contracts; Honest Boundaries; Evidence Before Abstraction; Local-First Privacy
-- Added sections: Delivery Gates; Development Workflow
-- Removed sections: all unresolved template placeholders
-- Templates: .specify/templates/plan-template.md compatible; spec-template.md compatible; tasks-template.md compatible
+- Version change: 1.0.0 -> 2.0.0
+- Modified principles: Durable Contracts Stay Small -> Durable Contracts Evolve Centrally
+- Added sections: none
+- Removed sections: none
+- Templates: plan-template.md compatible; spec-template.md updated; tasks-template.md compatible
+- Runtime guidance: README.md, docs/product.md, and docs/roadmap.md updated
 - Follow-up TODOs: none
 -->
 # Plotpoint Constitution
@@ -19,13 +20,16 @@ authoring input, playable outcome, learning return, and concrete exit evidence. 
 MUST be pulled by a demonstrated loop rather than scheduled only because it appears in the platform
 architecture.
 
-### II. Durable Contracts Stay Small
+### II. Durable Contracts Evolve Centrally
 
-Immutable releases, deterministic typed commands, explicit observations, versioned aggregates,
-atomic accepted transitions, and authorized projections are Plotpoint's durable invariants. Public,
-persisted, or cross-process contracts MUST be minimal, versioned independently, and changed only
-through an Accepted ADR. Repository packages and internal APIs MUST NOT be treated as product
-contracts without evidence that independent compatibility is required.
+Immutable releases, deterministic typed commands, explicit observations, schema-identified
+aggregates, atomic accepted transitions, and authorized projections are Plotpoint's durable
+invariants. Public, persisted, or cross-process contracts MUST be minimal and changed only through an
+Accepted ADR. Repository-owned interface, type, schema, and logical-ID names MUST remain plain; they
+MUST NOT embed generation suffixes or independent per-schema version counters. If incompatible
+evolution becomes necessary, compatibility MUST be governed by one centralized installation or
+negotiation mechanism justified by product evidence. Repository packages and internal APIs MUST NOT
+be treated as product contracts without evidence that independent compatibility is required.
 
 ### III. Trust Boundaries Are Honest
 
@@ -75,4 +79,4 @@ and propagation through affected templates and guidance. Compliance is reviewed 
 again before implementation. Exceptions are not implicit; any necessary violation MUST be recorded
 in the plan's Complexity Tracking section with the rejected simpler alternative.
 
-**Version**: 1.0.0 | **Ratified**: 2026-08-03 | **Last Amended**: 2026-08-03
+**Version**: 2.0.0 | **Ratified**: 2026-08-03 | **Last Amended**: 2026-08-05

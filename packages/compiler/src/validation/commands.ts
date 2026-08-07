@@ -17,11 +17,13 @@ export function validateCommands(
   inspection: DefinitionInspectionMetadata,
 ): readonly CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const aggregateSchemas = new Map(
-    registries.aggregateSchemas.map((registration) => [registration.id, registration] as const),
+  const models = new Map(
+    registries.aggregateModels.map((registration) => [registration.id, registration] as const),
   );
   const registrations = new Map(
-    registries.commands.map((registration) => [registration.id, registration] as const),
+    registries.commands
+      .filter((registration) => registration.execution === "local")
+      .map((registration) => [registration.id, registration] as const),
   );
   const metadata = new Map<string, (typeof inspection.commands)[number]>();
 
@@ -51,8 +53,9 @@ export function validateCommands(
   const definitionIds = new Map<string, string>();
   const commandTypes = new Map<string, string>();
   for (const registration of registries.commands) {
+    if (registration.execution !== "local") continue;
     const inspected = metadata.get(registration.id);
-    const aggregate = aggregateSchemas.get(registration.aggregateSchema);
+    const model = models.get(registration.aggregateModel);
     if (inspected === undefined) {
       diagnostics.push(
         createCompilerDiagnostic({
@@ -77,15 +80,15 @@ export function validateCommands(
         );
       }
     }
-    if (aggregate !== undefined && aggregate.kind !== inspected.aggregateKind) {
+    if (model !== undefined && model.kind !== inspected.aggregateKind) {
       diagnostics.push(
         createCompilerDiagnostic({
           code: "command-aggregate-mismatch",
-          location: commandLocation(registration.id, "aggregateSchema"),
+          location: commandLocation(registration.id, "aggregateModel"),
           details: {
-            expected: aggregate.kind,
+            expected: model.kind,
             actual: inspected.aggregateKind,
-            schema: aggregate.id,
+            aggregateModel: model.id,
           },
         }),
       );
@@ -104,8 +107,7 @@ export function validateCommands(
       definitionIds.set(inspected.definitionId, registration.id);
     }
 
-    const aggregateKind = aggregate?.kind ?? inspected.aggregateKind;
-    const typeKey = `${aggregateKind}\0${inspected.commandType}`;
+    const typeKey = `${registration.aggregateModel}\0${inspected.commandType}`;
     const priorType = commandTypes.get(typeKey);
     if (priorType !== undefined && priorType !== registration.id) {
       diagnostics.push(
@@ -113,7 +115,7 @@ export function validateCommands(
           code: "command-type-duplicate",
           location: commandLocation(registration.id, "type"),
           details: {
-            aggregateKind,
+            aggregateModel: registration.aggregateModel,
             commandType: inspected.commandType,
             priorRegistration: priorType,
           },

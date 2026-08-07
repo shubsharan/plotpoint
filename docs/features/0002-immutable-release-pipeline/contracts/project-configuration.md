@@ -1,9 +1,10 @@
-# Contract: Project Configuration V1
+# Contract: Project Configuration
 
 ## Compatibility Surface
 
 An author project contains one strict `plotpoint.project.json` at its root. The file is UTF-8 JSON,
-has no comments or duplicate keys, and uses `projectFormatVersion: 1`. Unknown fields are errors.
+has no comments or duplicate keys, and uses the centrally registered `projectFormatVersion`. Unknown
+fields are errors.
 The compiler never executes this file and performs no package, directory, or glob discovery.
 
 The declarations below describe required semantics. Exact TypeScript helper types may mirror them,
@@ -12,8 +13,8 @@ but the JSON document is the source of composition truth.
 ## Root Shape
 
 ```ts
-interface ProjectConfigurationV1 {
-  readonly projectFormatVersion: 1;
+interface ProjectConfiguration {
+  readonly projectFormatVersion: typeof CONTRACT_VERSIONS.projectConfiguration;
   readonly environment: "web";
   readonly hostApi: { readonly major: number; readonly minimumMinor: number };
   readonly entries: {
@@ -111,7 +112,7 @@ manifest; selected source modules are the statically reachable graph from config
 - IDs and export names are non-empty printable ASCII and use one stable spelling.
 - Capability IDs are namespaced, for example `plotpoint.location.foreground`.
 - Source and data paths are project-relative forward-slash paths.
-- Release paths use the canonical archive grammar defined by release-format v1.
+- Release paths use the canonical archive grammar defined by release-format.
 - Absolute paths, empty segments, `.` or `..`, URL imports, NUL, backslash, symlink aliases, and
   project-boundary escapes are invalid.
 - Case-equivalent source identities and release destinations are rejected even on a case-sensitive

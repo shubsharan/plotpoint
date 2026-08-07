@@ -1,7 +1,7 @@
 import type { AggregateKind } from "../aggregates.js";
 import type { JsonObject } from "../canonical-json.js";
 import { createDiagnostic, type Diagnostic } from "../diagnostics.js";
-import type { DefinedProgression } from "./graph.js";
+import type { ProgressionDefinition } from "./graph.js";
 import {
   PROGRESSION_STATUSES,
   type ProgressionInstance,
@@ -30,11 +30,9 @@ export function isLegalProgressionTransition(
 
 export interface ValidateProgressionGraphInput<
   State extends JsonObject = JsonObject,
-  Payload extends JsonObject = JsonObject,
-  Outcome extends JsonObject = JsonObject,
   Kind extends AggregateKind = AggregateKind,
 > {
-  readonly definition: DefinedProgression<State, Payload, Outcome, Kind>;
+  readonly definition: ProgressionDefinition<State, Kind>;
   readonly progression: ProgressionInstance;
   readonly intents?: readonly ProgressionIntent[];
   readonly commandId?: string;
@@ -48,13 +46,8 @@ function invalid(code: Diagnostic["code"], details: JsonObject): ValidateProgres
   return { kind: "invalid", diagnostic: createDiagnostic(code, details) };
 }
 
-export function validateProgressionGraph<
-  State extends JsonObject,
-  Payload extends JsonObject,
-  Outcome extends JsonObject,
-  Kind extends AggregateKind,
->(
-  input: ValidateProgressionGraphInput<State, Payload, Outcome, Kind>,
+export function validateProgressionGraph<State extends JsonObject, Kind extends AggregateKind>(
+  input: ValidateProgressionGraphInput<State, Kind>,
 ): ValidateProgressionGraphResult {
   const { definition, progression, intents = [] } = input;
   const nodeIds = new Set(definition.nodes.map((node) => node.nodeId));
@@ -69,9 +62,8 @@ export function validateProgressionGraph<
   const progressionValue = progression as unknown as Record<string, unknown>;
   if (
     typeof progressionValue.graphId !== "string" ||
-    !Number.isSafeInteger(progressionValue.graphVersion) ||
-    (progressionValue.graphVersion as number) < 1 ||
-    !Array.isArray(progressionValue.nodes)
+    !Array.isArray(progressionValue.nodes) ||
+    Object.keys(progressionValue).some((field) => field !== "graphId" && field !== "nodes")
   ) {
     return invalid("progression-state-invalid", {
       graphId: definition.graphId,
@@ -79,23 +71,18 @@ export function validateProgressionGraph<
     });
   }
 
-  const graphId = progressionValue.graphId;
-  const graphVersion = progressionValue.graphVersion as number;
-  const nodes = progressionValue.nodes;
-  if (graphId !== definition.graphId || graphVersion !== definition.graphVersion) {
+  if (progressionValue.graphId !== definition.graphId) {
     return invalid("progression-state-invalid", {
-      actualGraphId: graphId,
-      actualGraphVersion: graphVersion,
+      actualGraphId: progressionValue.graphId,
       expectedGraphId: definition.graphId,
-      expectedGraphVersion: definition.graphVersion,
       reason: "graph-identity-mismatch",
     });
   }
   const expectedIds = [...nodeIds].sort();
   const actualIds: string[] = [];
   const stateByNode = new Map<string, ProgressionStatus>();
-  for (let index = 0; index < nodes.length; index += 1) {
-    const node = nodes[index];
+  for (let index = 0; index < progressionValue.nodes.length; index += 1) {
+    const node = progressionValue.nodes[index];
     if (node === null || typeof node !== "object" || Array.isArray(node)) {
       return invalid("progression-state-invalid", {
         graphId: definition.graphId,
@@ -104,7 +91,11 @@ export function validateProgressionGraph<
       });
     }
     const nodeValue = node as Record<string, unknown>;
-    if (typeof nodeValue.nodeId !== "string" || !isProgressionStatus(nodeValue.status)) {
+    if (
+      typeof nodeValue.nodeId !== "string" ||
+      !isProgressionStatus(nodeValue.status) ||
+      Object.keys(nodeValue).some((field) => field !== "nodeId" && field !== "status")
+    ) {
       return invalid("progression-state-invalid", {
         graphId: definition.graphId,
         nodeIndex: index,
@@ -133,10 +124,16 @@ export function validateProgressionGraph<
       reason: "invalid-intents-shape",
     });
   }
-  const intentNodes = new Set<string>();
+  const targetNodes = new Set<string>();
   for (let index = 0; index < intents.length; index += 1) {
     const intent = intents[index];
-    if (intent === null || typeof intent !== "object" || Array.isArray(intent)) {
+    if (
+      intent === null ||
+      typeof intent !== "object" ||
+      Array.isArray(intent) ||
+      typeof intent.transitionId !== "string" ||
+      Object.keys(intent).some((field) => field !== "transitionId")
+    ) {
       return invalid("progression-intent-invalid", {
         commandId: input.commandId ?? "",
         graphId: definition.graphId,
@@ -144,40 +141,29 @@ export function validateProgressionGraph<
         reason: "invalid-intent-shape",
       });
     }
-    const intentValue = intent as unknown as Record<string, unknown>;
+    const transition = definition.transitions.find(
+      (candidate) =>
+        candidate.transitionId === intent.transitionId && candidate.trigger === "intent",
+    );
+    const current = transition === undefined ? undefined : stateByNode.get(transition.targetNodeId);
     if (
-      typeof intentValue.nodeId !== "string" ||
-      !isProgressionStatus(intentValue.from) ||
-      !isProgressionStatus(intentValue.to)
-    ) {
-      return invalid("progression-intent-invalid", {
-        commandId: input.commandId ?? "",
-        graphId: definition.graphId,
-        intentIndex: index,
-        reason: "invalid-intent-fields",
-      });
-    }
-    const nodeId = intentValue.nodeId;
-    const from = intentValue.from;
-    const to = intentValue.to;
-    const current = stateByNode.get(nodeId);
-    if (
+      transition === undefined ||
       current === undefined ||
-      intentNodes.has(nodeId) ||
-      current !== from ||
-      !isLegalProgressionTransition(from, to)
+      targetNodes.has(transition.targetNodeId) ||
+      !transition.from.includes(current)
     ) {
       return invalid("progression-intent-invalid", {
         commandId: input.commandId ?? "",
         current: current ?? null,
-        from,
         graphId: definition.graphId,
-        nodeId,
-        reason: intentNodes.has(nodeId) ? "duplicate-intent" : "invalid-intent",
-        to,
+        reason:
+          transition !== undefined && targetNodes.has(transition.targetNodeId)
+            ? "duplicate-target"
+            : "invalid-intent",
+        transitionId: intent.transitionId,
       });
     }
-    intentNodes.add(nodeId);
+    targetNodes.add(transition.targetNodeId);
   }
 
   return { kind: "valid" };

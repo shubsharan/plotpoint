@@ -1,0 +1,934 @@
+import { describe, expect, it, vi } from "vitest";
+
+import type { GameComposition, SharedPlayView, SyncPull } from "@plotpoint/protocol";
+
+import {
+  createCompositionSharedBridgeHandlers,
+  deriveSharedRuntimeSurface,
+  resolveSharedProjection,
+  routeSharedBridgeMessage,
+  type SharedProjectionContract,
+} from "../src/shared/host-bridge";
+import {
+  SHARED_MIGRATION,
+  SharedSyncStore,
+  type SharedSessionBinding,
+  type SharedSqlDatabase,
+} from "../src/shared/database";
+import { SharedHttpClient } from "../src/shared/http-client";
+import { SharedSyncCoordinator } from "../src/shared/sync-coordinator";
+
+const releaseId = `sha256:${"a".repeat(64)}` as const;
+const bindingContext: SharedSessionBinding = {
+  sessionId: "session-1",
+  runId: "run-1",
+  releaseId,
+  participantId: "participant-1",
+  teamId: "team-1",
+  serviceOrigin: "https://example.test",
+  envelopeKey: "plotpoint.shared.session-1.envelope",
+};
+const command = {
+  commandId: "command-1",
+  target: {
+    aggregateKind: "team",
+    aggregateId: "team-1",
+    schemaId: "example.counter",
+  },
+  expectedStateVersion: 0,
+  type: "example.increment",
+  payload: { amount: 1 },
+  observationIds: ["observation-1"],
+} as const;
+
+const sharedComposition = {
+  application: { components: ["shared-panel"] },
+  aggregateModels: [
+    {
+      id: "local-model",
+      authority: "local",
+      kind: "player",
+      stateSchema: { id: "local-state" },
+      initializationSchema: { id: "local-initialization" },
+      events: [],
+      effects: [],
+    },
+    {
+      id: "shared-model",
+      authority: "server",
+      kind: "team",
+      stateSchema: { id: "shared-state" },
+      initializationSchema: { id: "shared-initialization" },
+      events: [],
+      effects: [],
+    },
+  ],
+  commands: [
+    {
+      id: "shared-action",
+      type: "shared.action",
+      aggregateModel: "shared-model",
+      payloadSchema: { id: "shared-action-payload" },
+      outcomeSchema: { id: "shared-action-outcome" },
+      execution: "trusted-mechanic",
+    },
+  ],
+  progressions: [],
+  components: [
+    {
+      id: "shared-panel",
+      commands: ["shared-action"],
+      content: ["shared-configuration"],
+      assets: [],
+      capabilities: [],
+      sharedProjection: { id: "shared-projection" },
+    },
+  ],
+  resources: [],
+  trustedMechanic: {
+    id: "shared-adapter",
+    aggregateModel: "shared-model",
+    commands: ["shared-action"],
+    configuration: "shared-configuration",
+    projectionSchema: { id: "shared-projection" },
+    capabilities: [],
+  },
+} satisfies GameComposition;
+
+const localComposition = {
+  ...sharedComposition,
+  commands: [],
+  components: [{ ...sharedComposition.components[0]!, commands: [], sharedProjection: undefined }],
+  trustedMechanic: undefined,
+} satisfies GameComposition;
+
+const sharedView = {
+  sessionId: "session-1",
+  releaseId,
+  transport: "online",
+  synchronization: "current",
+  confirmedAt: "2030-01-01T00:00:00.000Z",
+  membership: { status: "active", teamId: "team-1" },
+  projections: [
+    {
+      aggregateKind: "team",
+      aggregateId: "team-1",
+      schemaId: "shared-projection",
+      stateVersion: 2,
+      value: { count: 2 },
+    },
+  ],
+  actions: [],
+} satisfies SharedPlayView;
+
+const projectionContract: SharedProjectionContract = {
+  schemaId: "shared-projection",
+  validate: (value) =>
+    typeof value.count === "number" &&
+    Number.isSafeInteger(value.count) &&
+    Object.keys(value).length === 1,
+};
+
+function pullWithMembership(membershipStatus: "active" | "revoked"): SyncPull {
+  return {
+    kind: "snapshot",
+    reset: false,
+    nextCursor: membershipStatus === "revoked" ? "revoked-cursor" : "active-cursor",
+    snapshot: {
+      sessionId: "session-1",
+      releaseId,
+      participantId: "participant-1",
+      teamId: "team-1",
+      membershipStatus,
+      confirmedAt: "2030-01-01T00:00:00.000Z",
+      projections: [],
+    },
+    commandResults: [],
+  };
+}
+
+describe("shared player architecture", () => {
+  it("uses only the minimal additive durable tables", () => {
+    expect(SHARED_MIGRATION).toContain("shared_outbox");
+    expect(SHARED_MIGRATION).toContain("shared_projections");
+    expect(SHARED_MIGRATION).not.toMatch(/delivery|inbox|membership_epoch|effect_outbox/);
+  });
+
+  it("routes generic bridge commands and rejects hunt-shaped host fields", async () => {
+    const enqueue = vi.fn(async () => ({
+      commandId: command.commandId,
+      disposition: "queued" as const,
+      terminal: "pending" as const,
+    }));
+    const response = await routeSharedBridgeMessage(
+      JSON.stringify({
+        version: 1,
+        requestId: "request-1",
+        type: "shared.command.enqueue",
+        payload: { command },
+      }),
+      {
+        getView: async () => {
+          throw new Error("unexpected");
+        },
+        enqueue,
+      },
+    );
+    expect(response).toMatchObject({
+      type: "shared.command.result",
+      payload: { terminal: "pending" },
+    });
+    expect(enqueue).toHaveBeenCalledWith(command);
+    const invalid = await routeSharedBridgeMessage(
+      JSON.stringify({
+        version: 1,
+        requestId: "request-2",
+        type: "shared.command.enqueue",
+        payload: { hunt: "hunt-1", targetId: "target-1" },
+      }),
+      {
+        getView: async () => {
+          throw new Error("unexpected");
+        },
+        enqueue,
+      },
+    );
+    expect(invalid).toMatchObject({ type: "host.error" });
+  });
+
+  it.each([
+    {
+      name: "invalid JSON",
+      raw: "{",
+      expectedRequestId: "unknown",
+    },
+    {
+      name: "invalid request ID",
+      raw: JSON.stringify({
+        version: 1,
+        requestId: "",
+        type: "shared.view.get",
+        payload: {},
+      }),
+      expectedRequestId: "unknown",
+    },
+    {
+      name: "non-canonical request ID",
+      raw: JSON.stringify({
+        version: 1,
+        requestId: "\ud800",
+        type: "shared.view.get",
+        payload: {},
+      }),
+      expectedRequestId: "unknown",
+    },
+    {
+      name: "unsupported version",
+      raw: JSON.stringify({
+        version: 2,
+        requestId: "semantic-version",
+        type: "shared.view.get",
+        payload: {},
+      }),
+      expectedRequestId: "semantic-version",
+    },
+    {
+      name: "unknown operation",
+      raw: JSON.stringify({
+        version: 1,
+        requestId: "semantic-type",
+        type: "shared.unknown",
+        payload: {},
+      }),
+      expectedRequestId: "semantic-type",
+    },
+    {
+      name: "malformed operation payload",
+      raw: JSON.stringify({
+        version: 1,
+        requestId: "semantic-payload",
+        type: "shared.command.enqueue",
+        payload: { command: { malformed: true } },
+      }),
+      expectedRequestId: "semantic-payload",
+    },
+    {
+      name: "malformed envelope fields",
+      raw: JSON.stringify({
+        version: 1,
+        requestId: "semantic-envelope",
+        type: "shared.view.get",
+        payload: {},
+        unexpected: true,
+      }),
+      expectedRequestId: "semantic-envelope",
+    },
+  ])("echoes the safely decoded request ID for $name", async ({ raw, expectedRequestId }) => {
+    const result = await routeSharedBridgeMessage(raw, {
+      getView: async () => sharedView,
+      enqueue: async () => {
+        throw new Error("unexpected-enqueue");
+      },
+    });
+    expect(result).toMatchObject({
+      requestId: expectedRequestId,
+      type: "host.error",
+      payload: { code: "shared-message-invalid" },
+    });
+  });
+
+  it("preserves request correlation for semantic handler failures", async () => {
+    const result = await routeSharedBridgeMessage(
+      JSON.stringify({
+        version: 1,
+        requestId: "missing-session-request",
+        type: "shared.view.get",
+        payload: {},
+      }),
+      {
+        getView: async () => {
+          throw new Error("shared-session-missing");
+        },
+        enqueue: async () => {
+          throw new Error("unexpected-enqueue");
+        },
+      },
+    );
+    expect(result).toMatchObject({
+      requestId: "missing-session-request",
+      type: "host.error",
+      payload: { code: "shared-session-missing" },
+    });
+  });
+
+  it("derives local-only, join, bound, and recovery surfaces only from composition", () => {
+    expect(deriveSharedRuntimeSurface(localComposition, null, releaseId, null)).toEqual({
+      kind: "local-only",
+      sharedBindingAvailable: false,
+    });
+    expect(
+      deriveSharedRuntimeSurface(sharedComposition, null, releaseId, projectionContract),
+    ).toEqual({
+      kind: "join",
+      sharedBindingAvailable: false,
+    });
+    expect(
+      deriveSharedRuntimeSurface(sharedComposition, sharedView, releaseId, projectionContract),
+    ).toMatchObject({
+      kind: "bound",
+      sharedBindingAvailable: true,
+      view: { projections: [{ schemaId: "shared-projection" }] },
+    });
+    expect(
+      deriveSharedRuntimeSurface(
+        sharedComposition,
+        { ...sharedView, synchronization: "recovery-required" },
+        releaseId,
+        projectionContract,
+      ),
+    ).toEqual({
+      kind: "recovery",
+      sharedBindingAvailable: false,
+      code: "shared-recovery-required",
+    });
+    expect(
+      deriveSharedRuntimeSurface(
+        sharedComposition,
+        { ...sharedView, releaseId: `sha256:${"b".repeat(64)}` },
+        releaseId,
+        projectionContract,
+      ),
+    ).toEqual({
+      kind: "recovery",
+      sharedBindingAvailable: false,
+      code: "shared-release-mismatch",
+    });
+    for (const [projection, code] of [
+      [
+        { ...sharedView.projections[0]!, schemaId: "wrong-projection" },
+        "shared-projection-binding-invalid",
+      ],
+      [
+        { ...sharedView.projections[0]!, value: { count: "invalid" } },
+        "shared-projection-payload-invalid",
+      ],
+      [
+        { ...sharedView.projections[0]!, aggregateKind: "player" as const },
+        "shared-projection-binding-invalid",
+      ],
+      [
+        { ...sharedView.projections[0]!, aggregateId: "wrong-team" },
+        "shared-projection-binding-invalid",
+      ],
+    ] as const) {
+      expect(
+        deriveSharedRuntimeSurface(
+          sharedComposition,
+          { ...sharedView, projections: [projection] },
+          releaseId,
+          projectionContract,
+        ),
+      ).toEqual({ kind: "recovery", sharedBindingAvailable: false, code });
+    }
+    for (const projections of [[], [...sharedView.projections, ...sharedView.projections]]) {
+      expect(
+        resolveSharedProjection(
+          sharedComposition,
+          {
+            releaseId,
+            sessionId: sharedView.sessionId,
+            teamId: sharedView.membership.teamId,
+            projections,
+          },
+          releaseId,
+          projectionContract,
+        ),
+      ).toEqual({ kind: "invalid", code: "shared-projection-binding-invalid" });
+    }
+  });
+
+  it("scopes projections and dispatches only composition-bound shared commands", async () => {
+    const enqueue = vi.fn(async () => ({
+      commandId: "action-1",
+      disposition: "queued" as const,
+      terminal: "pending" as const,
+    }));
+    const handlers = createCompositionSharedBridgeHandlers({
+      composition: sharedComposition,
+      expectedReleaseId: releaseId,
+      projectionContract,
+      getView: async () => sharedView,
+      enqueue,
+    });
+    const viewResponse = await routeSharedBridgeMessage(
+      JSON.stringify({
+        version: 1,
+        requestId: "view-request",
+        type: "shared.view.get",
+        payload: {},
+      }),
+      handlers,
+    );
+    expect(viewResponse).toMatchObject({
+      type: "shared.view.result",
+      payload: { projections: [{ schemaId: "shared-projection" }] },
+    });
+    expect((viewResponse.payload as unknown as SharedPlayView).projections).toHaveLength(1);
+
+    const validCommand = {
+      commandId: "action-1",
+      target: {
+        aggregateKind: "team" as const,
+        aggregateId: "team-1",
+        schemaId: "shared-state",
+      },
+      expectedStateVersion: 2,
+      type: "shared.action",
+      payload: { choice: "alpha" },
+      observationIds: [],
+    };
+    await expect(
+      routeSharedBridgeMessage(
+        JSON.stringify({
+          version: 1,
+          requestId: "command-request",
+          type: "shared.command.enqueue",
+          payload: { command: validCommand },
+        }),
+        handlers,
+      ),
+    ).resolves.toMatchObject({ type: "shared.command.result" });
+    expect(enqueue).toHaveBeenCalledWith(validCommand);
+
+    const mismatch = await routeSharedBridgeMessage(
+      JSON.stringify({
+        version: 1,
+        requestId: "mismatch-request",
+        type: "shared.command.enqueue",
+        payload: { command: { ...validCommand, expectedStateVersion: 99 } },
+      }),
+      handlers,
+    );
+    expect(mismatch).toMatchObject({
+      requestId: "mismatch-request",
+      type: "shared.command.result",
+      payload: { terminal: "pending" },
+    });
+    expect(enqueue).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps credentials in the Authorization header and preserves exact terminals", async () => {
+    const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe("https://example.test/v1/shared-sessions/session-1/commands");
+      expect(init?.headers).toMatchObject({ authorization: "Bearer secret" });
+      expect(init?.body).not.toContain("secret");
+      return new Response(
+        JSON.stringify({
+          commandId: "command-1",
+          disposition: "decided",
+          terminal: "no-op",
+          outcomeCode: "already",
+          resultingStateVersion: 2,
+          decisionPosition: "7",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    await expect(
+      new SharedHttpClient("https://example.test", fetcher as typeof fetch).submit(
+        "session-1",
+        "secret",
+        { ...command, observations: [] },
+      ),
+    ).resolves.toMatchObject({ terminal: "no-op", outcomeCode: "already" });
+  });
+
+  it("sends the exact release-pinned join request without repeated body versions", async () => {
+    const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      expect(String(url)).toBe("https://example.test/v1/shared-sessions/session-1/participants");
+      expect(JSON.parse(String(init?.body))).toEqual({
+        joinRequestId: "join-request-1",
+        expectedReleaseId: releaseId,
+        invitation: "invitation-secret",
+        participantCredential: "participant-secret",
+      });
+      return new Response(
+        JSON.stringify({
+          participantId: "participant-1",
+          teamId: "team-1",
+          releaseId,
+          disposition: "joined",
+          sync: pullWithMembership("active"),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    await expect(
+      new SharedHttpClient("https://example.test", fetcher as typeof fetch).join({
+        sessionId: "session-1",
+        joinRequestId: "join-request-1",
+        expectedReleaseId: releaseId,
+        invitation: "invitation-secret",
+        participantCredential: "participant-secret",
+      }),
+    ).resolves.toMatchObject({ releaseId, disposition: "joined" });
+  });
+
+  it("rejects a join response whose snapshot belongs to another session", async () => {
+    const pull = pullWithMembership("active");
+    const fetcher = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            participantId: "participant-1",
+            teamId: "team-1",
+            releaseId,
+            disposition: "joined",
+            sync: {
+              ...pull,
+              snapshot: { ...pull.snapshot, sessionId: "session-other" },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    );
+
+    await expect(
+      new SharedHttpClient("https://example.test", fetcher as typeof fetch).join({
+        sessionId: "session-1",
+        joinRequestId: "join-request-1",
+        expectedReleaseId: releaseId,
+        invitation: "invitation-secret",
+        participantCredential: "participant-secret",
+      }),
+    ).rejects.toThrow("shared-join-response-invalid");
+  });
+
+  it("resolves only exact persisted observations", async () => {
+    const row = {
+      observation_id: "observation-1",
+      recorded_at: "2030-01-01T00:00:01.000Z",
+      captured_at: "2030-01-01T00:00:00.000Z",
+      age_ms: 1000,
+      availability: "available",
+      latitude: 37,
+      longitude: -122,
+      horizontal_accuracy: 8,
+      diagnostic_code: null,
+    };
+    const database = { getFirstAsync: vi.fn(async () => row) } as unknown as SharedSqlDatabase;
+    const observations = await new SharedSyncStore(database).observations("run-1", [
+      "observation-1",
+    ]);
+    expect(observations).toEqual([
+      {
+        observationId: "observation-1",
+        recordedAt: row.recorded_at,
+        capturedAt: row.captured_at,
+        ageMs: 1000,
+        availability: "available",
+        latitude: 37,
+        longitude: -122,
+        horizontalAccuracy: 8,
+      },
+    ]);
+  });
+
+  it("blocks every pending action in the same transaction as a revoked snapshot", async () => {
+    const statements: Array<{ readonly sql: string; readonly parameters: readonly unknown[] }> = [];
+    const transaction = {
+      runAsync: vi.fn(async (sql: string, ...parameters: unknown[]) => {
+        statements.push({ sql: sql.replace(/\s+/g, " ").trim(), parameters });
+        return { changes: 1 };
+      }),
+      getFirstAsync: vi.fn(async (sql: string) =>
+        sql.includes("FROM runs")
+          ? {
+              release_id: releaseId,
+              status: "active",
+              started_at: "2030-01-01T00:00:00.000Z",
+            }
+          : {
+              session_id: "session-1",
+              run_id: "run-1",
+              release_id: releaseId,
+              participant_id: "participant-1",
+              team_id: "team-1",
+              service_origin: bindingContext.serviceOrigin,
+              envelope_key: bindingContext.envelopeKey,
+              membership_status: "active",
+            },
+      ),
+      getAllAsync: vi.fn(async () => []),
+    } as unknown as SharedSqlDatabase;
+    const database = {
+      getFirstAsync: transaction.getFirstAsync,
+      withExclusiveTransactionAsync: async (operation: (tx: SharedSqlDatabase) => Promise<void>) =>
+        operation(transaction),
+    } as unknown as SharedSqlDatabase;
+
+    await new SharedSyncStore(database).applyPull(bindingContext, pullWithMembership("revoked"));
+
+    const blockedOutbox = statements.find(
+      ({ sql }) => sql.includes("UPDATE shared_outbox") && sql.includes("blocked-revoked"),
+    );
+    expect(blockedOutbox).toBeDefined();
+    expect(blockedOutbox?.parameters).toContain("session-1");
+    expect(
+      statements.some(
+        ({ sql }) =>
+          sql.includes("UPDATE shared_sessions") &&
+          sql.includes("membership_status") &&
+          sql.includes("sync_status"),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a stale active snapshot before it can reactivate revoked durable state", async () => {
+    const runAsync = vi.fn(async () => ({ changes: 1 }));
+    const transaction = {
+      runAsync,
+      getFirstAsync: vi.fn(async (sql: string) =>
+        sql.includes("FROM runs")
+          ? {
+              release_id: releaseId,
+              status: "active",
+              started_at: "2030-01-01T00:00:00.000Z",
+            }
+          : {
+              session_id: "session-1",
+              run_id: "run-1",
+              release_id: releaseId,
+              participant_id: "participant-1",
+              team_id: "team-1",
+              service_origin: bindingContext.serviceOrigin,
+              envelope_key: bindingContext.envelopeKey,
+              membership_status: "revoked",
+            },
+      ),
+      getAllAsync: vi.fn(async () => []),
+    } as unknown as SharedSqlDatabase;
+    const database = {
+      getFirstAsync: transaction.getFirstAsync,
+      withExclusiveTransactionAsync: async (operation: (tx: SharedSqlDatabase) => Promise<void>) =>
+        operation(transaction),
+    } as unknown as SharedSqlDatabase;
+
+    await expect(
+      new SharedSyncStore(database).applyPull(bindingContext, pullWithMembership("active")),
+    ).rejects.toThrow("membership-reactivation-conflict");
+    expect(runAsync).not.toHaveBeenCalled();
+  });
+
+  it("commits authenticated revocation before deleting the participant credential", async () => {
+    const order: string[] = [];
+    const store = {
+      session: vi.fn(async () => ({
+        sessionId: "session-1",
+        runId: "run-1",
+        releaseId,
+        participantId: "participant-1",
+        teamId: "team-1",
+        serviceOrigin: "https://example.test",
+        envelopeKey: bindingContext.envelopeKey,
+        cursor: "0",
+        membershipStatus: "active" as const,
+      })),
+      beginSubmissionBatch: vi.fn(async () => ({ sessionId: "session-1", commands: [] })),
+      failSubmissionBatch: vi.fn(async () => undefined),
+      recordSyncEvidence: vi.fn(async () => undefined),
+      markRevoked: vi.fn(async () => {
+        order.push("revocation-commit");
+      }),
+    } as unknown as SharedSyncStore;
+    const credentials = {
+      generateJoinRequestId: vi.fn(() => "unused"),
+      generateCredential: vi.fn(() => "unused"),
+      putEnvelope: vi.fn(async () => undefined),
+      getEnvelope: vi.fn(async () => ({
+        kind: "bound" as const,
+        participantCredential: "participant-secret",
+      })),
+      removeEnvelope: vi.fn(async () => {
+        order.push("credential-delete");
+      }),
+    };
+    const fetcher = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ code: "participant-revoked" }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const coordinator = new SharedSyncCoordinator(
+      store,
+      credentials,
+      () => new SharedHttpClient("https://example.test", fetcher as typeof fetch),
+    );
+
+    await coordinator.request("session-1", "retry");
+
+    expect(order).toEqual(["revocation-commit", "credential-delete"]);
+  });
+
+  it("preserves the credential when authenticated revocation does not commit", async () => {
+    const store = {
+      session: vi.fn(async () => ({
+        sessionId: "session-1",
+        runId: "run-1",
+        releaseId,
+        participantId: "participant-1",
+        teamId: "team-1",
+        serviceOrigin: "https://example.test",
+        envelopeKey: bindingContext.envelopeKey,
+        cursor: "0",
+        membershipStatus: "active" as const,
+      })),
+      beginSubmissionBatch: vi.fn(async () => ({ sessionId: "session-1", commands: [] })),
+      failSubmissionBatch: vi.fn(async () => undefined),
+      recordSyncEvidence: vi.fn(async () => undefined),
+      markRevoked: vi.fn(async () => {
+        throw new Error("revocation-commit-interrupted");
+      }),
+    } as unknown as SharedSyncStore;
+    const removeEnvelope = vi.fn(async () => undefined);
+    const credentials = {
+      generateJoinRequestId: vi.fn(() => "unused"),
+      generateCredential: vi.fn(() => "unused"),
+      putEnvelope: vi.fn(async () => undefined),
+      getEnvelope: vi.fn(async () => ({
+        kind: "bound" as const,
+        participantCredential: "participant-secret",
+      })),
+      removeEnvelope,
+    };
+    const fetcher = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ code: "participant-revoked" }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const coordinator = new SharedSyncCoordinator(
+      store,
+      credentials,
+      () => new SharedHttpClient("https://example.test", fetcher as typeof fetch),
+    );
+
+    await expect(coordinator.request("session-1", "retry")).rejects.toThrow(
+      "revocation-commit-interrupted",
+    );
+    expect(removeEnvelope).not.toHaveBeenCalled();
+  });
+
+  it("deletes the credential only after a revoked snapshot commits", async () => {
+    const order: string[] = [];
+    const store = {
+      session: vi.fn(async () => ({
+        sessionId: "session-1",
+        runId: "run-1",
+        releaseId,
+        participantId: "participant-1",
+        teamId: "team-1",
+        serviceOrigin: "https://example.test",
+        envelopeKey: bindingContext.envelopeKey,
+        cursor: "0",
+        membershipStatus: "active" as const,
+      })),
+      beginSubmissionBatch: vi.fn(async () => ({ sessionId: "session-1", commands: [] })),
+      failSubmissionBatch: vi.fn(async () => undefined),
+      recordSyncEvidence: vi.fn(async () => undefined),
+      applyPull: vi.fn(async () => {
+        order.push("snapshot-commit");
+      }),
+      markRevoked: vi.fn(async () => {
+        throw new Error("unexpected-terminal-error");
+      }),
+    } as unknown as SharedSyncStore;
+    const credentials = {
+      generateJoinRequestId: vi.fn(() => "unused"),
+      generateCredential: vi.fn(() => "unused"),
+      putEnvelope: vi.fn(async () => undefined),
+      getEnvelope: vi.fn(async () => ({
+        kind: "bound" as const,
+        participantCredential: "participant-secret",
+      })),
+      removeEnvelope: vi.fn(async () => {
+        order.push("credential-delete");
+      }),
+    };
+    const fetcher = vi.fn(
+      async () =>
+        new Response(JSON.stringify(pullWithMembership("revoked")), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const coordinator = new SharedSyncCoordinator(
+      store,
+      credentials,
+      () => new SharedHttpClient("https://example.test", fetcher as typeof fetch),
+    );
+
+    await coordinator.request("session-1", "retry");
+
+    expect(order).toEqual(["snapshot-commit", "credential-delete"]);
+  });
+
+  it("applies projection, result, outbox removal, and cursor as one interruption-safe transaction", async () => {
+    const committed: string[][] = [];
+    let failAt = 3;
+    const database = {
+      getFirstAsync: async () => ({
+        session_id: "session-1",
+        run_id: "run-1",
+        release_id: releaseId,
+        participant_id: "participant-1",
+        team_id: "team-1",
+        service_origin: bindingContext.serviceOrigin,
+        envelope_key: bindingContext.envelopeKey,
+        membership_status: "active",
+        transport_status: "online",
+        sync_status: "syncing",
+        cursor: "0",
+        confirmed_at: null,
+        last_pull_digest: "",
+      }),
+      withExclusiveTransactionAsync: async (
+        operation: (tx: SharedSqlDatabase) => Promise<void>,
+      ) => {
+        const pending: string[] = [];
+        let call = 0;
+        const tx = {
+          runAsync: async (sql: string) => {
+            call += 1;
+            if (call === failAt) throw new Error("interrupted");
+            pending.push(sql);
+            return {};
+          },
+          getFirstAsync: async (sql: string) => {
+            if (sql.includes("FROM runs")) {
+              return {
+                release_id: releaseId,
+                status: "active",
+                started_at: "2030-01-01T00:00:00.000Z",
+              };
+            }
+            if (sql.includes("FROM shared_sessions")) {
+              return {
+                session_id: "session-1",
+                run_id: "run-1",
+                release_id: releaseId,
+                participant_id: "participant-1",
+                team_id: "team-1",
+                service_origin: bindingContext.serviceOrigin,
+                envelope_key: bindingContext.envelopeKey,
+                membership_status: "active",
+                sync_status: "syncing",
+              };
+            }
+            if (sql.includes("expected_state_version") && sql.includes("FROM shared_outbox")) {
+              return {
+                intent_json: JSON.stringify(command),
+                expected_state_version: 0,
+                observation_ids_json: "[]",
+              };
+            }
+            return null;
+          },
+          getAllAsync: async () => [],
+        } as unknown as SharedSqlDatabase;
+        await operation(tx);
+        committed.push(pending);
+      },
+    } as unknown as SharedSqlDatabase;
+    const store = new SharedSyncStore(database, {
+      aggregateKind: "team",
+      schemaId: "example.counter",
+      validate: () => true,
+    });
+    const pull = {
+      kind: "snapshot" as const,
+      reset: false,
+      nextCursor: "1",
+      snapshot: {
+        sessionId: "session-1",
+        releaseId,
+        participantId: "participant-1",
+        teamId: "team-1",
+        membershipStatus: "active" as const,
+        confirmedAt: "2030-01-01T00:00:00.000Z",
+        projections: [
+          {
+            aggregateKind: "team" as const,
+            aggregateId: "team-1",
+            schemaId: "example.counter",
+            stateVersion: 1,
+            value: { count: 1 },
+          },
+        ],
+      },
+      commandResults: [
+        {
+          commandId: "command-1",
+          disposition: "decided" as const,
+          terminal: "accepted" as const,
+          outcomeCode: "incremented",
+          resultingStateVersion: 1,
+          decisionPosition: "1",
+        },
+      ],
+    };
+    await expect(store.applyPull(bindingContext, pull)).rejects.toThrow("interrupted");
+    expect(committed).toEqual([]);
+    failAt = Number.POSITIVE_INFINITY;
+    await expect(store.applyPull(bindingContext, pull)).resolves.toBeUndefined();
+    expect(committed[0]).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("UPDATE shared_sessions"),
+        expect.stringContaining("INSERT INTO game_play_events"),
+      ]),
+    );
+  });
+});

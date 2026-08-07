@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   defineCommand,
-  executeCommand,
+  resolveCommandBinding,
   type Aggregate,
   type Command,
   type JsonObject,
@@ -15,6 +15,7 @@ import {
   observation,
   random,
 } from "@plotpoint/testkit";
+import { isJsonObject, modelFixture, runtimeSchema } from "./runtime-model.js";
 
 describe("scripted observations", () => {
   it("constructs canonical clock, identifier, random, generic, and capability entries", () => {
@@ -45,11 +46,11 @@ describe("scripted observations", () => {
   it("preserves runtime exhaustion and order diagnostics without fallbacks", () => {
     type State = JsonObject & { readonly value: string };
     const aggregate: Aggregate<State, "player"> = {
-      kind: "player",
-      id: "p1",
-      schemaVersion: 1,
+      aggregateId: "p1",
+      modelId: "observation.player",
+      aggregateKind: "player",
+      schemaId: "observation.state",
       stateVersion: 0,
-      authority: "local",
       state: { value: "" },
     };
     const command: Command<JsonObject, "player"> = {
@@ -60,7 +61,7 @@ describe("scripted observations", () => {
       payload: {},
     };
     const definition = defineCommand<"player", State, JsonObject, JsonObject>({
-      definitionId: "observe.v1",
+      definitionId: "observe",
       commandType: "observe",
       aggregateKind: "player",
       handle(_target, _command, context) {
@@ -75,41 +76,87 @@ describe("scripted observations", () => {
       },
     });
 
-    const missing = executeCommand({ definition, aggregate, command, observations: [] });
-    const wrongOrder = executeCommand({
-      definition,
+    const jsonSchema = runtimeSchema("observation.json", isJsonObject);
+    const stateSchema = runtimeSchema(
+      "observation.state",
+      (value): value is State =>
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        "value" in value &&
+        typeof value.value === "string",
+    );
+    const observedModel = modelFixture({
+      modelId: "observation.player",
+      aggregateKind: "player",
+      authority: "local",
+      stateSchema,
+      initializeState: () => ({ value: "" }),
+      commandsByType: {
+        observe: resolveCommandBinding({
+          registrationId: "observe",
+          definition,
+          payloadSchema: jsonSchema,
+          outcomeSchema: jsonSchema,
+        }),
+      },
+    });
+    const missing = observedModel.execute({ aggregate, command, observations: [] });
+    const wrongOrder = observedModel.execute({
       aggregate,
       command,
       observations: [identifier("id-1")],
     });
 
-    expect(missing.kind).toBe("invalid");
-    expect(wrongOrder.kind).toBe("invalid");
-    if (missing.kind === "invalid")
-      expect(missing.diagnostics[0]?.code).toBe("observation-exhausted");
-    if (wrongOrder.kind === "invalid") {
-      expect(wrongOrder.diagnostics[0]?.code).toBe("observation-order-mismatch");
-    }
+    expect(missing).toMatchObject({
+      kind: "recorded",
+      record: {
+        terminal: "invalid",
+        diagnostics: [{ code: "observation-exhausted" }],
+      },
+    });
+    expect(wrongOrder).toMatchObject({
+      kind: "recorded",
+      record: {
+        terminal: "invalid",
+        diagnostics: [{ code: "observation-order-mismatch" }],
+      },
+    });
 
     const harness = createRuntimeHarness();
+    const unusedDefinition = defineCommand<"player", State, JsonObject, JsonObject>({
+      definitionId: "unused",
+      commandType: "observe",
+      aggregateKind: "player",
+      handle(target) {
+        return {
+          kind: "accepted",
+          nextState: { value: `${target.state.value}changed` },
+          outcome: {},
+          domainEvents: [],
+          effectIntents: [],
+          progressionIntents: [],
+        };
+      },
+    });
+    const unusedBinding = resolveCommandBinding({
+      registrationId: "unused",
+      definition: unusedDefinition,
+      payloadSchema: jsonSchema,
+      outcomeSchema: jsonSchema,
+    });
+    const model = modelFixture({
+      modelId: "observation.player",
+      aggregateKind: "player",
+      authority: "local",
+      stateSchema,
+      initializeState: () => ({ value: "" }),
+      commandsByType: { observe: unusedBinding },
+    });
     expect(() =>
       harness.run({
         name: "unused observation",
-        definition: defineCommand<"player", State, JsonObject, JsonObject>({
-          definitionId: "unused.v1",
-          commandType: "observe",
-          aggregateKind: "player",
-          handle(target) {
-            return {
-              kind: "accepted",
-              nextState: { value: `${target.state.value}changed` },
-              outcome: {},
-              domainEvents: [],
-              effectIntents: [],
-              progressionIntents: [],
-            };
-          },
-        }),
+        model,
         aggregate,
         command,
         observations: [clock(1)],
