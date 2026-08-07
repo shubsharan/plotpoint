@@ -240,3 +240,29 @@ compiler and installed-player boundaries, while explicit adversarial deadlines r
   and opened the debug application, and `adb` confirmed `com.plotpoint.player` at PID 14246.
 - `git diff --check`: **PASS** after final documentation synchronization. Physical iOS and physical Android
   remain explicitly **NOT RUN**.
+
+## Phase 18 Acknowledged Runtime Disposal Closure
+
+- Status: **PASS** on 2026-08-06. React no longer owns WebView cleanup through effect teardown. One managed
+  runtime-view owner injects an exact correlated disposal request, keeps the old view hidden and
+  non-interactive while continuing to route cleanup host messages, and releases it only after the matching
+  generated-runtime acknowledgement or explicit native process termination.
+- Red-to-green lifecycle checkpoint: **PASS**. The first focused run failed because the player-owned
+  disposal coordinator did not exist. The completed generated-runtime and coordinator regressions cover
+  malformed, wrong, duplicate, and late acknowledgements; concurrent and startup-time requests;
+  asynchronous application/component cleanup; cleanup-originated capability work; reverse exactly-once
+  cleanup after failure; stable failure codes; and iOS/Android process-loss settlement without a deadline.
+- Focused runtime, controller, field, and installed co-op matrix: **PASS**, 8 files and 43 tests. Static App
+  ownership coverage proves scanner entry, every non-playable shared state, and runtime/controller
+  replacement await managed disposal, while the installed journeys continue through the generated runtime,
+  production bridges, SQLite, HTTP, and PostgreSQL.
+- Player project: **PASS**, 27 files and 212 tests. Generated runtime freshness and player type checks also
+  pass.
+- `pnpm verify`: **PASS**, including generated-runtime freshness, formatting, lint, all package type checks
+  and builds, 97 test files and 701 tests, Spec Kit workflow contract tests, synchronization, and validation.
+- Fresh iOS simulator: **PASS** on iPhone 17 Pro. Xcode reported `Build Succeeded` with zero errors and
+  warnings; Expo installed/opened `com.plotpoint.player`, and explicit `simctl launch` returned PID 69250.
+- Fresh Android emulator: **PASS** on `Plotpoint_API_36`. Gradle reported `BUILD SUCCESSFUL`; Expo installed
+  and opened the debug application, and `adb` confirmed `com.plotpoint.player` at PID 14470.
+- Physical iOS and physical Android: **NOT RUN**. No public Host API, database schema, migration, background
+  retry loop, or disposal timeout was added.

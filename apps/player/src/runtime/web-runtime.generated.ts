@@ -75,6 +75,30 @@ function buildRuntimeBootstrap(input) {
 <style>html,body,#root{margin:0;min-height:100%;font-family:ui-rounded,Georgia,serif;background:#f4f0e6;color:#142d2a}button,input{font:inherit}</style></head>
 <body><main id="root"></main><script>
 const pending = new Map(); let sequence = 0;
+let settleRuntimeDisposer;
+const runtimeDisposerReady = new Promise((resolve) => { settleRuntimeDisposer = resolve; });
+let cleanupAfterStartupFailure = async () => undefined;
+const disposalRequestIds = new Set();
+const postDisposalAcknowledgement = (requestId, payload) => {
+  window.ReactNativeWebView.postMessage(JSON.stringify({
+    version: ${HOST_BRIDGE_VERSION}, requestId, type: 'runtime.disposed', payload
+  }));
+};
+window.__plotpointRequestDispose = (requestId) => {
+  if (typeof requestId !== 'string' || requestId.length === 0 || disposalRequestIds.has(requestId)) return;
+  disposalRequestIds.add(requestId);
+  runtimeDisposerReady
+    .then((dispose) => dispose())
+    .then(
+      () => postDisposalAcknowledgement(requestId, { status: 'disposed' }),
+      (error) => postDisposalAcknowledgement(requestId, {
+        status: 'failed',
+        code: error && error.message === 'runtime-disposal-startup-failed'
+          ? 'runtime-disposal-startup-failed'
+          : 'runtime-disposal-cleanup-failed'
+      })
+    );
+};
 const clearPending = (requestId, waiter) => {
   if (pending.get(requestId) !== waiter) return false;
   pending.delete(requestId);
@@ -450,6 +474,7 @@ const cancelPending = () => {
     })();
     return cleanupPromise;
   };
+  cleanupAfterStartupFailure = cleanupMountScope;
 
   const select = (source, ids, code) => Object.freeze(Object.fromEntries(ids.map((id) => {
     if (!Object.hasOwn(source, id)) throw new Error(code + ':' + id);
@@ -611,9 +636,13 @@ const cancelPending = () => {
     })();
     return disposalPromise;
   };
-  window.__plotpointDispose = disposeRuntime;
+  settleRuntimeDisposer(disposeRuntime);
   window.addEventListener('pagehide', () => { void disposeRuntime(); }, { once: true });
-})().catch((error) => { document.getElementById('root').textContent = 'Runtime failed: ' + String(error && error.message || error); });
+})().catch(async (error) => {
+  try { await cleanupAfterStartupFailure(); } catch {}
+  settleRuntimeDisposer(() => Promise.reject(new Error('runtime-disposal-startup-failed')));
+  document.getElementById('root').textContent = 'Runtime failed: ' + String(error && error.message || error);
+});
 <\/script></body></html>`;
 }
 function allowRuntimeNavigation(url) {

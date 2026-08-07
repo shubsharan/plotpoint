@@ -104,6 +104,33 @@ async function exists(path: URL): Promise<boolean> {
 }
 
 describe("runtime view lifecycle", () => {
+  it("gates native runtime removal on one managed disposal acknowledgement", async () => {
+    const [app, managedView] = await Promise.all([
+      readFile(new URL("../App.tsx", import.meta.url), "utf8"),
+      readFile(new URL("../src/runtime/managed-runtime-webview.tsx", import.meta.url), "utf8"),
+    ]);
+
+    expect(app).not.toContain("useLayoutEffect");
+    expect(app).not.toContain("__plotpointDispose");
+    expect(app).toContain("await disposeMountedRuntime();");
+    expect(app.indexOf("await disposeMountedRuntime();")).toBeLessThan(
+      app.indexOf("sharedPlayController.current?.dispose();"),
+    );
+    expect(app).toMatch(
+      /if \(!sharedStateMountsRuntime\(state\)\) await disposeMountedRuntime\(\);/,
+    );
+    expect(app).toMatch(/await disposeMountedRuntime\(\);\s+setScanning\(true\);/);
+    expect(app).toContain(
+      "key={`${runtime.recovery.runId}:${runtime.recovery.releaseId}:${runtimeMountGeneration}`}",
+    );
+
+    expect(managedView).toContain('pointerEvents={phase === "disposing" ? "none" : "auto"}');
+    expect(managedView).toContain('phase === "disposing" ? styles.disposing : null');
+    expect(managedView).toContain("onContentProcessDidTerminate");
+    expect(managedView).toContain("onRenderProcessGone");
+    expect(managedView).not.toMatch(/setTimeout|deadline|timeout/i);
+  });
+
   it("requires composition at the playable bootstrap and recovery boundaries", async () => {
     const bootstrap = await readFile(
       new URL("../src/runtime/web-runtime.generated.ts", import.meta.url),

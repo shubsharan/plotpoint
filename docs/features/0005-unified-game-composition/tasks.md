@@ -449,6 +449,28 @@ without adding a schema, protocol, compatibility path, or background retry loop.
 
 ---
 
+## Phase 18: Acknowledged Runtime Disposal Closure
+
+**Purpose**: Close the final review-blocking WebView lifecycle race with one private correlated handshake,
+without extending Host API, persistence, migration, retry-loop, or deadline scope.
+
+- [x] T136 Add failing native-coordinator and generated-runtime regressions for exact correlation, malformed,
+      wrong, duplicate, and late acknowledgements; startup-time and concurrent disposal; asynchronous
+      application/component cleanup; cleanup-originated host work; stable failure; and process termination
+- [x] T137 Install `__plotpointRequestDispose` before bootstrap, await the idempotent generated-runtime cleanup,
+      emit one stable correlated acknowledgement, regenerate the production runtime, and retain exact-once
+      reverse cleanup after failure
+- [x] T138 Replace App-owned fire-and-forget injection with the managed runtime-view owner; keep disposal hidden
+      and non-interactive while routing messages, serialize shared-state publication, and await disposal before
+      scanner entry, shared suppression, recovery, revocation, and runtime/controller replacement
+- [x] T139 Update the Host Application contract, architecture guide, plan, and tasks with the private
+      acknowledged-disposal invariant and unchanged public scope
+- [x] T140 Run focused runtime/controller/field/co-op suites, generated freshness, player type checks,
+      `pnpm verify`, Spec Kit synchronization/validation, `git diff --check`, and fresh iOS simulator plus Android
+      emulator build/install/launch; record fresh remediation evidence and retain physical devices as `NOT RUN`
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase Dependencies
@@ -472,6 +494,7 @@ US4 + US5 + US3 -> Phase 8 Historical Evidence (superseded)
                           -> Phase 15 Root-Cause Simplification
                               -> Phase 16 Cohesion Closure
                                   -> Phase 17 Response-Loss Closure
+                                      -> Phase 18 Acknowledged Runtime Disposal Closure
 ```
 
 - **Setup (Phase 1)** has no dependency; T002-T004 begin only after the rename in T001.

@@ -70,6 +70,43 @@ constructs scoped contexts, and mounts the application only after bootstrap succ
 changes update the adapter and notify subscribed components; they do not remount or mutate the original
 application context.
 
+## Acknowledged Native Disposal
+
+Normal scanner entry, shared-state suppression, recovery, revocation, and runtime replacement keep the
+current WebView alive until its generated runtime finishes disposal. The native player injects one
+correlated `window.__plotpointRequestDispose(requestId)` call. That hook exists before asynchronous
+bootstrap starts and awaits the same idempotent disposal promise used for application unmount and
+reverse-order component cleanup.
+
+The generated runtime then posts one player-owned lifecycle envelope:
+
+```ts
+type RuntimeDisposalAcknowledgement = {
+  readonly version: 1;
+  readonly requestId: string;
+  readonly type: "runtime.disposed";
+  readonly payload:
+    | { readonly status: "disposed" }
+    | {
+        readonly status: "failed";
+        readonly code: "runtime-disposal-startup-failed" | "runtime-disposal-cleanup-failed";
+      };
+};
+```
+
+This envelope is private WebView lifecycle control, not an author-facing Host API message or a new Host
+API version. The native lifecycle owner consumes only the exact active correlation. While disposal is
+pending, it retains the old view hidden and non-interactive and continues routing ordinary host messages
+so cleanup-originated work can finish. It removes or replaces that view only after the correlated success
+or stable failure acknowledgement. Explicit iOS content-process termination or Android render-process
+loss settles the active disposal with a stable native diagnostic because the old WebView process no longer
+exists. There is no disposal deadline or timer-based forced removal.
+
+Concurrent native disposal callers share one active request. Startup-time requests wait for bootstrap or
+mount rollback to settle; application unmount and every registered cleanup still run at most once. A
+failure attempts all remaining cleanup before the runtime acknowledges, and arbitrary exception text is
+never copied into the lifecycle envelope.
+
 ## Scoped Component Context
 
 ```ts

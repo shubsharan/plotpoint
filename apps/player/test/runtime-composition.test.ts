@@ -116,6 +116,19 @@ const sharedProjection = {
 } satisfies SharedProjection;
 
 describe("generated runtime composition", () => {
+  it("installs a correlated disposal handshake before asynchronous bootstrap", () => {
+    const html = runtimeGlue();
+    const requestHook = html.indexOf("window.__plotpointRequestDispose");
+    const bootstrap = html.indexOf("(async () => {");
+
+    expect(requestHook).toBeGreaterThan(-1);
+    expect(requestHook).toBeLessThan(bootstrap);
+    expect(html).toContain("type: 'runtime.disposed'");
+    expect(html).toContain("runtime-disposal-startup-failed");
+    expect(html).toContain("runtime-disposal-cleanup-failed");
+    expect(html).not.toContain("window.__plotpointDispose");
+  });
+
   it("derives shared authority fields and rejects author-supplied authority", () => {
     const command = sharedComposition.commands.find(({ id }) => id === "shared-action");
     const model = sharedComposition.aggregateModels.find(({ id }) => id === "shared-model");

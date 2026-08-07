@@ -402,6 +402,14 @@ Components render and collect intent. Aggregate models and trusted mechanics dec
 The player owns a mount scope that cleans acquired resources in reverse order after unmount, remount,
 failed mount, or disposal. Application code never owns global cleanup or persistence authority.
 
+Native removal is acknowledged rather than inferred from React unmount. One managed runtime-view owner
+injects a correlated disposal request, keeps the old WebView hidden and non-interactive while the generated
+kernel awaits application unmount and reverse cleanup, and continues routing cleanup-originated host work.
+Only the matching `runtime.disposed` acknowledgement releases the view. Explicit iOS content-process or
+Android render-process termination may release it with a stable failure diagnostic because the process no
+longer exists; a timer never forces removal. The lifecycle envelope is player-internal and does not extend
+the author-facing Host API.
+
 Release logic and presentation share one trusted WebView realm. Closed imports, a restrictive CSP, and
 disabled navigation reduce accidental authority; they are not hostile-code isolation. See
 [ADR 0003](adrs/0003-trusted-webview-runtime.md) and the
@@ -452,9 +460,12 @@ transaction owns command idempotency, expected-version checks, observation links
 progression, journal, events, and effect intents. A response lost after commit is recovered by replaying
 the stored receipt.
 
-The WebView is disposable. On restart, the host re-verifies the installed release, validates the stored
-snapshot against the release schema, and bootstraps the generated runtime adapter from committed state.
-This boundary is governed by [ADR 0004](adrs/0004-atomic-player-persistence.md).
+The WebView is disposable. Scanner entry, synchronization, revocation, recovery, and replacement first
+await its correlated disposal acknowledgement while the old run and controller remain authoritative.
+Same-run durable aggregate refreshes retain the current view and use post-commit notifications. On restart,
+the host re-verifies the installed release, validates the stored snapshot against the release schema, and
+bootstraps the generated runtime adapter from committed state. This boundary is governed by
+[ADR 0004](adrs/0004-atomic-player-persistence.md).
 
 ### Native Capabilities and Observations
 

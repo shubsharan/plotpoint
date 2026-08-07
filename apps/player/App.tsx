@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AppState,
   Button,
@@ -14,7 +14,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Network from "expo-network";
 import * as Sharing from "expo-sharing";
 import { StatusBar } from "expo-status-bar";
-import { WebView, type WebViewMessageEvent } from "react-native-webview";
+import type { WebViewMessageEvent } from "react-native-webview";
 import { Ajv2020 } from "ajv/dist/2020.js";
 
 import {
@@ -37,8 +37,12 @@ import {
 import { PlayerDatabase } from "./src/persistence/database";
 import { nativeForegroundLocationAdapter } from "./src/location/native-location-adapter";
 import { createGamePlayReport } from "./src/reports/create-game-play-report";
-import { allowRuntimeNavigation, buildRuntimeBootstrap } from "./src/runtime/bootstrap";
+import { buildRuntimeBootstrap } from "./src/runtime/bootstrap";
 import { deriveHostSupportFromManifest } from "./src/runtime/host-support";
+import {
+  ManagedRuntimeWebView,
+  type ManagedRuntimeWebViewHandle,
+} from "./src/runtime/managed-runtime-webview";
 import { createProductionHostBridgeHandlers } from "./src/runtime/production-handlers";
 import {
   recoverLatestRun,
@@ -86,6 +90,10 @@ interface ReleaseDetails {
 interface InstallationFailure {
   readonly code: string;
   readonly action: string;
+}
+
+function sharedStateMountsRuntime(state: SharedPlayControllerState): boolean {
+  return state.status === "local-only" || state.status === "bound";
 }
 
 function base64ToBytes(value: string): Uint8Array {
@@ -233,12 +241,56 @@ export default function App() {
   const [installFailure, setInstallFailure] = useState<InstallationFailure | null>(null);
   const [scanning, setScanning] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
-  const webView = useRef<WebView>(null);
+  const managedRuntimeView = useRef<ManagedRuntimeWebViewHandle>(null);
   const installationInFlight = useRef(false);
   const sharedPlayController = useRef<SharedPlayController | null>(null);
+  const sharedStatePublication = useRef<Promise<void>>(Promise.resolve());
+  const runtimeWasDisposed = useRef(false);
+  const [runtimeMountGeneration, setRuntimeMountGeneration] = useState(0);
   const [sharedState, setSharedState] = useState<SharedPlayControllerState>({
     status: "local-only",
   });
+
+  const reply = (message: object) => managedRuntimeView.current?.injectHostMessage(message);
+
+  const notifySharedSyncChanged = () => {
+    reply({
+      version: 1,
+      requestId: "notification",
+      type: "shared.sync.changed",
+      payload: {},
+    });
+  };
+
+  const disposeMountedRuntime = async (): Promise<void> => {
+    const mounted = managedRuntimeView.current;
+    if (mounted === null) return;
+    await mounted.dispose();
+    runtimeWasDisposed.current = true;
+  };
+
+  const prepareRuntimeRemount = (): void => {
+    if (!runtimeWasDisposed.current) return;
+    runtimeWasDisposed.current = false;
+    setRuntimeMountGeneration((generation) => generation + 1);
+  };
+
+  const publishSharedControllerState = (
+    controller: SharedPlayController,
+    state: SharedPlayControllerState,
+  ): void => {
+    const publication = sharedStatePublication.current.then(async () => {
+      if (sharedPlayController.current !== controller) return;
+      if (!sharedStateMountsRuntime(state)) await disposeMountedRuntime();
+      if (sharedPlayController.current !== controller) return;
+      if (sharedStateMountsRuntime(state)) prepareRuntimeRemount();
+      setSharedState(state);
+      if (state.status === "bound") notifySharedSyncChanged();
+    });
+    sharedStatePublication.current = publication.catch((error: unknown) => {
+      setStatus(error instanceof Error ? error.message : "Runtime disposal failed");
+    });
+  };
 
   const loadRun = async (
     db: PlayerDatabase,
@@ -340,6 +392,8 @@ export default function App() {
       });
       projectionAggregateKind = serverModel.kind;
     }
+    await disposeMountedRuntime();
+    await sharedStatePublication.current;
     sharedPlayController.current?.dispose();
     const credentials = createParticipantCredentialStore();
     const sharedStore = new SharedSyncStore(
@@ -366,10 +420,8 @@ export default function App() {
       coordinator,
     );
     sharedPlayController.current = controller;
-    controller.subscribe((state) => {
-      setSharedState(state);
-      if (state.status === "bound") notifySharedSyncChanged();
-    });
+    controller.subscribe((state) => publishSharedControllerState(controller, state));
+    await sharedStatePublication.current;
     setRuntime({
       recovery: activeRecovery,
       composition,
@@ -389,6 +441,7 @@ export default function App() {
     setReleaseDetails(describeRequirements(opened.releaseId, opened.manifest, publication));
     setInstallFailure(null);
     await controller.start();
+    await sharedStatePublication.current;
     const controllerState = controller.snapshot();
     if (controllerState.status === "join-required") {
       setStatus("Release ready to join shared play.");
@@ -416,7 +469,6 @@ export default function App() {
   const install = async (descriptorUrl: string) => {
     if (database === null || installationInFlight.current) return;
     installationInFlight.current = true;
-    setScanning(false);
     setInstallFailure(null);
     setStatus("Verifying and installing release…");
     try {
@@ -442,27 +494,15 @@ export default function App() {
           ? "Published locally; fresh run created."
           : "Publication already installed; active run resumed.",
       );
+      setScanning(false);
     } catch (error) {
+      prepareRuntimeRemount();
+      setScanning(false);
       setStatus("Installation failed.");
       setInstallFailure(installationFailure(error));
     } finally {
       installationInFlight.current = false;
     }
-  };
-
-  const reply = (message: object) => {
-    webView.current?.injectJavaScript(
-      `window.__plotpointReceive(${JSON.stringify(JSON.stringify(message))});true;`,
-    );
-  };
-
-  const notifySharedSyncChanged = () => {
-    reply({
-      version: 1,
-      requestId: "notification",
-      type: "shared.sync.changed",
-      payload: {},
-    });
   };
 
   useEffect(() => {
@@ -564,13 +604,6 @@ export default function App() {
     reply(response);
   };
 
-  useLayoutEffect(() => {
-    const mounted = webView.current;
-    return () => {
-      mounted?.injectJavaScript("void window.__plotpointDispose?.(); true;");
-    };
-  }, [runtime?.html, sharedState.status, scanning]);
-
   const exportReport = async () => {
     if (database === null || runtime === null || FileSystem.cacheDirectory === null) return;
     try {
@@ -618,8 +651,14 @@ export default function App() {
   const beginScan = async () => {
     setInstallFailure(null);
     const result = permission?.granted ? permission : await requestPermission();
-    if (result.granted) setScanning(true);
-    else setStatus("Camera permission is required to scan an installation code.");
+    if (result.granted) {
+      try {
+        await disposeMountedRuntime();
+        setScanning(true);
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Runtime disposal failed");
+      }
+    } else setStatus("Camera permission is required to scan an installation code.");
   };
 
   return (
@@ -754,18 +793,13 @@ export default function App() {
           <Text>The verified application mounts after the native shared boundary is ready.</Text>
         </View>
       ) : (
-        <WebView
-          ref={webView}
-          source={{ html: runtime.html, baseUrl: "about:blank" }}
-          originWhitelist={["about:blank", "blob:*"]}
+        <ManagedRuntimeWebView
+          key={`${runtime.recovery.runId}:${runtime.recovery.releaseId}:${runtimeMountGeneration}`}
+          ref={managedRuntimeView}
+          html={runtime.html}
+          mountIdentity={`${runtime.recovery.runId}:${runtime.recovery.releaseId}:${runtimeMountGeneration}`}
           onMessage={(event) => void onBridgeMessage(event)}
-          onShouldStartLoadWithRequest={({ url }) => allowRuntimeNavigation(url)}
-          javaScriptEnabled
-          domStorageEnabled={false}
-          sharedCookiesEnabled={false}
-          thirdPartyCookiesEnabled={false}
-          setSupportMultipleWindows={false}
-          allowFileAccess={false}
+          onDisposalFailure={setStatus}
           style={styles.webview}
         />
       )}

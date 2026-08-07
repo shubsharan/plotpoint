@@ -79,6 +79,7 @@ export async function mountGeneratedWebRuntime(
     string,
     Set<(event: { readonly type: string; readonly detail?: unknown }) => void>
   >();
+  const disposalWaiters = new Map<string, (acknowledgement: unknown) => void>();
   const runtimeWindow: Record<string, unknown> = {
     addEventListener(
       type: string,
@@ -100,6 +101,18 @@ export async function mountGeneratedWebRuntime(
   };
   runtimeWindow.ReactNativeWebView = {
     postMessage(message: string) {
+      const decoded = JSON.parse(message) as {
+        readonly requestId?: unknown;
+        readonly type?: unknown;
+      };
+      if (decoded.type === "runtime.disposed" && typeof decoded.requestId === "string") {
+        const waiter = disposalWaiters.get(decoded.requestId);
+        if (waiter !== undefined) {
+          disposalWaiters.delete(decoded.requestId);
+          waiter(decoded);
+        }
+        return;
+      }
       void routeMessage(message).then((response) => {
         const receive = runtimeWindow.__plotpointReceive;
         if (typeof receive === "function") receive(response);
@@ -155,6 +168,17 @@ export async function mountGeneratedWebRuntime(
     restoreGlobals();
     throw new Error(root.textContent ?? "generated-runtime-mount-failed");
   }
+  let disposalSequence = 0;
+  const requestDisposal = (requestId = `generated-runtime-disposal-${++disposalSequence}`) => {
+    const request = runtimeWindow.__plotpointRequestDispose;
+    if (typeof request !== "function") throw new Error("generated-runtime-dispose-request-missing");
+    const acknowledgement = new Promise<unknown>((resolve) => {
+      disposalWaiters.set(requestId, resolve);
+    });
+    request(requestId);
+    return acknowledgement;
+  };
+  let unmountPromise: Promise<void> | null = null;
   return {
     root,
     dispatchHostEvent(detail: unknown) {
@@ -163,14 +187,30 @@ export async function mountGeneratedWebRuntime(
         throw new Error("generated-runtime-host-dispatch-missing");
       dispatch(new RuntimeCustomEvent("plotpoint-host", { detail }));
     },
-    async unmount() {
-      const dispose = runtimeWindow.__plotpointDispose;
-      if (typeof dispose !== "function") throw new Error("generated-runtime-dispose-missing");
-      try {
-        await dispose();
-      } finally {
-        restoreGlobals();
-      }
+    requestDisposal,
+    unmount() {
+      if (unmountPromise !== null) return unmountPromise;
+      unmountPromise = requestDisposal()
+        .then((acknowledgement) => {
+          const payload = (acknowledgement as { readonly payload?: unknown }).payload;
+          if (
+            payload === null ||
+            typeof payload !== "object" ||
+            !("status" in payload) ||
+            payload.status !== "disposed"
+          ) {
+            const code =
+              payload !== null &&
+              typeof payload === "object" &&
+              "code" in payload &&
+              typeof payload.code === "string"
+                ? payload.code
+                : "generated-runtime-disposal-failed";
+            throw new Error(code);
+          }
+        })
+        .finally(restoreGlobals);
+      return unmountPromise;
     },
   };
 }
