@@ -20,8 +20,8 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 1. **Ship and revise a field puzzle** — The core team edits a location-aware puzzle, compiles and QR
    installs it, plays offline on iOS and Android, recovers after interruption, exports a redacted
    report, and installs a revised release without rebuilding the player.
-2. **Add shared play when demanded** — A co-op game introduces authoritative sessions and
-   synchronization only after the local field loop is proven.
+2. **Validate shared play in the field** — The implemented co-op game proves authoritative sessions,
+   synchronization, recovery, and projection boundaries with real players and devices.
 3. **Validate external creation** — An external creator completes the loop without undocumented help,
    and a secret-role game tests authorized player-specific views.
 
@@ -51,11 +51,9 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 1. **Deterministic Runtime Core** _(Done)_ — deterministic command and progression contracts.
 2. **Immutable Release Pipeline** _(Done)_ — complete inspectable content-addressed releases.
 3. **Durable Offline Player** _(Active)_ — the complete Loop 1 field-puzzle product loop.
-4. **Co-op Game Loop** _(Active)_ — authoritative shared play and recovery-driven sync, awaiting
-   physical-device evidence.
-5. **Unified Game Composition** _(Done)_ — one runnable composition and recovery path across the
-   field puzzle and co-op game.
-6. **Creator and Multi-Game Proof** _(Planned)_ — external authoring and secret-role projections.
+4. **Unified Game Composition** _(Done)_ — one runnable composition and recovery path across the
+   field puzzle and co-op game; Loop 2 now awaits physical-device evidence.
+5. **Creator and Multi-Game Proof** _(Planned)_ — external authoring and secret-role projections.
 
 ## Risks and Open Questions
 
@@ -73,8 +71,6 @@ the smallest durable Plotpoint contracts and keeping game-specific rules inside 
 - [Deterministic Runtime Core](../../features/0001-deterministic-runtime-core/spec.md) — Done
 - [Immutable Release Pipeline](../../features/0002-immutable-release-pipeline/spec.md) — Done
 - [Durable Offline Field Puzzle](../../features/0003-durable-offline-player/spec.md) — Active
-- [Co-op Game Loop](../../features/0004-cooperative-hunt-loop/spec.md) — Active
 - [Unified Game Composition](../../features/0005-unified-game-composition/spec.md) — Done
-- [Platform Architecture Guide](../../features/0006-platform-architecture-guide/spec.md) — Pending
 
 <!-- speckit:generated:epic-features END -->

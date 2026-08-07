@@ -4,8 +4,9 @@ This record separates physical-platform observations from provider-free fixtures
 physical claim has been established. Fill exact values during the named loop; do not infer device or
 native behavior from Expo configuration, simulators, emulators, or scripted adapters.
 
-Physical field validation is deferred and does not block Feature 0003 implementation acceptance. See
-`platform-simulation.md` for the narrower native build-install-launch evidence accepted for now.
+Physical field validation is the active Loop 1 product-evidence boundary and does not retroactively
+block Feature 0003 implementation acceptance. See `platform-simulation.md` for the narrower native
+build-install-launch evidence already established.
 
 ## Early Smoke Loops
 

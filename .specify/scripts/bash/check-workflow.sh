@@ -105,6 +105,10 @@ while IFS= read -r spec; do
     state=$(status_of "$spec")
     if [[ "$state" == Done ]]; then
         verify_done_pr "$spec" "$branch"
+        tasks="$(dirname "$spec")/tasks.md"
+        if [[ -f "$tasks" ]] && grep -Eq '^- \[ \]' "$tasks"; then
+            fail "${spec#$REPO_ROOT/} is Done with unchecked tasks"
+        fi
     fi
 
     plan="$(dirname "$spec")/plan.md"

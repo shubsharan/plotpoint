@@ -104,8 +104,9 @@ testable without an Expo runtime.
   build, install, and launch on both platform toolchains.
 - Provider-free conformance supplies the complete offline route, interruption, recovery, report,
   revision, and fresh-run evidence that simulators cannot establish reliably.
-- Physical camera, GPS, private-LAN, and real process/device behavior remain deferred Loop 1 product
-  evidence and are not part of this feature's implementation acceptance tier.
+- Physical camera, GPS, private-LAN, and real process/device behavior remain the open Loop 1 product
+  evidence boundary. They are tracked separately from the completed implementation acceptance tier in
+  `evidence/physical-devices.md`.
 
 ## Delivery Phases
 
@@ -118,6 +119,8 @@ testable without an Expo runtime.
 4. Produce the redacted report, use it for a real revision, and install the fresh run on both platforms.
 5. Complete the remaining boundary matrix, provider-free gate, and final native build-install-launch
    check on each simulated reference platform.
+6. Run the early and final physical-device loops on iOS and Android, preserving exact observations in
+   `evidence/physical-devices.md` without promoting simulated results into physical evidence.
 
 ## Complexity Tracking
 

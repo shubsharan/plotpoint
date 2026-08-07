@@ -6,11 +6,15 @@ status: Active
 
 **Branch**: `feature/0003-durable-offline-player`
 **Epic**: [Plotpoint Core Product Loops](../../epics/0001-plotpoint-core-platform/epic.md)
-**PR**: Pending
+**PR**: [https://github.com/shubsharan/plotpoint/pull/3](https://github.com/shubsharan/plotpoint/pull/3)
 **Created**: 2026-08-03
 **Input**: Replace the platform-first player gate with Loop 1: edit, validate, compile, QR install,
 offline field play, recover, export a redacted report, revise, and reinstall while establishing the
 smallest reusable player contract for later games.
+
+**Delivery note**: Implementation is merged. The feature remains active only for the physical-device
+evidence tracked in `evidence/physical-devices.md`; simulator and emulator results do not close that
+product boundary.
 
 ## User Scenarios & Testing _(mandatory)_
 

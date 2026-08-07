@@ -85,11 +85,26 @@ puzzle. The same compiled release runs in an Expo mobile player on physical iOS 
 
 ## Loop 2: Co-op Game — Active
 
-A real co-op game pulls the minimum authoritative platform services and synchronization needed
-for multiple players to join one release-pinned session, submit trusted shared commands, receive only
-authorized projections, disconnect, reconnect, and converge without duplicate accepted work. The
-game, not a generic backend checklist, determines the first authoritative mechanics and conflict
-rules.
+### Product loop
+
+```text
+compile one co-op release
+  -> create a release-pinned session
+  -> join three physical players
+  -> discover shared targets
+  -> disconnect, restart, and converge
+  -> revoke one participant
+  -> export a redacted report
+  -> revise and start a fresh session
+```
+
+### Audience and game
+
+The core team authors one location-aware cooperative game in which three players discover shared
+targets. The same compiled release runs on physical iOS and Android devices while PostgreSQL owns
+authoritative team decisions and each player retains only its authorized projection. The game pulls
+only the services and synchronization needed to join, submit trusted shared commands, disconnect,
+reconnect, and converge without duplicate accepted work; its mechanics determine the conflict rules.
 
 ### Product boundary
 
@@ -100,21 +115,53 @@ rules.
 - No WebSockets, deltas, participant projection stores, delivery workers, generic effects, accounts,
   device attestation, or release-authored server execution.
 
-### Current evidence boundary
+### Evidence so far
 
 - Provider-free tests cover three-player lifecycle, concurrent target discovery, complete snapshot
   convergence, revocation, rollback, interruption safety, and redacted reporting.
 - Native player build-install-launch passes on the reference iOS simulator and Android emulator.
-- Physical-device location and network behavior remains explicitly deferred; simulated evidence does
-  not establish it.
+- Physical-device location and network behavior has not yet been run; simulated evidence does not
+  establish it.
 - [Feature 0005 remediation evidence](features/0005-unified-game-composition/evidence/remediation.md)
 
+### Exit evidence
+
+- Three physical players join the same release-pinned session across iOS and Android and discover
+  every configured target through the installed component action.
+- Foreground location, disconnection, application termination, response loss, and reconnection
+  preserve exact command identity and converge every participant on the same authorized projection.
+- Revocation blocks further authoritative work without deleting queued evidence or exposing another
+  participant's credential or view.
+- PostgreSQL receipts, player records, operational evidence, and exported reports retain no raw
+  coordinates or shared command payloads.
+- A report-driven rule revision compiles to a distinct release and completes in a fresh session
+  without migrating the previous session.
+
 ## Loop 3: Creator and Multi-Game Proof — Planned
+
+### Product loop
+
+```text
+external creator authors a game
+  -> validates and compiles without private guidance
+  -> installs and plays it
+  -> exports evidence and revises it
+  -> repeats with player-specific secret or role projections
+```
 
 An external creator completes the authoring and iteration loop without undocumented core-team help,
 and a secret or role-based game tests player-specific projections. Evidence from the field puzzle,
 co-op game, and secret-role experience determines the minimum stable capability and module
 contracts and whether stronger untrusted-code isolation is required.
+
+### Exit evidence
+
+- An external creator completes authoring, validation, compilation, installation, play, reporting,
+  and revision using only supported repository documentation and diagnostics.
+- A materially different secret or role-based game proves participant-specific projections without
+  leaking protected state through views, receipts, reports, or recovery.
+- Evidence from all three loops supports an explicit decision on stable capability/module contracts
+  and the isolation required before accepting untrusted creator code.
 
 ## Deferred Until Pulled By A Loop
 

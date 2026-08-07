@@ -171,10 +171,23 @@ printf '%s\n' \
     'esac' > "$TEST_ROOT/bin/gh"
 chmod +x "$TEST_ROOT/bin/gh"
 export PATH="$TEST_ROOT/bin:$PATH"
+printf '%s\n' '- [ ] T001 Record required evidence' > "$feature_dir/tasks.md"
+.specify/scripts/bash/refresh-pr-status.sh
+.specify/scripts/bash/sync-docs.sh
+grep -q '^status: Active$' "$spec"
+grep -q '^\*\*PR\*\*: \[https://github.com/example/plotpoint/pull/1\](https://github.com/example/plotpoint/pull/1)$' "$spec"
+perl -pi -e 's/- \[ \]/- [x]/' "$feature_dir/tasks.md"
 .specify/scripts/bash/refresh-pr-status.sh
 .specify/scripts/bash/sync-docs.sh
 grep -q '^status: Done$' "$spec"
 grep -q '^status: Done$' docs/epics/0001-policy/epic.md
+
+perl -pi -e 's/- \[x\]/- [ ]/' "$feature_dir/tasks.md"
+if .specify/scripts/bash/check-workflow.sh >/dev/null 2>&1; then
+    echo 'Done feature unexpectedly passed with unchecked tasks' >&2
+    exit 1
+fi
+perl -pi -e 's/- \[ \]/- [x]/' "$feature_dir/tasks.md"
 
 export FAKE_GH_FAIL=true
 if .specify/scripts/bash/check-workflow.sh >/dev/null 2>&1; then

@@ -161,18 +161,35 @@ synthetic candidates, prove Host API conformance.
 
 ---
 
+## Phase 9: Physical Device Product Evidence
+
+**Purpose**: Close the remaining Loop 1 product boundary without conflating simulator or emulator
+results with physical camera, GPS, private-LAN, and process-lifecycle behavior.
+
+- [ ] T045 Run and record the early smoke loop on one physical iOS device in `docs/features/0003-durable-offline-player/evidence/physical-devices.md`
+- [ ] T046 Run and record the early smoke loop on one physical Android device in `docs/features/0003-durable-offline-player/evidence/physical-devices.md`
+- [ ] T047 Complete and record the final edit-to-revision loop on the physical iOS device in `docs/features/0003-durable-offline-player/evidence/physical-devices.md`
+- [ ] T048 Complete and record the final edit-to-revision loop on the physical Android device in `docs/features/0003-durable-offline-player/evidence/physical-devices.md`
+- [ ] T049 Reconcile the physical observations with Loop 1 exit evidence, preserving any failed or not-run result explicitly in `docs/roadmap.md` and `docs/features/0003-durable-offline-player/evidence/physical-devices.md`
+
+**Checkpoint**: Loop 1 closes only when both platforms have direct, recorded physical evidence.
+
+---
+
 ## Dependencies And Execution Order
 
 ```text
-Baseline -> Host API -> US1 install -> US2 field play -> early iOS/Android smoke
+Baseline -> Host API -> US1 install -> US2 field play -> simulated iOS/Android checks
                                       -> US3 durability -> US4 learning -> exit hardening
+                                      -> physical iOS/Android evidence
 ```
 
 - Host API requires two-game provider-free evidence before it is treated as reusable.
 - US1 depends on Host API Core; US2 depends on installed offline releases.
 - Native simulator/emulator checks establish toolchain compatibility, not physical sensor behavior.
 - Provider-free durability and revision evidence combines with those checks for feature acceptance.
-- Deferred physical iOS and Android field loops remain product evidence rather than an implementation blocker.
+- Physical iOS and Android field loops remain product evidence rather than an implementation blocker,
+  but they are now the only open tasks on the active feature.
 
 ## Parallel Execution Examples
 
@@ -183,6 +200,7 @@ US2: T017 location contract tests can run alongside T018 field-game tests.
 US3: T024 transition faults can run alongside T025 recovery faults.
 US4: T030 report contract tests can run alongside T031 database-backed report tests.
 Exit: T037 iOS and T038 Android native checks can run in parallel after T036.
+Physical: T045 iOS and T046 Android smoke loops can run independently before T047 and T048 final loops.
 ```
 
 ## Implementation Strategy
@@ -193,6 +211,8 @@ Exit: T037 iOS and T038 Android native checks can run in parallel after T036.
 4. **Durability**: harden only the command, recovery, and report boundaries pulled by the loop.
 5. **Learning**: use a real report to revise the game and start a fresh run.
 6. **Exit**: finish the remaining matrix and final simulated native-platform checks.
+7. **Physical evidence**: exercise the same product loop on real iOS and Android hardware and record
+   the observations without inference from simulated platforms.
 
 Keep one local aggregate, one registered native capability, trusted single-WebView execution, and no
 hosted services, synchronization, generalized effects, active-run migration, or external creator code.

@@ -28,10 +28,15 @@ for spec in "${active_specs[@]}"; do
     }
     [[ -n "$pr" ]] || continue
     IFS=$'\t' read -r url state <<< "$pr"
+    tasks="$(dirname "$spec")/tasks.md"
+    complete=true
+    if [[ -f "$tasks" ]] && grep -Eq '^- \[ \]' "$tasks"; then
+        complete=false
+    fi
     tmp="$WORK/spec"
-    awk -v url="$url" -v state="$state" '
+    awk -v url="$url" -v state="$state" -v complete="$complete" '
         NR==1 && $0=="---" { fm=1 }
-        fm && /^status:[[:space:]]*/ && state=="MERGED" { $0="status: Done" }
+        fm && /^status:[[:space:]]*/ && state=="MERGED" && complete=="true" { $0="status: Done" }
         fm && NR>1 && $0=="---" { fm=0 }
         /^\*\*PR\*\*:/ { $0="**PR**: [" url "](" url ")" }
         { print }
