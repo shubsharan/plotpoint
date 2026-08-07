@@ -35,6 +35,7 @@ import {
   createNativeInstallTransport,
 } from "./src/install/native-adapters";
 import { PlayerDatabase } from "./src/persistence/database";
+import { nativeForegroundLocationAdapter } from "./src/location/native-location-adapter";
 import { createGamePlayReport } from "./src/reports/create-game-play-report";
 import { allowRuntimeNavigation, buildRuntimeBootstrap } from "./src/runtime/bootstrap";
 import { deriveHostSupportFromManifest } from "./src/runtime/host-support";
@@ -545,6 +546,7 @@ export default function App() {
           database,
           runId: runtime.recovery.runId,
           startedAt: runtime.recovery.startedAt,
+          adapter: nativeForegroundLocationAdapter,
         },
         onDurableResult: async () => {
           const recovered = await recoverRun(database, runtime.recovery, {

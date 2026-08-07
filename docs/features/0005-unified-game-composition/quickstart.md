@@ -284,7 +284,8 @@ consumption, or durable mutation.
 The co-op game acceptance is one report-driven two-release journey:
 
 1. registers the release and creates a generic shared session from the trusted binding;
-2. reserves one exact pending join and persists SecureStore secrets before network send;
+2. reserves one exact `preparing` join, persists its SecureStore envelope, advances it to `ready`, and
+   only then permits network send;
 3. joins three participants only when run/response/snapshot/binding identities match;
 4. queues discoveries for every configured target while disconnected;
 5. claims one finite batch, submits each captured command once, and pulls once;

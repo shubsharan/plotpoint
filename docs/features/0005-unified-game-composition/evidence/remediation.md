@@ -114,10 +114,10 @@ compiler and installed-player boundaries, while explicit adversarial deadlines r
   retained separate invitation and credential keys.
 - `pnpm --filter @plotpoint/modules test`: **PASS**, 2 files and 17 tests. Every authority, stale,
   already-satisfied, observation, and terminal-evidence case crosses only the complete `execute` result.
-- `pnpm --filter @plotpoint/player test`: **PASS**, 24 files and 182 tests. Recovery tests prove the
-  pending envelope is written before reservation, reduced only after atomic binding/pull commit, resumes
-  after interruption, and leaves a committed join successful with durable recovery evidence if reduction
-  must resume.
+- `pnpm --filter @plotpoint/player test`: **PASS**, 24 files and 182 tests. At this checkpoint the recovery
+  suite covered the then-current envelope-first attempt, atomic binding/pull commit, interruption resume,
+  and post-commit envelope reduction. Phase 16 supersedes the attempt ordering with SQLite reservation
+  ownership.
 - Installed co-op PostgreSQL/Testcontainers acceptance: **PASS**, 1 file and 1 test, after migrating the
   cross-package player harness to the mandatory envelope and `envelope_key` schema.
 - Module, player, and API type checks: **PASS**.
@@ -183,3 +183,33 @@ compiler and installed-player boundaries, while explicit adversarial deadlines r
   An initial explicit serial selector found no Expo device name; the sole-connected-device retry succeeded
   without a source change.
 - Physical iOS and physical Android: **NOT RUN**.
+
+## Phase 16 Cohesion Closure
+
+- Status: **PASS** on 2026-08-06. SQLite now reserves the only durable join attempt before SecureStore;
+  `SharedJoinCoordinator` alone classifies and resumes pending/bound state, while `SharedPlayController`
+  consumes only its typed `unbound | bound | blocked` outcome.
+- Red-to-green recovery and chronology checkpoint: **PASS**. The initial focused run failed only the
+  envelope-less `preparing` startup and wall-clock rollback cases. The completed focused player/runtime
+  matrix passed 6 files and 41 tests, covering safe cancellation, exact preparing/ready/submitting resend,
+  orphan-envelope ownership reconstruction, committed-envelope reduction, missing-credential blocking,
+  and nondecreasing elapsed evidence.
+- Installed co-op PostgreSQL/Testcontainers acceptance: **PASS**, 1 file and 1 test. The mounted generated
+  ClueBoard action emitted `capability.request`, `shared.view.get`, and `shared.command.enqueue`; production
+  location and composition-aware shared handlers persisted the observation, reached PostgreSQL through
+  the controller/HTTP path, refreshed zero to one confirmed target, survived controller recreation, and
+  exported the generic committed report.
+- `pnpm verify`: **PASS**, including generated-runtime freshness, clean format/lint, all package type
+  checks/builds, 95 test files and 688 tests, Spec Kit workflow tests, and workflow validation.
+- Fresh four-release validate/compile/inspect/verify/second-compile/`cmp` matrix: **PASS** with unchanged
+  identities: field puzzle `sha256:65bf7468b7e2166f620af6200da8844e844cb0d64760fa04e3cc18862ae6a2dd`,
+  minimal local puzzle `sha256:ad2a33ec8f88a67a45f7cdcdac82d68a24f533925267232434f598e8c31697ba`,
+  branching media tour `sha256:3bfc3ddf86a38dcac2da81ff851cf111e99b59f01ef92bcb1fae0f3890cccb1b`,
+  and co-op game `sha256:6b3a9adb1e9a9549a6a791f049fd6d9bdd3660b8e9a84d90d2023d9e265d58f2`.
+- Fresh iOS simulator: **PASS** on iPhone 17 Pro. Xcode reported `Build Succeeded` with zero errors and
+  warnings; Expo installed and opened `com.plotpoint.player`.
+- Fresh Android emulator: **PASS** on `Plotpoint_API_36`. Gradle reported `BUILD SUCCESSFUL`; Expo installed
+  the debug APK and opened the development-client route. The initial serial selector did not match Expo's
+  device-name selector; targeting the queried AVD name succeeded without a source change.
+- Spec Kit workflow validation and `git diff --check`: **PASS**. Physical iOS and physical Android remain
+  explicitly **NOT RUN**.

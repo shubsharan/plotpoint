@@ -16,6 +16,10 @@ release, Host API, shared-wire, or Game Play Report shapes. It removes duplicate
 global runtime dependency state, decomposed shared-result identity, stringly evidence translation, and
 duplicated ledger schema ownership. ADR-0006 already requires these durable contracts to evolve centrally.
 
+**Cohesion-closure update (2026-08-06)**: Phase 16 preserves reserve-first SQLite join ownership,
+centralizes cross-store restart reconciliation, proves the co-op action through the mounted production
+runtime, and makes ledger elapsed time nondecreasing without a schema or public-contract change.
+
 Make the field puzzle and co-op game runnable through one compiler-owned composition path, preserve all
 four valid compiler examples through the clean break, and close a two-release co-op learning loop. Correct
 Project Configuration, Game Composition, Host API, and Game Play Report in place; use plain stable
@@ -89,10 +93,9 @@ Only the final T102 post-design checkpoint may restore this gate to `PASS` after
 
 ### Post-Design Gate
 
-**PASS - PHASE 15 ROOT-CAUSE SIMPLIFICATION VERIFIED.** Protocol now owns serialized composition
-semantics; the sole generated runtime owns serialized local execution and root cleanup; `SharedSyncStore`
-owns exact binding and reconciliation; and one typed gameplay ledger owns report evidence and host time.
-Fresh provider-free, byte-reproduction, repository, simulator, and emulator evidence closes T124.
+**PASS - PHASE 16 COHESION CLOSURE (2026-08-06).** Reserve-first startup recovery, component-driven
+co-op acceptance, bounded device-clock chronology, provider-free verification, and fresh
+simulator/emulator evidence close T130 without expanding the public contracts or storage schema.
 
 - **PASS - One composition authority**: Project Configuration lowers to generated registries and
   Game Composition; no executable DSL or duplicate author runtime registry remains.
@@ -247,15 +250,17 @@ and recreated from source, while discarded configurations remain only as explici
    freshness. Vertical tests execute that production bundle through WebView-style transport.
 2. **One run-scoped shared controller**: a controller constructed from a verified installed run owns
    `start`, `join`, `enqueue`, `foreground`, `connectivityChanged`, `retry`, `snapshot`, `subscribe`, and
-   `dispose`, plus the complete observable state. Secret-first deterministic envelopes make every join
-   preparation crash-recoverable. Startup and reachability transitions drive keyed single-flight.
+   `dispose`, plus the complete observable state. Its join coordinator reserves SQLite ownership before
+   writing the deterministic envelope and reconciles every pending/bound restart shape. Startup and
+   reachability transitions drive keyed single-flight.
 3. **One authoritative execution operation**: the trusted adapter receives participant, current
    aggregate, public command, and observations; it validates authority, owns stale/no-op policy, invokes
    the pinned deterministic model, and returns the participant-visible terminal. Service code owns only
    locks, transactions, persistence, and response construction. Server models with effects are rejected.
 4. **One committed evidence ledger**: each responsible local/shared transaction appends validated generic
-   evidence. The report is a deterministic privacy-filtered projection and never reconstructs semantics
-   from versions, configuration, or unrelated tables.
+   evidence and clamps elapsed time to the prior per-run high-water. The report is a deterministic
+   privacy-filtered projection and never reconstructs semantics from versions, configuration, clocks, or
+   unrelated tables.
 
 The clean break removes aggregate schema-generation counters everywhere. Agreement is the tuple of
 pinned release identity, logical schema ID, and exact inventoried bytes/digest. SQLite compatibility is

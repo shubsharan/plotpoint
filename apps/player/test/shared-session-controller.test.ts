@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ParticipantCredentialStore, SharedSecretEnvelope } from "../src/shared/credentials";
 import type { SharedSyncStore } from "../src/shared/database";
 import type { SharedHttpClient } from "../src/shared/http-client";
-import { SharedSessionController } from "../src/shared/session-controller";
+import { SharedJoinCoordinator } from "../src/shared/session-controller";
 
 const releaseA = `sha256:${"a".repeat(64)}` as const;
 const releaseB = `sha256:${"b".repeat(64)}` as const;
@@ -46,6 +46,10 @@ interface JoinResponse {
 }
 
 interface Phase7Controller {
+  recover(input: {
+    readonly runId: string;
+    readonly expectedReleaseId: `sha256:${string}`;
+  }): Promise<unknown>;
   join(input: {
     readonly serviceUrl: string;
     readonly sessionId: string;
@@ -118,8 +122,17 @@ function pending(status: PendingJoinRecord["status"]): PendingJoinRecord {
 class PendingJoinStoreHarness {
   pending: PendingJoinRecord | null = null;
   bound = false;
+  binding: SessionBinding | null = null;
   commitError: Error | null = null;
   readonly order: string[] = [];
+
+  async sessionForRun(runId: string): Promise<string | null> {
+    return this.binding?.runId === runId ? this.binding.sessionId : null;
+  }
+
+  async session(sessionId: string): Promise<SessionBinding | null> {
+    return this.binding?.sessionId === sessionId ? this.binding : null;
+  }
 
   async pendingJoinForRun(runId: string): Promise<PendingJoinRecord | null> {
     this.order.push("pending-read");
@@ -210,6 +223,7 @@ class PendingJoinStoreHarness {
       throw new Error("shared-session-binding-conflict");
     }
     this.bound = true;
+    this.binding = input.binding;
     this.pending = null;
     if (input.recoveryDisposition !== undefined) this.order.push(input.recoveryDisposition);
   }
@@ -289,11 +303,9 @@ function createHarness(responses: readonly (JoinResponse | Error)[] = [joinRespo
       return next;
     }),
   };
-  const scheduler = { request: vi.fn(async () => undefined) };
-  const controller = new SharedSessionController(
+  const controller = new SharedJoinCoordinator(
     store as unknown as SharedSyncStore,
     secrets as unknown as ParticipantCredentialStore,
-    scheduler,
     () => client as unknown as SharedHttpClient,
   ) as unknown as Phase7Controller;
   return { controller, store, secrets, requests, order: store.order };
@@ -307,7 +319,10 @@ const joinInput = {
   invitation: "invitation-a",
 } as const;
 
-function seedRecoverableAttempt(harness: Harness, status: "ready" | "submitting"): void {
+function seedRecoverableAttempt(
+  harness: Harness,
+  status: "preparing" | "ready" | "submitting",
+): void {
   const attempt = pending(status);
   harness.store.pending = attempt;
   harness.secrets.values.set(attempt.envelopeKey, {
@@ -321,7 +336,24 @@ function seedRecoverableAttempt(harness: Harness, status: "ready" | "submitting"
   });
 }
 
-describe("shared session controller recovery", () => {
+describe("shared join coordinator recovery", () => {
+  it("returns a retryable typed outcome when durable storage is unavailable", async () => {
+    const coordinator = new SharedJoinCoordinator(
+      {
+        sessionForRun: async () => {
+          throw new Error("sqlite-unavailable");
+        },
+      } as unknown as SharedSyncStore,
+      {
+        getEnvelope: async () => null,
+      } as unknown as ParticipantCredentialStore,
+    );
+
+    await expect(
+      coordinator.recover({ runId: "run-a", expectedReleaseId: releaseA }),
+    ).resolves.toEqual({ kind: "blocked", code: "sqlite-unavailable", retryable: true });
+  });
+
   it("reserves one join owner before persisting its recoverable envelope and reduces it after commit", async () => {
     const harness = createHarness();
 
@@ -366,6 +398,15 @@ describe("shared session controller recovery", () => {
       participantCredential: "credential-a",
     });
     expect(harness.order).toContain("delivery-interrupted");
+
+    harness.secrets.failBoundWrite = false;
+    await expect(
+      harness.controller.recover({ runId: "run-a", expectedReleaseId: releaseA }),
+    ).resolves.toEqual({ kind: "bound", sessionId: "session-a" });
+    expect(harness.secrets.values.get(pending("submitting").envelopeKey)).toEqual({
+      kind: "bound",
+      participantCredential: "credential-a",
+    });
   });
 
   it("cancels a crashed preparing reservation with no envelope and starts a fresh attempt", async () => {
@@ -377,6 +418,63 @@ describe("shared session controller recovery", () => {
     expect(harness.order).toContain("cancel-preparing");
     expect(harness.secrets.generatedCredentials).toBe(1);
     expect(harness.store.bound).toBe(true);
+  });
+
+  it("advances a preparing reservation with its exact envelope without replacing identity", async () => {
+    const harness = createHarness();
+    seedRecoverableAttempt(harness, "preparing");
+
+    await expect(harness.controller.join(joinInput)).resolves.toEqual(pull());
+
+    expect(harness.secrets.generatedCredentials).toBe(0);
+    expect(harness.order).not.toContain("cancel-preparing");
+    expect(harness.requests[0]).toMatchObject({
+      joinRequestId: "join-request-a",
+      participantCredential: "credential-a",
+    });
+  });
+
+  it("reconstructs SQLite ownership from a complete orphan envelope", async () => {
+    const harness = createHarness();
+    const attempt = pending("preparing");
+    harness.secrets.values.set(attempt.envelopeKey, {
+      kind: "pending",
+      sessionId: attempt.sessionId,
+      expectedReleaseId: attempt.expectedReleaseId,
+      serviceOrigin: attempt.serviceOrigin,
+      joinRequestId: attempt.joinRequestId,
+      invitation: "invitation-a",
+      participantCredential: "credential-a",
+    });
+
+    await expect(harness.controller.join(joinInput)).resolves.toEqual(pull());
+
+    expect(harness.order.slice(0, 4)).toEqual(["pending-read", "reserve", "ready", "submitting"]);
+    expect(harness.secrets.generatedCredentials).toBe(0);
+  });
+
+  it("classifies a changed durable credential as non-retryable corruption", async () => {
+    const harness = createHarness();
+    const attempt = pending("ready");
+    harness.store.pending = attempt;
+    harness.secrets.values.set(attempt.envelopeKey, {
+      kind: "pending",
+      sessionId: attempt.sessionId,
+      expectedReleaseId: attempt.expectedReleaseId,
+      serviceOrigin: attempt.serviceOrigin,
+      joinRequestId: attempt.joinRequestId,
+      invitation: "invitation-a",
+      participantCredential: "credential-changed",
+    });
+
+    await expect(
+      harness.controller.recover({ runId: "run-a", expectedReleaseId: releaseA }),
+    ).resolves.toEqual({
+      kind: "blocked",
+      code: "shared-pending-join-credential-conflict",
+      retryable: false,
+    });
+    expect(harness.requests).toHaveLength(0);
   });
 
   it("resumes a complete ready attempt without allocating a new request or secret", async () => {

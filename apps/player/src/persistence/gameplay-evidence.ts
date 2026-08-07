@@ -91,40 +91,47 @@ export async function appendGameplayEvidence(
     readonly now?: () => Date;
   },
 ): Promise<void> {
-  let timing = input.timing;
-  if (timing === undefined || timing.committedAt === undefined) {
-    const run = await database.getFirstAsync<{ readonly started_at: string }>(
-      "SELECT started_at FROM runs WHERE run_id=?",
-      input.runId,
-    );
-    if (run === null) throw new Error("gameplay-evidence-run-missing");
-    const startedAtMs = Date.parse(run.started_at);
-    const now = timing === undefined ? (input.now ?? (() => new Date()))() : undefined;
-    const committedAtMs = timing === undefined ? now!.getTime() : startedAtMs + timing.elapsedMs;
-    if (!Number.isFinite(startedAtMs) || !Number.isFinite(committedAtMs)) {
-      throw new Error("gameplay-evidence-time-invalid");
-    }
-    timing = {
-      committedAt: new Date(committedAtMs).toISOString(),
-      elapsedMs: timing?.elapsedMs ?? Math.max(0, committedAtMs - startedAtMs),
-    };
-  }
-  const committedAt = timing.committedAt;
+  const run = await database.getFirstAsync<{
+    readonly started_at: string;
+    readonly previous_elapsed_ms: number | null;
+  }>(
+    `SELECT runs.started_at,
+            (SELECT MAX(events.elapsed_ms) FROM game_play_events AS events
+             WHERE events.run_id=runs.run_id) AS previous_elapsed_ms
+     FROM runs WHERE runs.run_id=?`,
+    input.runId,
+  );
+  if (run === null) throw new Error("gameplay-evidence-run-missing");
+  const startedAtMs = Date.parse(run.started_at);
+  const explicitCommittedAt = input.timing?.committedAt;
+  const candidateCommittedAtMs =
+    explicitCommittedAt === undefined
+      ? input.timing === undefined
+        ? (input.now ?? (() => new Date()))().getTime()
+        : startedAtMs + input.timing.elapsedMs
+      : Date.parse(explicitCommittedAt);
+  const candidateElapsedMs =
+    input.timing?.elapsedMs ?? Math.max(0, candidateCommittedAtMs - startedAtMs);
+  const previousElapsedMs = run.previous_elapsed_ms ?? 0;
   if (
-    !Number.isSafeInteger(timing.elapsedMs) ||
-    timing.elapsedMs < 0 ||
-    committedAt === undefined ||
-    !Number.isFinite(Date.parse(committedAt))
+    !Number.isFinite(startedAtMs) ||
+    !Number.isFinite(candidateCommittedAtMs) ||
+    !Number.isSafeInteger(candidateElapsedMs) ||
+    candidateElapsedMs < 0 ||
+    !Number.isSafeInteger(previousElapsedMs) ||
+    previousElapsedMs < 0
   ) {
     throw new Error("gameplay-evidence-time-invalid");
   }
+  const elapsedMs = Math.max(candidateElapsedMs, previousElapsedMs);
+  const committedAt = explicitCommittedAt ?? new Date(startedAtMs + elapsedMs).toISOString();
   await database.runAsync(
     `INSERT INTO game_play_events
      (run_id,committed_at,elapsed_ms,kind,command_id,evidence_json)
      VALUES (?,?,?,?,?,?)`,
     input.runId,
     committedAt,
-    timing.elapsedMs,
+    elapsedMs,
     input.evidence.kind,
     "commandId" in input.evidence ? (input.evidence.commandId ?? null) : null,
     JSON.stringify(eventValue(input.evidence)),

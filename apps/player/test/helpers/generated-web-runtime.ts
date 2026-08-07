@@ -153,6 +153,12 @@ export async function mountGeneratedWebRuntime(
   }
   return {
     root,
+    dispatchHostEvent(detail: unknown) {
+      const dispatch = runtimeWindow.dispatchEvent;
+      if (typeof dispatch !== "function")
+        throw new Error("generated-runtime-host-dispatch-missing");
+      dispatch(new RuntimeCustomEvent("plotpoint-host", { detail }));
+    },
     async unmount() {
       const dispose = runtimeWindow.__plotpointDispose;
       if (typeof dispose !== "function") throw new Error("generated-runtime-dispose-missing");

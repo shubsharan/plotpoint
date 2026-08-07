@@ -294,8 +294,8 @@ generations, and make the corrected storage contracts executable before story wo
 
 - [x] T089 [US7] Add failing restart-only tests for every secret, reservation, send, response, binding,
       invitation cleanup, submission, pull, validation, and snapshot-commit boundary
-- [x] T090 [US7] Implement one deterministic secret-first per-run SecureStore envelope, atomic binding plus
-      initial pull, post-commit envelope reduction, and recoverable interrupted preparation
+- [x] T090 [US7] Implement one deterministic per-run SecureStore envelope, atomic binding plus initial pull,
+      post-commit envelope reduction, and recoverable interrupted preparation
 - [x] T091 [US7] Replace App/session/coordinator fragments with one `SharedPlayController` and observable
       `local-only | join-required | joining | synchronizing | bound | revoked | recovery-required` state
 - [x] T092 [US7] Add `expo-network` `~57.0.1`; route startup, foreground, retry, and only unreachable-to-
@@ -404,6 +404,31 @@ uses the existing pre-release reset-or-reinstall policy.
 
 ---
 
+## Phase 16: Cohesion Closure
+
+**Purpose**: Close the final cross-store recovery, installed co-op action, and device-clock chronology
+gaps without adding a schema, compatibility path, or second authority.
+
+- [x] T125 Reopen the final checkpoint and align `spec.md`, `plan.md`, `research.md`, `data-model.md`,
+      Shared Recovery, Game Play Report, `docs/architecture.md`, and `quickstart.md` around reserve-first
+      join ownership and nondecreasing per-run evidence time
+- [x] T126 Add failing startup and interruption tests for a `preparing` reservation without an envelope,
+      exact pending-envelope recovery, ready/submitting credential loss, committed binding reduction, and
+      concurrent changed joins
+- [x] T127 Replace duplicate join recovery branches with one durable join coordinator whose typed outcome
+      is the only pending/bound recovery input consumed by the run-scoped shared-play controller
+- [x] T128 Add failing device-clock rollback coverage and normalize every gameplay event against the prior
+      committed per-run elapsed high-water inside the owning transaction, without changing report ordering
+      or storage schema
+- [x] T129 Drive the installed co-op discovery from the mounted generated component through production host
+      and composition-aware shared bridges, real SQLite/controller/HTTP/PostgreSQL, runtime notification,
+      restart, and ledger report
+- [x] T130 Run focused recovery, report, runtime, and PostgreSQL/Testcontainers suites; run the four-release
+      matrix, `pnpm verify`, workflow validation, and `git diff --check`; then record fresh provider-free,
+      iOS simulator, and Android emulator evidence while retaining physical devices as `NOT RUN`
+
+---
+
 ## Dependencies and Execution Order
 
 ### Phase Dependencies
@@ -425,6 +450,7 @@ US4 + US5 + US3 -> Phase 8 Historical Evidence (superseded)
                   -> Phase 13 Fresh Verification
                       -> Phase 14 Post-Review Cohesion Remediation
                           -> Phase 15 Root-Cause Simplification
+                              -> Phase 16 Cohesion Closure
 ```
 
 - **Setup (Phase 1)** has no dependency; T002-T004 begin only after the rename in T001.

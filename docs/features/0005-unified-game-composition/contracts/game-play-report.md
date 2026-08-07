@@ -92,6 +92,11 @@ records. `durationMs` derives from committed timestamps rather than export wall-
 `(elapsedMs, kind, stable source sequence)` with ordinal comparison. Repeated export from unchanged
 durable state is byte-equivalent after canonical JSON encoding.
 
+Before append, the committing boundary clamps candidate `elapsedMs` to the greatest elapsed value already
+committed for that run in the same transaction. Device wall-clock rollback therefore cannot move a later
+fact earlier; equal elapsed values retain the existing deterministic kind and source-sequence tie-breaks.
+An explicitly supplied committed timestamp remains factual, while derived timestamps use normalized elapsed.
+
 Only `commandAlias` carries information: it correlates events for the same redacted command. Constant
 run, session, participant, and team aliases are omitted because they do not distinguish anything inside
 a report. The optional shared section says only whether shared evidence exists and whether membership

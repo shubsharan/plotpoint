@@ -20,7 +20,7 @@ import {
   type SyncCommandResult,
   type SyncPull,
 } from "@plotpoint/protocol";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { compileProject } from "../../../packages/compiler/dist/index.js";
 import { createSecret } from "../src/security.js";
@@ -44,15 +44,20 @@ interface PlayerAcceptanceController {
   enqueue(command: object): Promise<unknown>;
   retry(): Promise<void>;
   snapshot(): Readonly<Record<string, unknown>>;
+  subscribe(listener: (state: Readonly<Record<string, unknown>>) => void): () => void;
   dispose(): void;
 }
 
+interface GeneratedRuntimeNode {
+  readonly dataset: Readonly<Record<string, string>>;
+  readonly children: readonly GeneratedRuntimeNode[];
+  readonly textContent: string | null;
+  dispatchEvent(type: string): Promise<void>;
+}
+
 interface MountedGeneratedRuntime {
-  readonly root: {
-    readonly children: readonly {
-      readonly dataset: Readonly<Record<string, string>>;
-    }[];
-  };
+  readonly root: GeneratedRuntimeNode;
+  dispatchHostEvent(detail: unknown): void;
   unmount(): Promise<void>;
 }
 
@@ -60,6 +65,10 @@ async function loadPlayerAcceptance() {
   const reportUrl = new URL("../../player/src/reports/create-game-play-report.ts", import.meta.url)
     .href;
   const databaseUrl = new URL("../../player/src/shared/database.ts", import.meta.url).href;
+  const persistenceUrl = new URL(
+    "../../player/src/persistence/record-location-observation.ts",
+    import.meta.url,
+  ).href;
   const sqliteUrl = new URL("../../player/test/helpers/shared-sqlite.ts", import.meta.url).href;
   const controllerUrl = new URL("../../player/src/shared/session-controller.ts", import.meta.url)
     .href;
@@ -71,26 +80,34 @@ async function loadPlayerAcceptance() {
     import.meta.url,
   ).href;
   const hostBridgeUrl = new URL("../../player/src/bridge/host-bridge.ts", import.meta.url).href;
+  const productionHandlersUrl = new URL(
+    "../../player/src/runtime/production-handlers.ts",
+    import.meta.url,
+  ).href;
   const sharedBridgeUrl = new URL("../../player/src/shared/host-bridge.ts", import.meta.url).href;
   const [
     reportModule,
     databaseModule,
+    persistenceModule,
     sqliteModule,
     controllerModule,
     coordinatorModule,
     runtimeModule,
     runtimeHarnessModule,
     hostBridgeModule,
+    productionHandlersModule,
     sharedBridgeModule,
   ]: unknown[] = await Promise.all([
     import(reportUrl),
     import(databaseUrl),
+    import(persistenceUrl),
     import(sqliteUrl),
     import(controllerUrl),
     import(coordinatorUrl),
     import(runtimeUrl),
     import(runtimeHarnessUrl),
     import(hostBridgeUrl),
+    import(productionHandlersUrl),
     import(sharedBridgeUrl),
   ]);
   if (
@@ -98,6 +115,8 @@ async function loadPlayerAcceptance() {
     typeof reportModule.createGamePlayReport !== "function" ||
     !isObject(databaseModule) ||
     typeof databaseModule.SharedSyncStore !== "function" ||
+    !isObject(persistenceModule) ||
+    typeof persistenceModule.recordLocationObservation !== "function" ||
     !isObject(sqliteModule) ||
     typeof sqliteModule.createSharedTestDatabase !== "function" ||
     !isObject(controllerModule) ||
@@ -110,8 +129,11 @@ async function loadPlayerAcceptance() {
     typeof runtimeHarnessModule.mountGeneratedWebRuntime !== "function" ||
     !isObject(hostBridgeModule) ||
     typeof hostBridgeModule.routeHostBridgeMessage !== "function" ||
+    !isObject(productionHandlersModule) ||
+    typeof productionHandlersModule.createProductionHostBridgeHandlers !== "function" ||
     !isObject(sharedBridgeModule) ||
-    typeof sharedBridgeModule.routeSharedBridgeMessage !== "function"
+    typeof sharedBridgeModule.routeSharedBridgeMessage !== "function" ||
+    typeof sharedBridgeModule.createCompositionSharedBridgeHandlers !== "function"
   ) {
     throw new Error("co-op-player-acceptance-module-invalid");
   }
@@ -121,6 +143,10 @@ async function loadPlayerAcceptance() {
       runId: string,
       platform: "ios" | "android",
     ) => Promise<unknown>,
+    recordLocationObservation: persistenceModule.recordLocationObservation as (
+      database: object,
+      input: Readonly<Record<string, unknown>>,
+    ) => Promise<void>,
     SharedSyncStore: databaseModule.SharedSyncStore as new (
       database: PlayerAcceptanceDatabase,
       projectionRule: {
@@ -152,6 +178,10 @@ async function loadPlayerAcceptance() {
       message: string,
       handlers: object,
     ) => Promise<unknown>,
+    createProductionHostBridgeHandlers:
+      productionHandlersModule.createProductionHostBridgeHandlers as (input: object) => object,
+    createCompositionSharedBridgeHandlers:
+      sharedBridgeModule.createCompositionSharedBridgeHandlers as (input: object) => object,
     routeSharedBridgeMessage: sharedBridgeModule.routeSharedBridgeMessage as (
       message: string,
       handlers: object,
@@ -227,6 +257,18 @@ let revisedReleaseBytes: Uint8Array;
 
 function isObject(value: unknown): value is Readonly<Record<string, unknown>> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function findRuntimeNode(
+  root: GeneratedRuntimeNode,
+  predicate: (node: GeneratedRuntimeNode) => boolean,
+): GeneratedRuntimeNode | undefined {
+  if (predicate(root)) return root;
+  for (const child of root.children) {
+    const match = findRuntimeNode(child, predicate);
+    if (match !== undefined) return match;
+  }
+  return undefined;
 }
 
 function isTarget(value: unknown): value is Target {
@@ -818,50 +860,6 @@ describe("co-op game acceptance", () => {
 
       const target = revisedConfiguration.targets[0];
       if (target === undefined) throw new Error("co-op-controller-target-missing");
-      const command = discoveryCommand({
-        session: controllerSession,
-        target,
-        commandId: "co-op-controller-command",
-        expectedStateVersion: 0,
-        ageMs: 1_000,
-      });
-      const evidence = command.observations[0];
-      if (evidence === undefined || evidence.availability !== "available") {
-        throw new Error("co-op-controller-observation-missing");
-      }
-      await controllerDatabase.runAsync(
-        `INSERT INTO observations
-         (run_id,observation_id,recorded_at,captured_at,sensor_captured_at,age_ms,availability,
-          latitude,longitude,horizontal_accuracy,diagnostic_code,elapsed_ms)
-         VALUES (?,?,?,?,?,?,?,?,?,?,NULL,?)`,
-        "co-op-controller-run",
-        evidence.observationId,
-        evidence.recordedAt,
-        evidence.capturedAt,
-        evidence.capturedAt,
-        evidence.ageMs,
-        evidence.availability,
-        evidence.latitude,
-        evidence.longitude,
-        evidence.horizontalAccuracy,
-        1,
-      );
-      await controller.enqueue({
-        commandId: command.commandId,
-        target: command.target,
-        expectedStateVersion: command.expectedStateVersion,
-        type: command.type,
-        payload: command.payload,
-        observationIds: [evidence.observationId],
-      });
-      await controller.retry();
-      expect(controller.snapshot()).toMatchObject({
-        status: "bound",
-        view: {
-          actions: expect.arrayContaining([expect.objectContaining({ terminal: "accepted" })]),
-        },
-      });
-
       const openedRelease = await openRelease(revisedReleaseBytes);
       if (openedRelease.kind !== "opened") throw new Error("co-op-runtime-release-invalid");
       const inspection = await inspectGameRelease(revisedReleaseBytes);
@@ -889,6 +887,18 @@ describe("co-op game acceptance", () => {
         throw new Error("co-op-runtime-entry-missing");
       }
       const runtimeMessages: string[] = [];
+      const runtimeBootstrap = {
+        runId: "co-op-controller-run",
+        releaseId: revisedReleaseId,
+        aggregate: {
+          modelId: "co-op.player",
+          aggregateId: "co-op-controller-run",
+          aggregateKind: "player",
+          schemaId: "co-op.player-state",
+          stateVersion: 0,
+          state: {},
+        },
+      };
       const runtimeHtml = player.buildRuntimeBootstrap({
         logicSource: new TextDecoder().decode(logic.bytes),
         presentationSource: new TextDecoder().decode(presentation.bytes),
@@ -897,6 +907,46 @@ describe("co-op game acceptance", () => {
         assets: { "co-op.map": new TextDecoder().decode(asset.bytes) },
         sharedBindingAvailable: true,
       });
+      const hostHandlers = player.createProductionHostBridgeHandlers({
+        store: controllerDatabase,
+        runtime: {
+          bootstrap: runtimeBootstrap,
+          composition: inspection.gameComposition,
+          aggregateSchemaId: "co-op.player-state",
+          validateSchema: () => true,
+          validateProgression: () => true,
+        },
+        location: {
+          database: {
+            recordObservation: (input: Readonly<Record<string, unknown>>) =>
+              player.recordLocationObservation(controllerDatabase, input),
+          },
+          runId: "co-op-controller-run",
+          startedAt: "2030-01-01T00:00:00.000Z",
+          adapter: {
+            requestPermission: async () => "granted",
+            capture: async () => ({
+              timestamp: Date.parse("2030-01-01T00:00:00.000Z"),
+              latitude: target.latitude,
+              longitude: target.longitude,
+              horizontalAccuracy: Math.min(5, target.maximumAccuracyMeters),
+            }),
+          },
+          now: () => new Date("2030-01-01T00:00:01.000Z"),
+          createObservationId: () => "co-op-controller-observation",
+        },
+      });
+      const sharedHandlers = player.createCompositionSharedBridgeHandlers({
+        composition: inspection.gameComposition,
+        expectedReleaseId: revisedReleaseId,
+        projectionContract: playerProjectionRule,
+        getView: async () => {
+          const snapshot = controller.snapshot();
+          if (snapshot.status !== "bound") throw new Error("co-op-controller-not-bound");
+          return snapshot.view;
+        },
+        enqueue: (intent: object) => controller.enqueue(intent),
+      });
       const routeRuntimeMessage = async (message: string): Promise<unknown> => {
         const decoded: unknown = JSON.parse(message);
         if (!isObject(decoded) || typeof decoded.type !== "string") {
@@ -904,40 +954,20 @@ describe("co-op game acceptance", () => {
         }
         runtimeMessages.push(decoded.type);
         if (decoded.type.startsWith("shared.")) {
-          return player.routeSharedBridgeMessage(message, {
-            getView: async () => {
-              const snapshot = controller.snapshot();
-              if (snapshot.status !== "bound") throw new Error("co-op-controller-not-bound");
-              return snapshot.view;
-            },
-            enqueue: (intent: object) => controller.enqueue(intent),
-          });
+          return player.routeSharedBridgeMessage(message, sharedHandlers);
         }
-        return player.routeHostBridgeMessage(message, {
-          runtimeReady: async () => ({
-            runId: "co-op-controller-run",
-            releaseId: revisedReleaseId,
-            aggregate: {
-              modelId: "co-op.player",
-              aggregateId: "co-op-controller-run",
-              aggregateKind: "player",
-              schemaId: "co-op.player-state",
-              stateVersion: 0,
-              state: {},
-            },
-          }),
-          commitTransition: async () => {
-            throw new Error("co-op-local-transition-unexpected");
-          },
-          requestCapability: async () => {
-            throw new Error("co-op-capability-request-unexpected");
-          },
-        });
+        return player.routeHostBridgeMessage(message, hostHandlers);
       };
-      const runtimeMount = await player.mountGeneratedWebRuntime(runtimeHtml, routeRuntimeMessage);
+      let runtimeMount: MountedGeneratedRuntime | null = null;
+      const unsubscribe = controller.subscribe((state) => {
+        if (state.status === "bound") {
+          runtimeMount?.dispatchHostEvent({ type: "shared.sync.changed" });
+        }
+      });
+      runtimeMount = await player.mountGeneratedWebRuntime(runtimeHtml, routeRuntimeMessage);
       for (
         let attempt = 0;
-        attempt < 100 && runtimeMount.root.children[0]?.dataset.confirmed !== "true";
+        attempt < 100 && runtimeMount.root.children[0]?.dataset.confirmedTargets !== "0";
         attempt += 1
       ) {
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -947,8 +977,43 @@ describe("co-op game acceptance", () => {
       expect(runtimeMount.root.children[0]?.dataset).toMatchObject({
         component: "co-op.clue-board",
         confirmed: "true",
+        confirmedTargets: "0",
+      });
+      const targetItem = findRuntimeNode(
+        runtimeMount.root,
+        (node) => node.dataset.targetId === target.targetId,
+      );
+      const discoverButton = targetItem?.children.find(
+        (node) => node.textContent === "Discover target",
+      );
+      if (discoverButton === undefined) throw new Error("co-op-discover-action-missing");
+
+      await discoverButton.dispatchEvent("click");
+      await controller.retry();
+      await vi.waitFor(() =>
+        expect(controller.snapshot()).toMatchObject({
+          status: "bound",
+          view: {
+            actions: expect.arrayContaining([expect.objectContaining({ terminal: "accepted" })]),
+          },
+        }),
+      );
+      await vi.waitFor(() =>
+        expect(runtimeMount?.root.children[0]?.dataset).toMatchObject({
+          component: "co-op.clue-board",
+          confirmed: "true",
+          confirmedTargets: "1",
+        }),
+      );
+      expect(runtimeMessages).toEqual(
+        expect.arrayContaining(["capability.request", "shared.view.get", "shared.command.enqueue"]),
+      );
+      expect(runtimeMount.root.children[0]?.dataset).toMatchObject({
+        component: "co-op.clue-board",
+        confirmed: "true",
         confirmedTargets: "1",
       });
+      unsubscribe();
       await runtimeMount.unmount();
       controller.dispose();
 

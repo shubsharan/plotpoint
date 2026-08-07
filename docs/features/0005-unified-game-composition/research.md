@@ -16,18 +16,21 @@
   it into the application scope; throw or invalid return rolls back only that child. After a transition
   commit, refresh and listener failures become safe recovery diagnostics and cannot rewrite success.
 
-### Decision: One Run-Scoped Controller and Secret-First Join
+### Decision: One Run-Scoped Controller and Reserve-First Join
 
 - **Decision**: Construct one controller from a verified installed run. It owns the whole shared state
-  machine and all triggers. One deterministic SecureStore envelope key exists per run. Store the complete
-  pending envelope before SQLite reservation; delete it if the reservation loses. Commit binding plus
-  initial pull atomically, then reduce the envelope to credential-only form.
-- **Rationale**: Startup can recover a known key after any crash, and the App no longer coordinates
-  mutable IDs, cached surfaces, credentials, and two controller objects independently.
+  machine and all triggers. One deterministic SecureStore envelope key exists per run. Reserve one
+  `preparing` SQLite owner before writing the envelope; advance to `ready` only after the secret is durable.
+  Commit binding plus initial pull atomically, then reduce the envelope to credential-only form.
+- **Rationale**: SQLite ownership makes parallel changed attempts conflict before either can overwrite the
+  deterministic key. Startup safely abandons only an envelope-less `preparing` row and exactly resumes every
+  later state. The App never coordinates pending rows and secrets independently.
 - **Connectivity**: Use `Network.addNetworkStateListener`; only unreachable-to-reachable transitions
   request work. Existing keyed single-flight remains the concurrency boundary.
 - **Rejected**: Patch each individual crash window. A single ownership/state machine is smaller and
   makes every restart test call only `start()`.
+- **Rejected**: Write the deterministic envelope before reservation. Concurrent attempts can overwrite the
+  same key, and loser cleanup can delete the winner's secret without cross-store compare-and-delete support.
 
 ### Decision: Mechanic-Owned Execute and Participant-Scoped Idempotency
 

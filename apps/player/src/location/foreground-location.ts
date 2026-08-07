@@ -1,5 +1,3 @@
-import * as Location from "expo-location";
-
 import {
   FOREGROUND_LOCATION_CAPABILITY,
   isLocationObservation,
@@ -24,25 +22,6 @@ export interface ForegroundLocationNativeAdapter {
 export interface ForegroundLocationPersistence {
   recordObservation(input: Parameters<PlayerDatabase["recordObservation"]>[0]): Promise<void>;
 }
-
-const expoLocationAdapter: ForegroundLocationNativeAdapter = {
-  async requestPermission() {
-    const permission = await Location.requestForegroundPermissionsAsync();
-    return permission.granted ? "granted" : "denied";
-  },
-  async capture() {
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-      mayShowUserSettingsDialog: true,
-    });
-    return {
-      timestamp: location.timestamp,
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      horizontalAccuracy: location.coords.accuracy,
-    };
-  },
-};
 
 function identifier(): string {
   const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
@@ -96,7 +75,7 @@ export interface CaptureForegroundLocationInput {
   readonly database: ForegroundLocationPersistence;
   readonly runId: string;
   readonly startedAt: string;
-  readonly adapter?: ForegroundLocationNativeAdapter;
+  readonly adapter: ForegroundLocationNativeAdapter;
   readonly now?: () => Date;
   readonly createObservationId?: () => string;
 }
@@ -104,7 +83,7 @@ export interface CaptureForegroundLocationInput {
 export async function captureForegroundLocation(
   input: CaptureForegroundLocationInput,
 ): Promise<LocationObservation> {
-  const adapter = input.adapter ?? expoLocationAdapter;
+  const adapter = input.adapter;
   const observationId = (input.createObservationId ?? identifier)();
   const recordedAt = () => (input.now ?? (() => new Date()))().toISOString();
   let observation: LocationObservation;

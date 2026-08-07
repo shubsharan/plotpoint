@@ -512,8 +512,9 @@ Before exposing a shared view, the player requires equality among the installed 
 join response, authorized snapshot, and any existing binding. Raw invitations and credentials use one
 deterministic per-run SecureStore envelope named by one immutable `envelope_key` in pending and bound
 storage. Pending form contains immutable join identity, invitation, and participant credential; bound
-form retains only the credential. Secret write precedes SQLite reservation so startup can recover every
-crash window; SQLite stores request provenance for exact retry.
+form retains only the credential. SQLite reserves one `preparing` owner before the secret write so
+parallel changed attempts cannot overwrite the deterministic key. Startup may cancel only a
+`preparing` row with no envelope; `ready` and `submitting` require the exact secret for retry.
 
 Shared commands and projections are generic schema-identified envelopes:
 
@@ -618,7 +619,8 @@ compiler, parser, and inspector. The generated Web runtime serializes local atte
 clients per component, and registers cleanup directly with one awaited mount scope. `SharedSyncStore`
 validates one exact binding and commits canonical pull reconciliation. A single typed gameplay-ledger module
 owns schema declaration, evidence encoding, and host-relative time; report code only validates, redacts, aliases,
-and orders committed facts.
+and orders committed facts. Append clamps elapsed time to the run's prior committed high-water, keeping
+chronology bounded when the device wall clock moves backward.
 
 ## Authority and Persistence Boundaries
 

@@ -41,10 +41,12 @@ type SharedSecretEnvelope =
   | { readonly kind: "bound"; readonly participantCredential: string };
 ```
 
-The pending envelope is written before SQLite reservation. A losing reservation removes its unused
-envelope. SQLite then reserves the pending request with run, session, release, origin, request and
-invitation digests, envelope key, and `preparing | ready | submitting` status. Exact reuse resumes the
-same envelope; changed reuse conflicts before network submission.
+SQLite first reserves the pending request with run, session, release, origin, request and invitation
+digests, envelope key, and `preparing` status. Only the reservation owner writes the deterministic
+pending envelope, then advances through `ready | submitting`. A `preparing` row without an envelope is
+safe to cancel because no network request can have occurred; `ready` or `submitting` without the exact
+envelope is non-retryable. Exact reuse resumes the same envelope; changed reuse conflicts before secret
+mutation or network submission.
 
 Binding and the validated initial pull commit atomically and delete the pending SQLite row. Only after
 that commit is the pending envelope reduced at the same key to its bound form. If reduction is

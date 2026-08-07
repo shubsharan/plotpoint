@@ -7,6 +7,17 @@ import { SharedPlayController } from "../src/shared/session-controller";
 
 const releaseId = `sha256:${"a".repeat(64)}` as const;
 
+const pendingJoin = {
+  sessionId: "session-1",
+  runId: "run-1",
+  expectedReleaseId: releaseId,
+  serviceOrigin: "https://service.example",
+  joinRequestId: "join-1",
+  invitationDigest: `sha256:${"b".repeat(64)}`,
+  envelopeKey: "plotpoint.shared.run-1.envelope",
+  requestDigest: `sha256:${"c".repeat(64)}`,
+} as const;
+
 function view(membership: "active" | "revoked" = "active"): SharedPlayView {
   return {
     sessionId: "session-1",
@@ -28,7 +39,15 @@ function harness(initialMembership: "active" | "revoked" = "active") {
     sessionForRun: vi.fn(async () => "session-1"),
     pendingJoinForRun: vi.fn(async () => null),
     view: vi.fn(async () => current),
-    session: vi.fn(async () => ({ envelopeKey: "run-envelope" })),
+    session: vi.fn(async () => ({
+      sessionId: "session-1",
+      runId: "run-1",
+      releaseId,
+      participantId: "participant-1",
+      teamId: "team-1",
+      serviceOrigin: "https://service.example",
+      envelopeKey: "run-envelope",
+    })),
     enqueue: vi.fn(async () => ({
       commandId: "command-1",
       disposition: "enqueued" as const,
@@ -62,6 +81,65 @@ function harness(initialMembership: "active" | "revoked" = "active") {
 }
 
 describe("run-scoped shared play controller", () => {
+  it("abandons an envelope-less preparing reservation during startup", async () => {
+    const cancelPreparingJoin = vi.fn(async () => undefined);
+    const store = {
+      sessionForRun: vi.fn(async () => null),
+      session: vi.fn(async () => null),
+      pendingJoinForRun: vi.fn(async () => ({ ...pendingJoin, status: "preparing" as const })),
+      cancelPreparingJoin,
+    };
+    const credentials = {
+      getEnvelope: vi.fn(async () => null),
+      removeEnvelope: vi.fn(async () => undefined),
+    };
+    const request = vi.fn(async () => undefined);
+    const join = vi.fn(async () => undefined);
+    const controller = new SharedPlayController(
+      { runId: "run-1", releaseId, sharedRequired: true },
+      store as unknown as SharedSyncStore,
+      credentials as unknown as ParticipantCredentialStore,
+      { request },
+      () => ({ join }) as never,
+    );
+
+    await controller.start();
+
+    expect(cancelPreparingJoin).toHaveBeenCalledWith("run-1", pendingJoin.requestDigest);
+    expect(join).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+    expect(controller.snapshot()).toEqual({ status: "join-required" });
+  });
+
+  it("blocks a ready reservation whose durable envelope is missing", async () => {
+    const cancelPreparingJoin = vi.fn(async () => undefined);
+    const store = {
+      sessionForRun: vi.fn(async () => null),
+      session: vi.fn(async () => null),
+      pendingJoinForRun: vi.fn(async () => ({ ...pendingJoin, status: "ready" as const })),
+      cancelPreparingJoin,
+    };
+    const credentials = {
+      getEnvelope: vi.fn(async () => null),
+      removeEnvelope: vi.fn(async () => undefined),
+    };
+    const controller = new SharedPlayController(
+      { runId: "run-1", releaseId, sharedRequired: true },
+      store as unknown as SharedSyncStore,
+      credentials as unknown as ParticipantCredentialStore,
+      { request: vi.fn(async () => undefined) },
+    );
+
+    await controller.start();
+
+    expect(cancelPreparingJoin).not.toHaveBeenCalled();
+    expect(controller.snapshot()).toEqual({
+      status: "recovery-required",
+      code: "shared-pending-join-envelope-missing",
+      retryable: false,
+    });
+  });
+
   it("retries the deterministic pending envelope when recovery has no binding yet", async () => {
     let bound = false;
     const reservePendingJoin = vi.fn(async (input) => ({ ...input, status: "preparing" as const }));

@@ -15,6 +15,10 @@ installed product loop, runtime singularity, recovery ownership, and report sema
 proved. User Stories 1-5 and tasks T001-T077 remain implementation history; User Stories 6-8 define
 the completion authority for the reopened feature.
 
+**Cohesion closure**: Phase 16 keeps SQLite reservation as the single concurrent join owner, makes the
+join coordinator reconcile every cross-store restart shape, drives the co-op action from the installed
+component, and bounds ledger chronology when the device wall clock moves backward.
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Play the Co-op Game as One Release (Priority: P1)
@@ -374,12 +378,13 @@ truthful nonzero synchronization chronology, stable bytes, and no private values
   inventoried digest and pass payload validation before persistence or component exposure. Aggregate
   schema-generation counters MUST NOT participate in agreement or survive in release, bridge, SQLite,
   PostgreSQL, projection, or runtime contracts.
-- **FR-022**: The player MUST store one deterministic SecureStore envelope per run before reserving its
-  pending SQLite row. A pending envelope contains immutable join identity, invitation, and participant
-  credential; a bound envelope retains only the participant credential. If reservation loses a race,
-  the unused envelope MUST be deleted. The player MUST reserve at most one pending-or-bound shared
-  session per run and make the exact join request durable before the first network attempt. Parallel or
-  changed joins for the run MUST conflict before submission. Joining shared play MUST then prove equality
+- **FR-022**: The player MUST reserve at most one pending-or-bound shared session per run in SQLite before
+  writing the deterministic per-run SecureStore envelope. A pending envelope contains immutable join
+  identity, invitation, and participant credential; a bound envelope retains only the participant
+  credential. A `preparing` reservation without an envelope MUST be safely abandoned because no network
+  attempt can precede `ready`; `ready` or `submitting` requires the exact envelope. The exact join request
+  MUST be durable before the first network attempt, and parallel or changed joins for the run MUST conflict
+  before secret mutation or submission. Joining shared play MUST then prove equality
   among the installed run release, join response release, authorized snapshot release, and persisted
   shared-session release before exposing the view.
 - **FR-023**: Exact join retries MUST preserve the original immutable run, release, session, participant,
@@ -438,7 +443,9 @@ truthful nonzero synchronization chronology, stable bytes, and no private values
   before mutation, persist and compare canonical full terminal results, and perform zero durable writes when
   an identical pull has no local recovery delta.
 - **FR-036**: Gameplay evidence MUST be a typed transaction-owned fact using host-relative elapsed time.
-  Report generation MUST project those facts without inferring failure stage, recovery meaning, or clock unit.
+  The committing boundary MUST clamp elapsed time to the prior per-run ledger high-water so device clock
+  rollback cannot move a later fact earlier. Report generation MUST project those facts without inferring
+  failure stage, recovery meaning, or clock unit.
 
 ### Key Entities
 

@@ -19,7 +19,8 @@ is a projection of controller state and holds no parallel session authority.
 
 One deterministic SecureStore key is derived from the run ID. The pending envelope contains immutable
 join identity, invitation, and participant credential. The bound envelope contains the participant
-credential only. The complete pending envelope is written before its SQLite reservation. Binding and
+credential only. SQLite first reserves the run in `preparing`; the envelope write advances it to `ready`.
+A missing envelope is safely abandonable only while `preparing`, before any network request. Binding and
 initial pull commit together; envelope reduction is post-commit cleanup.
 
 ### Authoritative Receipt
@@ -273,9 +274,11 @@ identity/digest, invitation digest, one immutable SecureStore envelope key, and 
 `preparing | ready | submitting`. A unique run constraint plus cross-table guards permits at most one
 pending-or-bound session per run. Exact reuse resumes; changed reuse conflicts before network send.
 
-The one pending envelope contains immutable join identity, invitation, and participant credential and
-is written before SQLite reservation. Successful immutable binding and initial snapshot commit delete
-the pending row atomically; the same envelope is then reduced to bound credential form. Response
+The one pending envelope contains immutable join identity, invitation, and participant credential.
+SQLite reservation is the concurrent owner: `preparing` precedes the envelope write, `ready` proves the
+envelope is durable, and `submitting` proves network dispatch may have begun. A missing envelope permits
+automatic cancellation only in `preparing`. Successful immutable binding and initial snapshot commit
+delete the pending row atomically; the same envelope is then reduced to bound credential form. Response
 mismatch retains the complete attempt for exact retry and exposes no projection.
 
 ### Shared Session Binding
@@ -351,8 +354,9 @@ blocked outbox byte-equivalent.
 ## Game Play Report
 
 One typed host-owned gameplay evidence union is appended by the transaction responsible for each fact.
-The ledger schema has one declaration and stores host-relative elapsed time; server confirmation time remains
-snapshot metadata. One host-owned report covers local and optional shared evidence for a run. It contains release,
+The ledger schema has one declaration and stores host-relative elapsed time clamped to the prior committed
+per-run high-water; server confirmation time remains snapshot metadata. One host-owned report covers local
+and optional shared evidence for a run. It contains release,
 platform, committed duration, optional membership status, and generic lifecycle, command, capability,
 synchronization, recovery, and report-safe diagnostic events.
 

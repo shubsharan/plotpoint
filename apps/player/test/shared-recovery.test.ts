@@ -397,7 +397,7 @@ describe("shared SQLite recovery", () => {
     expect(view.actions.map(({ commandId }) => commandId)).toEqual(["command-two", "command-ten"]);
   });
 
-  it("uses host time for shared evidence regardless of server clock skew", async () => {
+  it("keeps shared evidence chronology bounded when host time moves backward", async () => {
     const database = await createSharedTestDatabase();
     databases.push(database);
     await database.runAsync(
@@ -414,7 +414,7 @@ describe("shared SQLite recovery", () => {
       bindingContext.envelopeKey,
       "2030-01-01T00:00:00.000Z",
     );
-    const hostTimes = [new Date("2030-01-01T00:00:05.000Z"), new Date("2030-01-01T00:00:06.000Z")];
+    const hostTimes = [new Date("2030-01-01T00:00:05.000Z"), new Date("2030-01-01T00:00:03.000Z")];
     const store = new SharedSyncStore(database, projectionRule, () => hostTimes.shift()!);
     await store.applyPull(
       bindingContext,
@@ -432,7 +432,7 @@ describe("shared SQLite recovery", () => {
       ),
     ).resolves.toEqual([
       { committed_at: "2030-01-01T00:00:05.000Z", elapsed_ms: 5000 },
-      { committed_at: "2030-01-01T00:00:06.000Z", elapsed_ms: 6000 },
+      { committed_at: "2030-01-01T00:00:05.000Z", elapsed_ms: 5000 },
     ]);
   });
 
